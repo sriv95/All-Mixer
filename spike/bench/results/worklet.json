@@ -1,0 +1,1530 @@
+{
+  "date": "2026-10-04T07:53:03.399Z",
+  "budget_us": 2902.4943310657595,
+  "chromium": "chromium",
+  "results": [
+    {
+      "config": {
+        "headless": true,
+        "throttle": 1,
+        "timing": true,
+        "bypass": false,
+        "secs": 60
+      },
+      "init": {
+        "sampleRate": 44100,
+        "baseLatency": 0.005351473922902495,
+        "outputLatency": 0.024,
+        "state": "running"
+      },
+      "wallSec": 60.093,
+      "timing": {
+        "quanta": 20000,
+        "p50_us": 0,
+        "p99_us": 3810,
+        "p999_us": 11285,
+        "max_us": 41964.9999961257,
+        "mean_us": 142.60974998511375,
+        "worst_window_p99_us": 5100,
+        "max_deadline_lag_us": 39062.505665059936,
+        "windows_with_overrun": 20,
+        "windows": [
+          {
+            "q": 2000,
+            "p99": 4719,
+            "max": 14405,
+            "over": 18
+          },
+          {
+            "q": 3000,
+            "p99": 3475,
+            "max": 19545,
+            "over": 13
+          },
+          {
+            "q": 4000,
+            "p99": 2159,
+            "max": 5905,
+            "over": 9
+          },
+          {
+            "q": 5000,
+            "p99": 4200,
+            "max": 7645,
+            "over": 18
+          },
+          {
+            "q": 6000,
+            "p99": 2445,
+            "max": 10935,
+            "over": 10
+          },
+          {
+            "q": 7000,
+            "p99": 2785,
+            "max": 17975,
+            "over": 10
+          },
+          {
+            "q": 8000,
+            "p99": 3655,
+            "max": 13560,
+            "over": 12
+          },
+          {
+            "q": 9000,
+            "p99": 2784,
+            "max": 10195,
+            "over": 10
+          },
+          {
+            "q": 10000,
+            "p99": 4730,
+            "max": 12165,
+            "over": 15
+          },
+          {
+            "q": 11000,
+            "p99": 4094,
+            "max": 11105,
+            "over": 16
+          },
+          {
+            "q": 12000,
+            "p99": 3809,
+            "max": 13675,
+            "over": 19
+          },
+          {
+            "q": 13000,
+            "p99": 2044,
+            "max": 7280,
+            "over": 7
+          },
+          {
+            "q": 14000,
+            "p99": 5100,
+            "max": 8905,
+            "over": 13
+          },
+          {
+            "q": 15000,
+            "p99": 1854,
+            "max": 18120,
+            "over": 8
+          },
+          {
+            "q": 16000,
+            "p99": 3855,
+            "max": 11015,
+            "over": 14
+          },
+          {
+            "q": 17000,
+            "p99": 3820,
+            "max": 6305,
+            "over": 13
+          },
+          {
+            "q": 18000,
+            "p99": 4510,
+            "max": 22685,
+            "over": 13
+          },
+          {
+            "q": 19000,
+            "p99": 4824,
+            "max": 22265,
+            "over": 17
+          },
+          {
+            "q": 20000,
+            "p99": 3685,
+            "max": 12580,
+            "over": 13
+          },
+          {
+            "q": 21000,
+            "p99": 3734,
+            "max": 41965,
+            "over": 14
+          }
+        ],
+        "budget_us": 2902.4943310657595,
+        "quanta_over_budget": 262,
+        "pct_budget_p50": 0,
+        "pct_budget_p99": 131.26640625000002,
+        "pct_budget_max": 1445.8253904915182
+      },
+      "ctxAudioSec": 60.070022675736965,
+      "mediaSec": 1.970794,
+      "latency": {
+        "baseLatency_s": 0.005351473922902495,
+        "outputLatency_s": 0.024
+      },
+      "playbackStats": {
+        "before": {
+          "underrunDuration": 0.005351,
+          "underrunEvents": 1,
+          "totalDuration": 2.962489,
+          "averageLatency": 0.024281,
+          "minimumLatency": 0,
+          "maximumLatency": 0.065579
+        },
+        "after": {
+          "underrunDuration": 0.010702,
+          "underrunEvents": 2,
+          "totalDuration": 63.120496,
+          "averageLatency": 0.02421,
+          "minimumLatency": 0,
+          "maximumLatency": 0.065579
+        },
+        "underrunEvents_delta": 1,
+        "underrunDuration_delta_s": 0.005351
+      },
+      "cpu_percent_of_one_core": {
+        "browser": 0.21633135306940904,
+        "audio-service": 0.7821210457124789,
+        "renderer": 48.4415822142346,
+        "gpu": 0.01664087331303146,
+        "total": 49.456675486329516
+      }
+    },
+    {
+      "config": {
+        "headless": true,
+        "throttle": 1,
+        "timing": false,
+        "bypass": false,
+        "secs": 60
+      },
+      "init": {
+        "sampleRate": 44100,
+        "baseLatency": 0.005351473922902495,
+        "outputLatency": 0.064,
+        "state": "running"
+      },
+      "wallSec": 60.078,
+      "timing": null,
+      "ctxAudioSec": 60.247074829931975,
+      "mediaSec": 2.028844,
+      "latency": {
+        "baseLatency_s": 0.005351473922902495,
+        "outputLatency_s": 0.024
+      },
+      "playbackStats": {
+        "before": {
+          "underrunDuration": 0.005351,
+          "underrunEvents": 1,
+          "totalDuration": 2.968293,
+          "averageLatency": 0.024277,
+          "minimumLatency": 0,
+          "maximumLatency": 0.065602
+        },
+        "after": {
+          "underrunDuration": 0.032106,
+          "underrunEvents": 6,
+          "totalDuration": 63.147704,
+          "averageLatency": 0.024195,
+          "minimumLatency": 0,
+          "maximumLatency": 0.065602
+        },
+        "underrunEvents_delta": 5,
+        "underrunDuration_delta_s": 0.026755
+      },
+      "cpu_percent_of_one_core": {
+        "browser": 0.2829654782116582,
+        "audio-service": 0.865541462765072,
+        "renderer": 6.341755717567163,
+        "gpu": 0.01664502813009753,
+        "total": 7.5069076866739906
+      }
+    },
+    {
+      "config": {
+        "headless": true,
+        "throttle": 1,
+        "timing": true,
+        "bypass": true,
+        "secs": 60
+      },
+      "init": {
+        "sampleRate": 44100,
+        "baseLatency": 0.005351473922902495,
+        "outputLatency": 0.024,
+        "state": "running"
+      },
+      "wallSec": 60.087,
+      "timing": {
+        "quanta": 20000,
+        "p50_us": 0,
+        "p99_us": 0,
+        "p999_us": 5,
+        "max_us": 2780.000001192093,
+        "mean_us": 0.18550000041723252,
+        "worst_window_p99_us": 5,
+        "max_deadline_lag_us": 0,
+        "windows_with_overrun": 0,
+        "windows": [
+          {
+            "q": 2000,
+            "p99": 5,
+            "max": 20,
+            "over": 0
+          },
+          {
+            "q": 3000,
+            "p99": 0,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 4000,
+            "p99": 4,
+            "max": 40,
+            "over": 0
+          },
+          {
+            "q": 5000,
+            "p99": 0,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 6000,
+            "p99": 4,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 7000,
+            "p99": 0,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 8000,
+            "p99": 0,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 9000,
+            "p99": 0,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 10000,
+            "p99": 0,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 11000,
+            "p99": 0,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 12000,
+            "p99": 0,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 13000,
+            "p99": 4,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 14000,
+            "p99": 4,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 15000,
+            "p99": 0,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 16000,
+            "p99": 4,
+            "max": 10,
+            "over": 0
+          },
+          {
+            "q": 17000,
+            "p99": 0,
+            "max": 55,
+            "over": 0
+          },
+          {
+            "q": 18000,
+            "p99": 0,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 19000,
+            "p99": 0,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 20000,
+            "p99": 0,
+            "max": 2780,
+            "over": 0
+          },
+          {
+            "q": 21000,
+            "p99": 0,
+            "max": 5,
+            "over": 0
+          }
+        ],
+        "budget_us": 2902.4943310657595,
+        "quanta_over_budget": 0,
+        "pct_budget_p50": 0,
+        "pct_budget_p99": 0,
+        "pct_budget_max": 95.77968754107134
+      },
+      "ctxAudioSec": 60.16,
+      "mediaSec": 2.011429,
+      "latency": {
+        "baseLatency_s": 0.005351473922902495,
+        "outputLatency_s": 0.024
+      },
+      "playbackStats": {
+        "before": {
+          "underrunDuration": 0,
+          "underrunEvents": 0,
+          "totalDuration": 2.936824,
+          "averageLatency": 0.024261,
+          "minimumLatency": 0,
+          "maximumLatency": 0.065542
+        },
+        "after": {
+          "underrunDuration": 0.042702,
+          "underrunEvents": 3,
+          "totalDuration": 63.097358,
+          "averageLatency": 0.024191,
+          "minimumLatency": 0,
+          "maximumLatency": 0.065542
+        },
+        "underrunEvents_delta": 3,
+        "underrunDuration_delta_s": 0.042702
+      },
+      "cpu_percent_of_one_core": {
+        "browser": 0.2995656298367367,
+        "audio-service": 0.8986968895102101,
+        "renderer": 33.41821026178708,
+        "gpu": 0,
+        "total": 34.61647278113403
+      }
+    },
+    {
+      "config": {
+        "headless": true,
+        "throttle": 4,
+        "timing": true,
+        "bypass": false,
+        "secs": 60
+      },
+      "init": {
+        "sampleRate": 44100,
+        "baseLatency": 0.005351473922902495,
+        "outputLatency": 0.024,
+        "state": "running"
+      },
+      "wallSec": 60.074,
+      "timing": {
+        "quanta": 20000,
+        "p50_us": 0,
+        "p99_us": 2570,
+        "p999_us": 7654,
+        "max_us": 24100.000001490116,
+        "mean_us": 109.20300000049174,
+        "worst_window_p99_us": 4705,
+        "max_deadline_lag_us": 21197.505670424358,
+        "windows_with_overrun": 20,
+        "windows": [
+          {
+            "q": 2000,
+            "p99": 1379,
+            "max": 12915,
+            "over": 7
+          },
+          {
+            "q": 3000,
+            "p99": 559,
+            "max": 3360,
+            "over": 2
+          },
+          {
+            "q": 4000,
+            "p99": 1310,
+            "max": 5520,
+            "over": 5
+          },
+          {
+            "q": 5000,
+            "p99": 3179,
+            "max": 24100,
+            "over": 11
+          },
+          {
+            "q": 6000,
+            "p99": 1854,
+            "max": 7020,
+            "over": 9
+          },
+          {
+            "q": 7000,
+            "p99": 1945,
+            "max": 4845,
+            "over": 6
+          },
+          {
+            "q": 8000,
+            "p99": 2429,
+            "max": 11285,
+            "over": 8
+          },
+          {
+            "q": 9000,
+            "p99": 1574,
+            "max": 5725,
+            "over": 6
+          },
+          {
+            "q": 10000,
+            "p99": 2480,
+            "max": 6655,
+            "over": 9
+          },
+          {
+            "q": 11000,
+            "p99": 3234,
+            "max": 5910,
+            "over": 13
+          },
+          {
+            "q": 12000,
+            "p99": 3655,
+            "max": 11645,
+            "over": 12
+          },
+          {
+            "q": 13000,
+            "p99": 2570,
+            "max": 10375,
+            "over": 10
+          },
+          {
+            "q": 14000,
+            "p99": 2435,
+            "max": 8215,
+            "over": 9
+          },
+          {
+            "q": 15000,
+            "p99": 2479,
+            "max": 14300,
+            "over": 9
+          },
+          {
+            "q": 16000,
+            "p99": 1965,
+            "max": 13180,
+            "over": 8
+          },
+          {
+            "q": 17000,
+            "p99": 1300,
+            "max": 10190,
+            "over": 9
+          },
+          {
+            "q": 18000,
+            "p99": 2780,
+            "max": 7495,
+            "over": 9
+          },
+          {
+            "q": 19000,
+            "p99": 4705,
+            "max": 11265,
+            "over": 18
+          },
+          {
+            "q": 20000,
+            "p99": 3479,
+            "max": 17545,
+            "over": 12
+          },
+          {
+            "q": 21000,
+            "p99": 3625,
+            "max": 9485,
+            "over": 12
+          }
+        ],
+        "budget_us": 2902.4943310657595,
+        "quanta_over_budget": 184,
+        "pct_budget_p50": 0,
+        "pct_budget_p99": 88.54453125,
+        "pct_budget_max": 830.3203125513392
+      },
+      "ctxAudioSec": 60.029387755102036,
+      "mediaSec": 2.124626,
+      "latency": {
+        "baseLatency_s": 0.005351473922902495,
+        "outputLatency_s": 0.024
+      },
+      "playbackStats": {
+        "before": {
+          "underrunDuration": 0.005351,
+          "underrunEvents": 1,
+          "totalDuration": 2.968293,
+          "averageLatency": 0.024284,
+          "minimumLatency": 0,
+          "maximumLatency": 0.065613
+        },
+        "after": {
+          "underrunDuration": 0.016053,
+          "underrunEvents": 3,
+          "totalDuration": 63.131651,
+          "averageLatency": 0.024231,
+          "minimumLatency": 0,
+          "maximumLatency": 0.065613
+        },
+        "underrunEvents_delta": 2,
+        "underrunDuration_delta_s": 0.010702000000000001
+      },
+      "cpu_percent_of_one_core": {
+        "browser": 0.1831075007490761,
+        "audio-service": 0.8323068215867098,
+        "renderer": 89.82255218563772,
+        "gpu": 0,
+        "total": 90.8379665079735
+      }
+    },
+    {
+      "config": {
+        "headless": true,
+        "throttle": 4,
+        "timing": false,
+        "bypass": false,
+        "secs": 60
+      },
+      "init": {
+        "sampleRate": 44100,
+        "baseLatency": 0.005351473922902495,
+        "outputLatency": 0.024,
+        "state": "running"
+      },
+      "wallSec": 60.128,
+      "timing": null,
+      "ctxAudioSec": 60.395102040816326,
+      "mediaSec": 2.246412,
+      "latency": {
+        "baseLatency_s": 0.005351473922902495,
+        "outputLatency_s": 0.024
+      },
+      "playbackStats": {
+        "before": {
+          "underrunDuration": 0.010702,
+          "underrunEvents": 2,
+          "totalDuration": 2.962036,
+          "averageLatency": 0.024115,
+          "minimumLatency": 0,
+          "maximumLatency": 0.0284
+        },
+        "after": {
+          "underrunDuration": 0.042719,
+          "underrunEvents": 4,
+          "totalDuration": 63.120591,
+          "averageLatency": 0.024192,
+          "minimumLatency": 0,
+          "maximumLatency": 0.0284
+        },
+        "underrunEvents_delta": 2,
+        "underrunDuration_delta_s": 0.032017000000000004
+      },
+      "cpu_percent_of_one_core": {
+        "browser": 0.24946780202235236,
+        "audio-service": 0.8315593400745077,
+        "renderer": 51.706359765832886,
+        "gpu": 0.016631186801490144,
+        "total": 52.804018094731234
+      }
+    },
+    {
+      "config": {
+        "headless": true,
+        "throttle": 4,
+        "timing": true,
+        "bypass": true,
+        "secs": 60
+      },
+      "init": {
+        "sampleRate": 44100,
+        "baseLatency": 0.005351473922902495,
+        "outputLatency": 0.024,
+        "state": "running"
+      },
+      "wallSec": 60.074,
+      "timing": {
+        "quanta": 20000,
+        "p50_us": 0,
+        "p99_us": 5,
+        "p999_us": 5,
+        "max_us": 19.999995827674866,
+        "mean_us": 0.12374999970197678,
+        "worst_window_p99_us": 5,
+        "max_deadline_lag_us": 0,
+        "windows_with_overrun": 0,
+        "windows": [
+          {
+            "q": 2000,
+            "p99": 5,
+            "max": 10,
+            "over": 0
+          },
+          {
+            "q": 3000,
+            "p99": 5,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 4000,
+            "p99": 5,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 5000,
+            "p99": 5,
+            "max": 10,
+            "over": 0
+          },
+          {
+            "q": 6000,
+            "p99": 5,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 7000,
+            "p99": 5,
+            "max": 20,
+            "over": 0
+          },
+          {
+            "q": 8000,
+            "p99": 5,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 9000,
+            "p99": 5,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 10000,
+            "p99": 5,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 11000,
+            "p99": 5,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 12000,
+            "p99": 5,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 13000,
+            "p99": 5,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 14000,
+            "p99": 5,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 15000,
+            "p99": 4,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 16000,
+            "p99": 4,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 17000,
+            "p99": 5,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 18000,
+            "p99": 5,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 19000,
+            "p99": 5,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 20000,
+            "p99": 4,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 21000,
+            "p99": 4,
+            "max": 5,
+            "over": 0
+          }
+        ],
+        "budget_us": 2902.4943310657595,
+        "quanta_over_budget": 0,
+        "pct_budget_p50": 0,
+        "pct_budget_p99": 0.172265625,
+        "pct_budget_max": 0.6890623562503606
+      },
+      "ctxAudioSec": 60.09614512471656,
+      "mediaSec": 1.977663,
+      "latency": {
+        "baseLatency_s": 0.005351473922902495,
+        "outputLatency_s": 0.024
+      },
+      "playbackStats": {
+        "before": {
+          "underrunDuration": 0,
+          "underrunEvents": 0,
+          "totalDuration": 2.980354,
+          "averageLatency": 0.024147,
+          "minimumLatency": 0,
+          "maximumLatency": 0.030272
+        },
+        "after": {
+          "underrunDuration": 0,
+          "underrunEvents": 0,
+          "totalDuration": 63.130108,
+          "averageLatency": 0.02423,
+          "minimumLatency": 0,
+          "maximumLatency": 0.030272
+        },
+        "underrunEvents_delta": 0,
+        "underrunDuration_delta_s": 0
+      },
+      "cpu_percent_of_one_core": {
+        "browser": 0.16646136431734201,
+        "audio-service": 0.7157838665645705,
+        "renderer": 83.41378965942005,
+        "gpu": 0.016646136431734185,
+        "total": 84.31268102673369
+      }
+    },
+    {
+      "config": {
+        "headless": false,
+        "throttle": 1,
+        "timing": true,
+        "bypass": false,
+        "secs": 60
+      },
+      "init": {
+        "sampleRate": 44100,
+        "baseLatency": 0.005351473922902495,
+        "outputLatency": 0.024,
+        "state": "running"
+      },
+      "wallSec": 60.062,
+      "timing": {
+        "quanta": 20000,
+        "p50_us": 0,
+        "p99_us": 3554,
+        "p999_us": 10485,
+        "max_us": 25185.000002384186,
+        "mean_us": 126.76375001519918,
+        "worst_window_p99_us": 6005,
+        "max_deadline_lag_us": 22282.505671318428,
+        "windows_with_overrun": 20,
+        "windows": [
+          {
+            "q": 2000,
+            "p99": 3465,
+            "max": 9695,
+            "over": 12
+          },
+          {
+            "q": 3000,
+            "p99": 1509,
+            "max": 17400,
+            "over": 7
+          },
+          {
+            "q": 4000,
+            "p99": 2160,
+            "max": 22060,
+            "over": 7
+          },
+          {
+            "q": 5000,
+            "p99": 6005,
+            "max": 12125,
+            "over": 20
+          },
+          {
+            "q": 6000,
+            "p99": 3759,
+            "max": 25185,
+            "over": 14
+          },
+          {
+            "q": 7000,
+            "p99": 4294,
+            "max": 9010,
+            "over": 17
+          },
+          {
+            "q": 8000,
+            "p99": 3679,
+            "max": 6975,
+            "over": 14
+          },
+          {
+            "q": 9000,
+            "p99": 4240,
+            "max": 12285,
+            "over": 18
+          },
+          {
+            "q": 10000,
+            "p99": 3489,
+            "max": 7730,
+            "over": 12
+          },
+          {
+            "q": 11000,
+            "p99": 2739,
+            "max": 14885,
+            "over": 10
+          },
+          {
+            "q": 12000,
+            "p99": 1310,
+            "max": 7250,
+            "over": 7
+          },
+          {
+            "q": 13000,
+            "p99": 2619,
+            "max": 6965,
+            "over": 9
+          },
+          {
+            "q": 14000,
+            "p99": 2589,
+            "max": 13330,
+            "over": 10
+          },
+          {
+            "q": 15000,
+            "p99": 3354,
+            "max": 11510,
+            "over": 13
+          },
+          {
+            "q": 16000,
+            "p99": 840,
+            "max": 6175,
+            "over": 4
+          },
+          {
+            "q": 17000,
+            "p99": 4635,
+            "max": 8845,
+            "over": 16
+          },
+          {
+            "q": 18000,
+            "p99": 3899,
+            "max": 9975,
+            "over": 13
+          },
+          {
+            "q": 19000,
+            "p99": 2879,
+            "max": 6815,
+            "over": 10
+          },
+          {
+            "q": 20000,
+            "p99": 4740,
+            "max": 16900,
+            "over": 14
+          },
+          {
+            "q": 21000,
+            "p99": 4029,
+            "max": 12515,
+            "over": 13
+          }
+        ],
+        "budget_us": 2902.4943310657595,
+        "quanta_over_budget": 240,
+        "pct_budget_p50": 0,
+        "pct_budget_p99": 122.44640625000001,
+        "pct_budget_max": 867.7019532071427
+      },
+      "ctxAudioSec": 60.18321995464853,
+      "mediaSec": 2.023039,
+      "latency": {
+        "baseLatency_s": 0.005351473922902495,
+        "outputLatency_s": 0.024
+      },
+      "playbackStats": {
+        "before": {
+          "underrunDuration": 0.010702,
+          "underrunEvents": 2,
+          "totalDuration": 2.962036,
+          "averageLatency": 0.024269,
+          "minimumLatency": 0,
+          "maximumLatency": 0.065523
+        },
+        "after": {
+          "underrunDuration": 0.010702,
+          "underrunEvents": 2,
+          "totalDuration": 63.120496,
+          "averageLatency": 0.024198,
+          "minimumLatency": 0,
+          "maximumLatency": 0.065523
+        },
+        "underrunEvents_delta": 0,
+        "underrunDuration_delta_s": 0
+      },
+      "cpu_percent_of_one_core": {
+        "browser": 0.7159268755619197,
+        "audio-service": 0.915720422230362,
+        "renderer": 45.21993939595751,
+        "utility": 0.14984516000133197,
+        "gpu": 0.18314408444607239,
+        "total": 47.1845759381972
+      }
+    },
+    {
+      "config": {
+        "headless": false,
+        "throttle": 1,
+        "timing": false,
+        "bypass": false,
+        "secs": 60
+      },
+      "init": {
+        "sampleRate": 44100,
+        "baseLatency": 0.005351473922902495,
+        "outputLatency": 0,
+        "state": "running"
+      },
+      "wallSec": 60.067,
+      "timing": null,
+      "ctxAudioSec": 60.03809523809524,
+      "mediaSec": 1.878338,
+      "latency": {
+        "baseLatency_s": 0.005351473922902495,
+        "outputLatency_s": 0.024
+      },
+      "playbackStats": {
+        "before": {
+          "underrunDuration": 0.005351,
+          "underrunEvents": 1,
+          "totalDuration": 2.968293,
+          "averageLatency": 0.024122,
+          "minimumLatency": 0,
+          "maximumLatency": 0.028887
+        },
+        "after": {
+          "underrunDuration": 0.021404,
+          "underrunEvents": 4,
+          "totalDuration": 63.137002,
+          "averageLatency": 0.024215,
+          "minimumLatency": 0,
+          "maximumLatency": 0.028887
+        },
+        "underrunEvents_delta": 3,
+        "underrunDuration_delta_s": 0.016052999999999998
+      },
+      "cpu_percent_of_one_core": {
+        "browser": 0.4661461368138912,
+        "audio-service": 0.6825711289060548,
+        "renderer": 6.392861304876221,
+        "utility": 0.08324038157390912,
+        "gpu": 0.16648076314781832,
+        "total": 7.791299715317895
+      }
+    },
+    {
+      "config": {
+        "mode": "headed",
+        "throttle": 1,
+        "timing": true,
+        "bypass": true
+      },
+      "error": "Error: page.evaluate: Target page, context or browser has been closed"
+    },
+    {
+      "config": {
+        "headless": false,
+        "throttle": 4,
+        "timing": true,
+        "bypass": false,
+        "secs": 60
+      },
+      "init": {
+        "sampleRate": 44100,
+        "baseLatency": 0.005351473922902495,
+        "outputLatency": 0.024,
+        "state": "running"
+      },
+      "wallSec": 60.055,
+      "timing": {
+        "quanta": 20000,
+        "p50_us": 0,
+        "p99_us": 820,
+        "p999_us": 3149,
+        "max_us": 12649.999998509884,
+        "mean_us": 143.52075002007186,
+        "worst_window_p99_us": 1250,
+        "max_deadline_lag_us": 9747.505667444124,
+        "windows_with_overrun": 12,
+        "windows": [
+          {
+            "q": 2000,
+            "p99": 689,
+            "max": 1360,
+            "over": 0
+          },
+          {
+            "q": 3000,
+            "p99": 695,
+            "max": 5620,
+            "over": 2
+          },
+          {
+            "q": 4000,
+            "p99": 774,
+            "max": 7290,
+            "over": 2
+          },
+          {
+            "q": 5000,
+            "p99": 760,
+            "max": 1410,
+            "over": 0
+          },
+          {
+            "q": 6000,
+            "p99": 765,
+            "max": 4030,
+            "over": 1
+          },
+          {
+            "q": 7000,
+            "p99": 729,
+            "max": 810,
+            "over": 0
+          },
+          {
+            "q": 8000,
+            "p99": 799,
+            "max": 2405,
+            "over": 0
+          },
+          {
+            "q": 9000,
+            "p99": 875,
+            "max": 5665,
+            "over": 2
+          },
+          {
+            "q": 10000,
+            "p99": 869,
+            "max": 3335,
+            "over": 1
+          },
+          {
+            "q": 11000,
+            "p99": 879,
+            "max": 3235,
+            "over": 2
+          },
+          {
+            "q": 12000,
+            "p99": 905,
+            "max": 4805,
+            "over": 4
+          },
+          {
+            "q": 13000,
+            "p99": 814,
+            "max": 2135,
+            "over": 0
+          },
+          {
+            "q": 14000,
+            "p99": 864,
+            "max": 5275,
+            "over": 2
+          },
+          {
+            "q": 15000,
+            "p99": 1250,
+            "max": 12650,
+            "over": 5
+          },
+          {
+            "q": 16000,
+            "p99": 895,
+            "max": 3550,
+            "over": 2
+          },
+          {
+            "q": 17000,
+            "p99": 704,
+            "max": 935,
+            "over": 0
+          },
+          {
+            "q": 18000,
+            "p99": 690,
+            "max": 5245,
+            "over": 1
+          },
+          {
+            "q": 19000,
+            "p99": 719,
+            "max": 2910,
+            "over": 1
+          },
+          {
+            "q": 20000,
+            "p99": 700,
+            "max": 1470,
+            "over": 0
+          },
+          {
+            "q": 21000,
+            "p99": 670,
+            "max": 1165,
+            "over": 0
+          }
+        ],
+        "budget_us": 2902.4943310657595,
+        "quanta_over_budget": 25,
+        "pct_budget_p50": 0,
+        "pct_budget_p99": 28.2515625,
+        "pct_budget_max": 435.8320311986609
+      },
+      "ctxAudioSec": 60.1774149659864,
+      "mediaSec": 1.991111,
+      "latency": {
+        "baseLatency_s": 0.005351473922902495,
+        "outputLatency_s": 0.024
+      },
+      "playbackStats": {
+        "before": {
+          "underrunDuration": 0.005351,
+          "underrunEvents": 1,
+          "totalDuration": 2.953783,
+          "averageLatency": 0.024299,
+          "minimumLatency": 0,
+          "maximumLatency": 0.065623
+        },
+        "after": {
+          "underrunDuration": 0.005351,
+          "underrunEvents": 1,
+          "totalDuration": 63.103537,
+          "averageLatency": 0.02423,
+          "minimumLatency": 0,
+          "maximumLatency": 0.065623
+        },
+        "underrunEvents_delta": 0,
+        "underrunDuration_delta_s": 0
+      },
+      "cpu_percent_of_one_core": {
+        "browser": 0.5494962950628591,
+        "audio-service": 0.7992673382732496,
+        "renderer": 161.98484722337855,
+        "utility": 0.13321122304554156,
+        "gpu": 0.16651402880692695,
+        "total": 163.63333610856714
+      }
+    },
+    {
+      "config": {
+        "headless": false,
+        "throttle": 4,
+        "timing": false,
+        "bypass": false,
+        "secs": 60
+      },
+      "init": {
+        "sampleRate": 44100,
+        "baseLatency": 0.005351473922902495,
+        "outputLatency": 0,
+        "state": "running"
+      },
+      "wallSec": 60.062,
+      "timing": null,
+      "ctxAudioSec": 60.130975056689344,
+      "mediaSec": 1.930159,
+      "latency": {
+        "baseLatency_s": 0.005351473922902495,
+        "outputLatency_s": 0.024
+      },
+      "playbackStats": {
+        "before": {
+          "underrunDuration": 0.005351,
+          "underrunEvents": 1,
+          "totalDuration": 3.026333,
+          "averageLatency": 0.024138,
+          "minimumLatency": 0,
+          "maximumLatency": 0.028891
+        },
+        "after": {
+          "underrunDuration": 0.010702,
+          "underrunEvents": 2,
+          "totalDuration": 63.178536,
+          "averageLatency": 0.024212,
+          "minimumLatency": 0,
+          "maximumLatency": 0.028891
+        },
+        "underrunEvents_delta": 1,
+        "underrunDuration_delta_s": 0.005351
+      },
+      "cpu_percent_of_one_core": {
+        "browser": 0.7825247244514002,
+        "audio-service": 1.0156171955645836,
+        "renderer": 71.2263993872998,
+        "utility": 0.18314408444607236,
+        "gpu": 0.21644300889081283,
+        "total": 73.42412840065265
+      }
+    },
+    {
+      "config": {
+        "headless": false,
+        "throttle": 4,
+        "timing": true,
+        "bypass": true,
+        "secs": 60
+      },
+      "init": {
+        "sampleRate": 44100,
+        "baseLatency": 0.005351473922902495,
+        "outputLatency": 0.024,
+        "state": "running"
+      },
+      "wallSec": 60.164,
+      "timing": {
+        "quanta": 20000,
+        "p50_us": 0,
+        "p99_us": 5,
+        "p999_us": 5,
+        "max_us": 215.0000035762787,
+        "mean_us": 0.3052500069141388,
+        "worst_window_p99_us": 5,
+        "max_deadline_lag_us": 0,
+        "windows_with_overrun": 0,
+        "windows": [
+          {
+            "q": 2000,
+            "p99": 5,
+            "max": 215,
+            "over": 0
+          },
+          {
+            "q": 3000,
+            "p99": 5,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 4000,
+            "p99": 5,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 5000,
+            "p99": 5,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 6000,
+            "p99": 5,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 7000,
+            "p99": 5,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 8000,
+            "p99": 5,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 9000,
+            "p99": 5,
+            "max": 10,
+            "over": 0
+          },
+          {
+            "q": 10000,
+            "p99": 5,
+            "max": 75,
+            "over": 0
+          },
+          {
+            "q": 11000,
+            "p99": 5,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 12000,
+            "p99": 5,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 13000,
+            "p99": 5,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 14000,
+            "p99": 5,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 15000,
+            "p99": 5,
+            "max": 80,
+            "over": 0
+          },
+          {
+            "q": 16000,
+            "p99": 5,
+            "max": 110,
+            "over": 0
+          },
+          {
+            "q": 17000,
+            "p99": 5,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 18000,
+            "p99": 5,
+            "max": 5,
+            "over": 0
+          },
+          {
+            "q": 19000,
+            "p99": 5,
+            "max": 35,
+            "over": 0
+          },
+          {
+            "q": 20000,
+            "p99": 5,
+            "max": 35,
+            "over": 0
+          },
+          {
+            "q": 21000,
+            "p99": 5,
+            "max": 5,
+            "over": 0
+          }
+        ],
+        "budget_us": 2902.4943310657595,
+        "quanta_over_budget": 0,
+        "pct_budget_p50": 0,
+        "pct_budget_p99": 0.172265625,
+        "pct_budget_max": 7.407421998213977
+      },
+      "ctxAudioSec": 60.14548752834467,
+      "mediaSec": 2.014184,
+      "latency": {
+        "baseLatency_s": 0.005351473922902495,
+        "outputLatency_s": 0.024
+      },
+      "playbackStats": {
+        "before": {
+          "underrunDuration": 0,
+          "underrunEvents": 0,
+          "totalDuration": 2.951334,
+          "averageLatency": 0.024148,
+          "minimumLatency": 0,
+          "maximumLatency": 0.029803
+        },
+        "after": {
+          "underrunDuration": 0,
+          "underrunEvents": 0,
+          "totalDuration": 63.10399,
+          "averageLatency": 0.024217,
+          "minimumLatency": 0,
+          "maximumLatency": 0.029803
+        },
+        "underrunEvents_delta": 0,
+        "underrunDuration_delta_s": 0
+      },
+      "cpu_percent_of_one_core": {
+        "browser": 0.6814706468984777,
+        "audio-service": 0.9141679409613723,
+        "renderer": 151.5025596702347,
+        "utility": 0.13296988232165416,
+        "gpu": 0.1828335881922744,
+        "total": 153.41400172860844
+      }
+    }
+  ]
+}

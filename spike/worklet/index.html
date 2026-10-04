@@ -1,0 +1,29 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>worklet bench</title>
+<audio id="a" src="/clips/wav/00/mix.wav" loop></audio>
+<script type="module">
+const q = new URLSearchParams(location.search);
+const timing = q.get('timing') !== '0', bypass = q.get('bypass') === '1';
+window.stats = []; window.ready = false;
+window.start = async () => {
+  const ctx = new AudioContext({ latencyHint: 'interactive', sampleRate: 44100 });
+  const sab = new SharedArrayBuffer(8);
+  if (timing) { const w = new Worker('/worklet/clock-worker.js'); w.postMessage(sab); await new Promise(r => setTimeout(r, 200)); window.clockWorker = w; }
+  await ctx.audioWorklet.addModule('/worklet/separator-processor.js');
+  const node = new AudioWorkletNode(ctx, 'separator', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2],
+    processorOptions: { clockBuffer: timing ? sab : null, bypass } });
+  node.port.onmessage = (e) => { const d = e.data; window.stats.push(d); };
+  const el = document.getElementById('a');
+  const src = ctx.createMediaElementSource(el);
+  src.connect(node).connect(ctx.destination);
+  await ctx.resume(); await el.play();
+  window.ctx = ctx; window.node = node; window.ready = true;
+  return { sampleRate: ctx.sampleRate, baseLatency: ctx.baseLatency, outputLatency: ctx.outputLatency, state: ctx.state };
+};
+window.snapshot = () => {
+  const c = window.ctx, ps = c.playbackStats;
+  return { state: c.state, currentTime: c.currentTime, baseLatency: c.baseLatency, outputLatency: c.outputLatency,
+    playbackStats: ps ? ps.toJSON() : null, mediaTime: document.getElementById('a').currentTime };
+};
+</script>
