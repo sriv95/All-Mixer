@@ -98,7 +98,8 @@ export function scoreCandidate(track: TrackInfo, c: LrclibRecord): number {
 
   let score = title * 35 + artist * 25;
   const diff = Math.abs(track.duration - c.duration);
-  if (diff <= 3) score += 30 - diff * 2;
+  if (!(track.duration > 0)) score += 5; // duration not known yet: rely on title/artist
+  else if (diff <= 3) score += 30 - diff * 2;
   else if (diff <= 15) score += 18 - (diff - 3) * 0.5;
   else if (diff <= 60) score += 10 - (diff - 15) / 9; // music videos with intros/outros
   else return 0;

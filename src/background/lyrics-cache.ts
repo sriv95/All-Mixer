@@ -15,6 +15,8 @@ type Area = Pick<chrome.storage.StorageArea, 'get' | 'set' | 'remove'>;
 
 /** LRCLIB results per videoId in chrome.storage.local; negative results expire after a day. */
 export class LyricsCache {
+  private readonly inflight = new Map<string, Promise<FoundLyrics | null>>();
+
   constructor(
     private readonly area: Area,
     private readonly now: () => number = Date.now,
@@ -38,7 +40,17 @@ export class LyricsCache {
   }
 
   /** Cached lookup, falling back to `load`. Network errors are not cached. */
-  async getOrFetch(track: TrackInfo, load: (t: TrackInfo) => Promise<FoundLyrics | null>): Promise<FoundLyrics | null> {
+  getOrFetch(track: TrackInfo, load: (t: TrackInfo) => Promise<FoundLyrics | null>): Promise<FoundLyrics | null> {
+    const id = track.videoId;
+    let p = this.inflight.get(id);
+    if (!p) {
+      p = this.fetchAndStore(track, load).finally(() => this.inflight.delete(id));
+      this.inflight.set(id, p);
+    }
+    return p;
+  }
+
+  private async fetchAndStore(track: TrackInfo, load: (t: TrackInfo) => Promise<FoundLyrics | null>): Promise<FoundLyrics | null> {
     const cached = await this.lookup(track.videoId);
     if (cached.hit) return cached.found;
     const found = await load(track);

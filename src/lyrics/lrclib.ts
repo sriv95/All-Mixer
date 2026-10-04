@@ -47,7 +47,7 @@ function toFound(record: LrclibRecord): FoundLyrics | null {
 export async function findLyrics(track: TrackInfo, fetchFn: typeof fetch = fetch): Promise<FoundLyrics | null> {
   const clean: TrackInfo = { ...track, title: cleanTitle(track.title) || track.title, artist: cleanArtist(track.artist) };
 
-  const exact = await getRecord(clean, fetchFn).catch(() => null);
+  const exact = track.duration > 0 ? await getRecord(clean, fetchFn).catch(() => null) : null;
   if (exact?.syncedLyrics) return toFound(exact);
 
   const searches: Record<string, string>[] = [

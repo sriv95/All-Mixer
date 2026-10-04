@@ -49,3 +49,14 @@ describe('LyricsCache', () => {
     expect(keys).toContain('lyrics:v301');
   });
 });
+
+describe('LyricsCache in-flight', () => {
+  it('shares one fetch between concurrent requests for the same video', async () => {
+    const c = new LyricsCache(memArea() as never);
+    const load = vi.fn().mockResolvedValue(found);
+    const [a, b] = await Promise.all([c.getOrFetch(t('a'), load), c.getOrFetch(t('a'), load)]);
+    expect(a).toEqual(found);
+    expect(b).toEqual(found);
+    expect(load).toHaveBeenCalledTimes(1);
+  });
+});

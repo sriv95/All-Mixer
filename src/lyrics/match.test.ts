@@ -85,3 +85,11 @@ describe('scoring', () => {
     expect(pickBest(t, [rec({ trackName: 'Halo', artistName: 'Beyonce, Someone', duration: 261 })])).not.toBeNull();
   });
 });
+
+describe('unknown duration', () => {
+  it('still matches on title/artist when duration is 0 or NaN', () => {
+    for (const duration of [0, NaN]) {
+      expect(pickBest({ ...track, duration }, [rec({})])).not.toBeNull();
+    }
+  });
+});
