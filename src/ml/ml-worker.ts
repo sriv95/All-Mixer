@@ -26,7 +26,7 @@ async function start(init: MlWorkerInit): Promise<void> {
   // 1. WebGPU probe first: without a real adapter ORT is not even loaded.
   const gpu = (navigator as Navigator & { gpu?: { requestAdapter(): Promise<GPUAdapterLike | null> } }).gpu;
   if (!gpu) return unavailable('no navigator.gpu in the worker');
-  let adapter: GPUAdapterLike | null = null;
+  let adapter: GPUAdapterLike | null;
   try {
     adapter = await gpu.requestAdapter();
   } catch (e) {
