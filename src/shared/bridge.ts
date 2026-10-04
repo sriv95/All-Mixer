@@ -1,0 +1,43 @@
+/**
+ * Protocol between the content script (isolated world) and src/page/bridge.ts
+ * (main world, which can read YouTube's player object). window.postMessage only;
+ * the page bridge never receives extension privileges.
+ */
+
+export const BRIDGE_TAG = '__allMixer';
+
+export interface CaptionTrack {
+  baseUrl: string;
+  languageCode: string;
+  /** 'asr' for auto-generated tracks. */
+  kind?: string;
+  name?: string;
+}
+
+export interface PlayerInfo {
+  videoId: string;
+  title: string;
+  author: string;
+  /** Seconds; 0 when unknown. */
+  lengthSeconds: number;
+  /** YT Music only: MUSIC_VIDEO_TYPE_ATV (art track), _OMV (official video), _UGC … */
+  musicVideoType?: string;
+  captionTracks: CaptionTrack[];
+}
+
+export type BridgeRequest =
+  | { kind: 'player-info'; videoId: string }
+  | { kind: 'timedtext'; videoId: string; track: CaptionTrack };
+
+export interface BridgeRequestMsg {
+  [BRIDGE_TAG]: 'req';
+  id: number;
+  req: BridgeRequest;
+}
+
+export interface BridgeResponseMsg {
+  [BRIDGE_TAG]: 'res';
+  id: number;
+  /** PlayerInfo | json3 string | null */
+  data: unknown;
+}
