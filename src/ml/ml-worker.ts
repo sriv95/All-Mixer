@@ -9,16 +9,12 @@ import {
   type FromMlWorker,
   type MlWorkerInit,
 } from '../worklet/protocol';
-import { CTX, BINS, SpleeterStream, TENSOR_LEN } from './stream';
+import { CTX, BINS, SpleeterStream } from './stream';
+import { warmUp } from './warmup';
 
 type Ort = typeof import('onnxruntime-web/webgpu');
 
 const ctx = self as unknown as { postMessage(m: FromMlWorker): void; onmessage: ((e: MessageEvent<MlWorkerInit>) => void) | null };
-
-const pct = (a: number[], p: number): number => {
-  const s = [...a].sort((x, y) => x - y);
-  return s[Math.min(s.length - 1, Math.ceil(p * s.length) - 1)];
-};
 
 const unavailable = (reason: string): void => ctx.postMessage({ type: 'unavailable', reason });
 
@@ -66,20 +62,23 @@ async function start(init: MlWorkerInit): Promise<void> {
     return data;
   };
 
-  // 3. Warm-up: 10 inferences at T = 64 on noise (first one compiles the shaders).
-  const times: number[] = [];
+  // 3. Warm-up on noise: 2 untimed runs (shader compile, first upload; their time is added to
+  // createMs), then 10 timed runs of the whole block step (analyze + model + synthesize), which is
+  // what has to meet the block deadline.
+  const nl = new Float32Array(ML_BLOCK), nr = new Float32Array(ML_BLOCK);
+  const ol = new Float32Array(ML_BLOCK), or = new Float32Array(ML_BLOCK);
+  let wu: Awaited<ReturnType<typeof warmUp>>;
   try {
-    for (let i = 0; i < TENSOR_LEN; i++) stream.x[i] = Math.random() * 40;
-    for (let i = 0; i < 10; i++) {
-      const t = performance.now();
-      await model(stream.x);
-      times.push(performance.now() - t);
+    for (let i = 0; i < ML_BLOCK; i++) {
+      nl[i] = Math.random() * 2 - 1;
+      nr[i] = Math.random() * 2 - 1;
     }
+    wu = await warmUp(() => stream.process(nl, nr, model, ol, or), { skip: 2, n: 10 });
   } catch (e) {
     return unavailable(`warm-up: ${String(e)}`);
   }
   stream.reset();
-  ctx.postMessage({ type: 'ready', p50: pct(times, 0.5), p95: pct(times, 0.95), createMs, adapter: adapterName });
+  ctx.postMessage({ type: 'ready', p50: wu.p50, p95: wu.p95, createMs: createMs + wu.firstMs, adapter: adapterName });
 
   serve(init.port, stream, model);
 }
