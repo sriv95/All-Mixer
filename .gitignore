@@ -10,3 +10,6 @@ spike/ml/models/
 .cache/
 public/ml/vocals.onnx
 __pycache__/
+# local QA harness scratch (Shadow)
+.qa-out/
+scripts/qa-*.mjs*
