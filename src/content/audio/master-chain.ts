@@ -2,13 +2,18 @@ import type { AudioState } from '../../shared/messages';
 import type { SeparationQuality } from '../../shared/settings';
 import {
   DSP_LATENCY_SAMPLES,
+  ML_LATENCY_SAMPLES,
+  ML_SAMPLE_RATE,
   PARAM_INSTRUMENTAL,
   PARAM_VOCAL,
   SEPARATOR_MODULE_PATH,
   SEPARATOR_PROCESSOR,
+  type FromWorklet,
+  type MlEngine,
+  type MlReason,
   type ToWorklet,
 } from '../../worklet/protocol';
-import { toPerformanceTime, type LatencyInfo, type LatencyListener } from './latency';
+import { toPerformanceTime, type EngineReason, type LatencyInfo, type LatencyListener } from './latency';
 import { createLimiter } from './limiter';
 
 /**
@@ -18,7 +23,8 @@ import { createLimiter } from './limiter';
  *                                 └─ separator worklet (vocal/inst 0–6×) ─ sepOut (gain) ┘
  *
  * Default mode plays through `direct` with no added delay. Separate mode
- * crossfades to the separator, whose output is DSP_LATENCY_SAMPLES late; the
+ * crossfades to the separator, whose output is DSP_LATENCY_SAMPLES late (ML_LATENCY_SAMPLES
+ * in the ML engine, which the worklet reports with an `engine` message); the
  * crossfade starts once the separator has primed, so there is no gap. The
  * worklet module is only loaded the first time Separate mode is used.
  *
@@ -65,6 +71,9 @@ export class MasterChain {
   private separating = false;
   /** Worklet is running the separator (stays on briefly after a fade-out). */
   private workletOn = false;
+  /** Engine the worklet runs, and why (kept in step with its `engine` messages). */
+  private engine: MlEngine = 'dsp';
+  private engineReason: EngineReason = 'auto';
   private offTimer: ReturnType<typeof setTimeout> | undefined;
   private separation: SeparationRequest = OFF;
   private readonly listeners = new Set<LatencyListener>();
@@ -118,12 +127,12 @@ export class MasterChain {
   /** Current total audio delay (D1). */
   get latency(): LatencyInfo {
     const sampleRate = this.ctx?.sampleRate ?? 48000;
-    const processingSamples = this.separating ? DSP_LATENCY_SAMPLES : 0;
+    const processingSamples = !this.separating ? 0 : this.engine === 'ml' ? ML_LATENCY_SAMPLES : DSP_LATENCY_SAMPLES;
     const processingMs = (processingSamples / sampleRate) * 1000;
     const deviceMs = this.deviceLatencyMs;
     return {
-      engine: this.separating ? 'dsp' : 'bypass',
-      reason: this.separation.quality === 'light' ? 'user' : 'auto',
+      engine: this.separating ? this.engine : 'bypass',
+      reason: this.separating ? this.engineReason : this.separation.quality === 'light' ? 'user' : 'auto',
       sampleRate,
       processingSamples,
       processingMs,
@@ -141,6 +150,16 @@ export class MasterChain {
   /** Drop audio buffered in the separator (seeks call this automatically). */
   flush(): void {
     if (this.workletOn) this.post({ type: 'flush' });
+  }
+
+  /** Hand the worklet its channel to the ML worker (the port is transferred). */
+  setMlPort(port: MessagePort): void {
+    this.sep?.port.postMessage({ type: 'ml-port', port } satisfies ToWorklet, [port]);
+  }
+
+  /** Switch engine while separating. The worklet confirms with an `engine` message (and the delay event). */
+  setEngine(engine: MlEngine, reason: MlReason): void {
+    if (this.workletOn) this.post({ type: 'engine', engine, reason });
   }
 
   setVideo(video: HTMLMediaElement): void {
@@ -169,7 +188,13 @@ export class MasterChain {
   private engage(): void {
     this.engaged = true;
     try {
-      const ctx = new AudioContext({ latencyHint: 'interactive' });
+      // The ML engine runs at the model rate so the worklet needs no resampler; only users who
+      // chose the light (DSP) engine keep the device rate.
+      const ctx = new AudioContext(
+        this.separation.quality === 'light'
+          ? { latencyHint: 'interactive' }
+          : { latencyHint: 'interactive', sampleRate: ML_SAMPLE_RATE },
+      );
       const gain = new GainNode(ctx, { gain: this.targetGain });
       const limiter = createLimiter(ctx);
       gain.connect(limiter.input);
@@ -213,6 +238,8 @@ export class MasterChain {
       let start = now + PRE_ROLL;
       if (!this.workletOn) {
         // A fresh separator outputs silence for its first DSP_LATENCY_SAMPLES; fade in after that.
+        this.engine = 'dsp';
+        this.engineReason = 'auto';
         this.post({ type: 'active', on: true });
         this.workletOn = true;
         start += DSP_LATENCY_SAMPLES / ctx.sampleRate;
@@ -264,6 +291,7 @@ export class MasterChain {
           channelCountMode: 'explicit',
           channelInterpretation: 'speakers',
         });
+        node.port.onmessage = (e: MessageEvent<FromWorklet>) => this.onWorkletMessage(e.data);
         node.addEventListener('processorerror', () => this.failSeparation(new Error('separator stopped')));
         node.connect(this.sepOut!);
         const source = this.video && this.sources.get(this.video);
@@ -278,6 +306,14 @@ export class MasterChain {
     this.sepError = e instanceof Error ? e.message : String(e);
     console.warn('[All Mixer!] separation unavailable, playing the original mix:', e);
     this.route(); // fades back to `direct` if we were separating
+    this.onStateChange();
+  }
+
+  private onWorkletMessage(msg: FromWorklet): void {
+    if (msg.type !== 'engine') return;
+    this.engine = msg.engine;
+    this.engineReason = msg.reason;
+    this.emitLatency(msg.at);
     this.onStateChange();
   }
 
