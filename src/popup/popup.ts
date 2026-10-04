@@ -7,6 +7,11 @@ const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as 
 const tabs = [...document.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
 const master = $<HTMLInputElement>('master');
 const masterValue = $<HTMLOutputElement>('master-value');
+const vocal = $<HTMLInputElement>('vocal');
+const vocalValue = $<HTMLOutputElement>('vocal-value');
+const instrumental = $<HTMLInputElement>('instrumental');
+const instrumentalValue = $<HTMLOutputElement>('instrumental-value');
+const presets = [...document.querySelectorAll<HTMLButtonElement>('.presets button')];
 const quality = $<HTMLSelectElement>('separation-quality');
 const status = $<HTMLParagraphElement>('status');
 
@@ -22,6 +27,14 @@ function render(): void {
   }
   master.value = String(settings.masterPct);
   masterValue.value = `${settings.masterPct}%`;
+  vocal.value = String(settings.vocalPct);
+  vocalValue.value = `${settings.vocalPct}%`;
+  instrumental.value = String(settings.instrumentalPct);
+  instrumentalValue.value = `${settings.instrumentalPct}%`;
+  for (const b of presets) {
+    const on = Number(b.dataset.vocal) === settings.vocalPct && Number(b.dataset.instrumental) === settings.instrumentalPct;
+    b.setAttribute('aria-pressed', String(on));
+  }
   quality.value = settings.separationQuality;
 }
 
@@ -50,6 +63,19 @@ const STATUS_TEXT: Record<ContentStatus['audio'], string> = {
   error: 'Audio error',
 };
 
+const ENGINE_NAME: Record<string, string> = { dsp: 'Light', ml: 'Quality' };
+
+function separationText(s: ContentStatus): string {
+  const sep = s.separation;
+  if (settings.mode !== 'separate' || !sep) return '';
+  if (sep.state === 'loading') return 'Starting separation…';
+  if (sep.state === 'on') {
+    return `${ENGINE_NAME[sep.latency.engine] ?? sep.latency.engine} engine · ${Math.round(sep.latency.processingMs)} ms delay`;
+  }
+  if (sep.state === 'error') return `Separation unavailable: ${sep.error ?? 'unknown'}. Playing the original mix.`;
+  return '';
+}
+
 async function refreshStatus(): Promise<void> {
   if (tabId === null) return;
   const req: GetStatus = { type: 'get-status' };
@@ -61,7 +87,7 @@ async function refreshStatus(): Promise<void> {
   } else if (!s.videoFound && settings.masterPct !== 100) {
     status.textContent = 'No video player on this page yet.';
   } else {
-    status.textContent = STATUS_TEXT[s.audio];
+    status.textContent = separationText(s) || STATUS_TEXT[s.audio];
   }
 }
 
@@ -101,6 +127,23 @@ master.addEventListener('input', () => {
   settings = { ...settings, masterPct: clampPct(master.value) };
   save();
 });
+
+vocal.addEventListener('input', () => {
+  settings = { ...settings, vocalPct: clampPct(vocal.value) };
+  save();
+});
+
+instrumental.addEventListener('input', () => {
+  settings = { ...settings, instrumentalPct: clampPct(instrumental.value) };
+  save();
+});
+
+for (const b of presets) {
+  b.addEventListener('click', () => {
+    settings = { ...settings, vocalPct: Number(b.dataset.vocal), instrumentalPct: Number(b.dataset.instrumental) };
+    save();
+  });
+}
 
 quality.addEventListener('change', () => {
   settings = normalizeSettings({ ...settings, separationQuality: quality.value as SeparationQuality });

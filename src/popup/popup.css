@@ -8,3 +8,6 @@ label { display: block; margin-top: 6px; }
 output { min-width: 3.5em; text-align: right; font-variant-numeric: tabular-nums; }
 .note, .status { color: #555; }
 .status:empty { display: none; }
+.presets { display: flex; gap: 4px; margin: 8px 0; }
+.presets button { flex: 1; padding: 5px; border: 1px solid #999; background: #f2f2f2; cursor: pointer; }
+.presets button[aria-pressed='true'] { background: #dde8ff; border-color: #36c; font-weight: 600; }

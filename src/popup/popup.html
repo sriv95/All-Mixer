@@ -21,16 +21,20 @@
     </section>
 
     <section role="tabpanel" id="panel-separate" aria-labelledby="tab-separate" hidden>
-      <p class="note">Vocal / instrumental separation is coming in a later build. Audio plays at 100% in this mode for now.</p>
       <label for="vocal">Vocal</label>
       <div class="row">
-        <input id="vocal" type="range" min="0" max="600" step="5" value="100" disabled />
+        <input id="vocal" type="range" min="0" max="600" step="5" value="100" />
         <output id="vocal-value" for="vocal">100%</output>
       </div>
       <label for="instrumental">Instrumental</label>
       <div class="row">
-        <input id="instrumental" type="range" min="0" max="600" step="5" value="100" disabled />
+        <input id="instrumental" type="range" min="0" max="600" step="5" value="100" />
         <output id="instrumental-value" for="instrumental">100%</output>
+      </div>
+      <div class="presets" role="group" aria-label="Presets">
+        <button type="button" id="preset-karaoke" data-vocal="0" data-instrumental="100" aria-pressed="false">Karaoke</button>
+        <button type="button" id="preset-acappella" data-vocal="100" data-instrumental="0" aria-pressed="false">A cappella</button>
+        <button type="button" id="preset-reset" data-vocal="100" data-instrumental="100" aria-pressed="false">Reset</button>
       </div>
       <label for="separation-quality">Separation quality</label>
       <select id="separation-quality">

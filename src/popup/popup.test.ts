@@ -165,4 +165,69 @@ describe('popup', () => {
     await load({ status: 'reject' });
     expect(el('status').textContent).toMatch(/Reload this YouTube tab/);
   });
+
+  describe('Separate tab', () => {
+    const sep = (state: 'loading' | 'on' | 'error', extra: object = {}, engine = 'dsp', processingMs = 42.6) =>
+      ({ ...okStatus, separation: { state, latency: { engine, processingMs }, ...extra } }) as unknown as ContentStatus;
+    const drag = async (id: string, v: string) => {
+      const s = el<HTMLInputElement>(id);
+      s.value = v;
+      s.dispatchEvent(new Event('input', { bubbles: true }));
+      await settle();
+    };
+    const pressed = () =>
+      [...document.querySelectorAll('.presets button')].filter((b) => b.getAttribute('aria-pressed') === 'true').map((b) => b.id);
+
+    it('sliders are enabled and send vocalPct / instrumentalPct', async () => {
+      await load({ stored: { mode: 'separate' } });
+      expect(el<HTMLInputElement>('vocal').disabled).toBe(false);
+      await drag('vocal', '250');
+      expect(sent().at(-1).settings.vocalPct).toBe(250);
+      expect(el<HTMLOutputElement>('vocal-value').value).toBe('250%');
+      await drag('instrumental', '9999');
+      expect(sent().at(-1).settings).toMatchObject({ vocalPct: 250, instrumentalPct: 600 });
+    });
+
+    it.each([
+      ['preset-karaoke', 0, 100],
+      ['preset-acappella', 100, 0],
+      ['preset-reset', 100, 100],
+    ])('%s sets %i / %i and is aria-pressed', async (id, v, i) => {
+      await load({ stored: { mode: 'separate', vocalPct: 300, instrumentalPct: 300 } });
+      expect(pressed()).toEqual([]);
+      el(id).click();
+      await settle();
+      expect(sent().at(-1).settings).toMatchObject({ vocalPct: v, instrumentalPct: i });
+      expect(pressed()).toEqual([id]);
+    });
+
+    it('moving a slider clears the preset highlight', async () => {
+      await load({ stored: { mode: 'separate' } });
+      expect(pressed()).toEqual(['preset-reset']);
+      await drag('vocal', '50');
+      expect(pressed()).toEqual([]);
+    });
+
+    it('loading status', async () => {
+      await load({ stored: { mode: 'separate' }, status: sep('loading') });
+      expect(el('status').textContent).toBe('Starting separation…');
+    });
+
+    it('on status shows engine and rounded delay', async () => {
+      await load({ stored: { mode: 'separate' }, status: sep('on') });
+      expect(el('status').textContent).toBe('Light engine · 43 ms delay');
+      await load({ stored: { mode: 'separate' }, status: sep('on', {}, 'ml', 120.2) });
+      expect(el('status').textContent).toBe('Quality engine · 120 ms delay');
+    });
+
+    it('error status', async () => {
+      await load({ stored: { mode: 'separate' }, status: sep('error', { error: 'no worklet' }) });
+      expect(el('status').textContent).toBe('Separation unavailable: no worklet. Playing the original mix.');
+    });
+
+    it('shows nothing without separation info', async () => {
+      await load({ stored: { mode: 'separate' } });
+      expect(el('status').textContent).toBe('');
+    });
+  });
 });
