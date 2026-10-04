@@ -83,6 +83,15 @@ describe('LyricsController', () => {
     expect(s.states.map((x) => x.kind)).toEqual(['idle', 'idle', 'loading', 'ready']);
   });
 
+  it('loads for hidden prefetch surfaces too', async () => {
+    const d = deps();
+    const c = new LyricsController('ytmusic', d);
+    c.addSurface(Object.assign(new FakeSurface(), { active: false, prefetch: true }));
+    c.setVideoId('v1');
+    await flush();
+    expect(d.fetchLyrics).toHaveBeenCalledTimes(1);
+  });
+
   it('aligns with ASR captions when available', async () => {
     const asrTrack = { baseUrl: 'u', languageCode: 'en', kind: 'asr' };
     const words = [
