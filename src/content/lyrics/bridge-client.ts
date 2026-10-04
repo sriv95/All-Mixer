@@ -28,7 +28,7 @@ function ask(req: BridgeRequest, timeoutMs: number): Promise<unknown> {
   });
 }
 
-/** Player response for `videoId`, polling until YouTube has loaded it (SPA navigation). Null on timeout or abort. */
+/** Player response for `videoId` ('' = whatever is loaded), polling until YouTube has loaded it (SPA navigation). Null on timeout or abort. */
 export async function getPlayerInfo(videoId: string, signal: AbortSignal, waitMs = 8000): Promise<PlayerInfo | null> {
   const until = Date.now() + waitMs;
   while (!signal.aborted && Date.now() < until) {

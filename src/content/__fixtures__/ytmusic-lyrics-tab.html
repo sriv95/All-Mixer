@@ -1,0 +1,13 @@
+<ytmusic-app><ytmusic-player-page>
+  <ytmusic-player id="player"><div id="movie_player" class="html5-video-player"><video class="video-stream html5-main-video"></video></div></ytmusic-player>
+  <div id="side-panel">
+    <tp-yt-paper-tabs>
+      <tp-yt-paper-tab role="tab" aria-selected="true" class="iron-selected">Up next</tp-yt-paper-tab>
+      <tp-yt-paper-tab role="tab" aria-selected="false" aria-disabled="true" disabled>Lyrics</tp-yt-paper-tab>
+      <tp-yt-paper-tab role="tab" aria-selected="false">Related</tp-yt-paper-tab>
+    </tp-yt-paper-tabs>
+    <ytmusic-tab-renderer id="tab-renderer"><ytmusic-description-shelf-renderer>Native static lyrics</ytmusic-description-shelf-renderer></ytmusic-tab-renderer>
+  </div>
+</ytmusic-player-page>
+<ytmusic-player-bar><div class="right-controls-buttons"><button id="native-btn"></button></div></ytmusic-player-bar>
+</ytmusic-app>

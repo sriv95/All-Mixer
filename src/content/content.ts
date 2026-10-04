@@ -1,6 +1,7 @@
 import type { ContentRequest, ContentStatus, GetMyTabSettings } from '../shared/messages';
 import { DEFAULT_SETTINGS, masterGainFor, normalizeSettings, type MixerSettings } from '../shared/settings';
 import { MasterChain } from './audio/master-chain';
+import { initLyrics } from './lyrics/init';
 import { DelayedVideo } from './video-delay/delayed-video';
 import { overlayDelayMs } from './video-delay/schedule';
 import { detectSite, watchMainVideo } from './youtube-dom';
@@ -12,6 +13,8 @@ if (site) {
   let video: HTMLVideoElement | null = null;
   let overlay: DelayedVideo | null = null;
   const chain = new MasterChain(() => syncDelay());
+  // Lyrics follow what the user sees and hears, which trails currentTime by the picture delay (D1).
+  const lyrics = initLyrics(site, () => (overlay?.state === 'on' ? overlay.delayMs / 1000 : 0));
 
   const wantedDelayMs = (): number => {
     if (settings.mode === 'separate') {
@@ -47,6 +50,7 @@ if (site) {
   watchMainVideo(site, (v) => {
     video = v;
     chain.setVideo(v);
+    lyrics.setVideo(v);
     overlay?.destroy();
     overlay = new DelayedVideo(v);
     syncDelay(true);

@@ -97,3 +97,43 @@ export function watchMainVideo(
     offNav();
   };
 }
+
+/** Lyrics hooks (F1 / F2). */
+export const LYRICS_SELECTORS = {
+  /** Player control bars that get the lyrics toggle button. */
+  controls: {
+    youtube: '#movie_player .ytp-right-controls',
+    ytmusic: 'ytmusic-player-bar .right-controls-buttons',
+  } satisfies Record<Site, string>,
+  ytmusic: {
+    /** Up next / Lyrics / Related. Labels are localised, so we go by position. */
+    tabs: 'ytmusic-player-page tp-yt-paper-tab',
+    lyricsTabIndex: 1,
+    /** Container that shows the selected tab's content. */
+    tabContent: 'ytmusic-player-page #tab-renderer',
+  },
+} as const;
+
+export function findYtmLyricsTab(doc: ParentNode = document): HTMLElement | null {
+  const tabs = doc.querySelectorAll<HTMLElement>(LYRICS_SELECTORS.ytmusic.tabs);
+  return tabs[LYRICS_SELECTORS.ytmusic.lyricsTabIndex] ?? null;
+}
+
+export function findYtmTabContent(doc: ParentNode = document): HTMLElement | null {
+  return doc.querySelector<HTMLElement>(LYRICS_SELECTORS.ytmusic.tabContent);
+}
+
+export function isTabSelected(tab: Element): boolean {
+  return tab.getAttribute('aria-selected') === 'true' || tab.classList.contains('iron-selected');
+}
+
+/** YT Music greys out the Lyrics tab when it has no lyrics of its own. Re-enable it when we do. */
+export function enableTab(tab: HTMLElement): void {
+  tab.removeAttribute('disabled');
+  tab.setAttribute('aria-disabled', 'false');
+  (tab as HTMLElement & { disabled?: boolean }).disabled = false;
+}
+
+export function findLyricsControls(site: Site, doc: ParentNode = document): HTMLElement | null {
+  return doc.querySelector<HTMLElement>(LYRICS_SELECTORS.controls[site]);
+}

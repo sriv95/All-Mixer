@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc --noEmit && vite build && vite build --config vite.content.config.ts",
+    "build": "tsc --noEmit && vite build && vite build --config vite.content.config.ts && ENTRY=page vite build --config vite.content.config.ts",
     "dev": "vite build --watch --config vite.content.config.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",

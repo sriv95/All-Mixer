@@ -75,6 +75,7 @@ export class FloatingPanel {
   private touched = false;
   private saveTimer: ReturnType<typeof setTimeout> | undefined;
   private closeCbs: Array<() => void> = [];
+  private openCbs: Array<(open: boolean) => void> = [];
   private drag: { mode: 'move' | 'resize'; px: number; py: number; start: Rect } | null = null;
   private readonly keyBlocker = (e: Event): void => e.stopPropagation();
 
@@ -139,6 +140,7 @@ export class FloatingPanel {
     this.host.style.display = '';
     this.reclamp();
     this.scheduleSave();
+    this.emitOpen();
   }
 
   hide(): void {
@@ -146,6 +148,7 @@ export class FloatingPanel {
     this.touched = true;
     this.host.style.display = 'none';
     this.scheduleSave();
+    this.emitOpen();
   }
 
   toggle(): void {
@@ -157,6 +160,11 @@ export class FloatingPanel {
     this.closeCbs.push(cb);
   }
 
+  /** Called after every show() / hide(), including the one that restores the saved state. */
+  onOpenChange(cb: (open: boolean) => void): void {
+    this.openCbs.push(cb);
+  }
+
   destroy(): void {
     this.destroyed = true;
     clearTimeout(this.saveTimer);
@@ -164,6 +172,11 @@ export class FloatingPanel {
     document.removeEventListener('fullscreenchange', this.onFullscreen);
     this.host.remove();
     this.closeCbs = [];
+    this.openCbs = [];
+  }
+
+  private emitOpen(): void {
+    for (const cb of this.openCbs) cb(this.open);
   }
 
   private close(): void {

@@ -222,7 +222,9 @@ export class LyricsView {
   };
 
   private readonly onKeyDown = (e: KeyboardEvent): void => {
+    // Keys we handle must not also reach YouTube's page shortcuts (Space = pause, arrows = seek).
     if (SCROLL_KEYS.has(e.key)) {
+      e.stopPropagation();
       this.onUserScroll();
       return;
     }
@@ -230,6 +232,7 @@ export class LyricsView {
     const i = this.lineFromEvent(e);
     if (i < 0) return;
     e.preventDefault();
+    e.stopPropagation();
     this.seekTo(i);
   };
 

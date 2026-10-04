@@ -81,7 +81,8 @@ function playerInfo(wantId: string): PlayerInfo | null {
   const p = player();
   const resp = p?.getPlayerResponse?.();
   const d = resp?.videoDetails;
-  if (!d?.videoId || d.videoId !== wantId) return null; // stale response during SPA navigation
+  // Empty wantId = whatever is loaded. Otherwise reject stale responses during SPA navigation.
+  if (!d?.videoId || (wantId && d.videoId !== wantId)) return null;
   const tracks: CaptionTrack[] = (resp?.captions?.playerCaptionsTracklistRenderer?.captionTracks ?? [])
     .filter((t): t is RawTrack & { baseUrl: string } => typeof t.baseUrl === 'string')
     .map((t) => ({ baseUrl: t.baseUrl, languageCode: t.languageCode ?? '', kind: t.kind, name: trackName(t) }));
