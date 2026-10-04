@@ -1,7 +1,10 @@
 import type { ApplySettings, BackgroundRequest } from '../shared/messages';
 import { TabStore } from './tab-store';
+import { LyricsCache } from './lyrics-cache';
+import { findLyrics } from '../lyrics/lrclib';
 
 const store = new TabStore(chrome.storage.session);
+const lyricsCache = new LyricsCache(chrome.storage.local);
 
 async function handle(msg: BackgroundRequest, sender: chrome.runtime.MessageSender): Promise<unknown> {
   switch (msg.type) {
@@ -18,6 +21,8 @@ async function handle(msg: BackgroundRequest, sender: chrome.runtime.MessageSend
       await chrome.tabs.sendMessage(msg.tabId, apply).catch(() => {});
       return settings;
     }
+    case 'fetch-lyrics':
+      return lyricsCache.getOrFetch(msg.track, (t) => findLyrics(t));
   }
 }
 

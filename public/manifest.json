@@ -7,7 +7,7 @@
   "action": { "default_popup": "popup/popup.html", "default_title": "All Mixer!" },
   "background": { "service_worker": "background.js", "type": "module" },
   "permissions": ["storage"],
-  "host_permissions": ["https://www.youtube.com/*", "https://music.youtube.com/*"],
+  "host_permissions": ["https://www.youtube.com/*", "https://music.youtube.com/*", "https://lrclib.net/*"],
   "content_scripts": [
     {
       "matches": ["https://www.youtube.com/*", "https://music.youtube.com/*"],

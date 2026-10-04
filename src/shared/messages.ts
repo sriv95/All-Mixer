@@ -1,4 +1,5 @@
 import type { MixerSettings } from './settings';
+import type { TrackInfo } from '../lyrics/types';
 import type { Site } from '../content/youtube-dom';
 
 /** Content script → background: "what are my settings?" (tab id comes from sender). */
@@ -45,5 +46,11 @@ export interface ContentStatus {
   error?: string;
 }
 
-export type BackgroundRequest = GetMyTabSettings | GetTabSettings | SetTabSettings;
+/** Content script → background: fetch lyrics from LRCLIB (cached). Response: FoundLyrics | null. */
+export interface FetchLyrics {
+  type: 'fetch-lyrics';
+  track: TrackInfo;
+}
+
+export type BackgroundRequest = GetMyTabSettings | GetTabSettings | SetTabSettings | FetchLyrics;
 export type ContentRequest = ApplySettings | GetStatus;
