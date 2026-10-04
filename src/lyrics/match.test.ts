@@ -40,7 +40,27 @@ describe('splitYouTubeTitle', () => {
     ['Adele | Hello | Official Video', 'Adele', { artist: 'Adele', title: 'Hello' }],
     ['Mark Ronson - Uptown Funk ft. Bruno Mars', 'MarkRonsonVEVO', { artist: 'Mark Ronson', title: 'Uptown Funk' }],
     ['Yellow (Official Video)', 'Coldplay - Topic', { artist: 'Coldplay', title: 'Yellow' }],
-  ])('%s', (title, channel, out) => expect(splitYouTubeTitle(title, channel)).toEqual(out));
+  ])('%s', (title, channel, out) => expect(splitYouTubeTitle(title, channel)).toMatchObject(out));
+
+  it('swaps "Title (Lyrics) - Artist" fan uploads and keeps the original order as alternate', () => {
+    const r = splitYouTubeTitle('Never Gonna Give You Up (Lyrics) - Rick Astley', 'Giovanna Lozano');
+    expect(r).toMatchObject({ artist: 'Rick Astley', title: 'Never Gonna Give You Up' });
+    expect(r.alternates).toContainEqual({ artist: 'Never Gonna Give You Up', title: 'Rick Astley' });
+  });
+  it('keeps Artist - Title when the noise is on the title side', () => {
+    const r = splitYouTubeTitle('Rick Astley - Never Gonna Give You Up (Lyrics)', 'whatever');
+    expect(r).toMatchObject({ artist: 'Rick Astley', title: 'Never Gonna Give You Up' });
+    expect(r.alternates).toContainEqual({ artist: 'Never Gonna Give You Up', title: 'Rick Astley' });
+  });
+  it('uses the channel to break the tie', () => {
+    expect(splitYouTubeTitle('Blinding Lights - The Weeknd', 'The Weeknd')).toMatchObject({
+      artist: 'The Weeknd',
+      title: 'Blinding Lights',
+    });
+  });
+  it('has no alternates without a separator', () => {
+    expect(splitYouTubeTitle('Yellow', 'Coldplay').alternates).toEqual([]);
+  });
 });
 
 describe('normalize', () => {

@@ -79,7 +79,7 @@ describe('LyricsController', () => {
     s.active = true;
     c.refresh();
     await flush();
-    expect(d.fetchLyrics).toHaveBeenCalledWith({ videoId: 'v1', title: 'Song', artist: 'Band', duration: 200 });
+    expect(d.fetchLyrics).toHaveBeenCalledWith({ videoId: 'v1', title: 'Song', artist: 'Band', duration: 200, alternates: [{ artist: 'Song', title: 'Band' }] });
     expect(s.states.map((x) => x.kind)).toEqual(['idle', 'idle', 'loading', 'ready']);
   });
 

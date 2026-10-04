@@ -34,16 +34,51 @@ export function cleanArtist(s: string): string {
 
 const SEPARATORS = [' - ', ' – ', ' — ', ' | '];
 
-export function splitYouTubeTitle(videoTitle: string, channel: string): { artist: string; title: string } {
+export interface TitleReading {
+  artist: string;
+  title: string;
+}
+
+function hasNoiseBracket(s: string): boolean {
+  return s.replace(NOISE_BRACKET, '') !== s;
+}
+
+/** Artist side of a split: channel-style cleanup plus noise brackets such as "(Lyrics)". */
+function cleanArtistSide(s: string): string {
+  return cleanArtist(s.replace(NOISE_BRACKET, ' ').replace(/\s+/g, ' ').trim());
+}
+
+/**
+ * Split "A - B" into a primary reading and one alternate (the other order).
+ * Fan uploads are often "Title (Lyrics) - Artist", so the order is swapped when
+ * the left side carries a noise bracket and the right does not, or when the
+ * channel name matches the right side only.
+ */
+export function splitYouTubeTitle(
+  videoTitle: string,
+  channel: string,
+): TitleReading & { alternates: TitleReading[] } {
   for (const sep of SEPARATORS) {
     const i = videoTitle.indexOf(sep);
     if (i > 0) {
-      const artist = cleanArtist(videoTitle.slice(0, i).trim());
-      const title = cleanTitle(videoTitle.slice(i + sep.length));
-      if (artist && title) return { artist, title };
+      const left = videoTitle.slice(0, i).trim();
+      const right = videoTitle.slice(i + sep.length).trim();
+      const normal: TitleReading = { artist: cleanArtistSide(left), title: cleanTitle(right) };
+      const swapped: TitleReading = { artist: cleanArtistSide(right), title: cleanTitle(left) };
+      if (!normal.artist || !normal.title) continue;
+      const ch = normalize(cleanArtist(channel));
+      const matches = (side: string) => {
+        const n = normalize(cleanArtistSide(side));
+        return ch.length >= 3 && !!n && (n === ch || n.includes(ch) || ch.includes(n));
+      };
+      const swap =
+        !!swapped.artist &&
+        !!swapped.title &&
+        ((hasNoiseBracket(left) && !hasNoiseBracket(right)) || (matches(right) && !matches(left)));
+      return swap ? { ...swapped, alternates: [normal] } : { ...normal, alternates: swapped.artist && swapped.title ? [swapped] : [] };
     }
   }
-  return { artist: cleanArtist(channel), title: cleanTitle(videoTitle) };
+  return { artist: cleanArtist(channel), title: cleanTitle(videoTitle), alternates: [] };
 }
 
 /** Lowercase, strip accents and punctuation, collapse whitespace. */

@@ -77,4 +77,34 @@ describe.skipIf(!process.env.LRCLIB_LIVE)('live LRCLIB', () => {
     console.log('live synced length', res?.synced?.length);
     expect(res?.synced).toBeTruthy();
   });
+
+  describe('alternates', () => {
+    const swapped: TrackInfo = {
+      videoId: 'v',
+      title: 'Rick Astley',
+      artist: 'Never Gonna Give You Up',
+      duration: 213,
+      alternates: [{ artist: 'Rick Astley', title: 'Never Gonna Give You Up' }],
+    };
+    const rick = { ...record, id: 5, trackName: 'Never Gonna Give You Up', artistName: 'Rick Astley', duration: 213 };
+
+    it('tries the swapped reading when the primary finds nothing', async () => {
+      const f = vi.fn((u: string) => {
+        const url = new URL(u);
+        const hit = url.searchParams.get('artist_name') === 'Rick Astley' || url.searchParams.get('q') === 'Rick Astley Never Gonna Give You Up';
+        if (url.pathname.endsWith('/get')) return Promise.resolve(json(hit ? rick : {}, hit ? 200 : 404));
+        return Promise.resolve(json(hit ? [rick] : []));
+      });
+      const res = await findLyrics(swapped, f as unknown as typeof fetch);
+      expect(res?.record.id).toBe(5);
+      expect(res?.synced).toBe(SYNCED);
+    });
+
+    it('does not fetch alternates when the primary finds synced lyrics', async () => {
+      const f = vi.fn().mockResolvedValue(json(rick));
+      const res = await findLyrics({ ...swapped, title: 'Never Gonna Give You Up', artist: 'Rick Astley' }, f as unknown as typeof fetch);
+      expect(res?.record.id).toBe(5);
+      expect(f).toHaveBeenCalledTimes(1);
+    });
+  });
 });

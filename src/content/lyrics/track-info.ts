@@ -11,8 +11,8 @@ export function trackFromPlayer(site: Site, info: PlayerInfo, fallbackDuration =
   const clean =
     (site === 'ytmusic' && info.musicVideoType !== 'MUSIC_VIDEO_TYPE_UGC') || /\s-\sTopic$/i.test(info.author);
   if (clean) return { ...base, title: cleanTitle(info.title) || info.title, artist: cleanArtist(info.author) };
-  const { artist, title } = splitYouTubeTitle(info.title, info.author);
-  return { ...base, title, artist };
+  const { artist, title, alternates } = splitYouTubeTitle(info.title, info.author);
+  return { ...base, title, artist, ...(alternates.length ? { alternates } : {}) };
 }
 
 export interface CaptionChoice {
