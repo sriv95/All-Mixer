@@ -1,5 +1,6 @@
 // Real-time load test of DspSeparator inside an AudioWorklet (Chromium via Playwright).
-// Usage: node spike/bench/worklet_bench.mjs [--secs 60] [--modes headless,headed]
+// Usage: node spike/bench/worklet_bench.mjs [--secs 60] [--modes headless,headed] [--pairs N]
+//   --pairs N: N interleaved bypass/separator untimed 1x pairs per mode (with load average), then the timed 1x runs only.
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -10,6 +11,7 @@ import { chromium } from 'playwright';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ? process.argv[i + 1] : d; };
 const SECS = +arg('secs', 60);
+const PAIRS = +arg('pairs', 0);
 const MODES = arg('modes', 'headless,headed').split(',');
 const BUDGET_US = 128 / 44100 * 1e6; // 2902.5 (page requests a 44.1 kHz context)
 
@@ -53,6 +55,7 @@ function cpuDelta(a, b, wall) {
   return per;
 }
 
+const loadavg = () => execFileSync('uptime', { encoding: 'utf8' }).match(/load averages?:\s*(.*)$/m)[1].trim().split(/[ ,]+/).map(Number);
 const pct = (hist, q) => { const n = hist.reduce((s, v) => s + v, 0); let a = 0; for (let b = 0; b < hist.length; b++) { a += hist[b]; if (a >= q * n) return b; } return hist.length - 1; };
 
 async function run({ headless, throttle, timing, bypass = false }) {
@@ -65,10 +68,12 @@ async function run({ headless, throttle, timing, bypass = false }) {
   const init = await page.evaluate(() => window.start());
   await new Promise(r => setTimeout(r, 3000)); // settle
   const rootPid = [...psTable().values()].find(r => r.cmd.includes(marker) && !r.cmd.includes('--type=')).pid;
+  const load_start = loadavg();
   const t0 = Date.now(), ps0 = tree(psTable(), rootPid), s0 = await page.evaluate(() => window.snapshot());
   const nStats0 = await page.evaluate(() => window.stats.length);
   await new Promise(r => setTimeout(r, SECS * 1000));
   const wall = (Date.now() - t0) / 1000, ps1 = tree(psTable(), rootPid), s1 = await page.evaluate(() => window.snapshot());
+  const load_end = loadavg();
   const stats = (await page.evaluate(() => window.stats)).slice(nStats0);
   await browser.close();
   const hist = new Array(16384).fill(0); let maxw = 0, p99w = [];
@@ -78,7 +83,7 @@ async function run({ headless, throttle, timing, bypass = false }) {
   const ps = s1.playbackStats, p0 = s0.playbackStats;
   const d = (k) => ps && p0 ? ps[k] - p0[k] : null;
   return {
-    config: { headless, throttle, timing, bypass, secs: SECS }, init, wallSec: wall,
+    config: { headless, throttle, timing, bypass, secs: SECS }, loadavg_start: load_start, loadavg_end: load_end, init, wallSec: wall,
     timing: timing ? { quanta, p50_us: pct(hist, .5), p99_us: pct(hist, .99), p999_us: pct(hist, .999), max_us: maxw,
       mean_us: stats.reduce((s, x) => s + x.mean * x.n, 0) / Math.max(quanta, 1),
       worst_window_p99_us: Math.max(...p99w), max_deadline_lag_us: Math.max(...stats.map(x => x.maxLag)), windows_with_overrun: stats.filter(x => x.over).length,
@@ -94,14 +99,29 @@ async function run({ headless, throttle, timing, bypass = false }) {
 const results = [];
 // timing=true runs carry the clock-spinner Worker (extra CPU), timing=false runs give clean CPU %.
 // bypass=true measures the timer noise floor (copy-only worklet).
-const CONFIGS = [{ throttle: 1, timing: true }, { throttle: 1, timing: false }, { throttle: 1, timing: true, bypass: true },
+const CONFIGS = PAIRS ? [{ throttle: 1, timing: true }, { throttle: 1, timing: false }, { throttle: 1, timing: true, bypass: true }]
+  : [{ throttle: 1, timing: true }, { throttle: 1, timing: false }, { throttle: 1, timing: true, bypass: true },
   { throttle: 4, timing: true }, { throttle: 4, timing: false }, { throttle: 4, timing: true, bypass: true }];
-for (const mode of MODES) for (const c of CONFIGS) {
-  process.stderr.write(`run ${mode} ${JSON.stringify(c)} ...\n`);
-  try { results.push(await run({ headless: mode === 'headless', ...c })); }
-  catch (e) { results.push({ config: { mode, ...c }, error: String(e) }); }
+const pairs = [];
+const exec = async (mode, c, extra = {}) => {
+  process.stderr.write(`run ${mode} ${JSON.stringify(c)} ${JSON.stringify(extra)} ...\n`);
+  try { return { ...extra, ...(await run({ headless: mode === 'headless', ...c })) }; }
+  catch (e) { return { ...extra, config: { mode, ...c }, error: String(e) }; }
+};
+for (const mode of MODES) for (let i = 0; i < PAIRS; i++) {
+  // Interleave, alternating order per pair so drift does not favour one side.
+  const order = i & 1 ? [true, false] : [false, true];
+  const rec = { mode, pair: i + 1 };
+  for (const bypass of order) rec[bypass ? 'bypass' : 'separator'] = await exec(mode, { throttle: 1, timing: false, bypass }, { pair: i + 1 });
+  pairs.push(rec);
 }
+for (const mode of MODES) for (const c of CONFIGS) results.push(await exec(mode, c));
 server.close();
 const outp = path.join(root, 'bench/results/worklet.json');
-fs.writeFileSync(outp, JSON.stringify({ date: new Date().toISOString(), budget_us: BUDGET_US, chromium: chromium.name(), results }, null, 2));
+const sum = (r) => r.error ? { error: r.error } : { underruns: r.playbackStats.underrunEvents_delta, underrun_s: r.playbackStats.underrunDuration_delta_s, loadavg_start: r.loadavg_start, loadavg_end: r.loadavg_end, renderer_cpu_pct: r.cpu_percent_of_one_core.renderer, total_cpu_pct: r.cpu_percent_of_one_core.total };
+const ab = pairs.map(p => ({ mode: p.mode, pair: p.pair, bypass: sum(p.bypass), separator: sum(p.separator) }));
+const tot = (m, k) => ab.filter(p => p.mode === m).reduce((s, p) => s + (p[k].underruns || 0), 0);
+const ab_summary = MODES.map(m => ({ mode: m, bypass_underruns: tot(m, 'bypass'), separator_underruns: tot(m, 'separator') }));
+fs.writeFileSync(outp, JSON.stringify({ date: new Date().toISOString(), budget_us: BUDGET_US, chromium: chromium.name(), pairs: PAIRS, ab, ab_summary, results, pair_runs: pairs }, null, 2));
+console.log(JSON.stringify(ab, null, 1), JSON.stringify(ab_summary));
 console.log('wrote', outp);
