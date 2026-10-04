@@ -189,8 +189,9 @@ describe('SeparatorCore, ML engine', () => {
     expect(r.msgs).toEqual([]);
   });
 
-  it('a dropped block uses the DSP vocal for that block: same delay, small crossfade steps', () => {
-    const r = rig(3, tones);
+  it('a dropped block uses the DSP vocal for that block: same delay, crossfade has no step above the bound', () => {
+    // Pure side signal (R = −L): the DSP vocal is ~0 but the echo is the whole input, so a hard switch would jump.
+    const r = rig(3, (n, seed) => tones(n).map((v) => (seed === 2 ? -v : v)));
     r.port.policy = (k) => (k === 12 ? 'drop' : 'echo');
     r.core.setActive(true, 'ml');
     r.run(blocks(30));
@@ -202,17 +203,43 @@ describe('SeparatorCore, ML engine', () => {
     expect(maxErr(r, 13440, 0, n)).toBeLessThanOrEqual(1e-6);
     // The dropped posted block 12 is vocal block 11: input [S − 1024 + 11·4096, + 4096), heard 13440 later.
     const from = 13440 - 1024 + 11 * ML_BLOCK;
-    let swapped = 0;
-    for (let i = from; i < from + ML_BLOCK; i++) swapped = Math.max(swapped, Math.abs(r.vL[i] - r.sigL[i - 13440]));
-    expect(swapped).toBeGreaterThan(1e-4); // DSP vocal is not the echo, so the swap really happened
-    // No step bigger than the signal's own slope plus a small crossfade term, in either stem.
-    // The tones step at most 0.075; a one-quantum fade between two stems adds ≤ Δ/128.
-    const BOUND = 0.1;
+    const to = from + ML_BLOCK;
+    const echo = (i: number) => r.sigL[i - 13440];
+    // delta: how far the DSP vocal is from the echo at the two block-edge quanta (sensitivity of the test).
+    let delta = 0;
+    for (const [a, b] of [
+      [from, from + QUANTUM],
+      [to - QUANTUM, to],
+    ]) {
+      for (let i = a; i < b; i++) delta = Math.max(delta, Math.abs(echo(i) - r.vL[i]));
+    }
+    expect(delta).toBeGreaterThanOrEqual(0.3);
+    // Step bound: the signal's own slope plus a one-quantum fade of size delta (≤ delta / QUANTUM per sample).
+    let signalStep = 0;
     let step = 0;
-    for (let i = 1; i < n; i++) {
+    for (let i = from - 2 * QUANTUM; i < to + 2 * QUANTUM; i++) {
+      signalStep = Math.max(signalStep, Math.abs(echo(i) - echo(i - 1)));
       step = Math.max(step, Math.abs(r.vL[i] - r.vL[i - 1]), Math.abs(r.iL[i] - r.iL[i - 1]));
     }
-    expect(step).toBeLessThan(BOUND);
+    const BOUND = signalStep + delta / QUANTUM + 1e-3;
+    console.info(`crossfade: delta=${delta.toFixed(4)} BOUND=${BOUND.toFixed(4)} max step=${step.toFixed(4)}`);
+    expect(step).toBeLessThanOrEqual(BOUND);
+  });
+
+  it('refuses ML when the context is not at the model rate', () => {
+    const msgs: FromWorklet[] = [];
+    const core = new SeparatorCore(48000, (m) => msgs.push(m));
+    const port = new FakePort(new Float32Array(0), new Float32Array(0));
+    core.setPort(port as unknown as MessagePort);
+    core.setActive(true, 'ml');
+    expect(core.engine).toBe('dsp');
+    expect(port.posted).toBe(0);
+    core.requestEngine('ml', 'user');
+    const z = new Float32Array(QUANTUM);
+    for (let q = 0; q < 200; q++) core.process(z, z, z.slice(), z.slice(), z.slice(), z.slice(), q * 0.0027);
+    expect(core.engine).toBe('dsp');
+    expect(port.posted).toBe(0);
+    expect(msgs).toEqual([]);
   });
 
   it('3 misses in 10 s switch to the DSP engine for good, once, with reason deadline-miss', () => {

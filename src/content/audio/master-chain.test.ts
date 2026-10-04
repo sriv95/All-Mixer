@@ -283,15 +283,27 @@ describe('MasterChain separation', () => {
   it('follows the worklet engine messages: latency, engine, reason, and the change time', async () => {
     const { chain, ctx, sep, changes } = await separating();
     const port = sep.port as { postMessage: (m: unknown, t?: unknown[]) => void; onmessage?: (e: { data: unknown }) => void };
+    ctx.sampleRate = 44100; // the real context is created at the model rate for ML
     chain.setEngine('ml', 'user');
     expect(sep.messages.at(-1)).toEqual({ type: 'engine', engine: 'ml', reason: 'user' });
     port.onmessage!({ data: { type: 'engine', engine: 'ml', reason: 'user', at: ctx.currentTime + 1 } });
     expect(chain.latency).toMatchObject({ engine: 'ml', reason: 'user', processingSamples: 13440 });
-    expect(chain.latency.processingMs).toBeCloseTo((13440 / 48000) * 1000, 3);
+    expect(chain.latency.processingMs).toBeCloseTo((13440 / 44100) * 1000, 3);
     expect(changes.at(-1)![0]).toBe(13440);
+    // heard one processing delay after the input sample; device latency is added by the fake ctx
+    const heard = (at: number, n: number) => performance.now() + (at + n / 44100 - ctx.currentTime) * 1000 + chain.latency.deviceMs;
+    expect(changes.at(-1)![1]).toBeCloseTo(heard(ctx.currentTime + 1, 13440), -1);
     port.onmessage!({ data: { type: 'engine', engine: 'dsp', reason: 'deadline-miss', at: ctx.currentTime + 2 } });
     expect(chain.latency).toMatchObject({ engine: 'dsp', reason: 'deadline-miss', processingSamples: 2048 });
     expect(changes.at(-1)![0]).toBe(2048);
+    expect(changes.at(-1)![1]).toBeCloseTo(heard(ctx.currentTime + 2, 2048), -1);
+  });
+
+  it('ignores a switch to ML when the context is not at the model rate', async () => {
+    const { chain, sep } = await separating();
+    const n = sep.messages.length;
+    chain.setEngine('ml', 'user'); // fake ctx is 48000 Hz
+    expect(sep.messages).toHaveLength(n);
   });
 
   it('fades back to the direct path and stops the worklet when leaving Separate mode', async () => {
