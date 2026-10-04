@@ -18,6 +18,8 @@ export type LyricsState =
 export interface LyricsSurface {
   /** True while the user can see it; the controller only fetches and ticks for active surfaces. */
   readonly active: boolean;
+  /** Wants lyrics loaded even while hidden (e.g. to decide whether to enable YT Music's Lyrics tab). */
+  readonly prefetch?: boolean;
   render(state: LyricsState): void;
   update(time: number): void;
 }
@@ -113,7 +115,8 @@ export class LyricsController {
   /** Re-evaluate: start loading if someone is watching, and (re)start the frame loop. Surfaces call this when they open. */
   refresh(): void {
     const active = this.anyActive();
-    if (active && this.videoId && this.loadedFor !== this.videoId) void this.load(this.videoId);
+    const wanted = active || [...this.surfaces].some((s) => s.prefetch);
+    if (wanted && this.videoId && this.loadedFor !== this.videoId) void this.load(this.videoId);
     if (active && this.video && !this.video.paused) this.startLoop();
     else this.stopLoop();
     if (active) this.tick();

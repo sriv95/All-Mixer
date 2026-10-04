@@ -79,6 +79,9 @@ export class YtmTabSurface implements LyricsSurface {
     }
   }
 
+  /** Load lyrics for every track: a disabled Lyrics tab can only be enabled once we know we have some. */
+  readonly prefetch = true;
+
   get active(): boolean {
     const tab = findYtmLyricsTab(this.doc);
     return !!tab && isTabSelected(tab);
