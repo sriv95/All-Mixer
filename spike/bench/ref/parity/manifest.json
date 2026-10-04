@@ -1,0 +1,45 @@
+{
+ "n": 20,
+ "inputShape": [
+  2,
+  1,
+  64,
+  1024
+ ],
+ "outputShape": [
+  2,
+  1,
+  64,
+  1024
+ ],
+ "windowIndex": [
+  16,
+  19,
+  22,
+  25,
+  28,
+  31,
+  34,
+  37,
+  40,
+  43,
+  46,
+  49,
+  52,
+  55,
+  58,
+  61,
+  64,
+  67,
+  70,
+  73
+ ],
+ "clip": "clips/wav/00/mix.wav",
+ "sourceModel": "ml/models/sherpa-onnx-spleeter-2stems-fp16/vocals.fp16.onnx",
+ "model": "ml/models/vocals_stream.onnx",
+ "ctx": 64,
+ "hop": 4,
+ "lookahead": 0,
+ "maskEps": 1e-08,
+ "mask": "single-model path of separate(): clip(v / (x + 1e-8), 0, 1), x = input magnitude"
+}
