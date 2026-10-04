@@ -1,0 +1,36 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>SRI-14 delayed video bench</title>
+<style>body{margin:0;background:#111} #wrap{position:relative;width:1280px;height:720px} video{width:1280px;height:720px;display:block}</style>
+<div id="wrap"><video id="v" muted playsinline loop></video></div>
+<script type="module">
+import { DelayedVideo } from './delayed-video.js';
+const v = document.getElementById('v');
+let dv = null;
+window.bench = {
+  async load(src) {
+    v.src = src;
+    await v.play();
+    await new Promise((r) => setTimeout(r, 1000));
+  },
+  start(opts) { dv?.destroy(); dv = opts ? new DelayedVideo(v, opts) : null; this.base = baseCounter(); },
+  setDelay(ms) { dv.setDelay(ms); },
+  async seek(t) { v.currentTime = t; await new Promise((r) => v.addEventListener('seeked', r, { once: true })); },
+  pause() { v.pause(); }, play() { return v.play(); },
+  stats() {
+    const q = v.getVideoPlaybackQuality();
+    const s = dv ? { ...dv.stats, delay: dv.delay, ring: dv.ring.length } : { ...this.base.s };
+    return { ...s, vq: { total: q.totalVideoFrames, dropped: q.droppedVideoFrames }, heap: performance.memory?.usedJSHeapSize };
+  },
+  stop() { const s = this.stats(); dv?.destroy(); dv = null; this.base?.stop(); return s; },
+};
+// Baseline: rVFC only, no capture (to separate source drops from our cost).
+function baseCounter() {
+  const s = { srcFrames: 0, srcDropped: 0, lastPresented: null };
+  let id, on = true;
+  const f = (n, m) => { if (!on) return; if (s.lastPresented !== null && m.presentedFrames - s.lastPresented > 1) s.srcDropped += m.presentedFrames - s.lastPresented - 1; s.lastPresented = m.presentedFrames; s.srcFrames++; id = v.requestVideoFrameCallback(f); };
+  id = v.requestVideoFrameCallback(f);
+  return { s, stop() { on = false; v.cancelVideoFrameCallback(id); } };
+}
+window.ready = true;
+</script>
