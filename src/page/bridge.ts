@@ -55,15 +55,23 @@ function remember(key: string, body: string): void {
 }
 
 /** The player fetched captions (user has CC on): keep the body and its token, and tell the content script. */
-function onPlayerTimedText(u: URL, body: string): void {
+export function onPlayerTimedText(u: URL, body: string): void {
   const videoId = u.searchParams.get('v');
-  if (!videoId || !body) return;
+  if (!videoId) return;
+  let notify = false;
   if (u.searchParams.has('pot')) {
-    playerParams.set(videoId, [...u.searchParams].filter(([k]) => !TRACK_PARAMS.has(k)));
+    const known = playerParams.get(videoId);
+    const next = [...u.searchParams].filter(([k]) => !TRACK_PARAMS.has(k));
+    // A token we did not have yet lets the content script fetch the tracks itself, whatever format the player asked for.
+    notify = !known || JSON.stringify(known) !== JSON.stringify(next);
+    playerParams.set(videoId, next);
     if (playerParams.size > MAX_CAPTURED) playerParams.delete(playerParams.keys().next().value!);
   }
-  if (u.searchParams.get('fmt') !== 'json3' || u.searchParams.get('tlang')) return;
-  remember(keyOf(videoId, u.searchParams.get('lang'), u.searchParams.get('kind') === 'asr'), body);
+  if (body && u.searchParams.get('fmt') === 'json3' && !u.searchParams.get('tlang')) {
+    remember(keyOf(videoId, u.searchParams.get('lang'), u.searchParams.get('kind') === 'asr'), body);
+    notify = true;
+  }
+  if (!notify) return;
   const evt: BridgeEventMsg = { [BRIDGE_TAG]: 'evt', kind: 'captions', videoId };
   window.postMessage(evt, location.origin);
 }

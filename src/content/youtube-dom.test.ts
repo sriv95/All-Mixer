@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { NAVIGATION_EVENTS, detectSite, findMainVideo, getVideoId, onNavigate, watchMainVideo } from './youtube-dom';
+import { NAVIGATION_EVENTS, onCaptionsButtonOn, detectSite, findMainVideo, getVideoId, onNavigate, watchMainVideo } from './youtube-dom';
 
 const fixture = (name: string) => readFileSync(`src/content/__fixtures__/${name}.html`, 'utf8');
 
@@ -144,5 +144,32 @@ describe('watchMainVideo navigation', () => {
     document.dispatchEvent(new Event('yt-page-data-updated'));
     await flush();
     expect(cb).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('onCaptionsButtonOn', () => {
+  it('fires once when aria-pressed goes false -> true, also for a re-created button', async () => {
+    document.body.innerHTML = '<div id="movie_player"><button class="ytp-subtitles-button" aria-pressed="false"></button></div>';
+    const cb = vi.fn();
+    const stop = onCaptionsButtonOn(cb);
+    const tick = () => new Promise((r) => setTimeout(r, 0));
+    const btn = () => document.querySelector('.ytp-subtitles-button')!;
+    btn().setAttribute('aria-pressed', 'true');
+    await tick();
+    expect(cb).toHaveBeenCalledTimes(1);
+    btn().setAttribute('aria-pressed', 'true');
+    await tick();
+    expect(cb).toHaveBeenCalledTimes(1);
+    btn().setAttribute('aria-pressed', 'false');
+    await tick();
+    btn().setAttribute('aria-pressed', 'true');
+    await tick();
+    expect(cb).toHaveBeenCalledTimes(2);
+    document.body.innerHTML = '<button class="other" aria-pressed="false"></button>';
+    document.querySelector('.other')!.setAttribute('aria-pressed', 'true');
+    await tick();
+    expect(cb).toHaveBeenCalledTimes(2);
+    stop();
+    document.body.innerHTML = '';
   });
 });

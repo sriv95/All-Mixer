@@ -64,12 +64,33 @@ export class LyricsController {
   private raf = 0;
   /** LRCLIB result and caption tracks for `loadedFor`, kept for re-alignment. */
   private base: { videoId: string; info: PlayerInfo; track: TrackInfo; found: FoundLyrics | null } | null = null;
+  /** A captions event arrived while `load()` was still running; re-align as soon as `base` is set. */
+  private pendingRealign: string | null = null;
+  private retryTimers: ReturnType<typeof setTimeout>[] = [];
 
   constructor(
     private readonly site: Site,
     private readonly deps: LyricsDeps,
   ) {
     deps.onCaptionsAvailable?.((id) => void this.realign(id));
+  }
+
+  /** CC was turned on: the player fetches its captions a moment later, so re-align a few times until the timing changes. */
+  realignWithRetries(delaysMs: readonly number[] = REALIGN_RETRY_MS): void {
+    this.clearRetries();
+    const videoId = this.videoId;
+    if (!videoId) return;
+    const attempt = (i: number): void => {
+      const t = setTimeout(() => {
+        if (this.videoId !== videoId) return;
+        void this.realign(videoId).then((changed) => {
+          if (changed || this.videoId !== videoId) return;
+          if (i + 1 < delaysMs.length) attempt(i + 1);
+        });
+      }, delaysMs[i]! - (i > 0 ? delaysMs[i - 1]! : 0));
+      this.retryTimers.push(t);
+    };
+    if (delaysMs.length) attempt(0);
   }
 
   get current(): LyricsState {
@@ -101,6 +122,8 @@ export class LyricsController {
     this.abort?.abort();
     this.abort = null;
     this.loadedFor = null;
+    this.pendingRealign = null;
+    this.clearRetries();
     this.setState({ kind: 'idle' });
     this.refresh();
   }
@@ -124,9 +147,15 @@ export class LyricsController {
 
   destroy(): void {
     this.abort?.abort();
+    this.clearRetries();
     this.stopLoop();
     for (const ev of VIDEO_EVENTS) this.video?.removeEventListener(ev, this.onVideoEvent);
     this.surfaces.clear();
+  }
+
+  private clearRetries(): void {
+    for (const t of this.retryTimers) clearTimeout(t);
+    this.retryTimers = [];
   }
 
   private anyActive(): boolean {
@@ -161,6 +190,10 @@ export class LyricsController {
       this.base = { videoId, info, track, found };
       const lyrics = resolveLyrics(this.site, found, captions);
       this.setState(lyrics ? { kind: 'ready', lyrics, track } : { kind: 'not-found', track });
+      if (this.pendingRealign === videoId) {
+        this.pendingRealign = null;
+        void this.realign(videoId);
+      }
     } catch (e) {
       if (ctrl.signal.aborted) return;
       console.warn('[All Mixer!] lyrics failed:', e);
@@ -181,17 +214,22 @@ export class LyricsController {
     return { asr, manual };
   }
 
-  /** Captions showed up after we loaded (CC turned on): redo the alignment with the same LRCLIB result. */
-  private async realign(videoId: string): Promise<void> {
+  /** Captions showed up after we loaded (CC turned on): redo the alignment with the same LRCLIB result. True if the lyrics changed. */
+  async realign(videoId: string): Promise<boolean> {
+    if (this.videoId !== videoId) return false;
     const base = this.base;
-    if (!base || base.videoId !== videoId || this.videoId !== videoId) return;
+    if (!base || base.videoId !== videoId) {
+      if (this.loadedFor === videoId) this.pendingRealign = videoId; // load() is still running
+      return false;
+    }
     const captions = await this.captions(videoId, base.info);
-    if (this.base !== base) return;
+    if (this.base !== base) return false;
     const lyrics = resolveLyrics(this.site, base.found, captions);
-    if (!lyrics) return;
+    if (!lyrics) return false;
     const cur = this.state.kind === 'ready' ? this.state.lyrics : null;
-    if (cur && sameTiming(cur, lyrics)) return;
+    if (cur && sameTiming(cur, lyrics)) return false;
     this.setState({ kind: 'ready', lyrics, track: base.track });
+    return true;
   }
 
   private tick = (): void => {
@@ -217,6 +255,9 @@ export class LyricsController {
     this.raf = 0;
   }
 }
+
+/** Delays after CC turns on, measured from the button press. */
+const REALIGN_RETRY_MS = [1000, 3000, 6000];
 
 const VIDEO_EVENTS = ['play', 'pause', 'seeked', 'ratechange', 'loadedmetadata'] as const;
 

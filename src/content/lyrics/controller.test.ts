@@ -202,4 +202,92 @@ describe('LyricsController', () => {
     expect(st.kind === 'ready' && st.lyrics.kind === 'synced' && Math.round(st.lyrics.offset)).toBe(5);
     expect(d.fetchLyrics).toHaveBeenCalledTimes(1); // no new LRCLIB request
   });
+
+  const WORDS = [
+    { t: 6, w: 'hello' },
+    { t: 6.5, w: 'world' },
+    { t: 8, w: 'second' },
+    { t: 8.4, w: 'line' },
+  ];
+  const CAPTIONS = () => json3([...WORDS, ...WORDS.map((w) => ({ ...w, t: w.t + 0.05 })), ...WORDS.map((w) => ({ ...w, t: w.t - 0.05 }))]);
+  const asrTrack = { baseUrl: 'u', languageCode: 'en', kind: 'asr' };
+  const offsetOf = (st: LyricsState) => (st.kind === 'ready' && st.lyrics.kind === 'synced' ? Math.round(st.lyrics.offset) : null);
+
+  it('does not lose a captions event that arrives while load() is running', async () => {
+    let notify!: (id: string) => void;
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    let captions: string | null = null;
+    const d = deps({
+      getPlayerInfo: vi.fn(async (id: string) => info(id, { captionTracks: [asrTrack] })),
+      fetchLyrics: vi.fn(async () => {
+        await gate;
+        return { synced: SYNCED, record };
+      }),
+      getTimedText: vi.fn(async () => captions),
+      onCaptionsAvailable: (cb) => (notify = cb),
+    });
+    const c = new LyricsController('youtube', d);
+    const s = new FakeSurface();
+    c.addSurface(s);
+    c.setVideoId('v1');
+    await flush();
+    captions = CAPTIONS(); // the player has the data now, our load() fetched before that
+    notify('v1');
+    await flush();
+    release();
+    await flush();
+    await flush();
+    expect(offsetOf(s.last)).toBe(5);
+  });
+
+  it('retries realign after CC turns on and stops after the first change', async () => {
+    vi.useFakeTimers();
+    try {
+      let captions: string | null = null;
+      const d = deps({
+        getPlayerInfo: vi.fn(async (id: string) => info(id, { captionTracks: [asrTrack] })),
+        getTimedText: vi.fn(async () => captions),
+      });
+      const c = new LyricsController('youtube', d);
+      const s = new FakeSurface();
+      c.addSurface(s);
+      c.setVideoId('v1');
+      await vi.advanceTimersByTimeAsync(0);
+      expect(offsetOf(s.last)).toBe(0);
+      const calls = () => (d.getTimedText as ReturnType<typeof vi.fn>).mock.calls.length;
+      const base = calls();
+
+      c.realignWithRetries();
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(calls()).toBe(base + 1); // +1 s: still no data
+      expect(offsetOf(s.last)).toBe(0);
+      captions = CAPTIONS();
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(offsetOf(s.last)).toBe(5); // +3 s: aligned
+      await vi.advanceTimersByTimeAsync(10000);
+      expect(calls()).toBe(base + 2); // no +6 s attempt
+
+      // Nothing ever comes (no captions served): three tries, then it stops.
+      captions = null;
+      c.setVideoId('v2');
+      await vi.advanceTimersByTimeAsync(0);
+      const b2 = calls();
+      c.realignWithRetries();
+      await vi.advanceTimersByTimeAsync(20000);
+      expect(calls()).toBe(b2 + 3);
+
+      // Video change cancels pending retries.
+      const b3 = calls();
+      c.realignWithRetries();
+      c.setVideoId('v3');
+      await vi.advanceTimersByTimeAsync(0);
+      const b4 = calls();
+      await vi.advanceTimersByTimeAsync(20000);
+      expect(calls()).toBe(b4);
+      expect(b4).toBeGreaterThanOrEqual(b3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
