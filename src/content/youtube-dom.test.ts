@@ -1,5 +1,8 @@
+import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NAVIGATION_EVENTS, detectSite, findMainVideo, getVideoId, onNavigate, watchMainVideo } from './youtube-dom';
+
+const fixture = (name: string) => readFileSync(`src/content/__fixtures__/${name}.html`, 'utf8');
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
@@ -83,5 +86,56 @@ describe('watchMainVideo', () => {
     expect(cb).toHaveBeenCalledTimes(2);
     expect(cb.mock.calls[1][0]).not.toBe(first);
     off();
+  });
+});
+
+describe('findMainVideo fixtures', () => {
+  it.each([
+    ['youtube', 'watch'],
+    ['youtube', 'theater'],
+    ['youtube', 'fullscreen'],
+    ['youtube', 'miniplayer'],
+    ['youtube', 'shorts'],
+    ['ytmusic', 'ytmusic'],
+    ['ytmusic', 'ytmusic-audio-only'],
+  ] as const)('%s / %s: returns the player video, ignores previews', (site, name) => {
+    document.body.innerHTML = fixture(name);
+    const video = findMainVideo(site);
+    expect(video).not.toBeNull();
+    expect(video?.id).toBe('main');
+    expect(video?.closest('#movie_player')).not.toBeNull();
+  });
+
+  it('theater and fullscreen fixtures carry the expected state attributes', () => {
+    document.body.innerHTML = fixture('theater');
+    expect(document.querySelector('ytd-watch-flexy[theater]')).not.toBeNull();
+    document.body.innerHTML = fixture('fullscreen');
+    expect(document.querySelector('ytd-watch-flexy[fullscreen]')).not.toBeNull();
+  });
+});
+
+describe('watchMainVideo navigation', () => {
+  it('fires on popstate / yt-page-data-updated only if the element changed; off() stops it', async () => {
+    document.body.innerHTML = fixture('watch');
+    const cb = vi.fn();
+    const off = watchMainVideo('youtube', cb);
+    expect(cb).toHaveBeenCalledTimes(1);
+
+    window.dispatchEvent(new Event('popstate'));
+    document.dispatchEvent(new Event('yt-page-data-updated'));
+    await flush();
+    expect(cb).toHaveBeenCalledTimes(1);
+
+    document.querySelector('#movie_player video')!.replaceWith(Object.assign(document.createElement('video'), { className: 'html5-main-video', id: 'main' }));
+    window.dispatchEvent(new Event('popstate'));
+    await flush();
+    expect(cb).toHaveBeenCalledTimes(2);
+
+    off();
+    document.querySelector('#movie_player video')!.replaceWith(Object.assign(document.createElement('video'), { className: 'html5-main-video' }));
+    window.dispatchEvent(new Event('popstate'));
+    document.dispatchEvent(new Event('yt-page-data-updated'));
+    await flush();
+    expect(cb).toHaveBeenCalledTimes(2);
   });
 });
