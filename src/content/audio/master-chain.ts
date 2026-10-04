@@ -159,6 +159,8 @@ export class MasterChain {
 
   /** Switch engine while separating. The worklet confirms with an `engine` message (and the delay event). */
   setEngine(engine: MlEngine, reason: MlReason): void {
+    // The model has no resampler: ML only runs when the context is at the model rate.
+    if (engine === 'ml' && this.ctx?.sampleRate !== ML_SAMPLE_RATE) return;
     if (this.workletOn) this.post({ type: 'engine', engine, reason });
   }
 
@@ -313,7 +315,8 @@ export class MasterChain {
     if (msg.type !== 'engine') return;
     this.engine = msg.engine;
     this.engineReason = msg.reason;
-    this.emitLatency(msg.at);
+    // `at` is the input sample's context time; it is heard one processing delay later.
+    this.emitLatency(this.ctx ? msg.at + this.latency.processingSamples / this.ctx.sampleRate : undefined);
     this.onStateChange();
   }
 

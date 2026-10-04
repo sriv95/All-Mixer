@@ -18,7 +18,10 @@
 // `onEngine` reports the context time of the first input sample heard with the new delay;
 // the video overlay steps there too.
 //
-// process() allocates nothing (engine-switch messages aside, which are rare).
+// process() allocates nothing (engine-switch messages aside, which are rare). onBlock (port
+// message handler) creates two typed-array views per returned block; that runs between quanta,
+// not inside process(), and the transferred ArrayBuffer is a new object anyway.
+// ML is refused unless the context runs at ML_SAMPLE_RATE.
 import { DspSeparator } from './dsp/separator.js';
 import {
   DSP_LATENCY_SAMPLES,
@@ -27,6 +30,7 @@ import {
   ML_HEADER_BYTES,
   ML_LATENCY_SAMPLES,
   ML_RESULT_OFFSET,
+  ML_SAMPLE_RATE,
   type FromWorklet,
   type MlEngine,
   type MlReason,
@@ -130,7 +134,7 @@ export class SeparatorCore {
     this.reset();
     this.phase = 'steady';
     this.wantMl = this.wantDsp = null;
-    this.engine = on && engine === 'ml' && this.port ? 'ml' : 'dsp';
+    this.engine = on && engine === 'ml' && this.mlAllowed() ? 'ml' : 'dsp';
     this.reason = reason;
     this.delay = this.latencySamples;
     if (this.engine === 'ml') this.startStream();
@@ -252,13 +256,18 @@ export class SeparatorCore {
     this.pos = pos + QUANTUM;
   }
 
+  /** ML needs a port and a 44.1 kHz context (the model has no resampler). */
+  private mlAllowed(): boolean {
+    return this.port !== null && this.sampleRate === ML_SAMPLE_RATE;
+  }
+
   private timeOf(p: number): number {
     return this.time + (p - this.pos) / this.sampleRate;
   }
 
   private toMl(reason: MlReason): void {
     this.wantMl = null;
-    if (!this.port || this.engine !== 'dsp' || this.phase !== 'steady') return;
+    if (!this.mlAllowed() || this.engine !== 'dsp' || this.phase !== 'steady') return;
     this.phase = 'to-ml';
     this.switchPos = this.pos;
     this.reason = reason;
@@ -355,7 +364,8 @@ export class SeparatorCore {
 
   /** A buffer back from the worker (port message handler, between render quanta). */
   private onBlock(buf: ArrayBuffer): void {
-    if (buf.byteLength !== ML_BUFFER_BYTES) return;
+    // A buggy worker must not grow the pool.
+    if (buf.byteLength !== ML_BUFFER_BYTES || this.pool.length >= POOL) return;
     const e = entry(buf);
     const start = e.head[1];
     const rel = start - (this.streamStart + ML_BASE);

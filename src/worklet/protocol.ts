@@ -44,7 +44,8 @@ export type ToWorklet =
 export type FromWorklet =
   /**
    * The engine changed (requested, or ML → DSP after missed deadlines).
-   * `at` is the context time of the first input sample played with the new delay.
+   * `at` is the context time of the first input sample played with the new delay (input time:
+   * that sample is heard `newDelay / sampleRate` later).
    */
   | { type: 'engine'; engine: MlEngine; reason: MlReason; at: number };
 
