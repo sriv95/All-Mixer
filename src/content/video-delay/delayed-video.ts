@@ -39,6 +39,7 @@ export class DelayedVideo {
   private running = false;
   private destroyed = false;
   private failed = false;
+  private stopTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(
     private readonly video: HTMLVideoElement,
@@ -72,12 +73,18 @@ export class DelayedVideo {
   setDelay(delayMs: number, effectiveAtMs = performance.now()): void {
     if (this.destroyed) return;
     this.schedule.set(Math.max(0, delayMs), effectiveAtMs);
-    if (this.schedule.target > 0) this.start();
+    clearTimeout(this.stopTimer);
+    if (this.schedule.target > 0) return this.start();
+    // Keep showing delayed frames until the audio drops its delay too, so
+    // picture and sound jump forward together.
+    const wait = effectiveAtMs - performance.now();
+    if (wait > 0 && this.running) this.stopTimer = setTimeout(() => this.stop(), wait);
     else this.stop();
   }
 
   destroy(): void {
     if (this.destroyed) return;
+    clearTimeout(this.stopTimer);
     this.stop();
     this.destroyed = true;
     this.video.removeEventListener('seeking', this.onSeeking);

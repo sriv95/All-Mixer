@@ -96,6 +96,27 @@ describe('DelayedVideo', () => {
     expect(states.at(-1)).toBe('failed');
   });
 
+  it('turning the delay off waits until the audio change takes effect', () => {
+    vi.useFakeTimers();
+    try {
+      const dv = new DelayedVideo(video);
+      dv.setDelay(100);
+      dv.setDelay(0, performance.now() + 40);
+      expect(dv.state).not.toBe('off');
+      vi.advanceTimersByTime(41);
+      expect(dv.state).toBe('off');
+      expect(canvas()).toBeNull();
+      dv.setDelay(100);
+      dv.setDelay(0, performance.now() + 40);
+      dv.setDelay(80); // a new delay cancels the pending stop
+      vi.advanceTimersByTime(100);
+      expect(dv.state).not.toBe('off');
+      dv.destroy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('destroy removes the canvas and listeners', () => {
     const dv = new DelayedVideo(video);
     dv.setDelay(100);

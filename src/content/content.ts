@@ -16,26 +16,19 @@ if (site) {
   // Lyrics follow what the user sees and hears, which trails currentTime by the picture delay (D1).
   const lyrics = initLyrics(site, () => (overlay?.state === 'on' ? overlay.delayMs / 1000 : 0));
 
-  const wantedDelayMs = (): number => {
-    if (settings.mode === 'separate') {
-      // SRI-8: Duke wires SRI-7 latency here
-      return 0;
-    }
-    return overlayDelayMs(settings.mode, chain.deviceLatencyMs);
-  };
+  // D1: the picture trails by the graph's total audio delay (processing + device).
+  const wantedDelayMs = (videoDelayMs = chain.latency.videoDelayMs): number => overlayDelayMs(settings.mode, videoDelayMs);
 
   /** Apply the wanted picture delay; ignore moves under 5 ms (latency jitter). */
-  const syncDelay = (force = false) => {
+  const syncDelay = (force = false, want = wantedDelayMs(), effectiveAt?: number) => {
     if (!overlay) return;
-    const want = wantedDelayMs();
     if (!force && Math.abs(want - overlay.delayMs) < 5 && (want > 0) === (overlay.delayMs > 0)) return;
-    overlay.setDelay(want);
+    overlay.setDelay(want, effectiveAt);
   };
 
-  // outputLatency can change at runtime (e.g. Bluetooth connects).
-  setInterval(() => {
-    if (chain.state === 'active') syncDelay();
-  }, 2000);
+  // Fires when separation switches on/off (at the moment the new audio reaches
+  // the speakers) and when device latency moves, e.g. a Bluetooth switch.
+  chain.onLatencyChange((info, at) => syncDelay(false, wantedDelayMs(info.videoDelayMs), at));
 
   const apply = (raw: unknown) => {
     settings = normalizeSettings(raw);
