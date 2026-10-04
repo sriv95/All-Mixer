@@ -1,0 +1,63 @@
+{
+  "date": "2026-10-04T08:00:21.659Z",
+  "node": "v24.21.0",
+  "tol": 0.000001,
+  "equivPass": true,
+  "timingTargetPass": true,
+  "results": [
+    {
+      "name": "mix.wav(tiled)",
+      "samples": 1796096,
+      "max_abs_diff": 0,
+      "pass": true,
+      "ref": {
+        "hops": 3000,
+        "p50_us": 383.4,
+        "p99_us": 440.7,
+        "max_us": 1054.6
+      },
+      "new": {
+        "hops": 3000,
+        "p50_us": 136.9,
+        "p99_us": 148.4,
+        "max_us": 213.2
+      }
+    },
+    {
+      "name": "noise10s",
+      "samples": 1796096,
+      "max_abs_diff": 0,
+      "pass": true,
+      "ref": {
+        "hops": 3000,
+        "p50_us": 369.8,
+        "p99_us": 410,
+        "max_us": 628.2
+      },
+      "new": {
+        "hops": 3000,
+        "p50_us": 128.5,
+        "p99_us": 138.6,
+        "max_us": 396
+      }
+    },
+    {
+      "name": "noise10s_noperc",
+      "samples": 1796096,
+      "max_abs_diff": 0,
+      "pass": true,
+      "ref": {
+        "hops": 3000,
+        "p50_us": 356,
+        "p99_us": 406.5,
+        "max_us": 635.1
+      },
+      "new": {
+        "hops": 3000,
+        "p50_us": 88.1,
+        "p99_us": 95.6,
+        "max_us": 127.8
+      }
+    }
+  ]
+}

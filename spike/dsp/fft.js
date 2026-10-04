@@ -29,12 +29,13 @@ export class FFT {
         t = im[i]; im[i] = im[j]; im[j] = t;
       }
     }
-    const sign = inverse ? 1 : -1;
+    const sign = inverse ? 1 : -1, cos = this.cos, sin = this.sin;
     for (let size = 2; size <= n; size <<= 1) {
       const half = size >> 1, step = n / size;
-      for (let start = 0; start < n; start += size) {
-        for (let k = 0; k < half; k++) {
-          const wr = this.cos[k * step], wi = sign * this.sin[k * step];
+      // Butterfly loop order swapped (k outer): twiddle loaded once per k, not once per group.
+      for (let k = 0; k < half; k++) {
+        const wr = cos[k * step], wi = sign * sin[k * step];
+        for (let start = 0; start < n; start += size) {
           const a = start + k, b = a + half;
           const xr = re[b] * wr - im[b] * wi;
           const xi = re[b] * wi + im[b] * wr;

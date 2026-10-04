@@ -57,6 +57,10 @@ export class DspSeparator {
       this.band[k] = o.useBand ? w : 1;
     }
 
+    // pFreq is only read where band > 0, so the sliding median only needs that bin range.
+    this.kLo = 0; while (this.kLo < B && !(this.band[this.kLo] > 0)) this.kLo++;
+    this.kHi = B - 1; while (this.kHi >= this.kLo && !(this.band[this.kHi] > 0)) this.kHi--;
+
     // Input ring (last N samples), output accumulators (vocal only; instrumental is derived).
     this.inL = new Float32Array(N); this.inR = new Float32Array(N);
     this.accL = new Float32Array(N); this.accR = new Float32Array(N);
@@ -70,6 +74,7 @@ export class DspSeparator {
     this.hist = new Float32Array(o.hpssTimeFrames * B); this.histPos = 0;
     this.scratch = new Float32Array(Math.max(o.hpssTimeFrames, o.hpssFreqBins));
     this.pFreq = new Float32Array(B);
+    this.sortWin = new Float32Array(o.hpssFreqBins + 1);
     this.ready = new Float32Array(2 * H); // vocal L/R produced by the last hop
     this.readyPos = H;
   }
@@ -84,6 +89,43 @@ export class DspSeparator {
       buf[j + 1] = v;
     }
     return n & 1 ? buf[n >> 1] : 0.5 * (buf[(n >> 1) - 1] + buf[n >> 1]);
+  }
+
+  // Exact median of 9 values (Paeth/Smith selection network, 19 compare-exchanges). Same value as
+  // sorting, no state, no allocation. Reads from hist at stride B.
+  static median9(h, k, B) {
+    let a0 = h[k], a1 = h[B + k], a2 = h[2 * B + k], a3 = h[3 * B + k], a4 = h[4 * B + k],
+        a5 = h[5 * B + k], a6 = h[6 * B + k], a7 = h[7 * B + k], a8 = h[8 * B + k], t;
+    if (a1 > a2) { t = a1; a1 = a2; a2 = t; } if (a4 > a5) { t = a4; a4 = a5; a5 = t; } if (a7 > a8) { t = a7; a7 = a8; a8 = t; }
+    if (a0 > a1) { t = a0; a0 = a1; a1 = t; } if (a3 > a4) { t = a3; a3 = a4; a4 = t; } if (a6 > a7) { t = a6; a6 = a7; a7 = t; }
+    if (a1 > a2) { t = a1; a1 = a2; a2 = t; } if (a4 > a5) { t = a4; a4 = a5; a5 = t; } if (a7 > a8) { t = a7; a7 = a8; a8 = t; }
+    if (a0 > a3) { t = a0; a0 = a3; a3 = t; } if (a5 > a8) { t = a5; a5 = a8; a8 = t; } if (a4 > a7) { t = a4; a4 = a7; a7 = t; }
+    if (a3 > a6) { t = a3; a3 = a6; a6 = t; } if (a1 > a4) { t = a1; a1 = a4; a4 = t; } if (a2 > a5) { t = a2; a2 = a5; a5 = t; }
+    if (a4 > a7) { t = a4; a4 = a7; a7 = t; } if (a4 > a2) { t = a4; a4 = a2; a2 = t; } if (a6 > a4) { t = a6; a6 = a4; a4 = t; }
+    if (a4 > a2) { t = a4; a4 = a2; a2 = t; }
+    return a4;
+  }
+
+  // Sorted-array helpers for the sliding frequency median (no allocation).
+  static insertSorted(a, n, v) {
+    let j = n - 1;
+    while (j >= 0 && a[j] > v) { a[j + 1] = a[j]; j--; }
+    a[j + 1] = v;
+    return n + 1;
+  }
+  // Swap one value for another in a single pass (window size unchanged).
+  static replaceSorted(a, n, out, v) {
+    let i = 0;
+    while (i < n - 1 && a[i] !== out) i++;
+    while (i > 0 && a[i - 1] > v) { a[i] = a[i - 1]; i--; }
+    while (i < n - 1 && a[i + 1] < v) { a[i] = a[i + 1]; i++; }
+    a[i] = v;
+  }
+  static removeSorted(a, n, v) {
+    let lo = 0, hi = n - 1;
+    while (lo < hi) { const m = (lo + hi) >> 1; if (a[m] < v) lo = m + 1; else hi = m; }
+    for (let j = lo; j < n - 1; j++) a[j] = a[j + 1];
+    return n - 1;
   }
 
   // Processes one block. Arrays may be any length; outputs must be the same length.
@@ -107,45 +149,67 @@ export class DspSeparator {
   }
 
   hopFrame() {
-    const { N, H, B, re, im, win, fft } = this, o = this.opts;
+    const { N, H, B, re, im, win, fft, inL, inR } = this, o = this.opts;
     const start = this.fill; // oldest sample in the ring
-    for (let n = 0; n < N; n++) {
-      const j = (start + n) % N;
-      re[n] = this.inL[j] * win[n];
-      im[n] = this.inR[j] * win[n];
+    // Two linear segments instead of (start + n) % N.
+    const seg = N - start;
+    for (let n = 0; n < seg; n++) {
+      const w = win[n], j = start + n;
+      re[n] = inL[j] * w; im[n] = inR[j] * w;
+    }
+    for (let n = seg, j = 0; n < N; n++, j++) {
+      const w = win[n];
+      re[n] = inL[j] * w; im[n] = inR[j] * w;
     }
     fft.transform(re, im);
     const { Lr, Li, Rr, Ri, mag } = this;
     for (let k = 0; k < B; k++) {
-      const nk = (N - k) % N;
+      const nk = k === 0 ? 0 : N - k;
       Lr[k] = 0.5 * (re[k] + re[nk]); Li[k] = 0.5 * (im[k] - im[nk]);
       Rr[k] = 0.5 * (im[k] + im[nk]); Ri[k] = -0.5 * (re[k] - re[nk]);
-      mag[k] = Math.hypot(Lr[k] + Rr[k], Li[k] + Ri[k]) * 0.5; // mid magnitude
+      const mr = Lr[k] + Rr[k], mi = Li[k] + Ri[k];
+      mag[k] = Math.sqrt(mr * mr + mi * mi) * 0.5; // mid magnitude
     }
     // Percussive (frequency median) and harmonic (time median over past frames).
     const T = o.hpssTimeFrames, F = o.hpssFreqBins, hf = F >> 1, sc = this.scratch;
+    const usePerc = o.usePerc, useCenter = o.useCenter, cFloor = o.centerFloor;
+    const cPow = o.centerPower, pPow = o.percPower;
     this.hist.set(mag, this.histPos * B);
     this.histPos = (this.histPos + 1) % T;
-    for (let k = 0; k < B; k++) {
+    const pFreq = this.pFreq, hist = this.hist;
+    if (usePerc) {
+      // Sliding sorted window over k: drop the outgoing bin, insert the incoming one.
+      const sw = this.sortWin;
+      const kLo = this.kLo, kHi = this.kHi;
       let c = 0;
-      for (let j = k - hf; j <= k + hf; j++) if (j >= 0 && j < B) sc[c++] = mag[j];
-      this.pFreq[k] = DspSeparator.median(sc, c);
+      for (let j = Math.max(0, kLo - hf); j <= kLo + hf && j < B; j++) c = DspSeparator.insertSorted(sw, c, mag[j]);
+      for (let k = kLo; k <= kHi; k++) {
+        pFreq[k] = c & 1 ? sw[c >> 1] : 0.5 * (sw[(c >> 1) - 1] + sw[c >> 1]);
+        const out = k - hf, inc = k + 1 + hf;
+        if (out >= 0 && inc < B) DspSeparator.replaceSorted(sw, c, mag[out], mag[inc]);
+        else {
+          if (out >= 0) c = DspSeparator.removeSorted(sw, c, mag[out]);
+          if (inc < B) c = DspSeparator.insertSorted(sw, c, mag[inc]);
+        }
+      }
     }
     const mask = this.mask, band = this.band, rel = o.maskRelease;
     for (let k = 0; k < B; k++) {
       let m = band[k];
-      if (m > 0 && o.useCenter) {
+      if (m > 0 && useCenter) {
         const pl = Lr[k] * Lr[k] + Li[k] * Li[k], pr = Rr[k] * Rr[k] + Ri[k] * Ri[k];
         const cross = Lr[k] * Rr[k] + Li[k] * Ri[k];
         const coh = (2 * cross) / (pl + pr + 1e-12);
-        const c = Math.max(0, (coh - o.centerFloor) / (1 - o.centerFloor));
-        m *= c ** o.centerPower;
+        const c = Math.max(0, (coh - cFloor) / (1 - cFloor));
+        m *= cPow === 1 ? c : c ** cPow;
       }
-      if (m > 0 && o.usePerc) {
-        for (let t = 0; t < T; t++) sc[t] = this.hist[t * B + k];
-        const h = DspSeparator.median(sc, T), p = this.pFreq[k];
+      if (m > 0 && usePerc) {
+        let h;
+        if (T === 9) h = DspSeparator.median9(hist, k, B);
+        else { for (let t = 0; t < T; t++) sc[t] = hist[t * B + k]; h = DspSeparator.median(sc, T); }
+        const p = pFreq[k];
         const perc = (p * p) / (h * h + p * p + 1e-12);
-        m *= (1 - perc) ** o.percPower;
+        m *= pPow === 0.5 ? Math.sqrt(1 - perc) : (1 - perc) ** pPow;
       }
       // Fast attack, slower release to reduce musical noise.
       mask[k] = m >= mask[k] ? m : rel * mask[k] + (1 - rel) * m;
@@ -160,7 +224,7 @@ export class DspSeparator {
     fft.transform(re, im, true);
     const g = this.olaGain / N, acc = this.accL, accR = this.accR;
     // Overlap-add into a linear accumulator, emit the first H samples.
-    for (let n = 0; n < N; n++) { acc[n] += re[n] * win[n] * g; accR[n] += im[n] * win[n] * g; }
+    for (let n = 0; n < N; n++) { const w = win[n]; acc[n] += re[n] * w * g; accR[n] += im[n] * w * g; }
     for (let n = 0; n < H; n++) { this.ready[n] = acc[n]; this.ready[H + n] = accR[n]; }
     acc.copyWithin(0, H); acc.fill(0, N - H);
     accR.copyWithin(0, H); accR.fill(0, N - H);
