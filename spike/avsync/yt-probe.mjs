@@ -57,7 +57,7 @@ const res = await page.evaluate(async (D) => {
   await new Promise((r) => setTimeout(r, 8000));
   const s = dv.stats;
   // Is the canvas actually showing picture (not black / tainted)?
-  let nonBlack = null;
+  let nonBlack;
   try { const d = dv.ctx.getImageData(0, 0, dv.canvas.width, dv.canvas.height).data; let n = 0; for (let i = 0; i < d.length; i += 4000) if (d[i] + d[i + 1] + d[i + 2] > 30) n++; nonBlack = n; } catch (e) { nonBlack = 'err ' + e.message; }
   const q = v.getVideoPlaybackQuality();
   return { srcFrames: s.srcFrames, srcDropped: s.srcDropped, drawn: s.drawn, skipped: s.skipped, errs: s.captureErrors, ringMax: s.maxFrames, ringMB: Math.round(s.maxBytes / 2 ** 20), canvas: [dv.canvas.width, dv.canvas.height], nonBlack, vqDropped: q.droppedVideoFrames, ad: !!document.querySelector('.ad-showing'), fps: s.srcFrames / 8 };

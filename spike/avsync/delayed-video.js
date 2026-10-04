@@ -94,7 +94,7 @@ export class DelayedVideo {
       let f;
       try {
         f = new VideoFrame(this.video, { timestamp: Math.round(md.mediaTime * 1e6) });
-      } catch (e) {
+      } catch {
         s.captureErrors++;
         return;
       }
