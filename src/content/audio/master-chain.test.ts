@@ -63,6 +63,21 @@ beforeEach(() => {
 const video = () => document.createElement('video');
 
 describe('MasterChain', () => {
+  it('reports device latency in ms, 0 without a running context', () => {
+    vi.stubGlobal(
+      'AudioContext',
+      class extends FakeContext {
+        state: AudioContextState = 'running';
+        baseLatency = 0.01;
+        outputLatency = 0.04;
+      },
+    );
+    const chain = new MasterChain();
+    expect(chain.deviceLatencyMs).toBe(0);
+    chain.setGain(2);
+    expect(chain.deviceLatencyMs).toBeCloseTo(50, 5);
+  });
+
   it('leaves page audio alone at 100%', () => {
     const chain = new MasterChain();
     chain.setVideo(video());

@@ -1,5 +1,6 @@
 import type { MixerSettings } from './settings';
 import type { TrackInfo } from '../lyrics/types';
+import type { OverlayState } from '../content/video-delay/delayed-video';
 import type { Site } from '../content/youtube-dom';
 
 /** Content script → background: "what are my settings?" (tab id comes from sender). */
@@ -43,6 +44,7 @@ export interface ContentStatus {
   audio: AudioState;
   /** Requested master gain, linear (1 = 100 %). */
   gain: number;
+  videoDelay: { state: OverlayState; delayMs: number };
   error?: string;
 }
 

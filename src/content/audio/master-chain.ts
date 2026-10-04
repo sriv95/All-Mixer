@@ -37,6 +37,13 @@ export class MasterChain {
     return this.targetGain;
   }
 
+  /** Output delay the device adds, ms; 0 without a running context. */
+  get deviceLatencyMs(): number {
+    const ctx = this.ctx;
+    if (!ctx || ctx.state !== 'running') return 0;
+    return ((ctx.baseLatency || 0) + ((ctx as { outputLatency?: number }).outputLatency || 0)) * 1000;
+  }
+
   get error(): string | undefined {
     return this.lastError;
   }
