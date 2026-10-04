@@ -6,3 +6,6 @@ dist/
 .venv/
 spike/clips/
 spike/ml/models/
+# model packaging (SRI-29)
+.cache/
+public/ml/vocals.onnx
