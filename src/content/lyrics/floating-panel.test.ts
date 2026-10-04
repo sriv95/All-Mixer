@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { clampRect, FloatingPanel } from './floating-panel';
+import { clampRect, FloatingPanel, resizeRect } from './floating-panel';
 
 const store = new Map<string, unknown>();
 
@@ -42,6 +42,16 @@ describe('clampRect', () => {
   });
   it('min wins in a tiny viewport', () => {
     expect(clampRect({ x: 5, y: 5, w: 300, h: 300 }, { w: 100, h: 100 }, min)).toEqual({ x: 0, y: 0, w: 240, h: 160 });
+  });
+});
+
+describe('resizeRect', () => {
+  const vp = { w: 1000, h: 800 };
+  it('stops at the viewport edge without moving the panel', () => {
+    const r = clampRect(resizeRect({ x: 800, y: 700, w: 150, h: 50 }, 500, 500, vp), vp);
+    expect(r).toEqual({ x: 760, y: 640, w: 240, h: 160 });
+    const r2 = clampRect(resizeRect({ x: 500, y: 100, w: 300, h: 300 }, 900, 900, vp), vp);
+    expect(r2).toEqual({ x: 500, y: 100, w: 500, h: 700 });
   });
 });
 

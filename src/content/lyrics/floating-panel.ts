@@ -30,6 +30,15 @@ export function clampRect(rect: Rect, viewport: Viewport, min: Viewport = MIN_SI
   return { x, y, w, h };
 }
 
+/** Resize from the bottom-right corner: grow up to the viewport edge instead of pushing the panel away. */
+export function resizeRect(start: Rect, dx: number, dy: number, viewport: Viewport): Rect {
+  return {
+    ...start,
+    w: Math.min(start.w + dx, viewport.w - start.x),
+    h: Math.min(start.h + dy, viewport.h - start.y),
+  };
+}
+
 const STYLE = `
 :host { all: initial; }
 .panel {
@@ -211,7 +220,7 @@ export class FloatingPanel {
       const next =
         mode === 'move'
           ? { ...d.start, x: d.start.x + dx, y: d.start.y + dy }
-          : { ...d.start, w: d.start.w + dx, h: d.start.h + dy };
+          : resizeRect(d.start, dx, dy, this.viewport());
       this.rect = clampRect(next, this.viewport());
       this.apply();
     });
