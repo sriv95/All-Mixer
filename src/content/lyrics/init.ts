@@ -1,6 +1,6 @@
 import type { FetchLyrics } from '../../shared/messages';
 import type { FoundLyrics } from '../../lyrics/lrclib-types';
-import { findLyricsControls, getVideoId, onNavigate, type Site } from '../youtube-dom';
+import { findLyricsControls, getVideoId, onCaptionsButtonOn, onNavigate, type Site } from '../youtube-dom';
 import { getPlayerInfo, getTimedText, onCaptionsAvailable } from './bridge-client';
 import { LyricsController } from './controller';
 import { PanelSurface, YtmTabSurface } from './surfaces';
@@ -49,6 +49,9 @@ export function initLyrics(site: Site, audioDelay: () => number): LyricsFeature 
       });
     }).observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ['aria-selected'] });
   }
+
+  // CC turned on: the event from the page bridge can be missed, so re-align a few times on our own.
+  if (site === 'youtube') onCaptionsButtonOn(() => controller.realignWithRetries());
 
   // Which video is this? The URL on watch pages; the player itself elsewhere (miniplayer, YT Music player bar).
   let checkSeq = 0;

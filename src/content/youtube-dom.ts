@@ -137,3 +137,29 @@ export function enableTab(tab: HTMLElement): void {
 export function findLyricsControls(site: Site, doc: ParentNode = document): HTMLElement | null {
   return doc.querySelector<HTMLElement>(LYRICS_SELECTORS.controls[site]);
 }
+
+/** The player's CC button (youtube.com only; YT Music has none in the same place). */
+export const CC_BUTTON_SELECTOR = '.ytp-subtitles-button';
+
+/**
+ * Call `cb` when the CC button's aria-pressed goes from not-true to true.
+ * One observer for the page's lifetime: it matches the button by selector, so it survives
+ * the player re-creating its controls and SPA navigation. Returns a disconnect function.
+ */
+export function onCaptionsButtonOn(cb: () => void, root: Document = document): () => void {
+  const pressed = (el: Element) => el.getAttribute('aria-pressed') === 'true';
+  const was = new WeakMap<Element, boolean>();
+  const seed = root.querySelector(CC_BUTTON_SELECTOR);
+  if (seed) was.set(seed, pressed(seed));
+  const obs = new MutationObserver((records) => {
+    for (const r of records) {
+      const el = r.target as Element;
+      if (r.attributeName !== 'aria-pressed' || !el.matches?.(CC_BUTTON_SELECTOR)) continue;
+      const now = pressed(el);
+      if (now && was.get(el) !== true) cb();
+      was.set(el, now);
+    }
+  });
+  obs.observe(root.documentElement, { subtree: true, attributes: true, attributeFilter: ['aria-pressed'] });
+  return () => obs.disconnect();
+}
