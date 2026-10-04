@@ -77,3 +77,6 @@ export type FromMlWorker =
     }
   /** No usable WebGPU (none, fallback adapter, or the model failed to load). */
   | { type: 'unavailable'; reason: string };
+
+/** Page → worker init (iframe page forwards the ML port from the content script). */
+export type MlWorkerInit = { type: 'init'; port: MessagePort; modelUrl: string; wasmBase: string };
