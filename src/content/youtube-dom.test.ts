@@ -106,6 +106,13 @@ describe('findMainVideo fixtures', () => {
     expect(video?.closest('#movie_player')).not.toBeNull();
   });
 
+  it.each(['youtube', 'ytmusic'] as const)('%s: prefers the player even when a preview comes first in DOM order', (site) => {
+    document.body.innerHTML =
+      '<ytd-video-preview><video class="video-stream html5-main-video" id="preview"></video></ytd-video-preview>' +
+      (site === 'ytmusic' ? `<ytmusic-player>${fixture('watch')}</ytmusic-player>` : fixture('watch'));
+    expect(findMainVideo(site)?.id).toBe('main');
+  });
+
   it('theater and fullscreen fixtures carry the expected state attributes', () => {
     document.body.innerHTML = fixture('theater');
     expect(document.querySelector('ytd-watch-flexy[theater]')).not.toBeNull();
