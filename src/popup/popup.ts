@@ -76,8 +76,13 @@ function separationText(s: ContentStatus): string {
   return '';
 }
 
+// While the separator starts, poll so the popup moves on from "Starting separation…" by itself.
+const LOADING_POLL_MS = 500;
+let pollTimer: ReturnType<typeof setTimeout> | undefined;
+
 async function refreshStatus(): Promise<void> {
   if (tabId === null) return;
+  clearTimeout(pollTimer);
   const req: GetStatus = { type: 'get-status' };
   const s: ContentStatus | undefined = await chrome.tabs.sendMessage(tabId, req).catch(() => undefined);
   if (!s) {
@@ -88,6 +93,9 @@ async function refreshStatus(): Promise<void> {
     status.textContent = 'No video player on this page yet.';
   } else {
     status.textContent = separationText(s) || STATUS_TEXT[s.audio];
+  }
+  if (s?.separation?.state === 'loading' && settings.mode === 'separate') {
+    pollTimer = setTimeout(() => void refreshStatus(), LOADING_POLL_MS);
   }
 }
 

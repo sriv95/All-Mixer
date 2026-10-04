@@ -213,6 +213,14 @@ describe('popup', () => {
       expect(el('status').textContent).toBe('Starting separation…');
     });
 
+    it('polls while loading and shows the engine once it is on', async () => {
+      await load({ stored: { mode: 'separate' }, status: sep('loading') });
+      expect(el('status').textContent).toBe('Starting separation…');
+      (chrome.tabs.sendMessage as ReturnType<typeof vi.fn>).mockResolvedValue(sep('on'));
+      await new Promise((r) => setTimeout(r, 600));
+      expect(el('status').textContent).toBe('Light engine · 43 ms delay');
+    });
+
     it('on status shows engine and rounded delay', async () => {
       await load({ stored: { mode: 'separate' }, status: sep('on') });
       expect(el('status').textContent).toBe('Light engine · 43 ms delay');
