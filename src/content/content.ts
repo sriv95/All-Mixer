@@ -1,6 +1,8 @@
 import type { ContentRequest, ContentStatus, GetMyTabSettings } from '../shared/messages';
 import { DEFAULT_SETTINGS, masterGainFor, normalizeSettings, type MixerSettings } from '../shared/settings';
 import { MasterChain } from './audio/master-chain';
+import { DelayedVideo } from './video-delay/delayed-video';
+import { overlayDelayMs } from './video-delay/schedule';
 import { detectSite, watchMainVideo } from './youtube-dom';
 
 const site = detectSite(location.hostname);
@@ -8,11 +10,35 @@ const site = detectSite(location.hostname);
 if (site) {
   let settings: MixerSettings = { ...DEFAULT_SETTINGS };
   let video: HTMLVideoElement | null = null;
-  const chain = new MasterChain();
+  let overlay: DelayedVideo | null = null;
+  const chain = new MasterChain(() => syncDelay());
+
+  const wantedDelayMs = (): number => {
+    if (settings.mode === 'separate') {
+      // SRI-8: Duke wires SRI-7 latency here
+      return 0;
+    }
+    return overlayDelayMs(settings.mode, chain.deviceLatencyMs);
+  };
+
+  /** Apply the wanted picture delay; ignore moves under 5 ms (latency jitter). */
+  const syncDelay = (force = false) => {
+    if (!overlay) return;
+    const want = wantedDelayMs();
+    if (!force && Math.abs(want - overlay.delayMs) < 5 && (want > 0) === (overlay.delayMs > 0)) return;
+    overlay.setDelay(want);
+  };
+
+  // outputLatency can change at runtime (e.g. Bluetooth connects).
+  setInterval(() => {
+    if (chain.state === 'active') syncDelay();
+  }, 2000);
 
   const apply = (raw: unknown) => {
     settings = normalizeSettings(raw);
+    // SRI-7: engine reads settings.separationQuality
     chain.setGain(masterGainFor(settings));
+    syncDelay();
   };
 
   // The content script lives for the whole tab session, so the settings survive
@@ -21,6 +47,9 @@ if (site) {
   watchMainVideo(site, (v) => {
     video = v;
     chain.setVideo(v);
+    overlay?.destroy();
+    overlay = new DelayedVideo(v);
+    syncDelay(true);
   });
 
   chrome.runtime.onMessage.addListener((msg: ContentRequest, _sender, sendResponse) => {
@@ -33,6 +62,7 @@ if (site) {
         videoFound: video !== null,
         audio: chain.state,
         gain: chain.requestedGain,
+        videoDelay: { state: overlay?.state ?? 'off', delayMs: overlay?.delayMs ?? 0 },
         error: chain.error,
       };
       sendResponse(status);

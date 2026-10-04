@@ -1,5 +1,5 @@
 import type { ContentStatus, GetStatus, GetTabSettings, SetTabSettings } from '../shared/messages';
-import { clampPct, normalizeSettings, type MixerSettings, type Mode } from '../shared/settings';
+import { clampPct, normalizeSettings, type MixerSettings, type Mode, type SeparationQuality } from '../shared/settings';
 import { detectSite } from '../content/youtube-dom';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -7,6 +7,7 @@ const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as 
 const tabs = [...document.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
 const master = $<HTMLInputElement>('master');
 const masterValue = $<HTMLOutputElement>('master-value');
+const quality = $<HTMLSelectElement>('separation-quality');
 const status = $<HTMLParagraphElement>('status');
 
 let tabId: number | null = null;
@@ -21,6 +22,7 @@ function render(): void {
   }
   master.value = String(settings.masterPct);
   masterValue.value = `${settings.masterPct}%`;
+  quality.value = settings.separationQuality;
 }
 
 let pending = false;
@@ -64,7 +66,7 @@ async function refreshStatus(): Promise<void> {
 }
 
 function disableAll(message: string): void {
-  for (const el of document.querySelectorAll<HTMLInputElement | HTMLButtonElement>('input, button')) {
+  for (const el of document.querySelectorAll<HTMLInputElement | HTMLButtonElement | HTMLSelectElement>('input, button, select')) {
     el.disabled = true;
   }
   status.textContent = message;
@@ -97,6 +99,11 @@ for (const tab of tabs) {
 
 master.addEventListener('input', () => {
   settings = { ...settings, masterPct: clampPct(master.value) };
+  save();
+});
+
+quality.addEventListener('change', () => {
+  settings = normalizeSettings({ ...settings, separationQuality: quality.value as SeparationQuality });
   save();
 });
 

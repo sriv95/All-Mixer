@@ -6,7 +6,10 @@ const html = readFileSync('src/popup/popup.html', 'utf8');
 const body = /<body[^>]*>([\s\S]*)<\/body>/.exec(html)![1].replace(/<script[\s\S]*?<\/script>/g, '');
 
 const YT = { id: 7, url: 'https://www.youtube.com/watch?v=abcdefghijk' };
-const okStatus: ContentStatus = { site: 'youtube', videoFound: true, audio: 'active', gain: 1 };
+const okStatus: ContentStatus = { site: 'youtube', videoFound: true, audio: 'active',
+  gain: 1,
+  videoDelay: { state: 'off', delayMs: 0 },
+};
 
 interface Opts {
   tab?: { id?: number; url?: string };
@@ -122,6 +125,30 @@ describe('popup', () => {
     await settle();
     expect(sent().at(-1).settings.masterPct).toBe(100);
     expect(el<HTMLOutputElement>('master-value').value).toBe('100%');
+  });
+
+  it('shows the stored separation quality on open', async () => {
+    await load({ stored: { mode: 'separate', separationQuality: 'quality' } });
+    expect(el<HTMLSelectElement>('separation-quality').value).toBe('quality');
+  });
+
+  it('defaults the separation quality select to auto', async () => {
+    await load();
+    expect(el<HTMLSelectElement>('separation-quality').value).toBe('auto');
+  });
+
+  it('changing separation quality saves and sends it', async () => {
+    await load({ stored: { mode: 'separate' } });
+    const select = el<HTMLSelectElement>('separation-quality');
+    select.value = 'light';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    await settle();
+    expect(sent().at(-1)).toMatchObject({ tabId: 7, settings: { separationQuality: 'light' } });
+  });
+
+  it('disables the quality select on a non-YouTube tab', async () => {
+    await load({ tab: { id: 1, url: 'https://example.com/' } });
+    expect(el<HTMLSelectElement>('separation-quality').disabled).toBe(true);
   });
 
   it('shows the waiting-for-gesture hint', async () => {
