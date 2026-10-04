@@ -1,7 +1,7 @@
 import type { FetchLyrics } from '../../shared/messages';
 import type { FoundLyrics } from '../../lyrics/lrclib-types';
 import { findLyricsControls, getVideoId, onNavigate, type Site } from '../youtube-dom';
-import { getPlayerInfo, getTimedText } from './bridge-client';
+import { getPlayerInfo, getTimedText, onCaptionsAvailable } from './bridge-client';
 import { LyricsController } from './controller';
 import { PanelSurface, YtmTabSurface } from './surfaces';
 
@@ -20,12 +20,13 @@ export function initLyrics(site: Site, audioDelay: () => number): LyricsFeature 
   const controller = new LyricsController(site, {
     getPlayerInfo,
     getTimedText,
+    onCaptionsAvailable,
     fetchLyrics: (track) => chrome.runtime.sendMessage({ type: 'fetch-lyrics', track } satisfies FetchLyrics) as Promise<FoundLyrics | null>,
     audioDelay,
   });
   const seek = (t: number) => controller.seek(t);
 
-  const panel = new PanelSurface(seek, () => {
+  const panel = new PanelSurface(site, seek, () => {
     syncButton();
     controller.refresh();
   });

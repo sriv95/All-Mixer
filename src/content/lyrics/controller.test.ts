@@ -158,4 +158,39 @@ describe('LyricsController', () => {
     c.seek(42);
     expect(video.currentTime).toBe(42);
   });
+
+  it('re-aligns when the player loads captions later (CC turned on)', async () => {
+    let notify!: (id: string) => void;
+    let captions: string | null = null;
+    const asrTrack = { baseUrl: 'u', languageCode: 'en', kind: 'asr' };
+    const words = [
+      { t: 6, w: 'hello' },
+      { t: 6.5, w: 'world' },
+      { t: 8, w: 'second' },
+      { t: 8.4, w: 'line' },
+    ];
+    const d = deps({
+      getPlayerInfo: vi.fn(async (id: string) => info(id, { captionTracks: [asrTrack] })),
+      getTimedText: vi.fn(async () => captions),
+      onCaptionsAvailable: (cb) => (notify = cb),
+    });
+    const c = new LyricsController('youtube', d);
+    const s = new FakeSurface();
+    c.addSurface(s);
+    c.setVideoId('v1');
+    await flush();
+    const first = s.last;
+    expect(first.kind === 'ready' && first.lyrics.kind === 'synced' && first.lyrics.offset).toBe(0);
+    expect(d.fetchLyrics).toHaveBeenCalledTimes(1);
+
+    captions = json3([...words, ...words.map((w) => ({ ...w, t: w.t + 0.05 })), ...words.map((w) => ({ ...w, t: w.t - 0.05 }))]);
+    notify('other-video');
+    await flush();
+    expect(s.last).toBe(first);
+    notify('v1');
+    await flush();
+    const st = s.last;
+    expect(st.kind === 'ready' && st.lyrics.kind === 'synced' && Math.round(st.lyrics.offset)).toBe(5);
+    expect(d.fetchLyrics).toHaveBeenCalledTimes(1); // no new LRCLIB request
+  });
 });
