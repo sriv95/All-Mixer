@@ -3,7 +3,9 @@ import { findLyrics } from './lrclib';
 import type { TrackInfo } from './types';
 
 const track: TrackInfo = { videoId: 'v', title: 'Yellow (Official Video)', artist: 'Coldplay - Topic', duration: 269.4 };
-const record = { id: 7, trackName: 'Yellow', artistName: 'Coldplay', duration: 269, syncedLyrics: '[00:01.00] x', plainLyrics: 'x' };
+const SYNCED = '[00:01.00] x\n[00:02.00] y\n[00:03.00] z\n[00:04.00] w';
+const PLAIN = 'x\ny\nz\nw';
+const record = { id: 7, trackName: 'Yellow', artistName: 'Coldplay', duration: 269, syncedLyrics: SYNCED, plainLyrics: PLAIN };
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 
@@ -11,7 +13,7 @@ describe('findLyrics', () => {
   it('uses /get with cleaned names and rounded duration', async () => {
     const f = vi.fn().mockResolvedValue(json(record));
     const res = await findLyrics(track, f as unknown as typeof fetch);
-    expect(res?.synced).toBe('[00:01.00] x');
+    expect(res?.synced).toBe(SYNCED);
     expect(f).toHaveBeenCalledTimes(1);
     const url = new URL(f.mock.calls[0][0] as string);
     expect(url.pathname).toBe('/api/get');
@@ -27,6 +29,13 @@ describe('findLyrics', () => {
         u.includes('/get?') ? json({}, 404) : json([{ ...record, id: 1, duration: 400 }, { ...record, id: 2 }]),
       ),
     );
+    const res = await findLyrics(track, f as unknown as typeof fetch);
+    expect(res?.record.id).toBe(2);
+  });
+
+  it('skips a placeholder exact match and uses /search', async () => {
+    const junk = { ...record, id: 9, syncedLyrics: '[00:00.00]probe', plainLyrics: 'probe' };
+    const f = vi.fn((u: string) => Promise.resolve(u.includes('/get?') ? json(junk) : json([junk, { ...record, id: 2 }])));
     const res = await findLyrics(track, f as unknown as typeof fetch);
     expect(res?.record.id).toBe(2);
   });
@@ -48,7 +57,7 @@ describe('findLyrics', () => {
     const f = vi.fn((u: string) => Promise.resolve(json(u.includes('/get?') ? plainRec : [plainRec])));
     const res = await findLyrics(track, f as unknown as typeof fetch);
     expect(res?.synced).toBeUndefined();
-    expect(res?.plain).toBe('x');
+    expect(res?.plain).toBe(PLAIN);
   });
 
   it('aborts after the timeout', async () => {

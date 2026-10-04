@@ -53,8 +53,8 @@ const rec = (o: Partial<LrclibRecord>): LrclibRecord => ({
   trackName: 'Yellow',
   artistName: 'Coldplay',
   duration: 269,
-  syncedLyrics: '[00:01.00] a',
-  plainLyrics: 'a',
+  syncedLyrics: '[00:01.00] a\n[00:02.00] b\n[00:03.00] c\n[00:04.00] d',
+  plainLyrics: 'a\nb\nc\nd',
   ...o,
 });
 
@@ -91,5 +91,16 @@ describe('unknown duration', () => {
     for (const duration of [0, NaN]) {
       expect(pickBest({ ...track, duration }, [rec({})])).not.toBeNull();
     }
+  });
+});
+
+describe('usableSynced / usablePlain', () => {
+  it('rejects placeholders and accepts real lyrics', async () => {
+    const { usableSynced, usablePlain } = await import('./match');
+    expect(usableSynced('[00:00.00]probe')).toBeUndefined();
+    expect(usableSynced('[00:01.00]\n[00:02.00]\n[00:03.00]\n[00:04.00]')).toBeUndefined();
+    expect(usableSynced(' [00:01.00]a\n[00:02.00]b\n[00:03.00][00:09.00]c\n[00:04.00]d ')).toBe('[00:01.00]a\n[00:02.00]b\n[00:03.00][00:09.00]c\n[00:04.00]d');
+    expect(usablePlain('probe')).toBeUndefined();
+    expect(usablePlain('a\nb\n\nc\nd')).toBe('a\nb\n\nc\nd');
   });
 });

@@ -1,6 +1,6 @@
 import type { TrackInfo } from './types';
 import type { FoundLyrics, LrclibRecord } from './lrclib-types';
-import { cleanArtist, cleanTitle, pickBest } from './match';
+import { cleanArtist, cleanTitle, pickBest, usablePlain, usableSynced } from './match';
 
 export type { FoundLyrics, LrclibRecord } from './lrclib-types';
 
@@ -37,8 +37,8 @@ export async function searchRecords(params: Record<string, string>, fetchFn: typ
 }
 
 function toFound(record: LrclibRecord): FoundLyrics | null {
-  const synced = record.syncedLyrics?.trim() || undefined;
-  const plain = record.plainLyrics?.trim() || undefined;
+  const synced = usableSynced(record.syncedLyrics);
+  const plain = usablePlain(record.plainLyrics);
   if (record.instrumental || (!synced && !plain)) return null;
   return { synced, plain, record };
 }
@@ -48,7 +48,7 @@ export async function findLyrics(track: TrackInfo, fetchFn: typeof fetch = fetch
   const clean: TrackInfo = { ...track, title: cleanTitle(track.title) || track.title, artist: cleanArtist(track.artist) };
 
   const exact = track.duration > 0 ? await getRecord(clean, fetchFn).catch(() => null) : null;
-  if (exact?.syncedLyrics) return toFound(exact);
+  if (exact && usableSynced(exact.syncedLyrics)) return toFound(exact);
 
   const searches: Record<string, string>[] = [
     { track_name: clean.title, artist_name: clean.artist },

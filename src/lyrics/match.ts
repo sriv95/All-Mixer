@@ -83,6 +83,26 @@ function artistSimilarity(a: string, b: string): number {
   return s;
 }
 
+const MIN_LYRIC_LINES = 4;
+
+/**
+ * LRCLIB is crowd-sourced; some records are placeholders or vandalised
+ * (e.g. "[00:00.00]probe" as the exact match for a famous song). Accept lyrics
+ * only when they have a few real lines. Returns the trimmed text or undefined.
+ */
+export function usableSynced(s: string | null | undefined): string | undefined {
+  const t = s?.trim();
+  if (!t) return undefined;
+  const lines = t.split(/\r?\n/).filter((l) => /^(?:\[\d+:\d+(?:[.:]\d+)?\])+\s*\S/.test(l.trim()));
+  return lines.length >= MIN_LYRIC_LINES ? t : undefined;
+}
+
+export function usablePlain(s: string | null | undefined): string | undefined {
+  const t = s?.trim();
+  if (!t) return undefined;
+  return t.split(/\r?\n/).filter((l) => l.trim()).length >= MIN_LYRIC_LINES ? t : undefined;
+}
+
 const MIN_TITLE = 0.6;
 const MIN_ARTIST = 0.3;
 export const MIN_SCORE = 40;
@@ -90,7 +110,8 @@ export const MIN_SCORE = 40;
 /** 0 = implausible, higher is better. Max about 110. */
 export function scoreCandidate(track: TrackInfo, c: LrclibRecord): number {
   if (c.instrumental) return 0;
-  if (!c.syncedLyrics && !c.plainLyrics) return 0;
+  const synced = usableSynced(c.syncedLyrics);
+  if (!synced && !usablePlain(c.plainLyrics)) return 0;
   const title = similarity(cleanTitle(track.title), cleanTitle(c.trackName));
   if (title < MIN_TITLE) return 0;
   const artist = artistSimilarity(cleanArtist(track.artist), cleanArtist(c.artistName));
@@ -103,7 +124,7 @@ export function scoreCandidate(track: TrackInfo, c: LrclibRecord): number {
   else if (diff <= 15) score += 18 - (diff - 3) * 0.5;
   else if (diff <= 60) score += 10 - (diff - 15) / 9; // music videos with intros/outros
   else return 0;
-  if (c.syncedLyrics) score += 20;
+  if (synced) score += 20;
   if (track.album && c.albumName && similarity(track.album, c.albumName) > 0.8) score += 3;
   return score;
 }
