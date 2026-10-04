@@ -1,5 +1,5 @@
 import { findLineIndex, findWordIndex } from '../../lyrics/sync';
-import type { Lyrics, SyncedLyrics } from '../../lyrics/types';
+import type { Lyrics, LyricsSource, SyncedLyrics } from '../../lyrics/types';
 
 export type LyricsViewStatus = 'loading' | 'not-found' | 'error';
 
@@ -15,6 +15,14 @@ const DEFAULT_MESSAGES: Record<LyricsViewStatus, string> = {
   'not-found': 'No lyrics found for this track.',
   error: 'Could not load lyrics.',
 };
+
+const SOURCE_LABELS: Record<LyricsSource, string> = {
+  lrclib: 'LRCLIB',
+  'youtube-captions': 'YouTube captions',
+};
+
+/** Keys that scroll the focused container; pressing them counts as a user scroll. */
+const SCROLL_KEYS = new Set(['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End']);
 
 const STYLE = `
 :host { display: block; width: 100%; height: 100%; box-sizing: border-box; color: #fff; font: 16px/1.4 Roboto, Arial, sans-serif; }
@@ -76,7 +84,7 @@ export class LyricsView {
       p.className = 'plain';
       p.textContent = lyrics.text;
       this.scroller.replaceChildren(p);
-      this.footer.textContent = 'Lyrics: LRCLIB';
+      this.footer.textContent = `Lyrics: ${SOURCE_LABELS[lyrics.source]}`;
       return;
     }
     this.lyrics = lyrics;
@@ -104,7 +112,8 @@ export class LyricsView {
     });
     this.scroller.replaceChildren(frag);
     this.footer.textContent =
-      lyrics.offset !== 0 ? 'Lyrics: LRCLIB · timing aligned to captions' : 'Lyrics: LRCLIB';
+      `Lyrics: ${SOURCE_LABELS[lyrics.source]}` +
+      (lyrics.source === 'lrclib' && lyrics.offset !== 0 ? ' · timing aligned to captions' : '');
   }
 
   setStatus(status: LyricsViewStatus, message?: string): void {
@@ -186,7 +195,7 @@ export class LyricsView {
   }
 
   private autoScroll(index: number): void {
-    if (this.doc.defaultView && Date.now() < this.pausedUntil) return;
+    if (Date.now() < this.pausedUntil) return;
     const el = this.lineEls[index];
     const sc = this.scroller;
     const top = el.offsetTop - sc.clientHeight * CURRENT_LINE_POSITION + el.offsetHeight / 2;
@@ -213,6 +222,10 @@ export class LyricsView {
   };
 
   private readonly onKeyDown = (e: KeyboardEvent): void => {
+    if (SCROLL_KEYS.has(e.key)) {
+      this.onUserScroll();
+      return;
+    }
     if (e.key !== 'Enter' && e.key !== ' ') return;
     const i = this.lineFromEvent(e);
     if (i < 0) return;

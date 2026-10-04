@@ -134,6 +134,19 @@ describe('LyricsView', () => {
     expect(q('.footer').textContent).toBe('Lyrics: LRCLIB');
     view.setLyrics(synced(1.5));
     expect(q('.footer').textContent).toBe('Lyrics: LRCLIB · timing aligned to captions');
+    view.setLyrics({ ...synced(), source: 'youtube-captions' });
+    expect(q('.footer').textContent).toBe('Lyrics: YouTube captions');
+  });
+
+  it('keyboard scrolling pauses auto-scroll', () => {
+    view.setLyrics(synced());
+    const sc = q('.scroll');
+    const spy = vi.fn();
+    sc.scrollTo = spy as unknown as typeof sc.scrollTo;
+    q('.line').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    view.update(1.5);
+    expect(spy).not.toHaveBeenCalled();
+    expect(onSeek).not.toHaveBeenCalled();
   });
 
   it('setStatus replaces content and setLyrics replaces status', () => {
