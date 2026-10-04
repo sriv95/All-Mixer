@@ -1,18 +1,18 @@
-// AudioWorklet: DSP vocal / instrumental separation with per-stem gain.
+// AudioWorklet: vocal / instrumental separation with per-stem gain.
 //   out = vocalGain · vocal + instrumentalGain · instrumental   (stereo)
-// vocal + instrumental = input delayed by DSP_LATENCY_SAMPLES, so 100 % / 100 % is the original.
+// The separation (DSP or ML engine) lives in SeparatorCore; vocal + instrumental = input delayed
+// by the engine's latency, so 100 % / 100 % is the original.
 // process() allocates nothing; every buffer is created in the constructor.
-import { DspSeparator } from './dsp/separator.js';
-import { DSP_LATENCY_SAMPLES, PARAM_INSTRUMENTAL, PARAM_VOCAL, SEPARATOR_PROCESSOR, type ToWorklet } from './protocol';
+import { QUANTUM, SeparatorCore } from './core';
+import { PARAM_INSTRUMENTAL, PARAM_VOCAL, SEPARATOR_PROCESSOR, type FromWorklet, type ToWorklet } from './protocol';
 
 // AudioWorkletGlobalScope is not in TypeScript's DOM lib.
 declare const sampleRate: number;
+declare const currentTime: number;
 declare class AudioWorkletProcessor {
   readonly port: MessagePort;
 }
 declare function registerProcessor(name: string, ctor: new (options?: AudioWorkletNodeOptions) => AudioWorkletProcessor): void;
-
-const QUANTUM = 128;
 
 class SeparatorProcessor extends AudioWorkletProcessor {
   static get parameterDescriptors() {
@@ -22,12 +22,12 @@ class SeparatorProcessor extends AudioWorkletProcessor {
     ];
   }
 
-  private readonly sep = new DspSeparator(sampleRate);
+  private readonly core = new SeparatorCore(sampleRate, (m: FromWorklet) => this.port.postMessage(m));
   private readonly zero = new Float32Array(QUANTUM);
-  private vL = new Float32Array(QUANTUM);
-  private vR = new Float32Array(QUANTUM);
-  private iL = new Float32Array(QUANTUM);
-  private iR = new Float32Array(QUANTUM);
+  private readonly vL = new Float32Array(QUANTUM);
+  private readonly vR = new Float32Array(QUANTUM);
+  private readonly iL = new Float32Array(QUANTUM);
+  private readonly iR = new Float32Array(QUANTUM);
   private active = false;
   // Gains applied at the end of the previous quantum; each quantum ramps linearly from these.
   private vg = 1;
@@ -35,14 +35,18 @@ class SeparatorProcessor extends AudioWorkletProcessor {
 
   constructor() {
     super();
-    if (this.sep.latency !== DSP_LATENCY_SAMPLES) throw new Error('separator latency changed; update DSP_LATENCY_SAMPLES');
     this.port.onmessage = (e: MessageEvent<ToWorklet>) => {
       const msg = e.data;
       if (msg.type === 'active') {
-        if (msg.on && !this.active) this.sep.reset();
+        if (msg.on && !this.active) this.core.setActive(true, msg.engine, msg.reason);
+        else if (!msg.on) this.core.setActive(false);
         this.active = msg.on;
       } else if (msg.type === 'flush') {
-        this.sep.reset();
+        this.core.flush();
+      } else if (msg.type === 'ml-port') {
+        this.core.setPort(msg.port);
+      } else if (msg.type === 'engine') {
+        this.core.requestEngine(msg.engine, msg.reason);
       }
     };
   }
@@ -60,9 +64,14 @@ class SeparatorProcessor extends AudioWorkletProcessor {
     const inL = inp.length > 0 ? inp[0] : this.zero;
     const inR = inp.length > 1 ? inp[1] : inL;
     const len = oL.length;
-    if (this.vL.length !== len) this.resize(len);
+    if (len !== QUANTUM) {
+      // SeparatorCore is built for 128-frame quanta; another render size is not supported.
+      oL.fill(0);
+      oR.fill(0);
+      return true;
+    }
     const { vL, vR, iL, iR } = this;
-    this.sep.process(inL, inR, vL, vR, iL, iR);
+    this.core.process(inL, inR, vL, vR, iL, iR, currentTime);
 
     const vg1 = parameters[PARAM_VOCAL][0];
     const ig1 = parameters[PARAM_INSTRUMENTAL][0];
@@ -87,14 +96,6 @@ class SeparatorProcessor extends AudioWorkletProcessor {
       this.ig = ig1;
     }
     return true;
-  }
-
-  // Render quanta are 128 frames today; a future renderSizeHint could change that once.
-  private resize(len: number): void {
-    this.vL = new Float32Array(len);
-    this.vR = new Float32Array(len);
-    this.iL = new Float32Array(len);
-    this.iR = new Float32Array(len);
   }
 }
 
