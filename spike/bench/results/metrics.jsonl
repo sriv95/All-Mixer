@@ -16,3 +16,4 @@
 {"tag": "ms_only2", "bass_ret": -21.43, "drums_ret": -18.36, "kick_ret": -23.82, "vocal_leak": -15.44, "sub_energy": -19.67, "sdr_inst": 1.07, "sdr_voc": -3.04, "p10_bass_ret": -32.77, "p10_drums_ret": -28.0, "clips": 50}
 {"tag": "ms_lf2", "bass_ret": -0.83, "drums_ret": -1.77, "kick_ret": -0.03, "vocal_leak": -14.04, "sub_energy": -0.03, "sdr_inst": 6.31, "sdr_voc": 1.88, "p10_bass_ret": -2.64, "p10_drums_ret": -3.59, "clips": 50}
 {"tag": "dsp_final", "bass_ret": -0.65, "drums_ret": -1.01, "kick_ret": -0.02, "vocal_leak": -9.41, "sub_energy": -0.03, "sdr_inst": 7.34, "sdr_voc": 2.9, "p10_bass_ret": -1.99, "p10_drums_ret": -2.13, "clips": 50}
+{"tag": "prod", "bass_ret": -0.65, "drums_ret": -1.01, "kick_ret": -0.02, "vocal_leak": -9.41, "sub_energy": -0.03, "sdr_inst": 7.34, "sdr_voc": 2.9, "p10_bass_ret": -1.99, "p10_drums_ret": -2.13, "clips": 50}
