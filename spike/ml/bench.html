@@ -1,0 +1,35 @@
+<!doctype html><meta charset="utf-8"><title>ORT bench</title>
+<script type="module">
+import * as ort from '/node_modules/onnxruntime-web/dist/ort.webgpu.min.mjs';
+ort.env.wasm.wasmPaths = '/node_modules/onnxruntime-web/dist/';
+const pct = (a, p) => { const s = [...a].sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.ceil(p * s.length) - 1)]; };
+window.gpuInfo = async () => {
+  if (!navigator.gpu) return null;
+  const a = await navigator.gpu.requestAdapter();
+  if (!a) return null;
+  const i = a.info || {};
+  return { vendor: i.vendor, architecture: i.architecture, device: i.device, description: i.description, isFallback: a.isFallbackAdapter };
+};
+window.bench = async ({ url, ep, threads, shape, runs }) => {
+  ort.env.wasm.numThreads = threads || 1;
+  const heap0 = performance.memory?.usedJSHeapSize;
+  let t = performance.now();
+  const buf = await (await fetch(url)).arrayBuffer();
+  const fetchMs = performance.now() - t;
+  t = performance.now();
+  const sess = await ort.InferenceSession.create(buf, { executionProviders: [ep], graphOptimizationLevel: 'all' });
+  const createMs = performance.now() - t;
+  const n = shape.reduce((a, b) => a * b, 1);
+  const data = new Float32Array(n);
+  for (let i = 0; i < n; i++) data[i] = Math.random() * 2 - 1;
+  const feeds = { [sess.inputNames[0]]: new ort.Tensor('float32', data, shape) };
+  const once = async () => { const t0 = performance.now(); const o = await sess.run(feeds); const out = o[sess.outputNames[0]]; window.__dims = out.dims; await out.getData?.(); return performance.now() - t0; };
+  const firstMs = await once();
+  const times = [];
+  for (let i = 0; i < runs; i++) times.push(await once());
+  const heap1 = performance.memory?.usedJSHeapSize;
+  await sess.release();
+  return { outDims: window.__dims, downloadBytes: buf.byteLength, fetchMs, createMs, firstMs, p50: pct(times, 0.5), p95: pct(times, 0.95), min: Math.min(...times), jsHeapDeltaMB: heap1 && heap0 ? (heap1 - heap0) / 1048576 : null };
+};
+window.ready = true;
+</script>
