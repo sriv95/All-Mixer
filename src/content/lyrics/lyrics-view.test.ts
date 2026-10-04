@@ -119,6 +119,53 @@ describe('LyricsView', () => {
     expect(onSeek).toHaveBeenCalledTimes(3);
   });
 
+  describe('key isolation from YouTube', () => {
+    let seen: string[];
+    const spy = (e: Event) => seen.push(e.type);
+    const press = (el: HTMLElement, key: string, mods: KeyboardEventInit = {}) => {
+      for (const type of ['keydown', 'keypress', 'keyup']) {
+        el.dispatchEvent(new KeyboardEvent(type, { key, bubbles: true, composed: true, ...mods }));
+      }
+    };
+    beforeEach(() => {
+      seen = [];
+      for (const t of ['keydown', 'keypress', 'keyup']) document.addEventListener(t, spy);
+      view.setLyrics(synced());
+    });
+    afterEach(() => {
+      for (const t of ['keydown', 'keypress', 'keyup']) document.removeEventListener(t, spy);
+    });
+
+    it('Space seeks once and never reaches the page', () => {
+      press(qa('.line')[0], ' ');
+      expect(onSeek).toHaveBeenCalledTimes(1);
+      expect(onSeek).toHaveBeenCalledWith(1);
+      expect(seen).toEqual([]);
+    });
+
+    it('Enter seeks once and never reaches the page', () => {
+      press(qa('.line')[2], 'Enter');
+      expect(onSeek).toHaveBeenCalledTimes(1);
+      expect(onSeek).toHaveBeenCalledWith(6);
+      expect(seen).toEqual([]);
+    });
+
+    it.each(['ArrowLeft', 'ArrowRight'])('%s does not seek and never reaches the page', (key) => {
+      press(qa('.line')[0], key);
+      expect(onSeek).not.toHaveBeenCalled();
+      expect(seen).toEqual([]);
+    });
+
+    it('unguarded keys and Ctrl+ArrowRight reach the page', () => {
+      press(qa('.line')[0], 'k');
+      expect(seen).toEqual(['keydown', 'keypress', 'keyup']);
+      seen.length = 0;
+      press(qa('.line')[0], 'ArrowRight', { ctrlKey: true });
+      expect(seen).toEqual(['keydown', 'keypress', 'keyup']);
+      expect(onSeek).not.toHaveBeenCalled();
+    });
+  });
+
   it('renders plain lyrics without highlight or click, update is a no-op', () => {
     view.setLyrics({ kind: 'plain', source: 'lrclib', text: 'a\nb' });
     expect(qa('.line')).toHaveLength(0);

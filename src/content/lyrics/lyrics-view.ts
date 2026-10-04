@@ -23,6 +23,8 @@ const SOURCE_LABELS: Record<LyricsSource, string> = {
 
 /** Keys that scroll the focused container; pressing them counts as a user scroll. */
 const SCROLL_KEYS = new Set(['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End']);
+// Keys the panel owns while focused: YouTube acts on Space keyup and Left/Right, so keyup/keypress are stopped too.
+const GUARDED_KEYS = new Set([...SCROLL_KEYS, 'ArrowLeft', 'ArrowRight', ' ', 'Enter']);
 
 const STYLE = `
 :host { display: block; width: 100%; height: 100%; box-sizing: border-box; color: #fff; font: 16px/1.4 Roboto, Arial, sans-serif; }
@@ -72,6 +74,8 @@ export class LyricsView {
 
     this.scroller.addEventListener('click', this.onClick);
     this.scroller.addEventListener('keydown', this.onKeyDown);
+    this.scroller.addEventListener('keyup', this.onKeyGuard);
+    this.scroller.addEventListener('keypress', this.onKeyGuard);
     this.scroller.addEventListener('wheel', this.onUserScroll, { passive: true });
     this.scroller.addEventListener('touchmove', this.onUserScroll, { passive: true });
     this.scroller.addEventListener('pointerdown', this.onPointerDown);
@@ -149,6 +153,8 @@ export class LyricsView {
     this.destroyed = true;
     this.scroller.removeEventListener('click', this.onClick);
     this.scroller.removeEventListener('keydown', this.onKeyDown);
+    this.scroller.removeEventListener('keyup', this.onKeyGuard);
+    this.scroller.removeEventListener('keypress', this.onKeyGuard);
     this.scroller.removeEventListener('wheel', this.onUserScroll);
     this.scroller.removeEventListener('touchmove', this.onUserScroll);
     this.scroller.removeEventListener('pointerdown', this.onPointerDown);
@@ -221,8 +227,19 @@ export class LyricsView {
     this.seekTo(this.lineFromEvent(e));
   };
 
+  private readonly onKeyGuard = (e: KeyboardEvent): void => {
+    if (e.ctrlKey || e.metaKey || e.altKey || !GUARDED_KEYS.has(e.key)) return;
+    e.stopPropagation();
+    if ((e.key === ' ' || e.key === 'Enter') && this.lineFromEvent(e) >= 0) e.preventDefault();
+  };
+
   private readonly onKeyDown = (e: KeyboardEvent): void => {
     // Keys we handle must not also reach YouTube's page shortcuts (Space = pause, arrows = seek).
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      e.stopPropagation();
+      return;
+    }
     if (SCROLL_KEYS.has(e.key)) {
       e.stopPropagation();
       this.onUserScroll();
