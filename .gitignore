@@ -1,0 +1,8 @@
+node_modules/
+dist/
+*.log
+.claude/
+# audio spike (Marquess)
+.venv/
+spike/clips/
+spike/ml/models/
