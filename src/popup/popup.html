@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>All Mixer!</title>
+    <link rel="stylesheet" href="./popup.css" />
+  </head>
+  <body>
+    <div role="tablist" aria-label="Mode">
+      <button role="tab" id="tab-default" aria-controls="panel-default" data-mode="default">Default mode</button>
+      <button role="tab" id="tab-separate" aria-controls="panel-separate" data-mode="separate">Separate mode</button>
+    </div>
+
+    <section role="tabpanel" id="panel-default" aria-labelledby="tab-default">
+      <label for="master">Master volume</label>
+      <div class="row">
+        <input id="master" type="range" min="0" max="600" step="5" value="100" />
+        <output id="master-value" for="master">100%</output>
+      </div>
+      <button id="master-reset" type="button">Reset to 100%</button>
+    </section>
+
+    <section role="tabpanel" id="panel-separate" aria-labelledby="tab-separate" hidden>
+      <p class="note">Vocal / instrumental separation is coming in a later build. Audio plays at 100% in this mode for now.</p>
+      <label for="vocal">Vocal</label>
+      <div class="row">
+        <input id="vocal" type="range" min="0" max="600" step="5" value="100" disabled />
+        <output id="vocal-value" for="vocal">100%</output>
+      </div>
+      <label for="instrumental">Instrumental</label>
+      <div class="row">
+        <input id="instrumental" type="range" min="0" max="600" step="5" value="100" disabled />
+        <output id="instrumental-value" for="instrumental">100%</output>
+      </div>
+    </section>
+
+    <p id="status" class="status" role="status"></p>
+    <script type="module" src="./popup.ts"></script>
+  </body>
+</html>
