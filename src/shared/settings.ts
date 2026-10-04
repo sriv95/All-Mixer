@@ -46,10 +46,22 @@ export function normalizeSettings(raw: unknown): MixerSettings {
   };
 }
 
-/**
- * Linear gain for the master stage. Separate mode is not wired yet
- * (Marquess's separation engine), so it plays at unity for now.
- */
+/** Linear gain for the master stage. Separate mode uses the per-stem gains instead. */
 export function masterGainFor(settings: MixerSettings): number {
   return settings.mode === 'default' ? settings.masterPct / 100 : 1;
+}
+
+/** What the audio engine's separator should do for these settings (gains linear, 0–6). */
+export function separationFor(settings: MixerSettings): {
+  on: boolean;
+  vocal: number;
+  instrumental: number;
+  quality: SeparationQuality;
+} {
+  return {
+    on: settings.mode === 'separate',
+    vocal: settings.vocalPct / 100,
+    instrumental: settings.instrumentalPct / 100,
+    quality: settings.separationQuality,
+  };
 }

@@ -8,6 +8,9 @@
   "background": { "service_worker": "background.js", "type": "module" },
   "permissions": ["storage"],
   "host_permissions": ["https://www.youtube.com/*", "https://music.youtube.com/*", "https://lrclib.net/*"],
+  "web_accessible_resources": [
+    { "resources": ["worklet/separator-worklet.js"], "matches": ["https://www.youtube.com/*", "https://music.youtube.com/*"] }
+  ],
   "content_scripts": [
     {
       "matches": ["https://www.youtube.com/*", "https://music.youtube.com/*"],

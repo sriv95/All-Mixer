@@ -11,12 +11,16 @@ class FakeNode {
 }
 class FakeParam {
   value: number;
+  /** [target, startTime] of every setTargetAtTime call. */
+  targets: [number, number][] = [];
   constructor(v: number) {
     this.value = v;
   }
-  setTargetAtTime(v: number) {
+  setTargetAtTime(v: number, t = 0) {
     this.value = v;
+    this.targets.push([v, t]);
   }
+  cancelScheduledValues() {}
 }
 class FakeGain extends FakeNode {
   gain: FakeParam;
@@ -26,6 +30,24 @@ class FakeGain extends FakeNode {
   }
 }
 
+let worklets: FakeWorklet[] = [];
+class FakeWorklet extends FakeNode {
+  messages: unknown[] = [];
+  port = { postMessage: (m: unknown) => this.messages.push(m) };
+  parameters = new Map([
+    ['vocalGain', new FakeParam(1)],
+    ['instrumentalGain', new FakeParam(1)],
+  ]);
+  constructor(
+    readonly ctx: FakeContext,
+    readonly name: string,
+  ) {
+    super();
+    worklets.push(this);
+  }
+  addEventListener() {}
+}
+
 let contexts: FakeContext[] = [];
 class FakeContext extends EventTarget {
   state: AudioContextState = 'suspended';
@@ -33,6 +55,15 @@ class FakeContext extends EventTarget {
   destination = new FakeNode();
   sources: { el: HTMLMediaElement; node: FakeNode }[] = [];
   allowResume = false;
+  sampleRate = 48000;
+  modules: string[] = [];
+  loadFails = false;
+  audioWorklet = {
+    addModule: (url: string) => {
+      this.modules.push(url);
+      return this.loadFails ? Promise.reject(new Error('blocked')) : Promise.resolve();
+    },
+  };
   constructor() {
     super();
     contexts.push(this);
@@ -54,13 +85,16 @@ class FakeContext extends EventTarget {
 
 beforeEach(() => {
   contexts = [];
+  worklets = [];
   vi.stubGlobal('AudioContext', FakeContext);
+  vi.stubGlobal('AudioWorkletNode', FakeWorklet);
   vi.stubGlobal('GainNode', FakeGain);
   vi.stubGlobal('DynamicsCompressorNode', FakeNode);
   vi.stubGlobal('WaveShaperNode', FakeNode);
 });
 
 const video = () => document.createElement('video');
+const flushPromises = () => new Promise((r) => setTimeout(r, 0));
 
 describe('MasterChain', () => {
   it('reports device latency in ms, 0 without a running context', () => {
@@ -173,5 +207,127 @@ describe('MasterChain', () => {
     chain.setGain(2);
     expect(chain.state).toBe('error');
     expect(chain.error).toMatch(/already connected/);
+  });
+});
+
+describe('MasterChain separation', () => {
+  const running = () =>
+    vi.stubGlobal(
+      'AudioContext',
+      class extends FakeContext {
+        state: AudioContextState = 'running';
+        currentTime = 10;
+        baseLatency = 0.01;
+        outputLatency = 0.02;
+      },
+    );
+  const on = { on: true, vocal: 0, instrumental: 1.5, quality: 'auto' as const };
+  const off = { ...on, on: false };
+
+  async function separating() {
+    running();
+    const chain = new MasterChain(undefined, () => 'chrome-extension://x/worklet.js');
+    const v = video();
+    chain.setVideo(v);
+    const changes: [number, number, string][] = [];
+    chain.onLatencyChange((info, at) => changes.push([info.processingSamples, at, info.engine]));
+    chain.setSeparation(on);
+    await flushPromises();
+    const ctx = contexts[0];
+    const source = ctx.sources[0].node;
+    const sep = worklets[0];
+    const direct = source.connected[0] as FakeGain;
+    const sepOut = sep.connected[0] as FakeGain;
+    return { chain, v, ctx, source, sep, direct, sepOut, changes };
+  }
+
+  it('loads the worklet only when Separate mode is first used', () => {
+    running();
+    const chain = new MasterChain(undefined, () => 'chrome-extension://x/worklet.js');
+    chain.setVideo(video());
+    chain.setGain(2);
+    expect(contexts[0].modules).toEqual([]);
+    expect(chain.separationState).toBe('off');
+  });
+
+  it('routes the video into the separator and crossfades after it primes', async () => {
+    const { chain, ctx, source, sep, direct, sepOut, changes } = await separating();
+    expect(ctx.modules).toEqual(['chrome-extension://x/worklet.js']);
+    expect(sep.name).toBe('all-mixer-separator');
+    expect(source.connected).toEqual([direct, sep]);
+    expect(sep.messages).toEqual([{ type: 'active', on: true }]);
+    const start = 10 + 0.01 + 2048 / 48000;
+    expect(sepOut.gain.targets.at(-1)).toEqual([1, start]);
+    expect(direct.gain.targets.at(-1)).toEqual([0, start]);
+    expect(sep.parameters.get('vocalGain')!.value).toBe(0);
+    expect(sep.parameters.get('instrumentalGain')!.value).toBe(1.5);
+    expect(chain.separationState).toBe('on');
+    expect(chain.latency).toMatchObject({ engine: 'dsp', processingSamples: 2048, sampleRate: 48000 });
+    expect(chain.latency.processingMs).toBeCloseTo(42.667, 2);
+    expect(chain.latency.videoDelayMs).toBeCloseTo(42.667 + 30, 2);
+    expect(changes).toHaveLength(1);
+    expect(changes[0][0]).toBe(2048);
+    expect(changes[0][1]).toBeGreaterThan(performance.now());
+  });
+
+  it('changes stem gains without another crossfade or latency change', async () => {
+    const { chain, sep, sepOut, changes } = await separating();
+    const fades = sepOut.gain.targets.length;
+    chain.setSeparation({ ...on, vocal: 6, instrumental: 0 });
+    expect(sep.parameters.get('vocalGain')!.value).toBe(6);
+    expect(sep.parameters.get('instrumentalGain')!.value).toBe(0);
+    expect(sepOut.gain.targets).toHaveLength(fades);
+    expect(changes).toHaveLength(1);
+  });
+
+  it('fades back to the direct path and stops the worklet when leaving Separate mode', async () => {
+    const { chain, sep, direct, sepOut, changes } = await separating();
+    vi.useFakeTimers();
+    try {
+      chain.setSeparation(off);
+      expect(direct.gain.value).toBe(1);
+      expect(sepOut.gain.value).toBe(0);
+      expect(chain.latency.engine).toBe('bypass');
+      expect(changes.at(-1)![0]).toBe(0);
+      expect(sep.messages).toHaveLength(1);
+      vi.advanceTimersByTime(500);
+      expect(sep.messages.at(-1)).toEqual({ type: 'active', on: false });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('re-entering before the worklet stops reuses its buffers (no prime wait)', async () => {
+    const { chain, sep, sepOut } = await separating();
+    chain.setSeparation(off);
+    chain.setSeparation(on);
+    expect(sep.messages).toEqual([{ type: 'active', on: true }]);
+    expect(sepOut.gain.targets.at(-1)).toEqual([1, 10 + 0.01]);
+  });
+
+  it('flushes the separator on seek', async () => {
+    const { v, sep } = await separating();
+    v.dispatchEvent(new Event('seeking'));
+    expect(sep.messages.at(-1)).toEqual({ type: 'flush' });
+  });
+
+  it('reports an error state and bypass latency when the worklet load fails', async () => {
+    vi.stubGlobal(
+      'AudioContext',
+      class extends FakeContext {
+        state: AudioContextState = 'running';
+        loadFails = true;
+      },
+    );
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const chain = new MasterChain(undefined, () => 'chrome-extension://x/worklet.js');
+    chain.setVideo(video());
+    chain.setSeparation(on);
+    await flushPromises();
+    expect(chain.separationState).toBe('error');
+    expect(chain.separationError).toBe('blocked');
+    expect(chain.state).toBe('active');
+    expect(chain.latency.engine).toBe('bypass');
+    expect(worklets).toHaveLength(0);
   });
 });

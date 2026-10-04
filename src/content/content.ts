@@ -1,5 +1,5 @@
 import type { ContentRequest, ContentStatus, GetMyTabSettings } from '../shared/messages';
-import { DEFAULT_SETTINGS, masterGainFor, normalizeSettings, type MixerSettings } from '../shared/settings';
+import { DEFAULT_SETTINGS, masterGainFor, normalizeSettings, separationFor, type MixerSettings } from '../shared/settings';
 import { MasterChain } from './audio/master-chain';
 import { initLyrics } from './lyrics/init';
 import { DelayedVideo } from './video-delay/delayed-video';
@@ -39,8 +39,8 @@ if (site) {
 
   const apply = (raw: unknown) => {
     settings = normalizeSettings(raw);
-    // SRI-7: engine reads settings.separationQuality
     chain.setGain(masterGainFor(settings));
+    chain.setSeparation(separationFor(settings));
     syncDelay();
   };
 
@@ -67,6 +67,7 @@ if (site) {
         audio: chain.state,
         gain: chain.requestedGain,
         videoDelay: { state: overlay?.state ?? 'off', delayMs: overlay?.delayMs ?? 0 },
+        separation: { state: chain.separationState, latency: chain.latency, error: chain.separationError },
         error: chain.error,
       };
       sendResponse(status);

@@ -2,6 +2,8 @@ import type { MixerSettings } from './settings';
 import type { TrackInfo } from '../lyrics/types';
 import type { OverlayState } from '../content/video-delay/delayed-video';
 import type { Site } from '../content/youtube-dom';
+import type { SeparationState } from '../content/audio/master-chain';
+import type { LatencyInfo } from '../content/audio/latency';
 
 /** Content script → background: "what are my settings?" (tab id comes from sender). */
 export interface GetMyTabSettings {
@@ -45,6 +47,8 @@ export interface ContentStatus {
   /** Requested master gain, linear (1 = 100 %). */
   gain: number;
   videoDelay: { state: OverlayState; delayMs: number };
+  /** Separate mode engine; absent from content scripts older than SRI-7. */
+  separation?: { state: SeparationState; latency: LatencyInfo; error?: string };
   error?: string;
 }
 

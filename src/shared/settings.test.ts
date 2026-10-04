@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SETTINGS, clampPct, masterGainFor, normalizeSettings } from './settings';
+import { DEFAULT_SETTINGS, clampPct, masterGainFor, normalizeSettings, separationFor } from './settings';
 
 describe('clampPct', () => {
   it('clamps to 0–600 and rounds', () => {
@@ -46,5 +46,17 @@ describe('masterGainFor', () => {
   });
   it('is unity in separate mode until separation ships', () => {
     expect(masterGainFor({ ...DEFAULT_SETTINGS, mode: 'separate', masterPct: 600 })).toBe(1);
+  });
+});
+
+describe('separationFor', () => {
+  it('is off in Default mode and maps percent to linear gain in Separate mode', () => {
+    expect(separationFor(DEFAULT_SETTINGS).on).toBe(false);
+    expect(separationFor({ ...DEFAULT_SETTINGS, mode: 'separate', vocalPct: 0, instrumentalPct: 600 })).toEqual({
+      on: true,
+      vocal: 0,
+      instrumental: 6,
+      quality: 'auto',
+    });
   });
 });
