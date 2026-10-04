@@ -51,4 +51,6 @@ export interface TrackInfo {
   album?: string;
   /** Seconds, from the <video> / player response. */
   duration: number;
+  /** Other title/artist readings to try, in order (e.g. the swapped "Title - Artist" order). */
+  alternates?: { artist: string; title: string }[];
 }
