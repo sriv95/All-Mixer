@@ -1,0 +1,35 @@
+<!doctype html><meta charset="utf-8"><title>ORT parity</title>
+<script type="module">
+import * as ort from '/node_modules/onnxruntime-web/dist/ort.webgpu.min.mjs';
+ort.env.wasm.wasmPaths = '/node_modules/onnxruntime-web/dist/';
+window.gpuInfo = async () => {
+  if (!navigator.gpu) return null;
+  const a = await navigator.gpu.requestAdapter();
+  if (!a) return null;
+  const i = a.info || {};
+  return { vendor: i.vendor, architecture: i.architecture, device: i.device, description: i.description, isFallback: a.isFallbackAdapter };
+};
+// Runs all n windows through the model; returns outputs concatenated as a plain number array chunked per window (Float32 -> base64-free via Array).
+window.runParity = async ({ ep, threads, n, shape }) => {
+  ort.env.wasm.numThreads = threads || 1;
+  const get = async (u) => new Float32Array(await (await fetch(u)).arrayBuffer());
+  const x = await get('/bench/ref/parity/x.f32');
+  const buf = await (await fetch('/ml/models/vocals_stream.onnx')).arrayBuffer();
+  const sess = await ort.InferenceSession.create(buf, { executionProviders: [ep], graphOptimizationLevel: 'all' });
+  const per = shape.reduce((a, b) => a * b, 1);
+  const out = new Float32Array(n * per);
+  for (let i = 0; i < n; i++) {
+    const t = new ort.Tensor('float32', x.slice(i * per, (i + 1) * per), shape);
+    const o = await sess.run({ [sess.inputNames[0]]: t });
+    const y = o[sess.outputNames[0]];
+    out.set(await y.getData(), i * per);
+    y.dispose?.();
+  }
+  await sess.release();
+  // transfer as chunks of base64
+  let s = ''; const u8 = new Uint8Array(out.buffer);
+  for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+  return btoa(s);
+};
+window.ready = true;
+</script>
