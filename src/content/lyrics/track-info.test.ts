@@ -48,4 +48,9 @@ describe('chooseCaptionTracks', () => {
     expect(chooseCaptionTracks([t('ko'), t('en')])).toEqual({ asr: undefined, manual: undefined });
     expect(chooseCaptionTracks([])).toEqual({ asr: undefined, manual: undefined });
   });
+
+  it("uses the player's default caption language when there is no ASR track", () => {
+    expect(chooseCaptionTracks([t('ar'), t('en'), t('fr')], 'en')).toEqual({ asr: undefined, manual: t('en') });
+    expect(chooseCaptionTracks([t('ar'), t('en-US')], 'en')).toEqual({ asr: undefined, manual: t('en-US') });
+  });
 });

@@ -22,11 +22,16 @@ export interface CaptionChoice {
   manual?: CaptionTrack;
 }
 
-/** Pick caption tracks. The ASR track's language tells us the language of the song. */
-export function chooseCaptionTracks(tracks: readonly CaptionTrack[]): CaptionChoice {
+/** Pick caption tracks. The ASR track's language tells us the language of the song; else the player's default. */
+export function chooseCaptionTracks(tracks: readonly CaptionTrack[], defaultLang?: string): CaptionChoice {
   const asr = tracks.find((t) => t.kind === 'asr');
   const manuals = tracks.filter((t) => t.kind !== 'asr');
-  const lang = (t: CaptionTrack) => t.languageCode.split('-')[0];
-  const manual = asr ? manuals.find((t) => lang(t) === lang(asr)) : manuals.length === 1 ? manuals[0] : undefined;
+  const lang = (code: string) => code.split('-')[0];
+  const want = asr?.languageCode ?? defaultLang;
+  const manual = want
+    ? (manuals.find((t) => t.languageCode === want) ?? manuals.find((t) => lang(t.languageCode) === lang(want)))
+    : manuals.length === 1
+      ? manuals[0]
+      : undefined;
   return { asr, manual };
 }

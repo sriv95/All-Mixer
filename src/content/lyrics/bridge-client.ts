@@ -1,11 +1,17 @@
-import { BRIDGE_TAG, type BridgeRequest, type BridgeResponseMsg, type CaptionTrack, type PlayerInfo } from '../../shared/bridge';
+import { BRIDGE_TAG, type BridgeEventMsg, type BridgeRequest, type BridgeResponseMsg, type CaptionTrack, type PlayerInfo } from '../../shared/bridge';
 
 let nextId = 1;
 const pending = new Map<number, (data: unknown) => void>();
+const captionListeners = new Set<(videoId: string) => void>();
 
 window.addEventListener('message', (e: MessageEvent) => {
-  const msg = e.data as BridgeResponseMsg | null;
-  if (e.source !== window || !msg || msg[BRIDGE_TAG] !== 'res') return;
+  const msg = e.data as BridgeResponseMsg | BridgeEventMsg | null;
+  if (e.source !== window || !msg) return;
+  if (msg[BRIDGE_TAG] === 'evt') {
+    if (msg.kind === 'captions') for (const cb of captionListeners) cb(msg.videoId);
+    return;
+  }
+  if (msg[BRIDGE_TAG] !== 'res') return;
   const resolve = pending.get(msg.id);
   if (resolve) {
     pending.delete(msg.id);
@@ -42,4 +48,10 @@ export async function getPlayerInfo(videoId: string, signal: AbortSignal, waitMs
 export async function getTimedText(videoId: string, track: CaptionTrack): Promise<string | null> {
   const data = await ask({ kind: 'timedtext', videoId, track }, 10000);
   return typeof data === 'string' ? data : null;
+}
+
+/** Called when the player loads captions by itself (the user has CC on). */
+export function onCaptionsAvailable(cb: (videoId: string) => void): () => void {
+  captionListeners.add(cb);
+  return () => captionListeners.delete(cb);
 }

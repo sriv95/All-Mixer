@@ -1,7 +1,7 @@
 import type { LyricsState, LyricsSurface } from './controller';
 import { FloatingPanel } from './floating-panel';
 import { LyricsView } from './lyrics-view';
-import { enableTab, findYtmLyricsTab, findYtmTabContent, isTabSelected } from '../youtube-dom';
+import { enableTab, findYtmLyricsTab, findYtmTabContent, isTabSelected, type Site } from '../youtube-dom';
 
 function show(view: LyricsView, state: LyricsState): void {
   switch (state.kind) {
@@ -30,8 +30,9 @@ export class PanelSurface implements LyricsSurface {
   readonly panel: FloatingPanel;
   private readonly view: LyricsView;
 
-  constructor(onSeek: (t: number) => void, onOpenChange: (open: boolean) => void) {
-    this.panel = new FloatingPanel({ id: 'all-mixer-lyrics-panel', title: 'Lyrics', storageKey: 'lyricsPanel' });
+  constructor(site: Site, onSeek: (t: number) => void, onOpenChange: (open: boolean) => void) {
+    // Per site: on YT Music the Lyrics tab is the main view, so the panel starts closed there.
+    this.panel = new FloatingPanel({ id: 'all-mixer-lyrics-panel', title: 'Lyrics', storageKey: `lyricsPanel:${site}` });
     this.view = new LyricsView({ onSeek });
     this.panel.body.append(this.view.el);
     this.panel.onOpenChange(onOpenChange);
