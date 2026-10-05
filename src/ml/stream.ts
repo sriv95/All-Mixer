@@ -33,8 +33,8 @@ const ZRING = 8;
 const ACC = 8192; // > 4096 + 3·1024 spread of one output block's frames
 const TENSOR_ROW = CTX * BINS;
 export const TENSOR_LEN = 2 * TENSOR_ROW;
-/** A cappella vocal mask power (SRI-65: p 2.25 with no HPF meets the bar on the 50-clip bench). */
-export const P_ACAP = 2.25;
+/** A cappella vocal mask power (SRI-78: p 4 wins the 50-clip bench, acap_interf −18.38 → −21.54 dB vs p 2.25). */
+export const P_ACAP = 4;
 
 /** Model call: reads `x` ([2,1,64,1024] magnitudes), returns the vocal magnitudes, same shape. */
 export type ModelFn = (x: Float32Array) => Promise<Float32Array> | Float32Array;
