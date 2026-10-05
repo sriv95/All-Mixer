@@ -12,6 +12,8 @@ Reported (median over clips):
   sdr_inst, sdr_voc        simple SDR vs. accompaniment / vocals stems (dB, higher better)
   acap_drums/bass/other    retention of those stems in vocal.wav (A cappella leak, want very negative)
   acap_music               energy of vocal.wav - g_v*vocals relative to vocal.wav (dB, want low)
+  acap_interf              true music energy in vocal.wav: sum_k ||g_k s_k||^2 (drums,bass,other) / ||vocal.wav||^2 (dB)
+  acap_artif               residual of the 4-stem fit ||vb - A g||^2 / ||vb||^2 (dB): distortion that is neither vocal nor stem
   acap_voc_ret             vocals retention in vocal.wav (want ~0 dB)
 Usage: python metrics.py <tag> [<tag> ...]
 """
@@ -28,7 +30,8 @@ def bandpass(x, lo, hi, sr):
     sos = butter(4, [lo, hi], btype='band', fs=sr, output='sos')
     return sosfiltfilt(sos, x, axis=0)
 
-def retention(y, stems, sr, band):
+def fit(y, stems, sr, band):
+    """Joint least-squares fit y ~= A g. Returns (g, yb, A); inactive stems have g = nan."""
     lo, hi = BANDS[band]
     yb = bandpass(y, lo, hi, sr)[SKIP:-SKIP].reshape(-1)
     A = np.stack([bandpass(s, lo, hi, sr)[SKIP:-SKIP].reshape(-1) for s in stems], axis=1)
@@ -36,6 +39,10 @@ def retention(y, stems, sr, band):
     g = np.full(len(stems), np.nan)
     if active.any():
         g[active] = np.linalg.lstsq(A[:, active], yb, rcond=None)[0]
+    return g, yb, A
+
+def retention(y, stems, sr, band):
+    g = fit(y, stems, sr, band)[0]
     return 20 * np.log10(np.maximum(np.abs(g), 1e-4))
 
 def energy_db(x):
@@ -56,11 +63,17 @@ def evaluate(tag):
         r_full = retention(inst, stems, sr, 'full')
         r_sub = retention(inst, stems, sr, 'sub')
         ra = retention(voc, stems, sr, 'full')
+        g, vfit, A = fit(voc, stems, sr, 'full')
+        g0 = np.nan_to_num(g)
+        e_vb = (vfit ** 2).sum() + 1e-12
+        interf = 10 * np.log10((((A[:, 1:] * g0[1:]) ** 2).sum()) / e_vb + 1e-12)
+        artif = 10 * np.log10(((vfit - A @ g0) ** 2).sum() / e_vb + 1e-12)
         vb, sb = (bandpass(z, *BANDS['full'], sr)[SKIP:-SKIP].reshape(-1) for z in (voc, stems[0]))
         gv = (vb @ sb) / ((sb @ sb) + 1e-12)
         rows.append({
             'acap_drums': ra[1] if has_voc else np.nan, 'acap_bass': ra[2] if has_voc else np.nan,
             'acap_other': ra[3] if has_voc else np.nan, 'acap_voc_ret': ra[0] if has_voc else np.nan,
+            'acap_interf': interf if has_voc else np.nan, 'acap_artif': artif if has_voc else np.nan,
             'acap_music': energy_db(vb - gv * sb) - energy_db(vb) if has_voc else np.nan,
             'clip': d.name,
             'bass_ret': r_full[2], 'drums_ret': r_full[1], 'kick_ret': r_sub[1],

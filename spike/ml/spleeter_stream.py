@@ -28,7 +28,7 @@ def session(name):
 def run(sess, mag_windows):  # mag_windows: [2, S, C, 1024]
     return sess.run(None, {'x': mag_windows.astype(np.float32)})[0]
 
-def separate(x, sr, voc, acc, ctx, h, L, single, offline, voc_power=1.0, voc_hpf=0.0):
+def separate(x, sr, voc, acc, ctx, h, L, single, offline, voc_power=1.0, voc_hpf=0.0, voc_curve='power'):
     _, _, Z = stft(x.T, fs=sr, window='hann', nperseg=N_FFT, noverlap=N_FFT - HOP, boundary='zeros', padded=True)
     Z = Z * N_FFT / 2  # undo scipy scaling -> tf.stft-like magnitudes
     mag = np.abs(Z[:, :F, :]).transpose(0, 2, 1)  # [2, T, F]
@@ -58,11 +58,14 @@ def separate(x, sr, voc, acc, ctx, h, L, single, offline, voc_power=1.0, voc_hpf
     full[:, :F, :] = mask  # bins above ~11 kHz go to the instrumental (spleeter 'zeros' extension)
     _, soft = istft(Z * full / (N_FFT / 2), fs=sr, window='hann', nperseg=N_FFT, noverlap=N_FFT - HOP, boundary=True)
     soft = soft.T[: len(x)]
-    if voc_power == 1.0 and not voc_hpf:
+    if voc_power == 1.0 and not voc_hpf and voc_curve == 'power':
         return soft, x - soft
     # Vocal-stem-only variant: sharpened mask m^p and/or zero-delay STFT-domain 2nd-order Butterworth HPF
     # magnitude on the bins below f. The instrumental stays x - soft, so Karaoke is unchanged.
-    sharp = full ** voc_power
+    if voc_curve == 'wiener':  # m^p / (m^p + (1-m)^p): m>0.5 -> 1, m<0.5 -> 0, m=0.5 fixed
+        sharp = full ** voc_power / (full ** voc_power + (1 - full) ** voc_power + 1e-8)
+    else:
+        sharp = full ** voc_power
     if voc_hpf:
         r = (np.fft.rfftfreq(N_FFT, 1 / sr) / voc_hpf) ** 2
         sharp = sharp * (r / np.sqrt(1 + r ** 2))[None, :, None]
@@ -75,6 +78,7 @@ if __name__ == '__main__':
     ap.add_argument('--hop-frames', type=int, default=4); ap.add_argument('--lookahead', type=int, default=0)
     ap.add_argument('--single', action='store_true'); ap.add_argument('--offline', action='store_true')
     ap.add_argument('--voc-power', type=float, default=1.0); ap.add_argument('--voc-hpf', type=float, default=0.0)
+    ap.add_argument('--voc-curve', choices=['power', 'wiener'], default='power')
     ap.add_argument('--clips', type=int, default=50)
     ap.add_argument('--pre', type=int, default=0, help='prepend N zero samples, shift back (3072 = shipped worker frame/block phase)')
     a = ap.parse_args()
@@ -83,7 +87,7 @@ if __name__ == '__main__':
         x, sr = sf.read(d / 'mix.wav')
         n = len(x)
         if a.pre: x = np.concatenate([np.zeros((a.pre, x.shape[1])), x])
-        vocal, inst = separate(x, sr, voc, acc, a.ctx, a.hop_frames, a.lookahead, a.single, a.offline, a.voc_power, a.voc_hpf)
+        vocal, inst = separate(x, sr, voc, acc, a.ctx, a.hop_frames, a.lookahead, a.single, a.offline, a.voc_power, a.voc_hpf, a.voc_curve)
         if a.pre: x, vocal, inst = x[a.pre:a.pre + n], vocal[a.pre:a.pre + n], inst[a.pre:a.pre + n]
         (d / a.tag).mkdir(exist_ok=True)
         sf.write(d / a.tag / 'vocal.wav', vocal, sr, subtype='FLOAT')
