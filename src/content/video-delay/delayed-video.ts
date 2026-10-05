@@ -1,11 +1,12 @@
-import { DelaySchedule, FrameQueue } from './schedule';
+import type { AvProbe } from '../av-probe';
+import { DelaySchedule, FrameQueue, VIDEO_DELAY_BUDGET_BYTES, captureSize } from './schedule';
 
 /**
  * Shows the <video> D ms late so it lines up with audio that the separation
  * graph delays by D ms (decision D1, method from SRI-14 / SRI-5 §5).
  *
  * requestVideoFrameCallback copies each decoded frame with createImageBitmap
- * (resized to the display size), and a requestAnimationFrame loop draws the
+ * (resized to a size that keeps the queue within a memory budget), and a requestAnimationFrame loop draws the
  * newest due frame onto an opaque canvas laid right after the <video>. The
  * <video> keeps playing underneath (Chrome stops decoding hidden videos), so
  * YouTube's controls, captions, ads UI and progress bar stay on top and work.
@@ -20,6 +21,12 @@ import { DelaySchedule, FrameQueue } from './schedule';
 
 /** Give up after this many capture failures in a row (e.g. tainted video). */
 const MAX_CAPTURE_ERRORS = 30;
+
+const FPS_SAMPLES = 30;
+const FPS_MIN_SAMPLES = 10;
+
+/** Budgets at or above this mean "unbounded" (JSON turns Infinity into null, so QA sends a big number). */
+const LEGACY_BUDGET = 1e12;
 
 export type OverlayState = 'off' | 'waiting' | 'on' | 'failed';
 
@@ -39,16 +46,24 @@ export class DelayedVideo {
   private running = false;
   private destroyed = false;
   private failed = false;
+  private budgetBytes = VIDEO_DELAY_BUDGET_BYTES;
+  private capW = 2;
+  private capH = 2;
+  private fps = 60;
+  private lastMediaTime = -1;
+  private deltas: number[] = [];
   private stopTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(
     private readonly video: HTMLVideoElement,
     private readonly onStateChange: (state: OverlayState) => void = () => {},
+    private readonly probe: AvProbe | null = null,
   ) {
     const c = (this.canvas = document.createElement('canvas'));
     c.className = 'all-mixer-delayed-video';
     c.style.cssText = 'position:absolute;z-index:1;pointer-events:none;background:#000;display:none';
     this.ctx = c.getContext('2d', { alpha: false })!;
+    this.ctx.imageSmoothingQuality = 'medium';
     this.resizeObserver = new ResizeObserver(() => this.layout());
     // YouTube moves the video with inline left/top on theater/fullscreen
     // changes; a ResizeObserver alone misses position-only changes.
@@ -73,6 +88,7 @@ export class DelayedVideo {
   setDelay(delayMs: number, effectiveAtMs = performance.now()): void {
     if (this.destroyed) return;
     this.schedule.set(Math.max(0, delayMs), effectiveAtMs);
+    this.updateCapture();
     clearTimeout(this.stopTimer);
     if (this.schedule.target > 0) return this.start();
     // Keep showing delayed frames until the audio drops its delay too, so
@@ -80,6 +96,53 @@ export class DelayedVideo {
     const wait = effectiveAtMs - performance.now();
     if (wait > 0 && this.running) this.stopTimer = setTimeout(() => this.stop(), wait);
     else this.stop();
+  }
+
+  /** QA only: override the memory budget (null restores the default). */
+  setBudget(bytes: number | null): void {
+    this.budgetBytes = bytes !== null && bytes > 0 ? bytes : VIDEO_DELAY_BUDGET_BYTES;
+    this.updateCapture();
+  }
+
+  /** Recompute capture size and queue cap from display size, delay and fps. */
+  private updateCapture(): void {
+    const legacy = this.budgetBytes >= LEGACY_BUDGET;
+    const displayW = Math.max(2, Math.round(this.video.clientWidth * devicePixelRatio));
+    const displayH = Math.max(2, Math.round(this.video.clientHeight * devicePixelRatio));
+    if (legacy) {
+      // Old behaviour (display size, 120 frames) so QA can compare.
+      this.capW = displayW;
+      this.capH = displayH;
+      this.queue.setCap(120);
+      return;
+    }
+    const r = captureSize({
+      displayW,
+      displayH,
+      videoW: this.video.videoWidth,
+      videoH: this.video.videoHeight,
+      delayMs: this.schedule.target,
+      fps: this.fps,
+      budgetBytes: this.budgetBytes,
+    });
+    this.capW = r.width;
+    this.capH = r.height;
+    this.queue.setCap(r.maxFrames);
+  }
+
+  private trackFps(mediaTime: number): void {
+    const d = mediaTime - this.lastMediaTime;
+    this.lastMediaTime = mediaTime;
+    if (!(d > 0) || d > 1) return;
+    this.deltas.push(d);
+    if (this.deltas.length > FPS_SAMPLES) this.deltas.shift();
+    if (this.deltas.length < FPS_MIN_SAMPLES) return;
+    const sorted = [...this.deltas].sort((a, b) => a - b);
+    const fps = Math.min(60, Math.max(15, 1 / sorted[sorted.length >> 1]));
+    if (Math.abs(fps - this.fps) / this.fps > 0.1) {
+      this.fps = fps;
+      this.updateCapture();
+    }
   }
 
   destroy(): void {
@@ -94,6 +157,8 @@ export class DelayedVideo {
     if (this.running || this.failed) return;
     this.running = true;
     this.captureErrors = 0;
+    this.lastMediaTime = -1;
+    this.deltas = [];
     this.video.insertAdjacentElement('afterend', this.canvas);
     this.resizeObserver.observe(this.video);
     this.styleObserver.observe(this.video, { attributes: true, attributeFilter: ['style', 'class'] });
@@ -117,6 +182,7 @@ export class DelayedVideo {
     this.shown = null;
     this.canvas.style.display = 'none';
     this.canvas.remove();
+    this.probe?.overlayReset();
     this.onStateChange(this.state);
   }
 
@@ -135,8 +201,10 @@ export class DelayedVideo {
       // Resizing clears the canvas; redraw the current picture scaled.
       this.canvas.width = w;
       this.canvas.height = h;
+      this.ctx.imageSmoothingQuality = 'medium'; // resizing resets context state
       if (this.shown) this.ctx.drawImage(this.shown, 0, 0, w, h);
     }
+    this.updateCapture();
     Object.assign(this.canvas.style, {
       left: `${v.offsetLeft}px`,
       top: `${v.offsetTop}px`,
@@ -153,10 +221,10 @@ export class DelayedVideo {
   private readonly onFrame = (_now: number, md: VideoFrameCallbackMetadata): void => {
     if (!this.running) return;
     this.vfc = this.video.requestVideoFrameCallback(this.onFrame);
+    this.trackFps(md.mediaTime);
     const due = md.expectedDisplayTime + this.schedule.at(md.expectedDisplayTime);
     const epoch = this.epoch;
-    const { width, height } = this.canvas;
-    createImageBitmap(this.video, { resizeWidth: width, resizeHeight: height, resizeQuality: 'low' }).then(
+    createImageBitmap(this.video, { resizeWidth: this.capW, resizeHeight: this.capH, resizeQuality: 'low' }).then(
       (bmp) => {
         this.captureErrors = 0;
         if (epoch !== this.epoch || !this.running) return bmp.close();
@@ -178,6 +246,7 @@ export class DelayedVideo {
     const { width, height } = this.canvas;
     this.ctx.drawImage(frame.img, 0, 0, width, height);
     const first = !this.shown;
+    this.probe?.overlayFrame(frame.mediaTime, t);
     this.shown?.close();
     this.shown = frame.img;
     this.schedule.prune(t);
