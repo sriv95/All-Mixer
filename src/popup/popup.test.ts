@@ -186,7 +186,7 @@ describe('popup', () => {
     it('moving a slider clears the preset highlight', async () => {
       await load({ stored: { mode: 'separate' } });
       expect(pressed()).toEqual(['preset-reset']);
-      await drag('vocal', '50');
+      await drag('vocal', '55');
       expect(pressed()).toEqual([]);
     });
 
