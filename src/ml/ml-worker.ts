@@ -43,7 +43,8 @@ async function start(init: MlWorkerInit): Promise<void> {
     ort.env.wasm.numThreads = 1; // no SharedArrayBuffer; the webgpu EP does the work
     ort.env.wasm.proxy = false;
     const model = await (await fetch(init.modelUrl)).arrayBuffer();
-    session = await ort.InferenceSession.create(model, { executionProviders: ['webgpu'], graphOptimizationLevel: 'all' });
+    ort.env.logLevel = 'error'; // model declares a dynamic output dim; ORT warns VerifyOutputSizes per run
+    session = await ort.InferenceSession.create(model, { executionProviders: ['webgpu'], graphOptimizationLevel: 'all', logSeverityLevel: 3 });
   } catch (e) {
     return unavailable(`model: ${String(e)}`);
   }
