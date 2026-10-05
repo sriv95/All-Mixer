@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { QUANTUM, SeparatorCore } from './core';
 import {
-  DSP_LATENCY_SAMPLES,
   ML_BLOCK,
   ML_BUFFER_BYTES,
   ML_HEADER_BYTES,
@@ -106,6 +105,8 @@ interface Rig {
   vR: number[];
   iL: number[];
   iR: number[];
+  /** Bypass weight per output sample. */
+  b: number[];
   q: number;
   run(nq: number): void;
 }
@@ -122,6 +123,7 @@ function rig(seconds: number, signal: (n: number, seed: number) => Float32Array 
   const vr = new Float32Array(QUANTUM);
   const il = new Float32Array(QUANTUM);
   const ir = new Float32Array(QUANTUM);
+  const bw = new Float32Array(QUANTUM);
   const r: Rig = {
     core,
     port,
@@ -132,16 +134,18 @@ function rig(seconds: number, signal: (n: number, seed: number) => Float32Array 
     vR: [],
     iL: [],
     iR: [],
+    b: [],
     q: 0,
     run(nq) {
       for (let k = 0; k < nq; k++) {
         const p = r.q * QUANTUM;
-        core.process(sigL.subarray(p, p + QUANTUM), sigR.subarray(p, p + QUANTUM), vl, vr, il, ir, p / SR);
+        core.process(sigL.subarray(p, p + QUANTUM), sigR.subarray(p, p + QUANTUM), vl, vr, il, ir, bw, p / SR);
         for (let i = 0; i < QUANTUM; i++) {
           r.vL.push(vl[i]);
           r.vR.push(vr[i]);
           r.iL.push(il[i]);
           r.iR.push(ir[i]);
+          r.b.push(bw[i]);
         }
         r.q++;
         port.service(r.q);
@@ -151,9 +155,9 @@ function rig(seconds: number, signal: (n: number, seed: number) => Float32Array 
   return r;
 }
 
-/** Output n is the sum of both stems (= the input at n − delay, when steady). */
-const mixL = (r: Rig, n: number) => r.vL[n] + r.iL[n];
-const mixR = (r: Rig, n: number) => r.vR[n] + r.iR[n];
+/** Processor output at 100 % / 100 %: (1 − b)·(v + i) + b·(v + i). Output n is the sum of both stems (= the input at n − delay, when steady). */
+const mixL = (r: Rig, n: number) => (1 - r.b[n]) * (r.vL[n] + r.iL[n]) + r.b[n] * (r.vL[n] + r.iL[n]);
+const mixR = (r: Rig, n: number) => (1 - r.b[n]) * (r.vR[n] + r.iR[n]) + r.b[n] * (r.vR[n] + r.iR[n]);
 const sigAt = (s: Float32Array, p: number) => (p >= 0 ? s[p] : 0);
 
 /** Max |mix − input delayed by d| over output samples [from, to). */
@@ -167,7 +171,7 @@ function maxErr(r: Rig, d: number, from: number, to: number): number {
 
 const blocks = (n: number) => (n * ML_BLOCK) / QUANTUM; // quanta
 
-describe('SeparatorCore, ML engine', () => {
+describe('SeparatorCore, ML engine and bypass', () => {
   it('with every block back in time, output is the input delayed by exactly ML_LATENCY_SAMPLES', () => {
     expect(ML_LATENCY_SAMPLES).toBe(13440);
     const r = rig(3);
@@ -191,9 +195,8 @@ describe('SeparatorCore, ML engine', () => {
     expect(r.msgs).toEqual([]);
   });
 
-  it('a dropped block uses the DSP vocal for that block: same delay, crossfade has no step above the bound', () => {
-    // Pure side signal (R = −L): the DSP vocal is ~0 but the echo is the whole input, so a hard switch would jump.
-    const r = rig(3, (n, seed) => tones(n).map((v) => (seed === 2 ? -v : v)));
+  it('a dropped block plays the original mix at unity for that block: same delay, crossfade has no step above the bound', () => {
+    const r = rig(3, tones);
     r.port.policy = (k) => (k === 12 ? 'drop' : 'echo');
     r.core.setActive(true, 'ml');
     r.run(blocks(30));
@@ -207,7 +210,7 @@ describe('SeparatorCore, ML engine', () => {
     const from = 13440 - 1024 + 11 * ML_BLOCK;
     const to = from + ML_BLOCK;
     const echo = (i: number) => r.sigL[i - 13440];
-    // delta: how far the DSP vocal is from the echo at the two block-edge quanta (sensitivity of the test).
+    // delta: how far the vocal stem is from the echo at the two block-edge quanta (sensitivity of the test).
     let delta = 0;
     for (const [a, b] of [
       [from, from + QUANTUM],
@@ -216,6 +219,12 @@ describe('SeparatorCore, ML engine', () => {
       for (let i = a; i < b; i++) delta = Math.max(delta, Math.abs(echo(i) - r.vL[i]));
     }
     expect(delta).toBeGreaterThanOrEqual(0.3);
+    // The block is the original at unity: bypass weight 1, vocal 0, instrumental = delayed input.
+    const mid = from + 2 * QUANTUM;
+    expect(r.b[mid]).toBe(1);
+    expect(r.vL[mid]).toBe(0);
+    expect(r.iL[mid]).toBeCloseTo(echo(mid), 6);
+    expect(r.b[mid - ML_BLOCK]).toBe(0);
     // Step bound: the signal's own slope plus a one-quantum fade of size delta (≤ delta / QUANTUM per sample).
     let signalStep = 0;
     let step = 0;
@@ -234,37 +243,37 @@ describe('SeparatorCore, ML engine', () => {
     const port = new FakePort(new Float32Array(0), new Float32Array(0));
     core.setPort(port as unknown as MessagePort);
     core.setActive(true, 'ml');
-    expect(core.engine).toBe('dsp');
+    expect(core.engine).toBe('bypass');
     expect(port.posted).toBe(0);
-    core.requestEngine('ml', 'user');
+    core.requestEngine('ml', 'auto');
     const z = new Float32Array(QUANTUM);
-    for (let q = 0; q < 200; q++) core.process(z, z, z.slice(), z.slice(), z.slice(), z.slice(), q * 0.0027);
-    expect(core.engine).toBe('dsp');
+    for (let q = 0; q < 200; q++) core.process(z, z, z.slice(), z.slice(), z.slice(), z.slice(), z.slice(), q * 0.0027);
+    expect(core.engine).toBe('bypass');
     expect(port.posted).toBe(0);
     expect(msgs).toEqual([]);
   });
 
-  it('3 misses in 10 s switch to the DSP engine for good, once, with reason deadline-miss', () => {
+  it('3 misses in 10 s switch to bypass for good, once, with reason deadline-miss', () => {
     const r = rig(4, tones);
     r.port.policy = (k) => (k === 12 || k === 14 || k === 16 ? 'drop' : 'echo');
     r.core.setActive(true, 'ml');
     r.run(blocks(40));
     expect(r.msgs).toHaveLength(1);
     const m = r.msgs[0] as Extract<FromWorklet, { type: 'engine' }>;
-    expect(m).toMatchObject({ type: 'engine', engine: 'dsp', reason: 'deadline-miss' });
-    expect(r.core.engine).toBe('dsp');
+    expect(m).toMatchObject({ type: 'engine', engine: 'bypass', reason: 'deadline-miss' });
+    expect(r.core.engine).toBe('bypass');
     expect(r.core.reason).toBe('deadline-miss');
-    expect(r.core.latencySamples).toBe(DSP_LATENCY_SAMPLES);
-    // The stems end up delayed by DSP_LATENCY_SAMPLES.
+    expect(r.core.latencySamples).toBe(0);
+    // The output ends up undelayed and unprocessed.
     const n = r.vL.length;
-    expect(maxErr(r, DSP_LATENCY_SAMPLES, n - 4096, n)).toBeLessThanOrEqual(1e-6);
-    // `at`: context time of the first input sample heard with the DSP delay. Find the first
-    // quantum whose last sample is the DSP-delayed input (not the ML-delayed one).
+    expect(maxErr(r, 0, n - 4096, n)).toBeLessThanOrEqual(1e-6);
+    // `at`: context time of the first input sample heard with no delay. Find the first
+    // quantum whose last sample is the undelayed input (not the ML-delayed one).
     let n0 = -1;
     for (let s = 12 * ML_BLOCK; s < n; s += QUANTUM) {
       const e = s + QUANTUM - 1;
       if (
-        Math.abs(r.vL[e] + r.iL[e] - r.sigL[e - DSP_LATENCY_SAMPLES]) < 1e-6 &&
+        Math.abs(r.vL[e] + r.iL[e] - r.sigL[e]) < 1e-6 &&
         Math.abs(r.vL[e] + r.iL[e] - r.sigL[e - ML_LATENCY_SAMPLES]) > 1e-3
       ) {
         n0 = s;
@@ -272,8 +281,8 @@ describe('SeparatorCore, ML engine', () => {
       }
     }
     expect(n0).toBeGreaterThan(0);
-    expect(m.at).toBeCloseTo((n0 - DSP_LATENCY_SAMPLES) / SR, 9);
-    // It stays on DSP: no further messages even after more blocks.
+    expect(m.at).toBeCloseTo(n0 / SR, 9);
+    // It stays on bypass: no further messages even after more blocks.
     r.run(blocks(10));
     expect(r.msgs).toHaveLength(1);
   });
@@ -290,20 +299,32 @@ describe('SeparatorCore, ML engine', () => {
     expect(r.core.latencySamples).toBe(ML_LATENCY_SAMPLES);
   }, 60_000);
 
-  it('DSP → ML: no input sample repeats, `at` is the first input sample with the ML delay', () => {
+  it('bypass plays the original mix: delay 0, b = 1, vocal 0, stems sum to the input', () => {
+    const r = rig(1);
+    r.core.setActive(true, 'bypass');
+    expect(r.core.latencySamples).toBe(0);
+    r.run(blocks(4));
+    const n = r.vL.length;
+    expect(maxErr(r, 0, 0, n)).toBeLessThanOrEqual(0);
+    expect(Math.min(...r.b)).toBe(1);
+    expect(Math.max(...r.vL.map(Math.abs))).toBe(0);
+    expect(r.port.posted).toBe(0);
+  });
+
+  it('bypass → ML: no input sample repeats, `at` is the first input sample with the ML delay', () => {
     const r = rig(3);
-    r.core.setActive(true, 'dsp');
+    r.core.setActive(true, 'bypass');
     r.run(blocks(10) + 3);
-    const P = r.q * QUANTUM; // the switch starts at the next quantum
-    r.core.requestEngine('ml', 'user');
+    const P = r.q * QUANTUM + QUANTUM; // the switch starts at the next quantum, which fades the original out
+    r.core.requestEngine('ml', 'auto');
     r.run(blocks(20));
-    expect(r.msgs).toEqual([{ type: 'engine', engine: 'ml', reason: 'user', at: P / SR }]);
+    expect(r.msgs).toEqual([{ type: 'engine', engine: 'ml', reason: 'auto', at: P / SR }]);
     expect(r.core.engine).toBe('ml');
     const n = r.vL.length;
-    // DSP output of inputs < P − 128, silence, then ML from input P (after its fade-in).
-    expect(maxErr(r, DSP_LATENCY_SAMPLES, 4096, P + DSP_LATENCY_SAMPLES - QUANTUM)).toBeLessThanOrEqual(1e-6);
+    // Original of inputs < P − 128 (undelayed), silence, then ML from input P.
+    expect(maxErr(r, 0, 4096, P - QUANTUM)).toBeLessThanOrEqual(1e-6);
     let quiet = 0;
-    for (let i = P + DSP_LATENCY_SAMPLES; i < P + ML_LATENCY_SAMPLES; i++) {
+    for (let i = P; i < P + ML_LATENCY_SAMPLES; i++) {
       quiet = Math.max(quiet, Math.abs(mixL(r, i)), Math.abs(mixR(r, i)));
     }
     expect(quiet).toBe(0);
@@ -311,26 +332,24 @@ describe('SeparatorCore, ML engine', () => {
     // Fade-in quantum: input P … P+127 appears once, scaled by a ramp in (0, 1].
     for (let i = 0; i < QUANTUM; i++) {
       const out = mixL(r, P + ML_LATENCY_SAMPLES + i);
-      const x = r.sigL[P + i];
-      expect(Math.abs(out)).toBeLessThanOrEqual(Math.abs(x) + 1e-6);
+      expect(Math.abs(out)).toBeLessThanOrEqual(Math.abs(r.sigL[P + i]) + 1e-6);
     }
   });
 
-  it('ML → DSP on request: skips ahead, nothing repeats, `at` is the first input with the DSP delay', () => {
+  it('ML → bypass on request: skips ahead, nothing repeats, `at` is the first input with no delay', () => {
     const r = rig(3);
     r.core.setActive(true, 'ml');
     r.run(blocks(12) + 5);
     const pos = r.q * QUANTUM;
-    r.core.requestEngine('dsp', 'user');
+    r.core.requestEngine('bypass', 'auto');
     r.run(blocks(10));
-    // Handled at the start of quantum `pos`; DSP output starts at the quantum after it.
-    expect(r.msgs).toEqual([{ type: 'engine', engine: 'dsp', reason: 'user', at: (pos + QUANTUM - DSP_LATENCY_SAMPLES) / SR }]);
+    // Handled at the start of quantum `pos`; the original follows from the quantum after it.
+    expect(r.msgs).toEqual([{ type: 'engine', engine: 'bypass', reason: 'auto', at: (pos + QUANTUM) / SR }]);
     const n = r.vL.length;
     expect(maxErr(r, ML_LATENCY_SAMPLES, 3 * ML_BLOCK, pos)).toBeLessThanOrEqual(1e-6);
-    // pos is the fade-out quantum; the DSP output follows it, fading in over `pos + 128 …`.
-    expect(maxErr(r, DSP_LATENCY_SAMPLES, pos + 2 * QUANTUM, n)).toBeLessThanOrEqual(1e-6);
-    // The first DSP output (input pos + 128 − 2048) is past the last ML input (pos − 13440 + 128).
-    expect(pos + QUANTUM - DSP_LATENCY_SAMPLES).toBeGreaterThan(pos - ML_LATENCY_SAMPLES + QUANTUM);
+    expect(maxErr(r, 0, pos + 2 * QUANTUM, n)).toBeLessThanOrEqual(1e-6);
+    // The first bypass output (input pos + 128) is past the last ML input (pos − 13440 + 128).
+    expect(pos + QUANTUM).toBeGreaterThan(pos - ML_LATENCY_SAMPLES + QUANTUM);
   });
 
   it('the pool is reused: no buffer is created after warm-up', () => {
@@ -345,13 +364,13 @@ describe('SeparatorCore, ML engine', () => {
     expect(r.core.stats.returned).toBeGreaterThan(80);
   });
 
-  it('a worker that never answers falls back to DSP', () => {
+  it('a worker that never answers (pool exhausted) falls back to bypass', () => {
     const r = rig(4, tones);
     r.port.policy = () => 'hold';
     r.core.setActive(true, 'ml');
     r.run(blocks(30));
     expect(r.msgs).toHaveLength(1);
-    expect(r.msgs[0]).toMatchObject({ engine: 'dsp', reason: 'deadline-miss' });
+    expect(r.msgs[0]).toMatchObject({ engine: 'bypass', reason: 'deadline-miss' });
     expect(r.port.seen.size).toBeLessThanOrEqual(8);
   });
 

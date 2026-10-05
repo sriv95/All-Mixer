@@ -5,9 +5,6 @@ export const SEPARATOR_PROCESSOR = 'all-mixer-separator';
 /** Path of the bundled worklet module inside the extension (web-accessible). */
 export const SEPARATOR_MODULE_PATH = 'worklet/separator-worklet.js';
 
-/** STFT size of the DSP engine. The worklet adds no extra quantum: output n = input n − this. */
-export const DSP_LATENCY_SAMPLES = 2048;
-
 /**
  * ML (Spleeter) engine geometry, at the model rate. The graph runs at this rate
  * so the worklet and the model share one sample clock (no resampler).
@@ -18,7 +15,7 @@ export const ML_BLOCK = 4096;
 /**
  * ML output delay: STFT 4096 + (4 − 1 + lookahead 2) · hop 1024 + one block of
  * compute budget (13312, SRI-5 §3) + one render quantum, so the worklet can
- * decide ML vs DSP for a block one quantum before it starts and crossfade.
+ * decide ML vs the original mix for a block one quantum before it starts and crossfade.
  */
 export const ML_LATENCY_SAMPLES = 13312 + 128;
 /** A returned vocal block covers input samples [blockStart − this, blockStart − this + ML_BLOCK). */
@@ -28,11 +25,12 @@ export const ML_RESULT_OFFSET = 5120;
 export const PARAM_VOCAL = 'vocalGain';
 export const PARAM_INSTRUMENTAL = 'instrumentalGain';
 
-export type MlEngine = 'dsp' | 'ml';
-export type MlReason = 'auto' | 'deadline-miss' | 'user';
+/** bypass = the original mix, unprocessed, no added delay. */
+export type MlEngine = 'bypass' | 'ml';
+export type MlReason = 'auto' | 'deadline-miss';
 
 export type ToWorklet =
-  /** Start (reset + run the separator, in `engine`, default dsp) or stop (output silence, no CPU). */
+  /** Start (reset + run the separator, in `engine`, default bypass) or stop (output silence, no CPU). */
   | { type: 'active'; on: boolean; engine?: MlEngine; reason?: MlReason }
   /** Drop buffered audio, e.g. after a seek. */
   | { type: 'flush' }
@@ -43,7 +41,7 @@ export type ToWorklet =
 
 export type FromWorklet =
   /**
-   * The engine changed (requested, or ML → DSP after missed deadlines).
+   * The engine changed (requested, or ML → bypass after missed deadlines).
    * `at` is the context time of the first input sample played with the new delay (input time:
    * that sample is heard `newDelay / sampleRate` later).
    */

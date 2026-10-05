@@ -1,20 +1,22 @@
-// Separator core: DSP engine plus the ML block path, without worklet globals so it can be
-// unit tested. The processor (separator-processor.ts) wraps it and applies the stem gains.
+// Separator core: the ML block path plus the bypass (original mix) path, without worklet
+// globals so it can be unit tested. The processor (separator-processor.ts) wraps it and applies
+// the stem gains and the bypass weight.
 //
-// Both engines read from the same rings, indexed by absolute input sample:
-//   dry  input,  dsp  DSP vocal (written DSP_LATENCY_SAMPLES late, as produced),
-//   ml   vocal blocks back from the ML worker.
+// Both engines read from rings indexed by absolute input sample:
+//   dry  input,  ml  vocal blocks back from the ML worker.
 // Output at input position p reads index p − delay; instrumental = dry − vocal, so
-// vocal + instrumental is always the delayed input.
+// vocal + instrumental is the delayed input (exactly, when the vocal is not sharpened).
 //
-// DSP engine: delay = DSP_LATENCY_SAMPLES, vocal from `dsp`.
-// ML engine:  delay = ML_LATENCY_SAMPLES. Input goes to the worker in ML_BLOCK blocks. Each
-//   vocal block is chosen one quantum before it starts: ML if it is back, else the DSP vocal
-//   (the rings hold it at the same delay, so there is no delay jump). Source switches
-//   crossfade over one quantum. 3 misses within 10 s → DSP engine for good ('deadline-miss').
+// Bypass engine: delay 0, bypass weight b = 1, vocal 0, instrumental = dry: the original mix.
+// ML engine: delay = ML_LATENCY_SAMPLES. Input goes to the worker in ML_BLOCK blocks. Each
+//   vocal block is chosen one quantum before it starts: ML if it is back, else the original mix
+//   (b = 1; the rings hold it at the same delay, so there is no delay jump). Source switches
+//   crossfade b over one quantum. 3 misses within 10 s → bypass engine ('deadline-miss').
 //
-// Engine switches change the delay. DSP → ML plays the DSP output up to input P, is silent
-// for the extra delay, then plays ML from input P, so nothing repeats; ML → DSP skips ahead.
+// The processor outputs (1 − b)·(vg·v + ig·i) + b·(v + i).
+//
+// Engine switches change the delay. Bypass → ML plays the original up to input P, is silent
+// for the ML delay, then plays ML from input P, so nothing repeats; ML → bypass skips ahead.
 // `onEngine` reports the context time of the first input sample heard with the new delay;
 // the video overlay steps there too.
 //
@@ -22,9 +24,7 @@
 // message handler) creates two typed-array views per returned block; that runs between quanta,
 // not inside process(), and the transferred ArrayBuffer is a new object anyway.
 // ML is refused unless the context runs at ML_SAMPLE_RATE.
-import { DspSeparator } from './dsp/separator.js';
 import {
-  DSP_LATENCY_SAMPLES,
   ML_BLOCK,
   ML_BUFFER_BYTES,
   ML_HEADER_BYTES,
@@ -53,17 +53,14 @@ interface PoolEntry {
 
 type Phase =
   | 'steady'
-  /** DSP output until input `switchPos`, silence, then ML from input `switchPos`. */
+  /** Original mix until input `switchPos`, silence, then ML from input `switchPos`. */
   | 'to-ml'
-  /** This quantum fades the ML output out; the DSP output fades in on the next. */
-  | 'to-dsp';
+  /** This quantum fades the ML output out; the original mix fades in on the next. */
+  | 'to-bypass';
 
 export class SeparatorCore {
-  private readonly sep: DspSeparator;
   private readonly dryL = new Float32Array(RING);
   private readonly dryR = new Float32Array(RING);
-  private readonly dspL = new Float32Array(RING);
-  private readonly dspR = new Float32Array(RING);
   private readonly mlL = new Float32Array(RING);
   private readonly mlR = new Float32Array(RING);
   /** Sharpened ML vocal (A cappella); the instrumental uses mlL/mlR. */
@@ -73,10 +70,6 @@ export class SeparatorCore {
   private sharpen = 0;
   /** Absolute start of the ML block held in each slot (NaN = empty). */
   private readonly slotStart = new Float64Array(SLOTS).fill(NaN);
-  private readonly svL = new Float32Array(QUANTUM);
-  private readonly svR = new Float32Array(QUANTUM);
-  private readonly siL = new Float32Array(QUANTUM);
-  private readonly siR = new Float32Array(QUANTUM);
 
   /** Absolute input index of the current (or next) quantum's first sample. */
   private pos = 0;
@@ -84,15 +77,15 @@ export class SeparatorCore {
   private time = 0;
   private active = false;
   /** Engine whose output (and delay) we hear. */
-  engine: MlEngine = 'dsp';
+  engine: MlEngine = 'bypass';
   reason: MlReason = 'auto';
-  private delay = DSP_LATENCY_SAMPLES;
+  private delay = 0;
   private phase: Phase = 'steady';
   private switchPos = 0;
   /** Output envelope at the end of the last quantum (0 = silent). */
   private env = 1;
   private wantMl: MlReason | null = null;
-  private wantDsp: MlReason | null = null;
+  private wantBypass: MlReason | null = null;
 
   // ML stream
   private port: MessagePort | null = null;
@@ -117,13 +110,11 @@ export class SeparatorCore {
     private readonly sampleRate: number,
     private readonly onEngine: (msg: FromWorklet) => void,
   ) {
-    this.sep = new DspSeparator(sampleRate);
-    if (this.sep.latency !== DSP_LATENCY_SAMPLES) throw new Error('separator latency changed; update DSP_LATENCY_SAMPLES');
     for (let i = 0; i < POOL; i++) this.pool.push(entry(new ArrayBuffer(ML_BUFFER_BYTES)));
   }
 
   get latencySamples(): number {
-    return this.engine === 'ml' ? ML_LATENCY_SAMPLES : DSP_LATENCY_SAMPLES;
+    return this.engine === 'ml' ? ML_LATENCY_SAMPLES : 0;
   }
 
   setPort(port: MessagePort): void {
@@ -134,12 +125,12 @@ export class SeparatorCore {
     };
   }
 
-  setActive(on: boolean, engine: MlEngine = 'dsp', reason: MlReason = 'auto'): void {
+  setActive(on: boolean, engine: MlEngine = 'bypass', reason: MlReason = 'auto'): void {
     this.active = on;
     this.reset();
     this.phase = 'steady';
-    this.wantMl = this.wantDsp = null;
-    this.engine = on && engine === 'ml' && this.mlAllowed() ? 'ml' : 'dsp';
+    this.wantMl = this.wantBypass = null;
+    this.engine = on && engine === 'ml' && this.mlAllowed() ? 'ml' : 'bypass';
     this.reason = reason;
     this.delay = this.latencySamples;
     if (this.engine === 'ml') this.startStream();
@@ -161,11 +152,11 @@ export class SeparatorCore {
   /** Ask for an engine switch; it starts at the next quantum. */
   requestEngine(engine: MlEngine, reason: MlReason): void {
     if (engine === 'ml') {
-      this.wantDsp = null;
+      this.wantBypass = null;
       this.wantMl = reason;
     } else {
       this.wantMl = null;
-      this.wantDsp = reason;
+      this.wantBypass = reason;
     }
   }
 
@@ -177,7 +168,8 @@ export class SeparatorCore {
 
   /**
    * One render quantum (QUANTUM frames); `time` is the context time of its first frame.
-   * Writes the delayed vocal and instrumental stems.
+   * Writes the delayed vocal and instrumental stems and the bypass weight per sample
+   * (0 = ML stems, 1 = original mix).
    */
   process(
     inL: Float32Array,
@@ -186,6 +178,7 @@ export class SeparatorCore {
     vocR: Float32Array,
     insL: Float32Array,
     insR: Float32Array,
+    byp: Float32Array,
     time: number,
   ): void {
     if (!this.active) {
@@ -193,66 +186,51 @@ export class SeparatorCore {
       vocR.fill(0);
       insL.fill(0);
       insR.fill(0);
+      byp.fill(0);
       return;
     }
     const pos = this.pos;
     this.time = time;
     if (this.wantMl !== null) this.toMl(this.wantMl);
-    if (this.wantDsp !== null) this.toDsp(this.wantDsp);
+    if (this.wantBypass !== null) this.toBypass(this.wantBypass);
 
-    // 1. Rings: dry input and the DSP vocal (DSP_LATENCY_SAMPLES behind).
-    const { svL, svR } = this;
-    this.sep.process(inL, inR, svL, svR, this.siL, this.siR);
-    const dspAt = pos - DSP_LATENCY_SAMPLES;
+    // 1. Ring: dry input.
     for (let i = 0; i < QUANTUM; i++) {
       const j = (pos + i) & MASK;
       this.dryL[j] = inL[i];
       this.dryR[j] = inR[i];
-      const k = (dspAt + i) & MASK;
-      this.dspL[k] = svL[i];
-      this.dspR[k] = svR[i];
     }
 
     // 2. ML stream: fill the current block, send it when full.
     if (this.streaming) this.feed(inL, inR);
 
-    // 3. Envelope target and vocal source for this quantum.
+    // 3. Envelope target and ML weight for this quantum.
     let target = 1;
     if (this.phase === 'to-ml') {
-      // DSP output fades out on input P − QUANTUM … P − 1, then silence until ML reaches P.
-      if (pos >= this.switchPos + DSP_LATENCY_SAMPLES - QUANTUM) target = 0;
-    } else if (this.phase === 'to-dsp') {
+      // The original mix fades out on input P − QUANTUM … P − 1, then silence until ML reaches P.
+      if (pos >= this.switchPos - QUANTUM) target = 0;
+    } else if (this.phase === 'to-bypass') {
       target = 0;
     }
     this.w0 = this.w1 = 0;
     if (this.engine === 'ml') this.chooseSource(pos - ML_LATENCY_SAMPLES);
 
-    // 4. Output.
+    // 4. Output: v = w·vocal, i = dry − w·soft vocal, b = 1 − w.
     const r0 = pos - this.delay;
     const env0 = this.env;
     const dE = (target - env0) / QUANTUM;
     const w0 = this.w0;
     const dW = (this.w1 - w0) / QUANTUM;
-    const mix = w0 > 0 || this.w1 > 0;
-    const { dryL, dryR, dspL, dspR, mlL, mlR, mlSL, mlSR } = this;
+    const { dryL, dryR, mlL, mlR, mlSL, mlSR } = this;
     for (let i = 0; i < QUANTUM; i++) {
       const j = (r0 + i) & MASK;
       const e = env0 + dE * (i + 1);
-      let vl = dspL[j];
-      let vr = dspR[j];
-      let sl = vl;
-      let sr = vr;
-      if (mix) {
-        const w = w0 + dW * (i + 1);
-        vl += w * (mlL[j] - vl);
-        vr += w * (mlR[j] - vr);
-        sl += w * (mlSL[j] - sl);
-        sr += w * (mlSR[j] - sr);
-      }
-      vocL[i] = e * sl;
-      vocR[i] = e * sr;
-      insL[i] = e * (dryL[j] - vl);
-      insR[i] = e * (dryR[j] - vr);
+      const w = w0 + dW * (i + 1);
+      vocL[i] = e * w * mlSL[j];
+      vocR[i] = e * w * mlSR[j];
+      insL[i] = e * (dryL[j] - w * mlL[j]);
+      insR[i] = e * (dryR[j] - w * mlR[j]);
+      byp[i] = 1 - w;
     }
     this.env = target;
 
@@ -262,10 +240,10 @@ export class SeparatorCore {
       this.engine = 'ml';
       this.delay = ML_LATENCY_SAMPLES;
       this.decideInitial(this.switchPos);
-    } else if (this.phase === 'to-dsp') {
+    } else if (this.phase === 'to-bypass') {
       this.phase = 'steady';
-      this.engine = 'dsp';
-      this.delay = DSP_LATENCY_SAMPLES;
+      this.engine = 'bypass';
+      this.delay = 0;
       this.stopStream();
     }
     this.pos = pos + QUANTUM;
@@ -282,46 +260,46 @@ export class SeparatorCore {
 
   private toMl(reason: MlReason): void {
     this.wantMl = null;
-    if (!this.mlAllowed() || this.engine !== 'dsp' || this.phase !== 'steady') return;
+    if (!this.mlAllowed() || this.engine !== 'bypass' || this.phase !== 'steady') return;
     this.phase = 'to-ml';
-    this.switchPos = this.pos;
+    this.switchPos = this.pos + QUANTUM; // this quantum fades the original out
     this.reason = reason;
     this.startStream();
-    this.onEngine({ type: 'engine', engine: 'ml', reason, at: this.timeOf(this.pos) });
+    this.onEngine({ type: 'engine', engine: 'ml', reason, at: this.timeOf(this.switchPos) });
   }
 
-  private toDsp(reason: MlReason): void {
-    this.wantDsp = null;
+  private toBypass(reason: MlReason): void {
+    this.wantBypass = null;
     const pos = this.pos;
     if (this.phase === 'to-ml') {
-      // ML output has not started: go back to the DSP output from here (fades in if silent).
+      // ML output has not started: go back to the original mix from here (fades in if silent).
       this.phase = 'steady';
       this.reason = reason;
       this.stopStream();
-      this.onEngine({ type: 'engine', engine: 'dsp', reason, at: this.timeOf(pos - DSP_LATENCY_SAMPLES) });
+      this.onEngine({ type: 'engine', engine: 'bypass', reason, at: this.timeOf(pos) });
       return;
     }
     if (this.engine !== 'ml' || this.phase !== 'steady') return;
-    this.phase = 'to-dsp';
+    this.phase = 'to-bypass';
     this.reason = reason;
-    this.onEngine({ type: 'engine', engine: 'dsp', reason, at: this.timeOf(pos + QUANTUM - DSP_LATENCY_SAMPLES) });
+    this.onEngine({ type: 'engine', engine: 'bypass', reason, at: this.timeOf(pos + QUANTUM) });
   }
 
   /** Sets w0 / w1 for the quantum that reads input r0 … r0 + QUANTUM − 1. */
   private chooseSource(r0: number): void {
     const rel = r0 - (this.streamStart + ML_BASE);
-    if (rel < -QUANTUM) return; // before the stream: rings are silent there
+    if (rel < -QUANTUM) return; // before the stream: ring is silent there
     const off = rel - Math.floor(rel / ML_BLOCK) * ML_BLOCK;
     if (off === 0) {
       const was = this.useMl;
       this.useMl = this.nextMl;
       if (this.useMl && !was) {
-        this.w1 = 1; // DSP → ML over the block's first quantum
+        this.w1 = 1; // bypass → ML over the block's first quantum
         return;
       }
     }
     if (off === ML_BLOCK - QUANTUM) {
-      // Choose the next block now, so ML → DSP can fade over this quantum.
+      // Choose the next block now, so ML → bypass can fade over this quantum.
       this.nextMl = this.ready(Math.floor(rel / ML_BLOCK) + 1);
       if (!this.nextMl) this.miss();
       if (this.useMl && !this.nextMl) {
@@ -349,7 +327,7 @@ export class SeparatorCore {
     const pos = this.pos;
     if (pos - this.misses[0] <= MISS_WINDOW_S * this.sampleRate) {
       this.misses.fill(-Infinity);
-      this.wantDsp = 'deadline-miss'; // third miss within the window
+      this.wantBypass = 'deadline-miss'; // third miss within the window
       return;
     }
     this.misses[0] = this.misses[1];
@@ -361,7 +339,7 @@ export class SeparatorCore {
     if (fill === 0) {
       this.cur = this.pool.pop() ?? null;
       // Every buffer is with the worker: it is blocks behind, far past any deadline.
-      if (!this.cur) this.wantDsp = 'deadline-miss';
+      if (!this.cur) this.wantBypass = 'deadline-miss';
     }
     const cur = this.cur;
     if (!cur) return;
@@ -425,11 +403,8 @@ export class SeparatorCore {
   }
 
   private reset(): void {
-    this.sep.reset();
     this.dryL.fill(0);
     this.dryR.fill(0);
-    this.dspL.fill(0);
-    this.dspR.fill(0);
     this.mlL.fill(0);
     this.mlR.fill(0);
     this.mlSL.fill(0);
