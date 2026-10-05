@@ -35,3 +35,17 @@ export function chooseCaptionTracks(tracks: readonly CaptionTrack[], defaultLang
       : undefined;
   return { asr, manual };
 }
+
+export interface CaptionOption {
+  /** Index into `PlayerInfo.captionTracks`. */
+  index: number;
+  label: string;
+}
+
+/** Menu entries for the caption language picker, one per track. */
+export function captionOptions(tracks: readonly CaptionTrack[]): CaptionOption[] {
+  return tracks.map((t, index) => {
+    const name = t.name || t.languageCode || `Track ${index + 1}`;
+    return { index, label: t.kind === 'asr' && !/auto/i.test(name) ? `${name} (auto-generated)` : name };
+  });
+}

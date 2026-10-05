@@ -1,6 +1,6 @@
 import type { LyricsState, LyricsSurface } from './controller';
 import { FloatingPanel } from './floating-panel';
-import { LyricsView } from './lyrics-view';
+import { LyricsView, type LyricsViewOptions } from './lyrics-view';
 import { enableTab, findYtmLyricsTab, findYtmTabContent, isTabSelected, type Site } from '../youtube-dom';
 
 function show(view: LyricsView, state: LyricsState): void {
@@ -12,7 +12,7 @@ function show(view: LyricsView, state: LyricsState): void {
       view.setStatus('loading');
       break;
     case 'ready':
-      view.setLyrics(state.lyrics);
+      view.setLyrics(state.lyrics, state.captions);
       break;
     case 'not-found': {
       const t = state.track;
@@ -30,10 +30,10 @@ export class PanelSurface implements LyricsSurface {
   readonly panel: FloatingPanel;
   private readonly view: LyricsView;
 
-  constructor(site: Site, onSeek: (t: number) => void, onOpenChange: (open: boolean) => void) {
+  constructor(site: Site, view: LyricsViewOptions, onOpenChange: (open: boolean) => void) {
     // Per site: on YT Music the Lyrics tab is the main view, so the panel starts closed there.
     this.panel = new FloatingPanel({ id: 'all-mixer-lyrics-panel', title: 'Lyrics', storageKey: `lyricsPanel:${site}` });
-    this.view = new LyricsView({ onSeek });
+    this.view = new LyricsView(view);
     this.panel.body.append(this.view.el);
     this.panel.onOpenChange(onOpenChange);
   }
@@ -61,16 +61,17 @@ const YTM_STYLE = `
 /**
  * F1: synced lyrics inside YT Music's own Lyrics tab. Only takes over when we
  * have synced lyrics; otherwise YT Music's lyrics stay as they are (fallback).
+ * An auto-generated transcript is worse than YT Music's own lyrics, so it stays in the floating panel.
  */
 export class YtmTabSurface implements LyricsSurface {
   private readonly view: LyricsView;
   private state: LyricsState = { kind: 'idle' };
 
   constructor(
-    onSeek: (t: number) => void,
+    view: LyricsViewOptions,
     private readonly doc: Document = document,
   ) {
-    this.view = new LyricsView({ onSeek }, doc);
+    this.view = new LyricsView(view, doc);
     if (!doc.getElementById(YTM_STYLE_ID)) {
       const style = doc.createElement('style');
       style.id = YTM_STYLE_ID;
@@ -93,7 +94,7 @@ export class YtmTabSurface implements LyricsSurface {
 
   render(state: LyricsState): void {
     this.state = state;
-    if (state.kind === 'ready') this.view.setLyrics(state.lyrics);
+    if (state.kind === 'ready') this.view.setLyrics(state.lyrics, state.captions);
     this.sync();
   }
 
@@ -104,7 +105,7 @@ export class YtmTabSurface implements LyricsSurface {
   /** Mount or unmount to match the tab selection and the lyrics state. Call on tab / DOM changes. */
   sync(): void {
     const s = this.state;
-    const synced = s.kind === 'ready' && s.lyrics.kind === 'synced';
+    const synced = s.kind === 'ready' && s.lyrics.kind === 'synced' && s.lyrics.source !== 'youtube-auto-captions';
     const tab = findYtmLyricsTab(this.doc);
     const content = findYtmTabContent(this.doc);
     if (synced && tab) enableTab(tab);
@@ -113,7 +114,7 @@ export class YtmTabSurface implements LyricsSurface {
       if (this.view.el.parentNode !== content) {
         content.append(this.view.el);
         // Reset the highlight so the next update scrolls to the current line.
-        this.view.setLyrics(s.lyrics);
+        this.view.setLyrics(s.lyrics, s.captions);
       }
       content.setAttribute(YTM_MOUNT_ATTR, '');
     } else {

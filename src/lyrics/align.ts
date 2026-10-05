@@ -215,6 +215,22 @@ export function linesFromCaptions(cues: readonly CaptionCue[]): LyricLine[] {
   return lines;
 }
 
+/** Lines from auto-generated (ASR) captions, a transcript with per-word timing. Overlapping cues are cut at the next cue. */
+export function linesFromAsrCaptions(cues: readonly CaptionCue[]): LyricLine[] {
+  return cues.map((c, i) => {
+    const next = cues[i + 1];
+    const end = Math.max(c.start, next ? Math.min(c.end, next.start) : c.end);
+    const cw = c.words;
+    if (!cw) return { start: c.start, end, text: c.text };
+    const words: LyricWord[] = cw.map((w, j) => ({
+      start: Math.min(Math.max(w.start, c.start), end),
+      end: j + 1 < cw.length ? Math.min(cw[j + 1].start, end) : end,
+      text: j + 1 < cw.length ? `${w.text} ` : w.text,
+    }));
+    return { start: c.start, end, text: words.map((w) => w.text).join(''), words };
+  });
+}
+
 export interface CaptionTrackData {
   cues: CaptionCue[];
   /** Auto-generated (speech recognition) track. */

@@ -24,9 +24,9 @@ export function initLyrics(site: Site, audioDelay: () => number): LyricsFeature 
     fetchLyrics: (track) => chrome.runtime.sendMessage({ type: 'fetch-lyrics', track } satisfies FetchLyrics) as Promise<FoundLyrics | null>,
     audioDelay,
   });
-  const seek = (t: number) => controller.seek(t);
+  const view = { onSeek: (t: number) => controller.seek(t), onCaptionTrack: (i: number) => controller.selectCaptionTrack(i) };
 
-  const panel = new PanelSurface(site, seek, () => {
+  const panel = new PanelSurface(site, view, () => {
     syncButton();
     controller.refresh();
   });
@@ -34,7 +34,7 @@ export function initLyrics(site: Site, audioDelay: () => number): LyricsFeature 
 
   let tab: YtmTabSurface | null = null;
   if (site === 'ytmusic') {
-    const surface = new YtmTabSurface(seek);
+    const surface = new YtmTabSurface(view);
     tab = surface;
     controller.addSurface(surface);
     // Tab clicks flip aria-selected; YT Music also re-renders the tab content.

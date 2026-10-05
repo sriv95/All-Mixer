@@ -23,7 +23,8 @@ export interface LyricLine {
   words?: LyricWord[];
 }
 
-export type LyricsSource = 'lrclib' | 'youtube-captions';
+/** `youtube-auto-captions` = the speech-recognition transcript, used when nothing better exists. */
+export type LyricsSource = 'lrclib' | 'youtube-captions' | 'youtube-auto-captions';
 
 export interface SyncedLyrics {
   kind: 'synced';

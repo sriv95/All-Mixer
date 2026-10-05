@@ -1,10 +1,13 @@
 import { findLineIndex, findWordIndex } from '../../lyrics/sync';
 import type { Lyrics, LyricsSource, SyncedLyrics } from '../../lyrics/types';
+import type { CaptionPicker } from './controller';
 
 export type LyricsViewStatus = 'loading' | 'not-found' | 'error';
 
 export interface LyricsViewOptions {
   onSeek: (time: number) => void;
+  /** The user picked another caption track (index into the video's caption tracks). */
+  onCaptionTrack?: (index: number) => void;
 }
 
 const USER_SCROLL_PAUSE_MS = 4000;
@@ -19,6 +22,7 @@ const DEFAULT_MESSAGES: Record<LyricsViewStatus, string> = {
 const SOURCE_LABELS: Record<LyricsSource, string> = {
   lrclib: 'LRCLIB',
   'youtube-captions': 'YouTube captions',
+  'youtube-auto-captions': 'YouTube auto-generated captions',
 };
 
 /** Keys that scroll the focused container; pressing them counts as a user scroll. */
@@ -36,7 +40,9 @@ const STYLE = `
 .word.sung { color: #ffd54f; }
 .plain { white-space: pre-wrap; opacity: 0.85; margin: 0; padding: 0 4px; }
 .status { display: flex; align-items: center; justify-content: center; height: 100%; text-align: center; opacity: 0.7; padding: 12px; box-sizing: border-box; }
-.footer { flex: none; font-size: 11px; opacity: 0.5; text-align: center; padding: 4px; }
+.footer { flex: none; font-size: 11px; text-align: center; padding: 4px; }
+.source { opacity: 0.5; }
+.lang { margin-left: 6px; max-width: 60%; font: inherit; color: #fff; background: #222; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; }
 `;
 
 export class LyricsView {
@@ -46,6 +52,7 @@ export class LyricsView {
   private readonly scroller: HTMLElement;
   private readonly footer: HTMLElement;
   private readonly onSeek: (time: number) => void;
+  private readonly onCaptionTrack?: (index: number) => void;
 
   private lyrics: SyncedLyrics | null = null;
   private lineEls: HTMLElement[] = [];
@@ -58,6 +65,7 @@ export class LyricsView {
   constructor(opts: LyricsViewOptions, doc: Document = document) {
     this.doc = doc;
     this.onSeek = opts.onSeek;
+    this.onCaptionTrack = opts.onCaptionTrack;
     this.el = doc.createElement('div');
     this.el.setAttribute('data-am-lyrics', '');
     this.root = this.el.attachShadow({ mode: 'open' });
@@ -81,14 +89,15 @@ export class LyricsView {
     this.scroller.addEventListener('pointerdown', this.onPointerDown);
   }
 
-  setLyrics(lyrics: Lyrics): void {
+  /** `picker` adds a caption language menu to the footer (only with two or more tracks). */
+  setLyrics(lyrics: Lyrics, picker?: CaptionPicker): void {
     this.reset();
     if (lyrics.kind === 'plain') {
       const p = this.doc.createElement('p');
       p.className = 'plain';
       p.textContent = lyrics.text;
       this.scroller.replaceChildren(p);
-      this.footer.textContent = `Lyrics: ${SOURCE_LABELS[lyrics.source]}`;
+      this.setFooter(`Lyrics: ${SOURCE_LABELS[lyrics.source]}`, picker);
       return;
     }
     this.lyrics = lyrics;
@@ -115,9 +124,10 @@ export class LyricsView {
       frag.appendChild(div);
     });
     this.scroller.replaceChildren(frag);
-    this.footer.textContent =
-      `Lyrics: ${SOURCE_LABELS[lyrics.source]}` +
-      (lyrics.source === 'lrclib' && lyrics.offset !== 0 ? ' · timing aligned to captions' : '');
+    this.setFooter(
+      `Lyrics: ${SOURCE_LABELS[lyrics.source]}` + (lyrics.source === 'lrclib' && lyrics.offset !== 0 ? ' · timing aligned to captions' : ''),
+      picker,
+    );
   }
 
   setStatus(status: LyricsViewStatus, message?: string): void {
@@ -127,7 +137,31 @@ export class LyricsView {
     div.dataset.status = status;
     div.textContent = message ?? DEFAULT_MESSAGES[status];
     this.scroller.replaceChildren(div);
-    this.footer.textContent = '';
+    this.footer.replaceChildren();
+  }
+
+  private setFooter(text: string, picker?: CaptionPicker): void {
+    const src = this.doc.createElement('span');
+    src.className = 'source';
+    src.textContent = text;
+    this.footer.replaceChildren(src);
+    const onPick = this.onCaptionTrack;
+    if (!picker || picker.options.length < 2 || !onPick) return;
+    const sel = this.doc.createElement('select');
+    sel.className = 'lang';
+    sel.title = 'Caption language';
+    sel.setAttribute('aria-label', 'Caption language');
+    for (const o of picker.options) {
+      const opt = this.doc.createElement('option');
+      opt.value = String(o.index);
+      opt.textContent = o.label;
+      opt.selected = o.index === picker.selected;
+      sel.append(opt);
+    }
+    sel.addEventListener('change', () => onPick(Number(sel.value)));
+    // Arrow keys and letters pick options; they must not reach the YouTube player.
+    for (const ev of ['keydown', 'keyup', 'keypress']) sel.addEventListener(ev, (e) => e.stopPropagation());
+    this.footer.append(sel);
   }
 
   update(time: number): void {

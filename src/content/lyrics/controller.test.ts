@@ -47,21 +47,40 @@ const flush = () => new Promise((r) => setTimeout(r, 0));
 
 describe('resolveLyrics', () => {
   it('prefers LRCLIB synced lyrics', () => {
-    const l = resolveLyrics('youtube', { synced: SYNCED, plain: 'x', record }, {});
+    const l = resolveLyrics({ synced: SYNCED, plain: 'x', record }, {});
     expect(l).toMatchObject({ kind: 'synced', source: 'lrclib' });
   });
 
-  it('uses manual captions when LRCLIB only has plain lyrics', () => {
+  it('uses manual captions when LRCLIB has no synced lyrics', () => {
     const manual = { asr: false, cues: [{ start: 2, end: 4, text: 'hello world' }] };
-    expect(resolveLyrics('youtube', { plain: 'hello world', record }, { manual })).toMatchObject({ kind: 'synced', source: 'youtube-captions' });
-    // Not a known song on youtube.com: don't show random captions as lyrics.
-    expect(resolveLyrics('youtube', null, { manual })).toBeNull();
-    expect(resolveLyrics('ytmusic', null, { manual })).toMatchObject({ source: 'youtube-captions' });
+    expect(resolveLyrics({ plain: 'hello world', record }, { manual })).toMatchObject({ kind: 'synced', source: 'youtube-captions' });
+    expect(resolveLyrics(null, { manual })).toMatchObject({ source: 'youtube-captions' });
+  });
+
+  it('falls back to the ASR transcript with word timing when nothing else exists', () => {
+    const asr = { asr: true, cues: [{ start: 1, end: 9, text: 'hello world', words: [{ start: 1, text: 'hello' }, { start: 1.5, text: 'world' }] }, { start: 3, end: 5, text: 'again' }] };
+    const l = resolveLyrics(null, { asr });
+    expect(l).toMatchObject({ kind: 'synced', source: 'youtube-auto-captions', hasWordTiming: true });
+    if (l?.kind !== 'synced') throw new Error('synced expected');
+    // Overlapping ASR cue is cut at the next cue.
+    expect(l.lines[0]).toMatchObject({ start: 1, end: 3, text: 'hello world' });
+    expect(l.lines[0].words?.map((w) => w.text).join('')).toBe('hello world');
+    // Plain LRCLIB lyrics beat an ASR transcript.
+    expect(resolveLyrics({ plain: 'la la', record }, { asr })).toMatchObject({ kind: 'plain' });
+  });
+
+  it('shows the picked track and aligns it only with ASR in the same language', () => {
+    const asr = { asr: true, lang: 'en', cues: [{ start: 1, end: 3, text: 'hello world', words: [{ start: 1, text: 'hello' }, { start: 2, text: 'world' }] }] };
+    const es = { asr: false, lang: 'es', cues: [{ start: 1, end: 3, text: 'hola mundo' }] };
+    const l = resolveLyrics(null, { asr, display: es });
+    expect(l).toMatchObject({ source: 'youtube-captions', hasWordTiming: false });
+    if (l?.kind !== 'synced') throw new Error('synced expected');
+    expect(l.lines[0].text).toBe('hola mundo');
   });
 
   it('falls back to plain lyrics, then null', () => {
-    expect(resolveLyrics('youtube', { plain: 'la la', record }, {})).toEqual({ kind: 'plain', text: 'la la', source: 'lrclib' });
-    expect(resolveLyrics('youtube', null, {})).toBeNull();
+    expect(resolveLyrics({ plain: 'la la', record }, {})).toEqual({ kind: 'plain', text: 'la la', source: 'lrclib' });
+    expect(resolveLyrics(null, {})).toBeNull();
   });
 });
 
@@ -289,5 +308,53 @@ describe('LyricsController', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('shows subtitles when LRCLIB has nothing, with a language menu that switches track', async () => {
+    const tracks = [
+      { baseUrl: 'u-asr', languageCode: 'en', kind: 'asr', name: 'English' },
+      { baseUrl: 'u-en', languageCode: 'en', name: 'English' },
+      { baseUrl: 'u-es', languageCode: 'es', name: 'Spanish' },
+    ];
+    const cue = (text: string) => JSON.stringify({ events: [{ tStartMs: 1000, dDurationMs: 2000, segs: [{ utf8: text }] }] });
+    const bodies: Record<string, string> = { 'u-asr': cue('hello there'), 'u-en': cue('Hello there'), 'u-es': cue('Hola') };
+    const d = deps({
+      fetchLyrics: vi.fn(async () => null),
+      getPlayerInfo: vi.fn(async (id: string) => info(id, { captionTracks: tracks })),
+      getTimedText: vi.fn(async (_id: string, t: { baseUrl: string }) => bodies[t.baseUrl] ?? null),
+    });
+    const c = new LyricsController('youtube', d);
+    const s = new FakeSurface();
+    c.addSurface(s);
+    c.setVideoId('v');
+    await flush();
+    expect(s.last).toMatchObject({ kind: 'ready', lyrics: { source: 'youtube-captions' }, captions: { selected: 1 } });
+    if (s.last.kind !== 'ready') throw new Error('ready expected');
+    expect(s.last.captions?.options.map((o) => o.label)).toEqual(['English (auto-generated)', 'English', 'Spanish']);
+
+    c.selectCaptionTrack(2);
+    await flush();
+    expect(s.last).toMatchObject({ kind: 'ready', captions: { selected: 2 } });
+    if (s.last.kind !== 'ready' || s.last.lyrics.kind !== 'synced') throw new Error('synced expected');
+    expect(s.last.lyrics.lines[0].text).toBe('Hola');
+
+    // The picked language is preferred on the next video.
+    c.setVideoId('w');
+    await flush();
+    expect(s.last).toMatchObject({ kind: 'ready', captions: { selected: 2 } });
+  });
+
+  it('has no language menu for LRCLIB lyrics', async () => {
+    const tracks = [
+      { baseUrl: 'a', languageCode: 'en', name: 'English' },
+      { baseUrl: 'b', languageCode: 'es', name: 'Spanish' },
+    ];
+    const c = new LyricsController('youtube', deps({ getPlayerInfo: vi.fn(async (id: string) => info(id, { captionTracks: tracks })) }));
+    const s = new FakeSurface();
+    c.addSurface(s);
+    c.setVideoId('v');
+    await flush();
+    expect(s.last).toMatchObject({ kind: 'ready', lyrics: { source: 'lrclib' } });
+    expect(s.last.kind === 'ready' && s.last.captions).toBeFalsy();
   });
 });
