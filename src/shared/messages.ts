@@ -56,6 +56,22 @@ export interface AvProbeStatus {
   pauseOffsetMs?: number;
   /** Chrome's own audio-input vs. video offset at the last start. */
   pipelineMs?: number;
+  /** Last 20 pause / play transitions, each paired with its media event (SRI-102). */
+  transitions?: AvTransition[];
+  /** Why offsets may be empty: probe flag on, MediaElementSource attached, AudioContext state. */
+  probeOn?: boolean;
+  audioAttached?: boolean;
+  ctxState?: string;
+}
+
+export interface AvTransition {
+  kind: 'pause' | 'play';
+  at: number;
+  playOffsetMs?: number;
+  pauseOffsetMs?: number;
+  pipelineMs?: number;
+  /** Edges not seen in the window. */
+  missing: string[];
 }
 
 export interface ContentStatus {
