@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FFT } from './fft.js';
 import { ML_BLOCK, ML_RESULT_OFFSET } from '../worklet/protocol';
-import { BINS, CTX, HOP, N_FFT, P_ACAP, SpleeterStream, TENSOR_LEN, type ModelFn } from './stream';
+import { BINS, CTX, FG_FLOOR_DB, FG_HI_DB, FG_LO_DB, FG_REL_DB, HOP, N_FFT, P_ACAP, SpleeterStream, TENSOR_LEN, type ModelFn } from './stream';
 
 const ROW = CTX * BINS;
 
@@ -115,6 +115,49 @@ describe('SpleeterStream', () => {
     expect(d).toBeLessThan(2e-5);
   });
 
+  const constModel = (m: number): ModelFn => (x) => x.map((v) => v * m);
+  const rms = (a: Float32Array | Float64Array, from: number, to: number) => {
+    let e = 0;
+    for (let n = from; n < to; n++) e += a[n] * a[n];
+    return Math.sqrt(e / (to - from));
+  };
+
+  it('frame gate: vocal dominates every frame (rDb > −18) → G = 1, sharp stem = ungated p4 reference', async () => {
+    const s = await runSharp(L, R, constModel(1), 1);
+    const ref = offline(L, R, constModel(1), P_ACAP, false);
+    let d = 0;
+    for (let n = 0; n < N - ML_RESULT_OFFSET; n++) d = Math.max(d, Math.abs(s.hl[n] - ref.l[n]));
+    expect(d).toBeLessThan(2e-5);
+  });
+
+  it('frame gate: rDb < −30 is cut by ≥ 39 dB at a = 1 and about half that in dB at a = 0.5', async () => {
+    const lo = ML_RESULT_OFFSET + 8 * ML_BLOCK, hi = N - ML_RESULT_OFFSET;
+    for (const [a, db] of [[1, 39], [0.5, 19]] as const) {
+      const s = await runSharp(L, R, constModel(0.1), a);
+      const ref = offline(L, R, constModel(0.1), 1 + (P_ACAP - 1) * a, false);
+      const cut = 20 * Math.log10(rms(s.hl, lo, hi) / rms(ref.l, lo, hi));
+      expect(cut).toBeLessThan(-db);
+      expect(cut).toBeGreaterThan(-db - 2);
+    }
+  });
+
+  it('frame gate: reset() clears the gate state (same input → same output)', async () => {
+    const st = new SpleeterStream();
+    st.setSharpen(1);
+    const run1 = async () => {
+      const out: number[] = [];
+      const oL = new Float32Array(ML_BLOCK), oR = new Float32Array(ML_BLOCK), hL = new Float32Array(ML_BLOCK), hR = new Float32Array(ML_BLOCK);
+      for (let b = 0; b < 12; b++) {
+        await st.process(L.subarray(b * ML_BLOCK), R.subarray(b * ML_BLOCK), ctxModel, oL, oR, hL, hR);
+        out.push(...hL);
+      }
+      return out;
+    };
+    const first = await run1();
+    st.reset();
+    expect(await run1()).toEqual(first);
+  });
+
   it('mask 1 → vocal = input delayed by ML_RESULT_OFFSET (bit-close, bins < 1024)', async () => {
     const { vl, vr } = await run(L, R, (x) => x.slice());
     // last ML_RESULT_OFFSET samples are not returned yet
@@ -185,7 +228,7 @@ describe('SpleeterStream', () => {
 });
 
 /** Naive whole-signal reference of spleeter_stream.separate(--single, h4, L2, ctx64) on the 1024-shifted grid. */
-function offline(l: Float32Array, r: Float32Array, model: ModelFn, pwArg: number | ((b: number) => number) = 1) {
+function offline(l: Float32Array, r: Float32Array, model: ModelFn, pwArg: number | ((b: number) => number) = 1, gate = true) {
   const n = l.length, fft = new FFT(N_FFT);
   const win = new Float64Array(N_FFT);
   for (let i = 0; i < N_FFT; i++) win[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / N_FFT);
@@ -209,6 +252,7 @@ function offline(l: Float32Array, r: Float32Array, model: ModelFn, pwArg: number
   }
   const out = [new Float64Array(n + 8192), new Float64Array(n + 8192)];
   const off = 4096;
+  let gatePrev = 0;
   for (let bp = -1; bp < n / ML_BLOCK; bp++) {
     const x = new Float32Array(TENSOR_LEN);
     for (let c = 0; c < 2; c++)
@@ -232,6 +276,22 @@ function offline(l: Float32Array, r: Float32Array, model: ModelFn, pwArg: number
         const b = [zr[1][t - first][k] * m[1][k], zi[1][t - first][k] * m[1][k]];
         re[k] = a[0] - b[1]; im[k] = a[1] + b[0];
         if (k > 0) { re[N_FFT - k] = a[0] + b[1]; im[N_FFT - k] = b[0] - a[1]; }
+      }
+      if (pw === 1) gatePrev = 0;
+      if (gate && pw !== 1) {
+        // frame gate (SRI-87 fg30_18) scaled by a = (pw − 1)/(P_ACAP − 1), causal release
+        const a = (pw - 1) / (P_ACAP - 1);
+        let eIn = 0, eOut = 0;
+        for (let k = 0; k < BINS; k++)
+          for (let c = 0; c < 2; c++) {
+            const zre = zr[c][t - first][k], zim = zi[c][t - first][k];
+            eIn += zre * zre + zim * zim;
+            eOut += (zre * zre + zim * zim) * m[c][k] * m[c][k];
+          }
+        const rDb = 10 * Math.log10(eOut / (eIn + 1e-12) + 1e-12);
+        const gDb = FG_FLOOR_DB * (1 - Math.min(1, Math.max(0, (rDb - FG_LO_DB) / (FG_HI_DB - FG_LO_DB))));
+        gatePrev = Math.max(10 ** ((a * gDb) / 20), gatePrev * 10 ** (FG_REL_DB / 20));
+        for (let i = 0; i < N_FFT; i++) { re[i] *= gatePrev; im[i] *= gatePrev; }
       }
       fft.transform(re, im, true);
       for (let i = 0; i < N_FFT; i++) {
