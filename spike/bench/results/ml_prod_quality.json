@@ -1,0 +1,96 @@
+{
+ "clip": "00",
+ "sampleRate": 44100,
+ "samples": 299880,
+ "blocksFed": 77,
+ "ML_LATENCY_SAMPLES": 13440,
+ "ML_RESULT_OFFSET": 5120,
+ "adapter": "apple metal-3",
+ "workerReady": {
+  "p50": 13.899999991059303,
+  "p95": 20.299999997019768,
+  "createMs": 684.2999999970198
+ },
+ "blockRoundTripMs": {
+  "p50": 13.099999994039536,
+  "p95": 18.900000005960464,
+  "max": 24.5,
+  "mean": 13.757142857297675,
+  "blocks": 77
+ },
+ "blockBudgetMs": 92.87981859410431,
+ "compare_spl_h4l2_single": {
+  "native_clip": {
+   "bass_ret": -0.13,
+   "drums_ret": -0.45,
+   "kick_ret": -0.02,
+   "vocal_leak": -15.33,
+   "sub_energy": -0.03,
+   "sdr_inst": 11.53,
+   "sdr_voc": 7.95
+  },
+  "browser_clip": {
+   "bass_ret": -0.14,
+   "drums_ret": -0.5,
+   "kick_ret": -0.02,
+   "vocal_leak": -16.6,
+   "sub_energy": -0.03,
+   "sdr_inst": 12.11,
+   "sdr_voc": 8.56
+  },
+  "diff_dB": {
+   "bass_ret": -0.005,
+   "drums_ret": -0.044,
+   "kick_ret": -0.002,
+   "vocal_leak": -1.268,
+   "sub_energy": -0.001,
+   "sdr_inst": 0.578,
+   "sdr_voc": 0.61
+  },
+  "max_abs_diff_dB": 1.268,
+  "vocal_max_abs_diff": 0.12425849959254265,
+  "vocal_rms_diff": 0.012208678980472102,
+  "vocal_rms_native": 0.0766234575969693,
+  "vocal_diff_rms_rel_db": -15.953861420715555,
+  "vocal_max_abs_native": 0.40227529406547546,
+  "best_lag_samples": 0,
+  "best_lag_xcorr_norm": 0.9884926659805127
+ },
+ "compare_spl_h4l2_single_g3072": {
+  "native_clip": {
+   "bass_ret": -0.14,
+   "drums_ret": -0.49,
+   "kick_ret": -0.02,
+   "vocal_leak": -16.56,
+   "sub_energy": -0.03,
+   "sdr_inst": 12.09,
+   "sdr_voc": 8.54
+  },
+  "browser_clip": {
+   "bass_ret": -0.14,
+   "drums_ret": -0.5,
+   "kick_ret": -0.02,
+   "vocal_leak": -16.6,
+   "sub_energy": -0.03,
+   "sdr_inst": 12.11,
+   "sdr_voc": 8.56
+  },
+  "diff_dB": {
+   "bass_ret": -0.0,
+   "drums_ret": -0.001,
+   "kick_ret": -0.0,
+   "vocal_leak": -0.036,
+   "sub_energy": -0.0,
+   "sdr_inst": 0.02,
+   "sdr_voc": 0.021
+  },
+  "max_abs_diff_dB": 0.036,
+  "vocal_max_abs_diff": 0.035107110626995564,
+  "vocal_rms_diff": 0.00107356215305089,
+  "vocal_rms_native": 0.07781306682781039,
+  "vocal_diff_rms_rel_db": -37.204506795077535,
+  "vocal_max_abs_native": 0.40415647625923157,
+  "best_lag_samples": 0,
+  "best_lag_xcorr_norm": 0.999911387745029
+ }
+}
