@@ -185,6 +185,25 @@ describe('LyricsView', () => {
     expect(q('.footer').textContent).toBe('Lyrics: YouTube captions');
   });
 
+  it('shows a caption language menu and reports the pick', () => {
+    const onCaptionTrack = vi.fn();
+    const v = new LyricsView({ onSeek, onCaptionTrack });
+    const options = [
+      { index: 0, label: 'English' },
+      { index: 1, label: 'Spanish' },
+    ];
+    v.setLyrics({ ...synced(), source: 'youtube-captions' }, { options, selected: 1 });
+    const sel = v.el.shadowRoot!.querySelector('select')!;
+    expect(sel.value).toBe('1');
+    sel.value = '0';
+    sel.dispatchEvent(new Event('change'));
+    expect(onCaptionTrack).toHaveBeenCalledWith(0);
+    // One track: nothing to pick.
+    v.setLyrics({ ...synced(), source: 'youtube-captions' }, { options: options.slice(0, 1), selected: 0 });
+    expect(v.el.shadowRoot!.querySelector('select')).toBeNull();
+    v.destroy();
+  });
+
   it('keyboard scrolling pauses auto-scroll', () => {
     view.setLyrics(synced());
     const sc = q('.scroll');

@@ -28,21 +28,35 @@ afterEach(() => {
 
 describe('YtmTabSurface (F1)', () => {
   it('is active only while the Lyrics tab is selected', () => {
-    const s = new YtmTabSurface(() => {});
+    const s = new YtmTabSurface({ onSeek: () => {} });
     expect(s.active).toBe(false);
     select(1);
     expect(s.active).toBe(true);
   });
 
   it('re-enables a disabled Lyrics tab once synced lyrics exist', () => {
-    const s = new YtmTabSurface(() => {});
+    const s = new YtmTabSurface({ onSeek: () => {} });
     s.render(synced);
     expect(tabs()[1].hasAttribute('disabled')).toBe(false);
     expect(tabs()[1].getAttribute('aria-disabled')).toBe('false');
   });
 
+  it('leaves the tab alone for an auto-generated transcript', () => {
+    const s = new YtmTabSurface({ onSeek: () => {} });
+    const asr: LyricsState = {
+      kind: 'ready',
+      track,
+      lyrics: { kind: 'synced', source: 'youtube-auto-captions', offset: 0, hasWordTiming: false, lines: [{ start: 1, end: 3, text: 'hello' }] },
+    };
+    s.render(asr);
+    select(1);
+    s.sync();
+    expect(s.mounted).toBe(false);
+    expect(tabs()[1].hasAttribute('disabled')).toBe(true);
+  });
+
   it('takes over the tab content with synced lyrics and hands it back on tab switch', () => {
-    const s = new YtmTabSurface(() => {});
+    const s = new YtmTabSurface({ onSeek: () => {} });
     s.render(synced);
     expect(s.mounted).toBe(false);
     select(1);
@@ -59,7 +73,7 @@ describe('YtmTabSurface (F1)', () => {
   });
 
   it('falls back to YT Music lyrics when there are no synced lyrics', () => {
-    const s = new YtmTabSurface(() => {});
+    const s = new YtmTabSurface({ onSeek: () => {} });
     select(1);
     s.render(synced);
     expect(s.mounted).toBe(true);
@@ -71,7 +85,7 @@ describe('YtmTabSurface (F1)', () => {
   });
 
   it('remounts when YT Music re-renders the tab content', () => {
-    const s = new YtmTabSurface(() => {});
+    const s = new YtmTabSurface({ onSeek: () => {} });
     select(1);
     s.render(synced);
     content().replaceChildren();
@@ -80,8 +94,8 @@ describe('YtmTabSurface (F1)', () => {
   });
 
   it('injects the hide-native style once', () => {
-    new YtmTabSurface(() => {});
-    new YtmTabSurface(() => {});
+    new YtmTabSurface({ onSeek: () => {} });
+    new YtmTabSurface({ onSeek: () => {} });
     expect(document.querySelectorAll('#all-mixer-ytm-lyrics-style').length).toBe(1);
   });
 });
