@@ -10,6 +10,9 @@ Reported (median over clips):
   vocal_leak               vocals retention in the Karaoke output (want very negative)
   sub_energy               Karaoke vs. true accompaniment energy, 20-120 Hz (dB)
   sdr_inst, sdr_voc        simple SDR vs. accompaniment / vocals stems (dB, higher better)
+  acap_drums/bass/other    retention of those stems in vocal.wav (A cappella leak, want very negative)
+  acap_music               energy of vocal.wav - g_v*vocals relative to vocal.wav (dB, want low)
+  acap_voc_ret             vocals retention in vocal.wav (want ~0 dB)
 Usage: python metrics.py <tag> [<tag> ...]
 """
 import json, pathlib, sys
@@ -52,7 +55,13 @@ def evaluate(tag):
         has_voc = energy_db(stems[0]) - energy_db(acc) > -20
         r_full = retention(inst, stems, sr, 'full')
         r_sub = retention(inst, stems, sr, 'sub')
+        ra = retention(voc, stems, sr, 'full')
+        vb, sb = (bandpass(z, *BANDS['full'], sr)[SKIP:-SKIP].reshape(-1) for z in (voc, stems[0]))
+        gv = (vb @ sb) / ((sb @ sb) + 1e-12)
         rows.append({
+            'acap_drums': ra[1] if has_voc else np.nan, 'acap_bass': ra[2] if has_voc else np.nan,
+            'acap_other': ra[3] if has_voc else np.nan, 'acap_voc_ret': ra[0] if has_voc else np.nan,
+            'acap_music': energy_db(vb - gv * sb) - energy_db(vb) if has_voc else np.nan,
             'clip': d.name,
             'bass_ret': r_full[2], 'drums_ret': r_full[1], 'kick_ret': r_sub[1],
             'vocal_leak': r_full[0] if has_voc else np.nan,
