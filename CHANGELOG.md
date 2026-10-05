@@ -8,6 +8,8 @@ CI builds the extension, creates tag `vx.y.z` and a GitHub release with this sec
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-06
+
 ### Added
 
 - A cappella: a per-frame gate on the sharpened vocal stem mutes frames where the vocal kept almost no energy (instrumental-only gaps), so less instrumental leaks through. Vocal quality is unchanged (bench: gap leak −41.2 → −61.5 dB).
