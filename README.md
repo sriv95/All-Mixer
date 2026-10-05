@@ -42,3 +42,10 @@ Use `bun run test`, not `bun test`. `bun test` starts Bun's own test runner; thi
 ## Debug
 
 - Force ML deadline misses (QA): in the extension service-worker console run `chrome.storage.local.set({'debug.mlStallMs': 400})`, then reload the YouTube tab. After `debug.mlStallAfterMs` (default 5000 ms, after warm-up) every ML block is held 400 ms, far past the block deadline, so 3 misses happen within about 2 s. Clear with `chrome.storage.local.remove(['debug.mlStallMs','debug.mlStallAfterMs'])`.
+
+## Release
+
+1. Add a `## [x.y.z] - YYYY-MM-DD` section to `CHANGELOG.md`.
+2. Set the same `version` in `package.json` and push to `main`.
+
+`.github/workflows/release.yml` then builds the extension, creates tag `vx.y.z` and a GitHub release with `all-mixer-vx.y.z.zip` and the changelog section as notes. The build writes the `package.json` version into `dist/manifest.json`, so do not edit the version in `public/manifest.json`. The version must be 1–4 dot-separated numbers (Chrome rule; no `-beta`). If the tag already exists, the workflow does nothing. To re-run by hand: Actions → Release → Run workflow.
