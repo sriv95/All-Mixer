@@ -17,9 +17,14 @@ Reported (median over clips):
   acap_gap_leak            energy(vocal.wav)/energy(mix) (dB) pooled over 1 s windows where true vocals are < -30 dB below the clip's mean window energy (NaN if none)
   acap_gap_leak_q          same, 0.25 s windows; gap = true vocals window < -20 dB below the median of voiced windows (voiced = above the 30th percentile of window energy). gap_clips_q = clips with a gap
   acap_voc_ret             vocals retention in vocal.wav (want ~0 dB)
+  kara_sir, kara_sar       framewise BSS-eval v4 (museval, 1 s windows, median over windows then clips) of the Karaoke output vs. accompaniment, interferer = vocals
+  acap_sir, acap_sar       same for vocal.wav vs. vocals, interferer = accompaniment (SIR higher = less music, SAR higher = fewer artifacts)
+  kara_buzz                energy of (inst_est - accompaniment) in 1-8 kHz relative to accompaniment energy there, 0.25 s windows, median (dB, lower = cleaner)
+  acap_hf_ret/mid_ret/low_ret  retention of the true vocal in vocal.wav, 2-8 kHz / 300-2000 Hz / < 300 Hz (g of vb ~= g * vocals_band, dB; 0 = full)
 Usage: python metrics.py <tag> [<tag> ...]
 """
-import json, pathlib, sys
+import json, pathlib, sys, warnings
+from concurrent.futures import ProcessPoolExecutor
 import numpy as np, soundfile as sf
 from scipy.signal import butter, sosfiltfilt
 
@@ -75,6 +80,43 @@ def sdr(ref, est):
     ref, est = ref[SKIP:-SKIP], est[SKIP:-SKIP]
     return 10 * np.log10((ref ** 2).sum() / (((ref - est) ** 2).sum() + 1e-12) + 1e-12)
 
+def bss_median(ref_a, ref_b, est_a, sr):
+    """Framewise BSS-eval v4 (museval) for source a vs interferer b; returns (median SIR, median SAR) over 1 s windows."""
+    import museval
+    n = min(len(ref_a), len(est_a))
+    refs = np.stack([ref_a[:n], ref_b[:n]]); ests = np.stack([est_a[:n], ref_a[:n] + ref_b[:n] - est_a[:n]])
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        sdr_, isr_, sir_, sar_, _perm = museval.metrics.bss_eval(refs, ests, window=sr, hop=sr, compute_permutation=False)
+    return float(np.nanmedian(sir_[0])), float(np.nanmedian(sar_[0]))
+
+def buzz(inst, acc, sr, win_s=0.25):
+    e = bandpass(inst - acc, 1000, 8000, sr); r = bandpass(acc, 1000, 8000, sr)
+    w = int(sr * win_s); n = len(acc) // w
+    v = [10 * np.log10(((e[i * w:(i + 1) * w] ** 2).sum() + 1e-12) / ((r[i * w:(i + 1) * w] ** 2).sum() + 1e-12)) for i in range(n)
+         if (r[i * w:(i + 1) * w] ** 2).sum() > 1e-8]
+    return float(np.median(v)) if v else np.nan
+
+def band_ret(voc, voc_true, sr, lo, hi):
+    a, b = (bandpass(z, lo, hi, sr)[SKIP:-SKIP].reshape(-1) for z in (voc, voc_true))
+    return 20 * np.log10(max(abs((a @ b) / (b @ b + 1e-12)), 1e-4))
+
+def clip_extra(d, tag):
+    stems = {s: sf.read(d / f'{s}.wav')[0] for s in STEMS}
+    acc, sr = sf.read(d / 'accompaniment.wav')
+    inst = sf.read(d / tag / 'instrumental.wav')[0]; voc = sf.read(d / tag / 'vocal.wav')[0]
+    has_voc = energy_db(stems['vocals']) - energy_db(acc) > -20
+    ks, ka = bss_median(acc, stems['vocals'], inst, sr) if has_voc else (np.nan, np.nan)
+    as_, aa = bss_median(stems['vocals'], acc, voc, sr) if has_voc else (np.nan, np.nan)
+    v = stems['vocals']
+    return {'kara_sir': ks, 'kara_sar': ka, 'acap_sir': as_, 'acap_sar': aa, 'kara_buzz': buzz(inst, acc, sr),
+            'acap_hf_ret': band_ret(voc, v, sr, 2000, 8000) if has_voc else np.nan,
+            'acap_mid_ret': band_ret(voc, v, sr, 300, 2000) if has_voc else np.nan,
+            'acap_low_ret': band_ret(voc, v, sr, 40, 300) if has_voc else np.nan}
+
+def _extra(args):
+    return clip_extra(*args)
+
 def evaluate(tag):
     rows = []
     for d in sorted(p for p in ROOT.iterdir() if (p / tag / 'instrumental.wav').exists()):
@@ -107,6 +149,10 @@ def evaluate(tag):
             'sdr_inst': sdr(acc, inst),
             'sdr_voc': sdr(stems[0], voc) if has_voc else np.nan,
         })
+    dirs = sorted(p for p in ROOT.iterdir() if (p / tag / 'instrumental.wav').exists())
+    with ProcessPoolExecutor() as ex:
+        for r, x in zip(rows, ex.map(_extra, [(d, tag) for d in dirs])):
+            r.update(x)
     keys = [k for k in rows[0] if k != 'clip']
     summary = {k: round(float(np.nanmedian([r[k] for r in rows])), 2) for k in keys}
     summary['p10_bass_ret'] = round(float(np.nanpercentile([r['bass_ret'] for r in rows], 10)), 2)
