@@ -1,5 +1,5 @@
 // SRI-40/44: CC off at load -> turn CC on -> footer should say "timing aligned to captions".
-// Usage: npm run build && node scripts/smoke-cc-toggle.mjs [videoId] [secondVideoId]
+// Usage: bun run build && node scripts/smoke-cc-toggle.mjs [videoId] [secondVideoId]
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';

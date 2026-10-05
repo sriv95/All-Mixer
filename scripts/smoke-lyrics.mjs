@@ -1,5 +1,5 @@
 // SRI-6 smoke test: load dist/ as an unpacked extension and check F1 / F2 on real pages.
-// Usage: npm run build && node scripts/smoke-lyrics.mjs [youtube-url] [ytmusic-url]
+// Usage: bun run build && node scripts/smoke-lyrics.mjs [youtube-url] [ytmusic-url]
 // Needs Playwright (spike/node_modules) and network access. Writes screenshots to $OUT (default /tmp).
 import path from 'node:path';
 import os from 'node:os';
