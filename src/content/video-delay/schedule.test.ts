@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DelaySchedule, FrameQueue, overlayDelayMs } from './schedule';
+import { DelaySchedule, FrameQueue, VIDEO_DELAY_BUDGET_BYTES, captureSize, overlayDelayMs } from './schedule';
 
 describe('overlayDelayMs', () => {
   it('matches the graph in Separate mode', () => {
@@ -90,5 +90,46 @@ describe('FrameQueue', () => {
     q.clear();
     expect(released).toEqual([7]);
     expect(q.size).toBe(0);
+  });
+});
+
+describe('captureSize', () => {
+  const base = { displayW: 1920, displayH: 1080, videoW: 1920, videoH: 1080, fps: 60, budgetBytes: VIDEO_DELAY_BUDGET_BYTES };
+
+  it('keeps full size at a short delay', () => {
+    const r = captureSize({ ...base, delayMs: 305 });
+    expect([r.width, r.height]).toEqual([1920, 1080]);
+  });
+
+  it('fits the budget at 2 s and keeps the aspect', () => {
+    const r = captureSize({ ...base, delayMs: 2000 });
+    const frames = Math.ceil(2 * 60) + 8;
+    expect(r.width * r.height * 4 * frames).toBeLessThanOrEqual(VIDEO_DELAY_BUDGET_BYTES);
+    expect(Math.abs(r.width / r.height / (1920 / 1080) - 1)).toBeLessThan(0.01);
+    expect(r.maxFrames).toBeGreaterThanOrEqual(frames);
+  });
+
+  it('caps a 4K display at the 1080p video size', () => {
+    const r = captureSize({ ...base, displayW: 3840, displayH: 2160, delayMs: 305 });
+    expect([r.width, r.height]).toEqual([1920, 1080]);
+  });
+
+  it('allows a larger size at 30 fps than at 60 fps', () => {
+    const a = captureSize({ ...base, delayMs: 2000, fps: 60 });
+    const b = captureSize({ ...base, delayMs: 2000, fps: 30 });
+    expect(b.width * b.height).toBeGreaterThan(a.width * a.height);
+  });
+
+  it('queue sized by captureSize does not skip at a steady 2 s / 60 fps', () => {
+    const { maxFrames } = captureSize({ ...base, delayMs: 2000 });
+    const q = new FrameQueue<number>(() => {});
+    q.setCap(maxFrames);
+    const step = 1000 / 60;
+    for (let n = 0; n < 600; n++) {
+      const t = n * step;
+      q.push({ due: t + 2000, mediaTime: t, img: n });
+      q.take(t, step);
+    }
+    expect(q.skipped).toBe(0);
   });
 });

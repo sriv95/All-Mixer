@@ -63,6 +63,48 @@ export class DelaySchedule {
   }
 }
 
+/** Memory budget for queued delay frames (RGBA, 4 bytes per pixel). */
+export const VIDEO_DELAY_BUDGET_BYTES = 384 * 1024 * 1024;
+
+export interface CaptureSizeInput {
+  /** Display size in device pixels. */
+  displayW: number;
+  displayH: number;
+  /** Native video size; 0 when unknown. */
+  videoW: number;
+  videoH: number;
+  delayMs: number;
+  fps: number;
+  budgetBytes: number;
+}
+
+/**
+ * Size to capture frames at and how many to keep, so that the delay queue fits
+ * the memory budget. Keeps the aspect ratio of the display size.
+ */
+export function captureSize(i: CaptureSizeInput): { width: number; height: number; maxFrames: number } {
+  let w = Math.max(2, i.displayW);
+  let h = Math.max(2, i.displayH);
+  if (i.videoW > 0 && i.videoH > 0 && w * h > i.videoW * i.videoH) {
+    const k = Math.sqrt((i.videoW * i.videoH) / (w * h));
+    w *= k;
+    h *= k;
+  }
+  // Margin of 8 for in-flight captures and jitter.
+  const frames = Math.ceil((i.delayMs / 1000) * i.fps) + 8;
+  const maxPx = i.budgetBytes / (4 * frames);
+  if (w * h > maxPx) {
+    const k = Math.sqrt(maxPx / (w * h));
+    w *= k;
+    h *= k;
+  }
+  // Floor, so rounding never pushes the total over the budget.
+  w = Math.max(2, Math.floor(w));
+  h = Math.max(2, Math.floor(h));
+  const maxFrames = Math.min(frames * 2, Math.max(frames, Math.floor(i.budgetBytes / (4 * w * h))));
+  return { width: w, height: h, maxFrames };
+}
+
 export interface QueuedFrame<T> {
   /** When this frame should reach the screen. */
   due: number;
@@ -80,9 +122,18 @@ export class FrameQueue<T> {
 
   constructor(
     private readonly release: (img: T) => void,
-    /** Safety cap: 2 s at 60 fps. More means rAF stopped (hidden tab). */
-    private readonly cap = 120,
+    /** Safety cap (set at runtime from `captureSize`). More means rAF stopped (hidden tab). */
+    private cap = 120,
   ) {}
+
+  setCap(n: number): void {
+    this.cap = Math.max(1, Math.floor(n));
+    while (this.frames.length > this.cap) this.release(this.frames.shift()!.img);
+  }
+
+  forEach(fn: (img: T) => void): void {
+    for (const f of this.frames) fn(f.img);
+  }
 
   get size(): number {
     return this.frames.length;
