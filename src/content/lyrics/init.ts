@@ -2,7 +2,8 @@ import type { FetchLyrics } from '../../shared/messages';
 import type { FoundLyrics } from '../../lyrics/lrclib-types';
 import { findLyricsControls, getVideoId, onCaptionsButtonOn, onNavigate, type Site } from '../youtube-dom';
 import { getPlayerInfo, getTimedText, onCaptionsAvailable } from './bridge-client';
-import { LyricsController } from './controller';
+import { LyricsController, type SourcePref } from './controller';
+import type { CaptionPick } from './track-info';
 import { PanelSurface, YtmTabSurface } from './surfaces';
 
 const BUTTON_ATTR = 'data-allmixer-lyrics-btn';
@@ -24,7 +25,11 @@ export function initLyrics(site: Site, audioDelay: () => number): LyricsFeature 
     fetchLyrics: (track) => chrome.runtime.sendMessage({ type: 'fetch-lyrics', track } satisfies FetchLyrics) as Promise<FoundLyrics | null>,
     audioDelay,
   });
-  const view = { onSeek: (t: number) => controller.seek(t), onCaptionTrack: (i: number) => controller.selectCaptionTrack(i) };
+  const view = {
+    onSeek: (t: number) => controller.seek(t),
+    onCaptionTrack: (p: CaptionPick) => controller.selectCaptionTrack(p),
+    onSource: (p: SourcePref) => controller.selectSource(p),
+  };
 
   const panel = new PanelSurface(site, view, () => {
     syncButton();

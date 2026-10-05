@@ -185,22 +185,59 @@ describe('LyricsView', () => {
     expect(q('.footer').textContent).toBe('Lyrics: YouTube captions');
   });
 
-  it('shows a caption language menu and reports the pick', () => {
+  it('shows a caption language menu with an auto-translate group and reports the pick', () => {
     const onCaptionTrack = vi.fn();
     const v = new LyricsView({ onSeek, onCaptionTrack });
     const options = [
-      { index: 0, label: 'English' },
-      { index: 1, label: 'Spanish' },
+      { index: 0, label: 'English', group: 'track' as const },
+      { index: 1, label: 'Spanish', group: 'track' as const },
+      { index: 1, tlang: 'de', label: 'German (auto-translated)', group: 'translate' as const },
     ];
-    v.setLyrics({ ...synced(), source: 'youtube-captions' }, { options, selected: 1 });
-    const sel = v.el.shadowRoot!.querySelector('select')!;
-    expect(sel.value).toBe('1');
+    v.setLyrics({ ...synced(), source: 'youtube-captions' }, { options, selected: { index: 1 } });
+    const root = v.el.shadowRoot!;
+    const sel = root.querySelector<HTMLSelectElement>('select.lang')!;
+    expect(sel.selectedOptions[0].textContent).toBe('Spanish');
+    expect(sel.querySelector('optgroup')?.label).toBe('Auto-translate');
+    expect(sel.querySelectorAll('optgroup option')).toHaveLength(1);
+    sel.value = '2';
+    sel.dispatchEvent(new Event('change'));
+    expect(onCaptionTrack).toHaveBeenLastCalledWith({ index: 1, tlang: 'de' });
     sel.value = '0';
     sel.dispatchEvent(new Event('change'));
-    expect(onCaptionTrack).toHaveBeenCalledWith(0);
-    // One track: nothing to pick.
-    v.setLyrics({ ...synced(), source: 'youtube-captions' }, { options: options.slice(0, 1), selected: 0 });
-    expect(v.el.shadowRoot!.querySelector('select')).toBeNull();
+    expect(onCaptionTrack).toHaveBeenLastCalledWith({ index: 0 });
+    // The translated pick is the selected entry.
+    v.setLyrics({ ...synced(), source: 'youtube-captions' }, { options, selected: { index: 1, tlang: 'de' } });
+    expect(root.querySelector<HTMLSelectElement>('select.lang')!.selectedOptions[0].textContent).toBe('German (auto-translated)');
+    // One option: nothing to pick.
+    v.setLyrics({ ...synced(), source: 'youtube-captions' }, { options: options.slice(0, 1), selected: { index: 0 } });
+    expect(root.querySelector('select.lang')).toBeNull();
+    v.destroy();
+  });
+
+  it('shows a source menu with disabled unavailable sources, reports the pick and keeps keys from the page', () => {
+    const onSource = vi.fn();
+    const v = new LyricsView({ onSeek, onSource });
+    document.body.append(v.el);
+    v.setLyrics(synced(), undefined, { pref: 'auto', available: { lrclib: false, captions: true } });
+    const root = v.el.shadowRoot!;
+    const sel = root.querySelector<HTMLSelectElement>('select.src')!;
+    const opts = [...sel.options].map((o) => [o.textContent, o.disabled]);
+    expect(opts).toEqual([['Auto', false], ['LRCLIB (not found)', true], ['YouTube captions', false]]);
+    expect(sel.value).toBe('auto');
+    sel.value = 'captions';
+    sel.dispatchEvent(new Event('change'));
+    expect(onSource).toHaveBeenCalledWith('captions');
+    const seen: string[] = [];
+    const spy = (e: Event) => seen.push(e.type);
+    for (const t of ['keydown', 'keypress', 'keyup']) document.addEventListener(t, spy);
+    for (const t of ['keydown', 'keypress', 'keyup']) sel.dispatchEvent(new KeyboardEvent(t, { key: 'ArrowDown', bubbles: true, composed: true }));
+    for (const t of ['keydown', 'keypress', 'keyup']) document.removeEventListener(t, spy);
+    expect(seen).toEqual([]);
+    // No callback or no data: no menu. Fallback note in the footer.
+    v.setLyrics(synced(), undefined, { pref: 'lrclib', available: { lrclib: false, captions: true }, fellBack: 'lrclib' });
+    expect(root.querySelector('.source')!.textContent).toContain('LRCLIB: not found');
+    v.setLyrics(synced());
+    expect(root.querySelector('select.src')).toBeNull();
     v.destroy();
   });
 
