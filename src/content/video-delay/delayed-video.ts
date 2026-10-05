@@ -273,7 +273,7 @@ export class DelayedVideo {
       (bmp) => {
         this.captureErrors = 0;
         if (epoch !== this.epoch || !this.running) return bmp.close();
-        this.queue.push({ due, mediaTime: md.mediaTime, delay, img: bmp });
+        this.queue.push({ due, mediaTime: md.mediaTime, delay, img: bmp }, performance.now());
       },
       () => {
         if (epoch === this.epoch && this.running && ++this.captureErrors >= MAX_CAPTURE_ERRORS) this.fail();
