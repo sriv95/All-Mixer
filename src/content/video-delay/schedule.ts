@@ -109,6 +109,8 @@ export interface QueuedFrame<T> {
   /** When this frame should reach the screen. */
   due: number;
   mediaTime: number;
+  /** Schedule delay that applied when the frame was captured (for stats). */
+  delay?: number;
   img: T;
 }
 
@@ -133,6 +135,10 @@ export class FrameQueue<T> {
 
   forEach(fn: (img: T) => void): void {
     for (const f of this.frames) fn(f.img);
+  }
+
+  get capacity(): number {
+    return this.cap;
   }
 
   get size(): number {
