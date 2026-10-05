@@ -55,6 +55,11 @@ export class DelaySchedule {
     return this.steps[this.steps.length - 1].delay;
   }
 
+  /** Largest delay among current steps (the old delay still applies until a pending step's time). */
+  get max(): number {
+    return Math.max(...this.steps.map((s) => s.delay));
+  }
+
   /** Forget steps that no frame before `t` can need anymore. */
   prune(t: number): void {
     let i = 0;

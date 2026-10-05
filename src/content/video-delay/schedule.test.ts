@@ -21,6 +21,15 @@ describe('overlayDelayMs', () => {
 });
 
 describe('DelaySchedule', () => {
+  it('max covers the old delay until a pending decrease takes effect', () => {
+    const s = new DelaySchedule(0);
+    s.set(2000, -Infinity);
+    s.set(300, 1000);
+    expect(s.max).toBe(2000);
+    s.prune(1000);
+    expect(s.max).toBe(300);
+  });
+
   it('keeps the old delay until the change takes effect', () => {
     const s = new DelaySchedule(50);
     s.set(305, 1000);
