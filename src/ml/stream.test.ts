@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FFT } from '../worklet/dsp/fft.js';
 import { ML_BLOCK, ML_RESULT_OFFSET } from '../worklet/protocol';
-import { BINS, CTX, HOP, N_FFT, SpleeterStream, TENSOR_LEN, type ModelFn } from './stream';
+import { BINS, CTX, HOP, N_FFT, P_ACAP, SpleeterStream, TENSOR_LEN, type ModelFn } from './stream';
 
 const ROW = CTX * BINS;
 
@@ -34,9 +34,73 @@ async function run(l: Float32Array, r: Float32Array, model: ModelFn) {
   return { vl, vr };
 }
 
+const ctxModel: ModelFn = (x) => {
+  const v = new Float32Array(TENSOR_LEN);
+  for (let c = 0; c < 2; c++)
+    for (let r = 0; r < CTX; r++)
+      for (let k = 0; k < BINS; k++) {
+        const a = x[c * ROW + r * BINS + k];
+        const p = r > 0 ? x[c * ROW + (r - 1) * BINS + k] : 0;
+        v[c * ROW + r * BINS + k] = (0.3 + 0.6 * ((k % 5) / 5)) * a + 0.1 * p;
+      }
+  return v;
+};
+
+/** Run with setSharpen(a); returns soft (outL/R) and sharp (shL/R) vocal stems on the input time axis. */
+async function runSharp(l: Float32Array, r: Float32Array, model: ModelFn, a: number) {
+  const st = new SpleeterStream();
+  st.setSharpen(a);
+  const n = l.length;
+  const o = { sl: new Float32Array(n), sr: new Float32Array(n), hl: new Float32Array(n), hr: new Float32Array(n) };
+  const oL = new Float32Array(ML_BLOCK), oR = new Float32Array(ML_BLOCK), hL = new Float32Array(ML_BLOCK), hR = new Float32Array(ML_BLOCK);
+  for (let b = 0; b < n / ML_BLOCK; b++) {
+    await st.process(l.subarray(b * ML_BLOCK), r.subarray(b * ML_BLOCK), model, oL, oR, hL, hR);
+    const start = b * ML_BLOCK - ML_RESULT_OFFSET;
+    for (let i = 0; i < ML_BLOCK; i++)
+      if (start + i >= 0 && start + i < n) { o.sl[start + i] = oL[i]; o.sr[start + i] = oR[i]; o.hl[start + i] = hL[i]; o.hr[start + i] = hR[i]; }
+  }
+  return o;
+}
+
 describe('SpleeterStream', () => {
   const N = ML_BLOCK * 40;
   const L = signal(N, 1), R = signal(N, 2);
+
+  it('sharpen a = 0: soft output bit-identical to the no-sharpen call, sharp stem = soft, vocal + (x − vocal) = x', async () => {
+    const plain = await run(L, R, ctxModel);
+    const s = await runSharp(L, R, ctxModel, 0);
+    expect(Array.from(s.sl)).toEqual(Array.from(plain.vl));
+    expect(Array.from(s.hl)).toEqual(Array.from(s.sl));
+    expect(Array.from(s.hr)).toEqual(Array.from(s.sr));
+    // worklet mix at 100/100: sharp vocal + (x − soft) = x
+    let e = 0;
+    for (let n = 0; n < N - ML_RESULT_OFFSET; n++) e = Math.max(e, Math.abs(s.hl[n] + (L[n] - s.sl[n]) - L[n]));
+    expect(e).toBeLessThan(1e-6);
+  });
+
+  it('sharpen a = 1: soft stem unchanged, sharp stem = offline reference with mask^P_ACAP, vocal + instrumental ≠ x', async () => {
+    const s0 = await runSharp(L, R, ctxModel, 0);
+    const s1 = await runSharp(L, R, ctxModel, 1);
+    expect(Array.from(s1.sl)).toEqual(Array.from(s0.sl));
+    const ref = offline(L, R, ctxModel, P_ACAP);
+    let d = 0, diff = 0, sum = 0;
+    for (let n = 0; n < N - ML_RESULT_OFFSET; n++) {
+      d = Math.max(d, Math.abs(s1.hl[n] - ref.l[n]), Math.abs(s1.hr[n] - ref.r[n]));
+      diff = Math.max(diff, Math.abs(s1.hl[n] - s1.sl[n]));
+      sum = Math.max(sum, Math.abs(s1.hl[n] + (L[n] - s1.sl[n]) - L[n]));
+    }
+    expect(d).toBeLessThan(2e-5);
+    expect(diff).toBeGreaterThan(1e-3);
+    expect(sum).toBeGreaterThan(1e-3);
+  });
+
+  it('sharpen 0.5 uses p_eff = 1 + (P_ACAP − 1)/2', async () => {
+    const s = await runSharp(L, R, ctxModel, 0.5);
+    const ref = offline(L, R, ctxModel, 1 + (P_ACAP - 1) * 0.5);
+    let d = 0;
+    for (let n = 0; n < N - ML_RESULT_OFFSET; n++) d = Math.max(d, Math.abs(s.hl[n] - ref.l[n]));
+    expect(d).toBeLessThan(2e-5);
+  });
 
   it('mask 1 → vocal = input delayed by ML_RESULT_OFFSET (bit-close, bins < 1024)', async () => {
     const { vl, vr } = await run(L, R, (x) => x.slice());
@@ -108,7 +172,7 @@ describe('SpleeterStream', () => {
 });
 
 /** Naive whole-signal reference of spleeter_stream.separate(--single, h4, L2, ctx64) on the 1024-shifted grid. */
-function offline(l: Float32Array, r: Float32Array, model: ModelFn) {
+function offline(l: Float32Array, r: Float32Array, model: ModelFn, pw = 1) {
   const n = l.length, fft = new FFT(N_FFT);
   const win = new Float64Array(N_FFT);
   for (let i = 0; i < N_FFT; i++) win[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / N_FFT);
@@ -147,7 +211,7 @@ function offline(l: Float32Array, r: Float32Array, model: ModelFn) {
       for (let c = 0; c < 2; c++)
         for (let k = 0; k < BINS; k++) {
           const q = v[c * ROW + row * BINS + k] / (x[c * ROW + row * BINS + k] + 1e-8);
-          m[c][k] = Math.min(1, Math.max(0, q));
+          m[c][k] = pw === 1 ? Math.min(1, Math.max(0, q)) : Math.min(1, Math.max(0, q)) ** pw;
         }
       for (let k = 0; k < BINS; k++) {
         const a = [zr[0][t - first][k] * m[0][k], zi[0][t - first][k] * m[0][k]];
