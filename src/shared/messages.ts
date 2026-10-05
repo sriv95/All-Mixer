@@ -48,7 +48,13 @@ export interface ContentStatus {
   gain: number;
   videoDelay: { state: OverlayState; delayMs: number };
   /** Separate mode engine; absent from content scripts older than SRI-7. */
-  separation?: { state: SeparationState; latency: LatencyInfo; error?: string };
+  separation?: {
+    state: SeparationState;
+    latency: LatencyInfo;
+    /** Engine the quality setting settled on and why (cause: short text for the UI). */
+    choice?: { engine: 'dsp' | 'ml'; reason: 'auto' | 'deadline-miss' | 'user'; cause?: string };
+    error?: string;
+  };
   error?: string;
 }
 

@@ -74,6 +74,8 @@ export class MasterChain {
   /** Engine the worklet runs, and why (kept in step with its `engine` messages). */
   private engine: MlEngine = 'dsp';
   private engineReason: EngineReason = 'auto';
+  private pendingMlPort: MessagePort | null = null;
+  private pendingEngine: { engine: MlEngine; reason: MlReason } | null = null;
   private offTimer: ReturnType<typeof setTimeout> | undefined;
   private separation: SeparationRequest = OFF;
   private readonly listeners = new Set<LatencyListener>();
@@ -154,14 +156,20 @@ export class MasterChain {
 
   /** Hand the worklet its channel to the ML worker (the port is transferred). */
   setMlPort(port: MessagePort): void {
-    this.sep?.port.postMessage({ type: 'ml-port', port } satisfies ToWorklet, [port]);
+    if (!this.sep) {
+      this.pendingMlPort = port; // delivered once the worklet module has loaded
+      return;
+    }
+    this.sep.port.postMessage({ type: 'ml-port', port } satisfies ToWorklet, [port]);
   }
 
   /** Switch engine while separating. The worklet confirms with an `engine` message (and the delay event). */
-  setEngine(engine: MlEngine, reason: MlReason): void {
+  setEngine(engine: MlEngine, reason: MlReason): boolean {
     // The model has no resampler: ML only runs when the context is at the model rate.
-    if (engine === 'ml' && this.ctx?.sampleRate !== ML_SAMPLE_RATE) return;
+    if (engine === 'ml' && this.ctx?.sampleRate !== ML_SAMPLE_RATE) return false;
     if (this.workletOn) this.post({ type: 'engine', engine, reason });
+    else this.pendingEngine = { engine, reason }; // applied once the separator has started
+    return true;
   }
 
   setVideo(video: HTMLMediaElement): void {
@@ -244,6 +252,8 @@ export class MasterChain {
         this.engineReason = 'auto';
         this.post({ type: 'active', on: true });
         this.workletOn = true;
+        if (this.pendingEngine) this.post({ type: 'engine', ...this.pendingEngine });
+        this.pendingEngine = null;
         start += DSP_LATENCY_SAMPLES / ctx.sampleRate;
       }
       this.crossfade(sepOut, direct, start);
@@ -299,6 +309,11 @@ export class MasterChain {
         const source = this.video && this.sources.get(this.video);
         source?.connect(node);
         this.sep = node;
+        if (this.pendingMlPort) {
+          const port = this.pendingMlPort;
+          this.pendingMlPort = null;
+          this.setMlPort(port);
+        }
         this.route();
       })
       .catch((e: unknown) => this.failSeparation(e));

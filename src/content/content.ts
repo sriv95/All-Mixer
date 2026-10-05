@@ -1,5 +1,6 @@
 import type { ContentRequest, ContentStatus, GetMyTabSettings } from '../shared/messages';
 import { DEFAULT_SETTINGS, masterGainFor, normalizeSettings, separationFor, type MixerSettings } from '../shared/settings';
+import { EngineSelector } from './audio/engine-select';
 import { MasterChain } from './audio/master-chain';
 import { initLyrics } from './lyrics/init';
 import { DelayedVideo } from './video-delay/delayed-video';
@@ -13,6 +14,7 @@ if (site) {
   let video: HTMLVideoElement | null = null;
   let overlay: DelayedVideo | null = null;
   const chain = new MasterChain(() => syncDelay());
+  const selector = new EngineSelector(chain);
   // Lyrics follow what the user sees and hears, which trails currentTime by the picture delay (D1).
   const lyrics = initLyrics(site, () => (overlay?.state === 'on' ? overlay.delayMs / 1000 : 0));
 
@@ -33,7 +35,9 @@ if (site) {
   const apply = (raw: unknown) => {
     settings = normalizeSettings(raw);
     chain.setGain(masterGainFor(settings));
-    chain.setSeparation(separationFor(settings));
+    const sep = separationFor(settings);
+    chain.setSeparation(sep);
+    selector.update(sep);
     syncDelay();
   };
 
@@ -60,7 +64,7 @@ if (site) {
         audio: chain.state,
         gain: chain.requestedGain,
         videoDelay: { state: overlay?.state ?? 'off', delayMs: overlay?.delayMs ?? 0 },
-        separation: { state: chain.separationState, latency: chain.latency, error: chain.separationError },
+        separation: { state: chain.separationState, latency: chain.latency, choice: selector.status, error: chain.separationError },
         error: chain.error,
       };
       sendResponse(status);
