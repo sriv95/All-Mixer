@@ -163,12 +163,12 @@ export class MasterChain {
     this.sep.port.postMessage({ type: 'ml-port', port } satisfies ToWorklet, [port]);
   }
 
-  /** Switch engine while separating. The worklet confirms with an `engine` message (and the delay event). */
   /** True when the graph can run the ML engine (context at the model rate, or not built yet). */
   canRunMl(): boolean {
     return !this.ctx || this.ctx.sampleRate === ML_SAMPLE_RATE;
   }
 
+  /** Switch engine while separating. The worklet confirms with an `engine` message (and the delay event). */
   setEngine(engine: MlEngine, reason: MlReason): boolean {
     if (engine === 'dsp') this.pendingEngine = null;
     // The model has no resampler: ML only runs when the context is at the model rate.

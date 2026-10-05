@@ -11,6 +11,7 @@ import {
 } from '../worklet/protocol';
 import { CTX, BINS, SpleeterStream } from './stream';
 import { warmUp } from './warmup';
+import { makeStall, type StallOpts } from './stall';
 
 type Ort = typeof import('onnxruntime-web/webgpu');
 
@@ -80,11 +81,12 @@ async function start(init: MlWorkerInit): Promise<void> {
   stream.reset();
   ctx.postMessage({ type: 'ready', p50: wu.p50, p95: wu.p95, createMs: createMs + wu.firstMs, adapter: adapterName });
 
-  serve(init.port, stream, model);
+  serve(init.port, stream, model, { stallMs: init.stallMs ?? 0, stallAfterMs: init.stallAfterMs ?? 5000 });
 }
 
 /** Block loop. Blocks are handled one at a time, in order; stale ones are returned unprocessed. */
-function serve(port: MessagePort, stream: SpleeterStream, model: (x: Float32Array) => Promise<Float32Array>): void {
+function serve(port: MessagePort, stream: SpleeterStream, model: (x: Float32Array) => Promise<Float32Array>, dbg: StallOpts): void {
+  const stall = makeStall(dbg); // debug flag; null when off
   let latestEpoch = -1; // newest epoch seen on the port
   let epoch = -1; // epoch the stream state belongs to
   let expected = NaN; // `start` of the next block in that epoch
@@ -115,6 +117,7 @@ function serve(port: MessagePort, stream: SpleeterStream, model: (x: Float32Arra
       try {
         const l = data.subarray(0, ML_BLOCK), r = data.subarray(ML_BLOCK);
         await stream.process(l, r, model, l, r); // in place: the output goes over the input
+        if (stall) await stall();
         back(buf, head, start - ML_RESULT_OFFSET);
       } catch {
         stream.reset();
