@@ -165,7 +165,7 @@ export class DelayedVideo {
       displayH,
       videoW: this.video.videoWidth,
       videoH: this.video.videoHeight,
-      delayMs: this.schedule.target,
+      delayMs: this.schedule.max,
       fps: this.fps,
       budgetBytes: this.budgetBytes,
     });
@@ -301,7 +301,9 @@ export class DelayedVideo {
     this.probe?.overlayFrame(frame.mediaTime, t);
     this.shown?.close();
     this.shown = frame.img;
+    const prevMax = this.schedule.max;
     this.schedule.prune(t);
+    if (this.schedule.max < prevMax) this.updateCapture();
     if (first) {
       // Only cover the real video once there is a picture to show.
       this.canvas.style.display = '';
