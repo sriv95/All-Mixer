@@ -1,6 +1,7 @@
 // AudioWorklet: vocal / instrumental separation with per-stem gain.
-//   out = vocalGain · vocal + instrumentalGain · instrumental   (stereo)
-// The separation (DSP or ML engine) lives in SeparatorCore; vocal + instrumental = input delayed
+//   out = (1 − b)·(vocalGain · vocal + instrumentalGain · instrumental) + b·(vocal + instrumental)
+// with b the core's bypass weight (1 = original mix).
+// The separation (ML engine, or the bypass path that plays the original mix) lives in SeparatorCore; vocal + instrumental = input delayed
 // by the engine's latency, so 100 % / 100 % is the original.
 // process() allocates nothing; every buffer is created in the constructor.
 import { QUANTUM, SeparatorCore } from './core';
@@ -28,6 +29,7 @@ class SeparatorProcessor extends AudioWorkletProcessor {
   private readonly vR = new Float32Array(QUANTUM);
   private readonly iL = new Float32Array(QUANTUM);
   private readonly iR = new Float32Array(QUANTUM);
+  private readonly bw = new Float32Array(QUANTUM);
   private active = false;
   // Gains applied at the end of the previous quantum; each quantum ramps linearly from these.
   private vg = 1;
@@ -70,9 +72,9 @@ class SeparatorProcessor extends AudioWorkletProcessor {
       oR.fill(0);
       return true;
     }
-    const { vL, vR, iL, iR } = this;
+    const { vL, vR, iL, iR, bw } = this;
     this.core.setSharpen(parameters[PARAM_INSTRUMENTAL][0]);
-    this.core.process(inL, inR, vL, vR, iL, iR, currentTime);
+    this.core.process(inL, inR, vL, vR, iL, iR, bw, currentTime);
 
     const vg1 = parameters[PARAM_VOCAL][0];
     const ig1 = parameters[PARAM_INSTRUMENTAL][0];
@@ -80,8 +82,9 @@ class SeparatorProcessor extends AudioWorkletProcessor {
     const ig0 = this.ig;
     if (vg0 === vg1 && ig0 === ig1) {
       for (let i = 0; i < len; i++) {
-        oL[i] = vg1 * vL[i] + ig1 * iL[i];
-        oR[i] = vg1 * vR[i] + ig1 * iR[i];
+        const b = bw[i];
+        oL[i] = (1 - b) * (vg1 * vL[i] + ig1 * iL[i]) + b * (vL[i] + iL[i]);
+        oR[i] = (1 - b) * (vg1 * vR[i] + ig1 * iR[i]) + b * (vR[i] + iR[i]);
       }
     } else {
       // Per-sample ramp so k-rate steps do not zipper.
@@ -90,8 +93,9 @@ class SeparatorProcessor extends AudioWorkletProcessor {
       for (let i = 0; i < len; i++) {
         const v = vg0 + dv * (i + 1);
         const g = ig0 + di * (i + 1);
-        oL[i] = v * vL[i] + g * iL[i];
-        oR[i] = v * vR[i] + g * iR[i];
+        const b = bw[i];
+        oL[i] = (1 - b) * (v * vL[i] + g * iL[i]) + b * (vL[i] + iL[i]);
+        oR[i] = (1 - b) * (v * vR[i] + g * iR[i]) + b * (vR[i] + iR[i]);
       }
       this.vg = vg1;
       this.ig = ig1;
