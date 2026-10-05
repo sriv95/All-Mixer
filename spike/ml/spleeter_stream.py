@@ -8,11 +8,13 @@ and keep only the mask rows of the newest block. All windows of a clip are batch
 Added audio delay of the streaming scheme (excluding inference time):
   n_fft (STFT frame) + (h - 1 + L) * hop  samples.
 Writes <clip>/<tag>/{vocal,instrumental}.wav aligned to the input (delay removed) for metrics.py.
-Usage: python spleeter_stream.py <tag> --ctx 64 --hop-frames 4 --lookahead 0 [--single] [--offline]
+Usage: python spleeter_stream.py <tag> --ctx 64 --hop-frames 4 --lookahead 0 [--single | --two-model] [--offline]
+  [--mask-smooth k (k <= lookahead)] [--freq-smooth 3]
 """
 import argparse, pathlib, time
 import numpy as np, soundfile as sf, onnx, onnxruntime as ort
 from scipy.signal import stft, istft
+from scipy.ndimage import median_filter
 
 N_FFT, HOP, F = 4096, 1024, 1024
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -28,31 +30,37 @@ def session(name):
 def run(sess, mag_windows):  # mag_windows: [2, S, C, 1024]
     return sess.run(None, {'x': mag_windows.astype(np.float32)})[0]
 
-def separate(x, sr, voc, acc, ctx, h, L, single, offline, voc_power=1.0, voc_hpf=0.0, voc_curve='power', voc_bingate=0.0, voc_framegate=None, voc_gate_floor=-40.0):
+def separate(x, sr, voc, acc, ctx, h, L, single, offline, voc_power=1.0, voc_hpf=0.0, voc_curve='power', voc_bingate=0.0, voc_framegate=None, voc_gate_floor=-40.0, mask_smooth=0, freq_smooth=0):
     _, _, Z = stft(x.T, fs=sr, window='hann', nperseg=N_FFT, noverlap=N_FFT - HOP, boundary='zeros', padded=True)
     Z = Z * N_FFT / 2  # undo scipy scaling -> tf.stft-like magnitudes
     mag = np.abs(Z[:, :F, :]).transpose(0, 2, 1)  # [2, T, F]
     T = mag.shape[1]
+    def to_mask(v, a, mg):
+        if single:
+            return np.clip(v / (mg + 1e-8), 0, 1)
+        return (v ** 2 + 1e-10 / 2) / (v ** 2 + a ** 2 + 1e-10)  # Wiener-style, vocals vs accompaniment model
+    def smooth(mw):  # medians run on the whole window; rows t+-k exist inside it because k <= L (no delay added)
+        if mask_smooth:
+            mw = median_filter(mw, size=(1, 1, 2 * mask_smooth + 1, 1), mode='nearest')
+        if freq_smooth:
+            mw = median_filter(mw, size=(1, 1, 1, freq_smooth), mode='nearest')
+        return mw
     if offline:
         pad = (-T) % 512
         m = np.pad(mag, ((0, 0), (0, pad), (0, 0)))
         win = m.reshape(2, -1, 512, F)
-        v = run(voc, win).reshape(2, -1, F)[:, :T]
-        a = run(acc, win).reshape(2, -1, F)[:, :T] if not single else None
+        v = run(voc, win); a = run(acc, win) if not single else None
+        mask = to_mask(v, a, win).reshape(2, -1, F)[:, :T]
     else:
+        assert mask_smooth <= L, 'mask smoothing may only use lookahead frames (k <= L)'
         # Left-pad with ctx frames of silence so early frames have a full window.
         m = np.pad(mag, ((0, 0), (ctx, h + L), (0, 0)))
         starts = list(range(0, T, h))
         win = np.stack([m[:, s + h + L: s + h + L + ctx] for s in starts], axis=1)  # window ends at block_end+L
-        t0 = time.perf_counter()
         vw = run(voc, win); aw = run(acc, win) if not single else None
+        mw = smooth(to_mask(vw, aw, win))
         rows = slice(ctx - h - L, ctx - L)
-        v = np.concatenate([vw[:, i, rows] for i in range(len(starts))], axis=1)[:, :T]
-        a = np.concatenate([aw[:, i, rows] for i in range(len(starts))], axis=1)[:, :T] if not single else None
-    if single:
-        mask = np.clip(v / (mag + 1e-8), 0, 1)
-    else:
-        mask = (v ** 2 + 1e-10 / 2) / (v ** 2 + a ** 2 + 1e-10)
+        mask = np.concatenate([mw[:, i, rows] for i in range(len(starts))], axis=1)[:, :T]
     mask = mask.transpose(0, 2, 1)  # [2, F, T]
     full = np.zeros(Z.shape)
     full[:, :F, :] = mask  # bins above ~11 kHz go to the instrumental (spleeter 'zeros' extension)
@@ -88,7 +96,9 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument('tag'); ap.add_argument('--ctx', type=int, default=64)
     ap.add_argument('--hop-frames', type=int, default=4); ap.add_argument('--lookahead', type=int, default=0)
-    ap.add_argument('--single', action='store_true'); ap.add_argument('--offline', action='store_true')
+    ap.add_argument('--single', action='store_true'); ap.add_argument('--two-model', action='store_true', help='vocal + accompaniment models, Wiener mask v^2/(v^2+a^2) (default when --single is not given)')
+    ap.add_argument('--mask-smooth', type=int, default=0, help='k: median over +-k mask frames (needs k <= lookahead, adds no delay)'); ap.add_argument('--freq-smooth', type=int, default=0, help='median over this many bins of the mask')
+    ap.add_argument('--offline', action='store_true')
     ap.add_argument('--voc-power', type=float, default=1.0); ap.add_argument('--voc-hpf', type=float, default=0.0)
     ap.add_argument('--voc-curve', choices=['power', 'wiener'], default='power')
     ap.add_argument('--voc-bingate', type=float, default=0.0)
@@ -97,12 +107,13 @@ if __name__ == '__main__':
     ap.add_argument('--clips', type=int, default=50)
     ap.add_argument('--pre', type=int, default=0, help='prepend N zero samples, shift back (3072 = shipped worker frame/block phase)')
     a = ap.parse_args()
+    assert not (a.single and a.two_model)
     voc, acc = session('vocals'), (None if a.single else session('accompaniment'))
     for d in sorted((ROOT / 'clips/wav').iterdir())[: a.clips]:
         x, sr = sf.read(d / 'mix.wav')
         n = len(x)
         if a.pre: x = np.concatenate([np.zeros((a.pre, x.shape[1])), x])
-        vocal, inst = separate(x, sr, voc, acc, a.ctx, a.hop_frames, a.lookahead, a.single, a.offline, a.voc_power, a.voc_hpf, a.voc_curve, a.voc_bingate, a.voc_framegate, a.voc_gate_floor)
+        vocal, inst = separate(x, sr, voc, acc, a.ctx, a.hop_frames, a.lookahead, a.single, a.offline, a.voc_power, a.voc_hpf, a.voc_curve, a.voc_bingate, a.voc_framegate, a.voc_gate_floor, a.mask_smooth, a.freq_smooth)
         if a.pre: x, vocal, inst = x[a.pre:a.pre + n], vocal[a.pre:a.pre + n], inst[a.pre:a.pre + n]
         (d / a.tag).mkdir(exist_ok=True)
         sf.write(d / a.tag / 'vocal.wav', vocal, sr, subtype='FLOAT')
