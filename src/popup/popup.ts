@@ -51,6 +51,11 @@ function save(): void {
 
 function setMode(mode: Mode): void {
   settings = { ...settings, mode };
+  if (mode !== 'separate') {
+    // Do not wait for refreshStatus: drop the stale separation text and the warming poll now.
+    clearTimeout(pollTimer);
+    status.textContent = '';
+  }
   save();
 }
 

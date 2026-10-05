@@ -210,6 +210,15 @@ describe('popup', () => {
       expect(el('status').textContent).toBe('Separation on · 120 ms delay');
     });
 
+    it('clicking Default clears the separation status at once', async () => {
+      await load({ stored: { mode: 'separate' }, status: sep('on', { choice: { state: 'on' } }, 'ml', 305) });
+      expect(el('status').textContent).toBe('Separation on · 305 ms delay');
+      tabBtn('default').click();
+      expect(el('status').textContent).toBe('');
+      await settle();
+      expect(el('status').textContent).toBe('');
+    });
+
     it('on shows the rounded delay', async () => {
       await load({ stored: { mode: 'separate' }, status: sep('on', { choice: { state: 'on' } }, 'ml', 303.4) });
       expect(el('status').textContent).toBe('Separation on · 303 ms delay');
