@@ -15,12 +15,13 @@ class FakeHost implements MlHostLike {
   }
 }
 
-function setup(accept = true) {
+function setup(accept = true, canRun = true) {
   const hosts: FakeHost[] = [];
   let listener: LatencyListener = () => {};
   const chain = {
     setMlPort: vi.fn(),
     setEngine: vi.fn(() => accept),
+    canRunMl: vi.fn(() => canRun),
     onLatencyChange: (cb: LatencyListener) => {
       listener = cb;
       return () => {};
@@ -136,5 +137,30 @@ describe('EngineSelector', () => {
     sel.update(req('auto'));
     sel.update(req('auto', false));
     expect(hosts[1].disposed).toBe(true);
+  });
+
+  it('Quality warm-up is reported as auto, not a failure', () => {
+    const { sel } = setup();
+    sel.update(req('quality'));
+    expect(sel.status).toMatchObject({ engine: 'dsp', reason: 'auto', cause: 'ML warming up' });
+  });
+
+  it('gives up before creating a host when the context cannot run ML', () => {
+    const { sel, hosts, chain } = setup(true, false);
+    sel.update(req('quality'));
+    expect(hosts).toHaveLength(0);
+    expect(chain.setMlPort).not.toHaveBeenCalled();
+    expect(sel.status).toMatchObject({ engine: 'dsp', reason: 'deadline-miss' });
+    expect(sel.status.cause).toMatch(/44\.1/);
+  });
+
+  it('Separate off while ML runs sends the worklet back to dsp', () => {
+    const { sel, hosts, chain } = setup();
+    sel.update(req('auto'));
+    hosts[0].onStatus!(ready(20));
+    chain.setEngine.mockClear();
+    sel.update(req('auto', false));
+    expect(chain.setEngine).toHaveBeenCalledWith('dsp', 'user');
+    expect(hosts[0].disposed).toBe(true);
   });
 });

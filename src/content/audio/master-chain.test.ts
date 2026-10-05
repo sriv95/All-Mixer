@@ -331,6 +331,19 @@ describe('MasterChain separation', () => {
     expect(sepOut.gain.targets.at(-1)).toEqual([1, 10 + 0.01]);
   });
 
+  it('drops a pending ML port when Separate turns off before the worklet loads', async () => {
+    running();
+    const chain = new MasterChain(undefined, () => 'chrome-extension://x/worklet.js');
+    chain.setVideo(video());
+    chain.setSeparation(on);
+    const close = vi.fn();
+    chain.setMlPort({ close } as unknown as MessagePort);
+    chain.setSeparation(off);
+    await flushPromises();
+    expect(close).toHaveBeenCalled();
+    expect(worklets[0].messages.some((m) => (m as { type: string }).type === 'ml-port')).toBe(false);
+  });
+
   it('flushes the separator on seek', async () => {
     const { v, sep } = await separating();
     v.dispatchEvent(new Event('seeking'));

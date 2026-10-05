@@ -164,7 +164,13 @@ export class MasterChain {
   }
 
   /** Switch engine while separating. The worklet confirms with an `engine` message (and the delay event). */
+  /** True when the graph can run the ML engine (context at the model rate, or not built yet). */
+  canRunMl(): boolean {
+    return !this.ctx || this.ctx.sampleRate === ML_SAMPLE_RATE;
+  }
+
   setEngine(engine: MlEngine, reason: MlReason): boolean {
+    if (engine === 'dsp') this.pendingEngine = null;
     // The model has no resampler: ML only runs when the context is at the model rate.
     if (engine === 'ml' && this.ctx?.sampleRate !== ML_SAMPLE_RATE) return false;
     if (this.workletOn) this.post({ type: 'engine', engine, reason });
@@ -191,6 +197,12 @@ export class MasterChain {
 
   setSeparation(req: SeparationRequest): void {
     this.separation = { ...req };
+    if (!req.on) {
+      // Nothing may leak into the next turn-on: the host that owned this port is gone.
+      this.pendingEngine = null;
+      this.pendingMlPort?.close();
+      this.pendingMlPort = null;
+    }
     if (!this.engaged && req.on) this.engage();
     this.route();
   }
@@ -198,13 +210,9 @@ export class MasterChain {
   private engage(): void {
     this.engaged = true;
     try {
-      // The ML engine runs at the model rate so the worklet needs no resampler; only users who
-      // chose the light (DSP) engine keep the device rate.
-      const ctx = new AudioContext(
-        this.separation.quality === 'light'
-          ? { latencyHint: 'interactive' }
-          : { latencyHint: 'interactive', sampleRate: ML_SAMPLE_RATE },
-      );
+      // Always the model rate, whatever the quality setting: the worklet needs no resampler and
+      // switching Light -> Auto in the same tab can still run ML. Chrome resamples at the output.
+      const ctx = new AudioContext({ latencyHint: 'interactive', sampleRate: ML_SAMPLE_RATE });
       const gain = new GainNode(ctx, { gain: this.targetGain });
       const limiter = createLimiter(ctx);
       gain.connect(limiter.input);

@@ -13,6 +13,8 @@ export interface EngineChain {
   setMlPort(port: MessagePort): void;
   /** @returns false when ML cannot run on this graph (e.g. context not at the model rate). */
   setEngine(engine: MlEngine, reason: MlReason): boolean;
+  /** False when ML can never run on this graph; checked before any host is created. */
+  canRunMl(): boolean;
   onLatencyChange(cb: LatencyListener): () => void;
 }
 
@@ -69,6 +71,7 @@ export class EngineSelector {
     this.on = req.on;
     this.quality = req.quality;
     if (!req.on) {
+      if (this.mlActive) this.chain.setEngine('dsp', 'user');
       this.disposeHost();
       this.mlActive = false;
       this.fallback = { reason: 'auto' };
@@ -87,10 +90,11 @@ export class EngineSelector {
   }
 
   private probe(): void {
+    if (!this.chain.canRunMl()) return this.giveUp('ML needs a 44.1 kHz audio context');
     const host = this.createHost();
     this.host = host;
     this.probing = true;
-    this.fallback = { reason: this.reasonFor(), cause: 'ML warming up' };
+    this.fallback = { reason: 'auto', cause: 'ML warming up' };
     const port = host.start((m) => {
       if (this.host !== host || !this.probing) return;
       this.probing = false;
