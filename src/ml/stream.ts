@@ -35,6 +35,13 @@ const TENSOR_ROW = CTX * BINS;
 export const TENSOR_LEN = 2 * TENSOR_ROW;
 /** A cappella vocal mask power (SRI-78: p 4 wins the 50-clip bench, acap_interf −18.38 → −21.54 dB vs p 2.25). */
 export const P_ACAP = 4;
+/** A cappella frame gate (SRI-87 p4_fg30_18): kept-energy ratio below FG_LO_DB → FG_FLOOR_DB, above FG_HI_DB → 0 dB. Per 1024-hop frame. */
+export const FG_LO_DB = -30;
+export const FG_HI_DB = -18;
+export const FG_FLOOR_DB = -40;
+/** Gate release per frame (instant attack). */
+export const FG_REL_DB = -3;
+const FG_REL = Math.pow(10, FG_REL_DB / 20);
 
 /** Model call: reads `x` ([2,1,64,1024] magnitudes), returns the vocal magnitudes, same shape. */
 export type ModelFn = (x: Float32Array) => Promise<Float32Array> | Float32Array;
@@ -58,6 +65,8 @@ export class SpleeterStream {
   private sharpen = 0;
   /** The previous block ran the sharp path, so `accS` may differ from `acc` (pending tails). */
   private sharpPrev = false;
+  /** Frame gate gain of the previous sharp frame (release state). */
+  private gatePrev = 0;
   private blocks = 0;
 
   constructor() {
@@ -82,6 +91,7 @@ export class SpleeterStream {
     this.acc.fill(0);
     this.accS.fill(0);
     this.sharpPrev = false;
+    this.gatePrev = 0;
     this.blocks = 0;
   }
 
@@ -145,7 +155,10 @@ export class SpleeterStream {
     // Sharp path while pEff ≠ 1, plus one more block after it (pw = 1) to flush the old sharp tails.
     const sharp = shL !== undefined && shR !== undefined && (pEff !== 1 || this.sharpPrev);
     // Entry: until now sharp == soft, so the soft tails are exactly the pending sharp tails.
-    if (sharp && !this.sharpPrev) accS.set(acc);
+    if (sharp && !this.sharpPrev) {
+      accS.set(acc);
+      this.gatePrev = 0;
+    }
     for (let f = 0; f < HOP_FRAMES; f++) {
       const t = HOP_FRAMES * b - HOP_FRAMES + f;
       this.frame(v, t, f, 1, acc);
@@ -183,6 +196,7 @@ export class SpleeterStream {
     const norm = 1 / (1.5 * N_FFT);
     re.fill(0);
     im.fill(0);
+    let eIn = 0, eOut = 0;
     for (let k = 0; k < BINS; k++) {
       let ml = clip01(v[row * BINS + k] / (x[row * BINS + k] + 1e-8));
       let mr = clip01(v[TENSOR_ROW + row * BINS + k] / (x[TENSOR_ROW + row * BINS + k] + 1e-8));
@@ -192,12 +206,27 @@ export class SpleeterStream {
       }
       const lr = this.zRe[slot + k] * ml, li = this.zIm[slot + k] * ml;
       const rr = this.zRe[slot + BINS + k] * mr, ri = this.zIm[slot + BINS + k] * mr;
+      if (pw !== 1) {
+        const zl = this.zRe[slot + k], zli = this.zIm[slot + k];
+        const zr = this.zRe[slot + BINS + k], zri = this.zIm[slot + BINS + k];
+        eIn += zl * zl + zli * zli + zr * zr + zri * zri;
+        eOut += lr * lr + li * li + rr * rr + ri * ri;
+      }
       re[k] = lr - ri;
       im[k] = li + rr;
       if (k > 0) {
         re[N_FFT - k] = lr + ri;
         im[N_FFT - k] = rr - li;
       }
+    }
+    if (pw !== 1) {
+      const rDb = 10 * Math.log10(eOut / (eIn + 1e-12) + 1e-12);
+      const gDb = FG_FLOOR_DB * (1 - clip01((rDb - FG_LO_DB) / (FG_HI_DB - FG_LO_DB)));
+      const gRaw = Math.pow(10, (this.sharpen * gDb) / 20);
+      const rel = this.gatePrev * FG_REL;
+      const G = gRaw > rel ? gRaw : rel;
+      this.gatePrev = G;
+      if (G !== 1) for (let n = 0; n < N_FFT; n++) { re[n] *= G; im[n] *= G; }
     }
     fft.transform(re, im, true);
     // frame t starts at stream sample 1024t − 1024
