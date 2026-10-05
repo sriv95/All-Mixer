@@ -55,7 +55,7 @@ class FakePort {
     this.seen.add(buf);
     const k = this.posted++;
     const how = this.policy(k);
-    const head = new Float64Array(buf, 0, 2);
+    const head = new Float64Array(buf, 0, 3);
     if (how === 'hold') {
       this.held.push(buf);
       return;
@@ -65,11 +65,13 @@ class FakePort {
     } else {
       // Vocal for input [start − ML_RESULT_OFFSET, … + ML_BLOCK): the true input, so vocal = dry.
       const start = head[1] - ML_RESULT_OFFSET;
-      const data = new Float32Array(buf, ML_HEADER_BYTES, 2 * ML_BLOCK);
+      const data = new Float32Array(buf, ML_HEADER_BYTES, 4 * ML_BLOCK);
       for (let i = 0; i < ML_BLOCK; i++) {
         const p = start + i;
         data[i] = p >= 0 && p < this.sigL.length ? this.sigL[p] : 0;
         data[ML_BLOCK + i] = p >= 0 && p < this.sigR.length ? this.sigR[p] : 0;
+        data[2 * ML_BLOCK + i] = data[i];
+        data[3 * ML_BLOCK + i] = data[ML_BLOCK + i];
       }
       head[1] = start;
     }

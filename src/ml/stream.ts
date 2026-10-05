@@ -3,6 +3,9 @@
 // --single --hop-frames 4 --lookahead 2 --ctx 64: n_fft 4096, hop 1024, periodic Hann,
 // magnitudes = |FFT| (scipy's ×n_fft/2 undone), F = 1024 bins into the model, mask
 // clip(v/(mag+1e-8), 0, 1), bins ≥ 1024 get mask 0, overlap-add ISTFT / Σw² (= 1.5).
+// Optional second vocal stem with --voc-power P_ACAP·a (--voc-hpf 0): mask m^p_eff, p_eff = 1 + (P−1)·a
+// (a = clamp(1 − instrumentalGain, 0, 1), setSharpen). The soft-mask vocal is always produced too, so
+// the instrumental x − soft is Karaoke's and a = 0 is bit-identical to before. No per-block allocation.
 //
 // Frame grid and ML_RESULT_OFFSET. Frame t covers input [1024t − 1024, 1024t + 3072) of the
 // stream (1024 samples of zero pre-roll; scipy's grid has 2048, see below). After input block b
@@ -30,6 +33,8 @@ const ZRING = 8;
 const ACC = 8192; // > 4096 + 3·1024 spread of one output block's frames
 const TENSOR_ROW = CTX * BINS;
 export const TENSOR_LEN = 2 * TENSOR_ROW;
+/** A cappella vocal mask power (SRI-65: p 2.25 with no HPF meets the bar on the 50-clip bench). */
+export const P_ACAP = 2.25;
 
 /** Model call: reads `x` ([2,1,64,1024] magnitudes), returns the vocal magnitudes, same shape. */
 export type ModelFn = (x: Float32Array) => Promise<Float32Array> | Float32Array;
@@ -47,6 +52,10 @@ export class SpleeterStream {
   private readonly zRe = new Float32Array(ZRING * 2 * BINS);
   private readonly zIm = new Float32Array(ZRING * 2 * BINS);
   private readonly acc = new Float32Array(2 * ACC);
+  /** Overlap-add of the sharpened vocal (only used while sharpen > 0). */
+  private readonly accS = new Float32Array(2 * ACC);
+  /** a = clamp(1 − instrumentalGain, 0, 1): how far the vocal mask is sharpened. */
+  private sharpen = 0;
   private blocks = 0;
 
   constructor() {
@@ -55,12 +64,21 @@ export class SpleeterStream {
     this.reset();
   }
 
+  /**
+   * a = clamp(1 − instrumentalGain, 0, 1), taken per block. The sharpened vocal uses mask m^p_eff,
+   * p_eff = 1 + (P_ACAP − 1)·a. Takes effect from the next `synthesize`; `reset()` keeps it.
+   */
+  setSharpen(a: number): void {
+    this.sharpen = a > 0 ? (a < 1 ? a : 1) : 0;
+  }
+
   reset(): void {
     this.x.fill(0);
     this.tail.fill(0);
     this.zRe.fill(0);
     this.zIm.fill(0);
     this.acc.fill(0);
+    this.accS.fill(0);
     this.blocks = 0;
   }
 
@@ -112,39 +130,20 @@ export class SpleeterStream {
 
   /**
    * Model output `v` (vocal magnitudes for the window `analyze` just built) → the vocal block
-   * [blockStart − ML_RESULT_OFFSET, … + ML_BLOCK) (see header), written to outL/outR.
+   * [blockStart − ML_RESULT_OFFSET, … + ML_BLOCK) (see header), written to outL/outR. This is the
+   * soft-mask vocal; the worklet's instrumental is x − this, so it never depends on `sharpen`.
+   * If `shL`/`shR` are given they get the sharpened vocal stem (mask m^p_eff, see `setSharpen`);
+   * with sharpen 0 that is a bit copy of outL/outR, otherwise a second inverse FFT per frame.
    */
-  synthesize(v: Float32Array, outL: Float32Array, outR: Float32Array): void {
-    const { x, re, im, win, fft, acc } = this;
+  synthesize(v: Float32Array, outL: Float32Array, outR: Float32Array, shL?: Float32Array, shR?: Float32Array): void {
+    const { acc, accS } = this;
     const b = this.blocks;
-    const rows0 = CTX - HOP_FRAMES - LOOKAHEAD; // 58: frames 4b − 4 … 4b − 1
-    const norm = 1 / (1.5 * N_FFT);
+    const pEff = 1 + (P_ACAP - 1) * this.sharpen;
+    const sharp = shL !== undefined && shR !== undefined && pEff !== 1;
     for (let f = 0; f < HOP_FRAMES; f++) {
       const t = HOP_FRAMES * b - HOP_FRAMES + f;
-      const slot = (t & (ZRING - 1)) * 2 * BINS;
-      const row = rows0 + f;
-      re.fill(0);
-      im.fill(0);
-      for (let k = 0; k < BINS; k++) {
-        const ml = clip01(v[row * BINS + k] / (x[row * BINS + k] + 1e-8));
-        const mr = clip01(v[TENSOR_ROW + row * BINS + k] / (x[TENSOR_ROW + row * BINS + k] + 1e-8));
-        const lr = this.zRe[slot + k] * ml, li = this.zIm[slot + k] * ml;
-        const rr = this.zRe[slot + BINS + k] * mr, ri = this.zIm[slot + BINS + k] * mr;
-        re[k] = lr - ri;
-        im[k] = li + rr;
-        if (k > 0) {
-          re[N_FFT - k] = lr + ri;
-          im[N_FFT - k] = rr - li;
-        }
-      }
-      fft.transform(re, im, true);
-      // frame t starts at stream sample 1024t − 1024
-      const s0 = HOP * t - PREROLL;
-      for (let n = 0; n < N_FFT; n++) {
-        const j = (s0 + n) & (ACC - 1);
-        acc[j] += re[n] * win[n] * norm;
-        acc[ACC + j] += im[n] * win[n] * norm;
-      }
+      this.frame(v, t, f, 1, acc);
+      if (sharp) this.frame(v, t, f, pEff, accS);
     }
     // Complete now: [4096b − 5120, 4096b − 1024). Emit and clear.
     const o0 = ML_BLOCK * b - (ML_BLOCK + PREROLL);
@@ -154,15 +153,68 @@ export class SpleeterStream {
       outR[n] = acc[ACC + j];
       acc[j] = 0;
       acc[ACC + j] = 0;
+      if (shL !== undefined && shR !== undefined) {
+        if (sharp) {
+          shL[n] = accS[j];
+          shR[n] = accS[ACC + j];
+          accS[j] = 0;
+          accS[ACC + j] = 0;
+        } else {
+          shL[n] = outL[n];
+          shR[n] = outR[n];
+        }
+      }
     }
     this.blocks++;
   }
 
+  /** Mask frame t (window row 58 + f), mask power `pw` (1 = exact m), overlap-added into `into`. */
+  private frame(v: Float32Array, t: number, f: number, pw: number, into: Float32Array): void {
+    const { x, re, im, win, fft } = this;
+    const slot = (t & (ZRING - 1)) * 2 * BINS;
+    const row = CTX - HOP_FRAMES - LOOKAHEAD + f; // 58: frames 4b − 4 … 4b − 1
+    const norm = 1 / (1.5 * N_FFT);
+    re.fill(0);
+    im.fill(0);
+    for (let k = 0; k < BINS; k++) {
+      let ml = clip01(v[row * BINS + k] / (x[row * BINS + k] + 1e-8));
+      let mr = clip01(v[TENSOR_ROW + row * BINS + k] / (x[TENSOR_ROW + row * BINS + k] + 1e-8));
+      if (pw !== 1) {
+        ml = Math.pow(ml, pw);
+        mr = Math.pow(mr, pw);
+      }
+      const lr = this.zRe[slot + k] * ml, li = this.zIm[slot + k] * ml;
+      const rr = this.zRe[slot + BINS + k] * mr, ri = this.zIm[slot + BINS + k] * mr;
+      re[k] = lr - ri;
+      im[k] = li + rr;
+      if (k > 0) {
+        re[N_FFT - k] = lr + ri;
+        im[N_FFT - k] = rr - li;
+      }
+    }
+    fft.transform(re, im, true);
+    // frame t starts at stream sample 1024t − 1024
+    const s0 = HOP * t - PREROLL;
+    for (let n = 0; n < N_FFT; n++) {
+      const j = (s0 + n) & (ACC - 1);
+      into[j] += re[n] * win[n] * norm;
+      into[ACC + j] += im[n] * win[n] * norm;
+    }
+  }
+
   /** analyze + model + synthesize. */
-  async process(inL: Float32Array, inR: Float32Array, model: ModelFn, outL: Float32Array, outR: Float32Array): Promise<void> {
+  async process(
+    inL: Float32Array,
+    inR: Float32Array,
+    model: ModelFn,
+    outL: Float32Array,
+    outR: Float32Array,
+    shL?: Float32Array,
+    shR?: Float32Array,
+  ): Promise<void> {
     this.analyze(inL, inR);
     const v = await model(this.x);
-    this.synthesize(v, outL, outR);
+    this.synthesize(v, outL, outR, shL, shR);
   }
 }
 

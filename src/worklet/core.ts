@@ -66,6 +66,11 @@ export class SeparatorCore {
   private readonly dspR = new Float32Array(RING);
   private readonly mlL = new Float32Array(RING);
   private readonly mlR = new Float32Array(RING);
+  /** Sharpened ML vocal (A cappella); the instrumental uses mlL/mlR. */
+  private readonly mlSL = new Float32Array(RING);
+  private readonly mlSR = new Float32Array(RING);
+  /** a = clamp(1 − instrumentalGain, 0, 1), stamped on each block sent to the worker. */
+  private sharpen = 0;
   /** Absolute start of the ML block held in each slot (NaN = empty). */
   private readonly slotStart = new Float64Array(SLOTS).fill(NaN);
   private readonly svL = new Float32Array(QUANTUM);
@@ -164,6 +169,12 @@ export class SeparatorCore {
     }
   }
 
+  /** a = clamp(1 − instrumentalGain, 0, 1); sent with the next ML block. */
+  setSharpen(instrumentalGain: number): void {
+    const a = 1 - instrumentalGain;
+    this.sharpen = a > 0 ? (a < 1 ? a : 1) : 0;
+  }
+
   /**
    * One render quantum (QUANTUM frames); `time` is the context time of its first frame.
    * Writes the delayed vocal and instrumental stems.
@@ -223,19 +234,23 @@ export class SeparatorCore {
     const w0 = this.w0;
     const dW = (this.w1 - w0) / QUANTUM;
     const mix = w0 > 0 || this.w1 > 0;
-    const { dryL, dryR, dspL, dspR, mlL, mlR } = this;
+    const { dryL, dryR, dspL, dspR, mlL, mlR, mlSL, mlSR } = this;
     for (let i = 0; i < QUANTUM; i++) {
       const j = (r0 + i) & MASK;
       const e = env0 + dE * (i + 1);
       let vl = dspL[j];
       let vr = dspR[j];
+      let sl = vl;
+      let sr = vr;
       if (mix) {
         const w = w0 + dW * (i + 1);
         vl += w * (mlL[j] - vl);
         vr += w * (mlR[j] - vr);
+        sl += w * (mlSL[j] - sl);
+        sr += w * (mlSR[j] - sr);
       }
-      vocL[i] = e * vl;
-      vocR[i] = e * vr;
+      vocL[i] = e * sl;
+      vocR[i] = e * sr;
       insL[i] = e * (dryL[j] - vl);
       insR[i] = e * (dryR[j] - vr);
     }
@@ -355,6 +370,7 @@ export class SeparatorCore {
     if (fill + QUANTUM === ML_BLOCK) {
       cur.head[0] = this.epoch;
       cur.head[1] = this.pos + QUANTUM - ML_BLOCK;
+      cur.head[2] = this.sharpen;
       this.xfer[0] = cur.buf;
       this.port!.postMessage(cur.buf, this.xfer);
       this.cur = null;
@@ -376,6 +392,8 @@ export class SeparatorCore {
         const live = start + i >= this.streamStart;
         this.mlL[j] = live ? e.data[i] : 0;
         this.mlR[j] = live ? e.data[ML_BLOCK + i] : 0;
+        this.mlSL[j] = live ? e.data[2 * ML_BLOCK + i] : 0;
+        this.mlSR[j] = live ? e.data[3 * ML_BLOCK + i] : 0;
       }
       this.slotStart[(rel / ML_BLOCK) & (SLOTS - 1)] = start;
       this.stats.returned++;
@@ -414,10 +432,12 @@ export class SeparatorCore {
     this.dspR.fill(0);
     this.mlL.fill(0);
     this.mlR.fill(0);
+    this.mlSL.fill(0);
+    this.mlSR.fill(0);
     this.env = 1;
   }
 }
 
 function entry(buf: ArrayBuffer): PoolEntry {
-  return { buf, head: new Float64Array(buf, 0, 2), data: new Float32Array(buf, ML_HEADER_BYTES, 2 * ML_BLOCK) };
+  return { buf, head: new Float64Array(buf, 0, 3), data: new Float32Array(buf, ML_HEADER_BYTES, 4 * ML_BLOCK) };
 }
