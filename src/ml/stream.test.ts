@@ -47,13 +47,14 @@ const ctxModel: ModelFn = (x) => {
 };
 
 /** Run with setSharpen(a); returns soft (outL/R) and sharp (shL/R) vocal stems on the input time axis. */
-async function runSharp(l: Float32Array, r: Float32Array, model: ModelFn, a: number) {
+async function runSharp(l: Float32Array, r: Float32Array, model: ModelFn, a: number | ((b: number) => number)) {
   const st = new SpleeterStream();
-  st.setSharpen(a);
+  if (typeof a === 'number') st.setSharpen(a);
   const n = l.length;
   const o = { sl: new Float32Array(n), sr: new Float32Array(n), hl: new Float32Array(n), hr: new Float32Array(n) };
   const oL = new Float32Array(ML_BLOCK), oR = new Float32Array(ML_BLOCK), hL = new Float32Array(ML_BLOCK), hR = new Float32Array(ML_BLOCK);
   for (let b = 0; b < n / ML_BLOCK; b++) {
+    if (typeof a === 'function') st.setSharpen(a(b));
     await st.process(l.subarray(b * ML_BLOCK), r.subarray(b * ML_BLOCK), model, oL, oR, hL, hR);
     const start = b * ML_BLOCK - ML_RESULT_OFFSET;
     for (let i = 0; i < ML_BLOCK; i++)
@@ -99,6 +100,18 @@ describe('SpleeterStream', () => {
     const ref = offline(L, R, ctxModel, 1 + (P_ACAP - 1) * 0.5);
     let d = 0;
     for (let n = 0; n < N - ML_RESULT_OFFSET; n++) d = Math.max(d, Math.abs(s.hl[n] - ref.l[n]));
+    expect(d).toBeLessThan(2e-5);
+  });
+
+  it('sharpen schedule changes mid-stream: sharp stem = offline reference with per-block p_eff', async () => {
+    const sched = (b: number) => (b < 10 ? 0 : b < 20 ? 1 : b < 25 ? 0 : b < 30 ? 0.5 : 0);
+    const s = await runSharp(L, R, ctxModel, sched);
+    const s0 = await runSharp(L, R, ctxModel, 0);
+    expect(Array.from(s.sl)).toEqual(Array.from(s0.sl));
+    // frame t of stream block b = t/4 + 1 (synthesize: t = 4b − 4 + f)
+    const ref = offline(L, R, ctxModel, (b) => 1 + (P_ACAP - 1) * sched(b));
+    let d = 0;
+    for (let n = 0; n < N - ML_RESULT_OFFSET; n++) d = Math.max(d, Math.abs(s.hl[n] - ref.l[n]), Math.abs(s.hr[n] - ref.r[n]));
     expect(d).toBeLessThan(2e-5);
   });
 
@@ -172,7 +185,7 @@ describe('SpleeterStream', () => {
 });
 
 /** Naive whole-signal reference of spleeter_stream.separate(--single, h4, L2, ctx64) on the 1024-shifted grid. */
-function offline(l: Float32Array, r: Float32Array, model: ModelFn, pw = 1) {
+function offline(l: Float32Array, r: Float32Array, model: ModelFn, pwArg: number | ((b: number) => number) = 1) {
   const n = l.length, fft = new FFT(N_FFT);
   const win = new Float64Array(N_FFT);
   for (let i = 0; i < N_FFT; i++) win[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / N_FFT);
@@ -204,6 +217,7 @@ function offline(l: Float32Array, r: Float32Array, model: ModelFn, pw = 1) {
         if (t >= first) x.set(mag[c][t - first], c * ROW + row * BINS);
       }
     const v = model(x) as Float32Array;
+    const pw = typeof pwArg === 'function' ? pwArg(bp + 1) : pwArg; // stream block b = bp + 1
     for (let f = 0; f < 4; f++) {
       const t = 4 * bp + f, row = CTX - 4 - 2 + f;
       const re = new Float64Array(N_FFT), im = new Float64Array(N_FFT);
