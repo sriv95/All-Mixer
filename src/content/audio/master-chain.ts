@@ -59,6 +59,14 @@ const DEVICE_STEP_MS = 2;
 
 const OFF: SeparationRequest = { on: false, vocal: 1, instrumental: 1, quality: 'auto' };
 
+/** Set on the element when we route its audio. The DOM is shared, so another copy of the extension sees it. */
+export const OWNER_ATTR = 'data-all-mixer-audio';
+
+export const ERR_OTHER_COPY =
+  'Another copy of All Mixer! already controls this video. Turn off the other copy in chrome://extensions, then reload the page.';
+export const ERR_OTHER_OWNER =
+  "Another extension or script already controls this video's audio. Turn it off for YouTube, then reload the page.";
+
 export class MasterChain {
   private ctx: AudioContext | null = null;
   private gain: GainNode | null = null;
@@ -87,6 +95,7 @@ export class MasterChain {
   private lastError: string | undefined;
   private removeGestureListeners: (() => void) | null = null;
   private readonly onSeeking = () => this.flush();
+  private readonly instanceId = Math.random().toString(36).slice(2);
 
   constructor(
     private readonly onStateChange: () => void = () => {},
@@ -373,10 +382,13 @@ export class MasterChain {
       source.connect(direct);
       if (this.sep) source.connect(this.sep);
       this.sources.set(video, source);
+      video.setAttribute(OWNER_ATTR, this.instanceId);
       this.lastError = undefined;
     } catch (e) {
-      // Typically: another extension already owns this element's audio.
-      this.fail(e);
+      // An element feeds at most one MediaElementSource, for its whole life: someone else got there first.
+      console.warn('[All Mixer!] audio error:', e);
+      const owner = video.getAttribute(OWNER_ATTR);
+      this.fail(owner && owner !== this.instanceId ? ERR_OTHER_COPY : ERR_OTHER_OWNER);
     }
     this.onStateChange();
   }
@@ -404,7 +416,7 @@ export class MasterChain {
 
   private fail(e: unknown): void {
     this.lastError = e instanceof Error ? e.message : String(e);
-    console.warn('[All Mixer!] audio error:', e);
+    if (typeof e !== 'string') console.warn('[All Mixer!] audio error:', e);
     this.onStateChange();
   }
 }

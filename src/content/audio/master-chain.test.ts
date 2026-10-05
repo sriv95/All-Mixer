@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { MasterChain } from './master-chain';
+import { ERR_OTHER_COPY, ERR_OTHER_OWNER, MasterChain, OWNER_ATTR } from './master-chain';
 
 // Minimal Web Audio fakes: enough to observe graph wiring and context state.
 class FakeNode {
@@ -206,7 +206,39 @@ describe('MasterChain', () => {
     chain.setVideo(video());
     chain.setGain(2);
     expect(chain.state).toBe('error');
-    expect(chain.error).toMatch(/already connected/);
+    expect(chain.error).toBe(ERR_OTHER_OWNER);
+  });
+
+  it('names a second copy of the extension when that copy owns the element', () => {
+    vi.stubGlobal(
+      'AudioContext',
+      class extends FakeContext {
+        state: AudioContextState = 'running';
+      },
+    );
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const el = video();
+    const first = new MasterChain();
+    first.setVideo(el);
+    first.setGain(2);
+    expect(first.state).toBe('active');
+    expect(el.getAttribute(OWNER_ATTR)).toBeTruthy();
+
+    // Same element, second copy: the browser throws because `first` already owns it.
+    vi.stubGlobal(
+      'AudioContext',
+      class extends FakeContext {
+        state: AudioContextState = 'running';
+        createMediaElementSource(): FakeNode {
+          throw new Error('HTMLMediaElement already connected previously to a different MediaElementSourceNode');
+        }
+      },
+    );
+    const second = new MasterChain();
+    second.setVideo(el);
+    second.setGain(2);
+    expect(second.state).toBe('error');
+    expect(second.error).toBe(ERR_OTHER_COPY);
   });
 });
 
