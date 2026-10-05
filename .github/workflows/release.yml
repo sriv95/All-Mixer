@@ -1,0 +1,84 @@
+# Release (SRI-73): on a package.json change on main, build the extension and publish
+# a GitHub release v<version> with the zip and the CHANGELOG.md section as notes.
+# Does nothing if tag v<version> already exists (e.g. a dependency-only change).
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths: [package.json]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Read version
+        id: version
+        run: |
+          version=$(node -p "require('./package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+          if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null; then
+            echo "Tag v$version already exists: nothing to release."
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Release notes from CHANGELOG.md
+        if: steps.version.outputs.exists == 'false'
+        run: node scripts/changelog-section.mjs "${{ steps.version.outputs.version }}" > "$RUNNER_TEMP/notes.md"
+
+      - uses: oven-sh/setup-bun@v2
+        if: steps.version.outputs.exists == 'false'
+        with:
+          bun-version-file: package.json
+
+      - name: Cache model tarball
+        if: steps.version.outputs.exists == 'false'
+        uses: actions/cache@v4
+        with:
+          path: .cache/models
+          key: model-${{ hashFiles('scripts/fetch-model.mjs') }}
+
+      - name: Install, fetch model, lint, test, build
+        if: steps.version.outputs.exists == 'false'
+        run: |
+          bun install --frozen-lockfile
+          bun run fetch-model
+          bun run lint
+          bun run test
+          bun run build
+
+      - name: Package
+        if: steps.version.outputs.exists == 'false'
+        id: package
+        run: |
+          got=$(node -p "require('./dist/manifest.json').version")
+          if [ "$got" != "${{ steps.version.outputs.version }}" ]; then
+            echo "dist/manifest.json version $got != package.json ${{ steps.version.outputs.version }}"
+            exit 1
+          fi
+          zip_name="all-mixer-${{ steps.version.outputs.tag }}.zip"
+          (cd dist && zip -qr "../$zip_name" .)
+          echo "zip=$zip_name" >> "$GITHUB_OUTPUT"
+
+      - name: Create tag and release
+        if: steps.version.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.version.outputs.tag }}" "${{ steps.package.outputs.zip }}" \
+            --target "$GITHUB_SHA" \
+            --title "All Mixer! ${{ steps.version.outputs.tag }}" \
+            --notes-file "$RUNNER_TEMP/notes.md"

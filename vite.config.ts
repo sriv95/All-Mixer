@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
 
@@ -10,7 +10,7 @@ function mlAssets(): Plugin {
     name: 'all-mixer-ml-assets',
     buildStart() {
       if (!existsSync(resolve(__dirname, 'public/ml/vocals.onnx'))) {
-        this.error('public/ml/vocals.onnx is missing: run npm run fetch-model');
+        this.error('public/ml/vocals.onnx is missing: run bun run fetch-model');
       }
     },
     closeBundle() {
@@ -22,13 +22,30 @@ function mlAssets(): Plugin {
   };
 }
 
+// package.json is the single source of the version (SRI-73): stamp it into dist/manifest.json.
+function manifestVersion(): Plugin {
+  return {
+    name: 'all-mixer-manifest-version',
+    closeBundle() {
+      const { version } = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf8'));
+      if (!/^\d+(\.\d+){0,3}$/.test(version)) {
+        this.error(`package.json version "${version}" is not a valid Chrome manifest version (1-4 dot-separated integers)`);
+      }
+      const file = resolve(__dirname, 'dist/manifest.json');
+      const manifest = JSON.parse(readFileSync(file, 'utf8'));
+      manifest.version = version;
+      writeFileSync(file, JSON.stringify(manifest, null, 2) + '\n');
+    },
+  };
+}
+
 // Main build: popup page + background service worker (ES module).
 // Content script is built separately (vite.content.config.ts) because
 // content scripts cannot be ES modules and must be a single IIFE file.
 export default defineConfig({
   root: 'src',
   publicDir: resolve(__dirname, 'public'),
-  plugins: [mlAssets()],
+  plugins: [mlAssets(), manifestVersion()],
   worker: { format: 'es', rollupOptions: { output: { entryFileNames: 'ml/[name].js', chunkFileNames: 'ml/[name]-[hash].js' } } },
   build: {
     outDir: resolve(__dirname, 'dist'),
