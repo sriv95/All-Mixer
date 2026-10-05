@@ -1,5 +1,5 @@
 import type { ContentStatus, GetStatus, GetTabSettings, SetTabSettings } from '../shared/messages';
-import { clampPct, normalizeSettings, type MixerSettings, type Mode, type SeparationQuality } from '../shared/settings';
+import { clampPct, normalizeSettings, type MixerSettings, type Mode } from '../shared/settings';
 import { detectSite } from '../content/youtube-dom';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -12,7 +12,6 @@ const vocalValue = $<HTMLOutputElement>('vocal-value');
 const instrumental = $<HTMLInputElement>('instrumental');
 const instrumentalValue = $<HTMLOutputElement>('instrumental-value');
 const presets = [...document.querySelectorAll<HTMLButtonElement>('.presets button')];
-const quality = $<HTMLSelectElement>('separation-quality');
 const status = $<HTMLParagraphElement>('status');
 
 let tabId: number | null = null;
@@ -35,7 +34,6 @@ function render(): void {
     const on = Number(b.dataset.vocal) === settings.vocalPct && Number(b.dataset.instrumental) === settings.instrumentalPct;
     b.setAttribute('aria-pressed', String(on));
   }
-  quality.value = settings.separationQuality;
 }
 
 let pending = false;
@@ -63,20 +61,28 @@ const STATUS_TEXT: Record<ContentStatus['audio'], string> = {
   error: 'Audio error',
 };
 
-const ENGINE_NAME: Record<string, string> = { dsp: 'Light', ml: 'Quality' };
-
 function separationText(s: ContentStatus): string {
   const sep = s.separation;
   if (settings.mode !== 'separate' || !sep) return '';
   if (sep.state === 'loading') return 'Starting separation…';
   if (sep.state === 'on') {
-    return `${ENGINE_NAME[sep.latency.engine] ?? sep.latency.engine} engine · ${Math.round(sep.latency.processingMs)} ms delay`;
+    const choice = sep.choice;
+    switch (choice?.state) {
+      case 'warming':
+        return 'Separation warming up… Playing the original mix.';
+      case 'unavailable':
+        return `Separation unavailable: ${choice.cause ?? 'unknown'}. Playing the original mix.`;
+      case 'stopped':
+        return 'Separation stopped: this device is too slow (ML missed its deadline). Playing the original mix. Switch to Default and back to retry.';
+      default:
+        return `Separation on · ${Math.round(sep.latency.processingMs)} ms delay`;
+    }
   }
   if (sep.state === 'error') return `Separation unavailable: ${sep.error ?? 'unknown'}. Playing the original mix.`;
   return '';
 }
 
-// While the separator starts, poll so the popup moves on from "Starting separation…" by itself.
+// While the separator starts or ML warms up, poll so the popup moves on from "Starting separation…" by itself.
 const LOADING_POLL_MS = 500;
 let pollTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -94,7 +100,8 @@ async function refreshStatus(): Promise<void> {
   } else {
     status.textContent = separationText(s) || STATUS_TEXT[s.audio];
   }
-  if (s?.separation?.state === 'loading' && settings.mode === 'separate') {
+  const warming = s?.separation?.state === 'loading' || s?.separation?.choice?.state === 'warming';
+  if (warming && settings.mode === 'separate') {
     pollTimer = setTimeout(() => void refreshStatus(), LOADING_POLL_MS);
   }
 }
@@ -152,11 +159,6 @@ for (const b of presets) {
     save();
   });
 }
-
-quality.addEventListener('change', () => {
-  settings = normalizeSettings({ ...settings, separationQuality: quality.value as SeparationQuality });
-  save();
-});
 
 $<HTMLButtonElement>('master-reset').addEventListener('click', () => {
   settings = { ...settings, masterPct: 100 };
