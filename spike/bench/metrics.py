@@ -14,6 +14,7 @@ Reported (median over clips):
   acap_music               energy of vocal.wav - g_v*vocals relative to vocal.wav (dB, want low)
   acap_interf              true music energy in vocal.wav: sum_k ||g_k s_k||^2 (drums,bass,other) / ||vocal.wav||^2 (dB)
   acap_artif               residual of the 4-stem fit ||vb - A g||^2 / ||vb||^2 (dB): distortion that is neither vocal nor stem
+  acap_gap_leak            energy(vocal.wav)/energy(mix) (dB) pooled over 1 s windows where true vocals are < -30 dB below the clip's mean window energy (NaN if none)
   acap_voc_ret             vocals retention in vocal.wav (want ~0 dB)
 Usage: python metrics.py <tag> [<tag> ...]
 """
@@ -48,6 +49,15 @@ def retention(y, stems, sr, band):
 def energy_db(x):
     return 10 * np.log10((x ** 2).sum() + 1e-12)
 
+def gap_leak(voc_true, voc_est, mix, sr, win_s=1.0, thr_db=-30):
+    w = int(sr * win_s); n = len(voc_true) // w
+    ev = np.array([(voc_true[i * w:(i + 1) * w] ** 2).sum() for i in range(n)])
+    gap = ev < ev.mean() * 10 ** (thr_db / 10)
+    if not gap.any():
+        return np.nan
+    sel = lambda x: sum((x[i * w:(i + 1) * w] ** 2).sum() for i in np.flatnonzero(gap))
+    return 10 * np.log10((sel(voc_est) + 1e-12) / (sel(mix) + 1e-12))
+
 def sdr(ref, est):
     ref, est = ref[SKIP:-SKIP], est[SKIP:-SKIP]
     return 10 * np.log10((ref ** 2).sum() / (((ref - est) ** 2).sum() + 1e-12) + 1e-12)
@@ -75,6 +85,7 @@ def evaluate(tag):
             'acap_other': ra[3] if has_voc else np.nan, 'acap_voc_ret': ra[0] if has_voc else np.nan,
             'acap_interf': interf if has_voc else np.nan, 'acap_artif': artif if has_voc else np.nan,
             'acap_music': energy_db(vb - gv * sb) - energy_db(vb) if has_voc else np.nan,
+            'acap_gap_leak': gap_leak(stems[0], voc, sf.read(d / 'mix.wav')[0], sr),
             'clip': d.name,
             'bass_ret': r_full[2], 'drums_ret': r_full[1], 'kick_ret': r_sub[1],
             'vocal_leak': r_full[0] if has_voc else np.nan,
@@ -86,6 +97,7 @@ def evaluate(tag):
     summary = {k: round(float(np.nanmedian([r[k] for r in rows])), 2) for k in keys}
     summary['p10_bass_ret'] = round(float(np.nanpercentile([r['bass_ret'] for r in rows], 10)), 2)
     summary['p10_drums_ret'] = round(float(np.nanpercentile([r['drums_ret'] for r in rows], 10)), 2)
+    summary['gap_clips'] = int(np.sum(~np.isnan([r['acap_gap_leak'] for r in rows])))
     summary['clips'] = len(rows)
     return summary
 

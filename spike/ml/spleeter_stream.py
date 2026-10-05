@@ -28,7 +28,7 @@ def session(name):
 def run(sess, mag_windows):  # mag_windows: [2, S, C, 1024]
     return sess.run(None, {'x': mag_windows.astype(np.float32)})[0]
 
-def separate(x, sr, voc, acc, ctx, h, L, single, offline, voc_power=1.0, voc_hpf=0.0, voc_curve='power'):
+def separate(x, sr, voc, acc, ctx, h, L, single, offline, voc_power=1.0, voc_hpf=0.0, voc_curve='power', voc_bingate=0.0, voc_framegate=None, voc_gate_floor=-40.0):
     _, _, Z = stft(x.T, fs=sr, window='hann', nperseg=N_FFT, noverlap=N_FFT - HOP, boundary='zeros', padded=True)
     Z = Z * N_FFT / 2  # undo scipy scaling -> tf.stft-like magnitudes
     mag = np.abs(Z[:, :F, :]).transpose(0, 2, 1)  # [2, T, F]
@@ -58,7 +58,7 @@ def separate(x, sr, voc, acc, ctx, h, L, single, offline, voc_power=1.0, voc_hpf
     full[:, :F, :] = mask  # bins above ~11 kHz go to the instrumental (spleeter 'zeros' extension)
     _, soft = istft(Z * full / (N_FFT / 2), fs=sr, window='hann', nperseg=N_FFT, noverlap=N_FFT - HOP, boundary=True)
     soft = soft.T[: len(x)]
-    if voc_power == 1.0 and not voc_hpf and voc_curve == 'power':
+    if voc_power == 1.0 and not voc_hpf and voc_curve == 'power' and not voc_bingate and voc_framegate is None:
         return soft, x - soft
     # Vocal-stem-only variant: sharpened mask m^p and/or zero-delay STFT-domain 2nd-order Butterworth HPF
     # magnitude on the bins below f. The instrumental stays x - soft, so Karaoke is unchanged.
@@ -66,6 +66,18 @@ def separate(x, sr, voc, acc, ctx, h, L, single, offline, voc_power=1.0, voc_hpf
         sharp = full ** voc_power / (full ** voc_power + (1 - full) ** voc_power + 1e-8)
     else:
         sharp = full ** voc_power
+    if voc_bingate:  # zero at m <= tau, full at m >= 2 tau
+        sharp = sharp * np.clip((full - voc_bingate) / voc_bingate, 0, 1)
+    if voc_framegate is not None:  # causal per-frame gain from the kept-energy ratio, instant attack, -3 dB/frame release
+        lo, hi = voc_framegate
+        e_in = (np.abs(Z[:, :F, :]) ** 2).sum((0, 1)); e_out = (np.abs(Z[:, :F, :] * sharp[:, :F, :]) ** 2).sum((0, 1))
+        r_db = 10 * np.log10(e_out / (e_in + 1e-12) + 1e-12)
+        g_raw_db = voc_gate_floor + (0 - voc_gate_floor) * np.clip((r_db - lo) / (hi - lo), 0, 1)
+        g_raw = 10 ** (g_raw_db / 20)
+        G = np.empty_like(g_raw); prev = 0.0; rel = 10 ** (-3 / 20)
+        for t in range(len(G)):
+            prev = G[t] = max(g_raw[t], prev * rel)
+        sharp = sharp * G[None, None, :]
     if voc_hpf:
         r = (np.fft.rfftfreq(N_FFT, 1 / sr) / voc_hpf) ** 2
         sharp = sharp * (r / np.sqrt(1 + r ** 2))[None, :, None]
@@ -79,6 +91,9 @@ if __name__ == '__main__':
     ap.add_argument('--single', action='store_true'); ap.add_argument('--offline', action='store_true')
     ap.add_argument('--voc-power', type=float, default=1.0); ap.add_argument('--voc-hpf', type=float, default=0.0)
     ap.add_argument('--voc-curve', choices=['power', 'wiener'], default='power')
+    ap.add_argument('--voc-bingate', type=float, default=0.0)
+    ap.add_argument('--voc-framegate', type=lambda v: tuple(float(q) for q in v.split(',')), default=None, help='LO,HI dB')
+    ap.add_argument('--voc-gate-floor', type=float, default=-40.0)
     ap.add_argument('--clips', type=int, default=50)
     ap.add_argument('--pre', type=int, default=0, help='prepend N zero samples, shift back (3072 = shipped worker frame/block phase)')
     a = ap.parse_args()
@@ -87,7 +102,7 @@ if __name__ == '__main__':
         x, sr = sf.read(d / 'mix.wav')
         n = len(x)
         if a.pre: x = np.concatenate([np.zeros((a.pre, x.shape[1])), x])
-        vocal, inst = separate(x, sr, voc, acc, a.ctx, a.hop_frames, a.lookahead, a.single, a.offline, a.voc_power, a.voc_hpf, a.voc_curve)
+        vocal, inst = separate(x, sr, voc, acc, a.ctx, a.hop_frames, a.lookahead, a.single, a.offline, a.voc_power, a.voc_hpf, a.voc_curve, a.voc_bingate, a.voc_framegate, a.voc_gate_floor)
         if a.pre: x, vocal, inst = x[a.pre:a.pre + n], vocal[a.pre:a.pre + n], inst[a.pre:a.pre + n]
         (d / a.tag).mkdir(exist_ok=True)
         sf.write(d / a.tag / 'vocal.wav', vocal, sr, subtype='FLOAT')
