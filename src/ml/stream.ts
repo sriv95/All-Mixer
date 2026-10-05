@@ -56,6 +56,8 @@ export class SpleeterStream {
   private readonly accS = new Float32Array(2 * ACC);
   /** a = clamp(1 − instrumentalGain, 0, 1): how far the vocal mask is sharpened. */
   private sharpen = 0;
+  /** The previous block ran the sharp path, so `accS` may differ from `acc` (pending tails). */
+  private sharpPrev = false;
   private blocks = 0;
 
   constructor() {
@@ -79,6 +81,7 @@ export class SpleeterStream {
     this.zIm.fill(0);
     this.acc.fill(0);
     this.accS.fill(0);
+    this.sharpPrev = false;
     this.blocks = 0;
   }
 
@@ -139,7 +142,10 @@ export class SpleeterStream {
     const { acc, accS } = this;
     const b = this.blocks;
     const pEff = 1 + (P_ACAP - 1) * this.sharpen;
-    const sharp = shL !== undefined && shR !== undefined && pEff !== 1;
+    // Sharp path while pEff ≠ 1, plus one more block after it (pw = 1) to flush the old sharp tails.
+    const sharp = shL !== undefined && shR !== undefined && (pEff !== 1 || this.sharpPrev);
+    // Entry: until now sharp == soft, so the soft tails are exactly the pending sharp tails.
+    if (sharp && !this.sharpPrev) accS.set(acc);
     for (let f = 0; f < HOP_FRAMES; f++) {
       const t = HOP_FRAMES * b - HOP_FRAMES + f;
       this.frame(v, t, f, 1, acc);
@@ -165,6 +171,7 @@ export class SpleeterStream {
         }
       }
     }
+    this.sharpPrev = sharp && pEff !== 1;
     this.blocks++;
   }
 
