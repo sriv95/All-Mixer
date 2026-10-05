@@ -4,7 +4,6 @@ import {
   type MlEngine,
   type MlReason,
 } from '../../worklet/protocol';
-import type { SeparationQuality } from '../../shared/settings';
 import type { LatencyListener } from './latency';
 import { MlHost } from './ml-host';
 
@@ -23,98 +22,93 @@ export interface MlHostLike {
   dispose(): void;
 }
 
+/**
+ * What Separate mode is doing, for the popup:
+ *   off          Separate is off
+ *   warming      probing ML; the original mix plays
+ *   on           ML stems play
+ *   unavailable  ML cannot run (cause says why); the original mix plays
+ *   stopped      ML missed its deadline at run time; the original mix plays until Separate is toggled
+ */
+export type SeparationChoiceState = 'off' | 'warming' | 'on' | 'unavailable' | 'stopped';
+
 export interface EngineChoice {
-  engine: MlEngine;
-  reason: MlReason;
+  state: SeparationChoiceState;
   /** Short text for the UI, e.g. why ML is not running. */
   cause?: string;
 }
 
 export interface SelectorRequest {
   on: boolean;
-  quality: SeparationQuality;
 }
 
+const RATE_CAUSE = 'the audio context is not at 44.1 kHz';
+
 /**
- * Auto / Light / Quality engine choice (SRI-5 §4). The DSP engine always starts at once; this
- * decides whether to also probe the ML engine, and switches to it only after a fast warm-up.
- * A runtime deadline-miss pins DSP until Separate mode is toggled or the setting changes.
+ * ML-only engine choice. Separate mode starts on the original mix (bypass); this probes the ML
+ * engine and switches to it only after a fast warm-up. When ML cannot run, the original mix keeps
+ * playing and `status` says why. A runtime deadline-miss stops ML until Separate mode is toggled.
  */
 export class EngineSelector {
   private host: MlHostLike | null = null;
   private probing = false;
   private mlActive = false;
   private on = false;
-  private quality: SeparationQuality | null = null;
-  private fallback: Pick<EngineChoice, 'reason' | 'cause'> = { reason: 'auto' };
+  private choice: EngineChoice = { state: 'off' };
 
   constructor(
     private readonly chain: EngineChain,
     private readonly createHost: () => MlHostLike = () => new MlHost(),
   ) {
     chain.onLatencyChange((info) => {
-      if (this.mlActive && info.engine === 'dsp' && info.reason === 'deadline-miss') {
+      if (this.mlActive && info.engine === 'bypass' && info.reason === 'deadline-miss') {
         this.mlActive = false;
         this.disposeHost();
-        this.fallback = { reason: 'deadline-miss', cause: 'ML missed its deadline' };
+        this.choice = { state: 'stopped', cause: 'ML missed its deadline' };
       }
     });
   }
 
   get status(): EngineChoice {
-    return this.mlActive ? { engine: 'ml', reason: 'auto' } : { engine: 'dsp', ...this.fallback };
+    return this.choice;
   }
 
   update(req: SelectorRequest): void {
     const turnedOn = req.on && !this.on;
-    const changed = req.quality !== this.quality;
     this.on = req.on;
-    this.quality = req.quality;
     if (!req.on) {
-      if (this.mlActive) this.chain.setEngine('dsp', 'user');
+      if (this.mlActive) this.chain.setEngine('bypass', 'auto');
       this.disposeHost();
       this.mlActive = false;
-      this.fallback = { reason: 'auto' };
+      this.choice = { state: 'off' };
       return;
     }
-    if (!turnedOn && !changed) return;
-    if (req.quality === 'light') {
-      this.disposeHost();
-      if (this.mlActive) this.chain.setEngine('dsp', 'user');
-      this.mlActive = false;
-      this.fallback = { reason: 'user' };
-      return;
-    }
-    if (this.mlActive || this.probing) return;
+    if (!turnedOn || this.mlActive || this.probing) return;
     this.probe();
   }
 
   private probe(): void {
-    if (!this.chain.canRunMl()) return this.giveUp('ML needs a 44.1 kHz audio context');
+    if (!this.chain.canRunMl()) return this.giveUp(RATE_CAUSE);
     const host = this.createHost();
     this.host = host;
     this.probing = true;
-    this.fallback = { reason: 'auto', cause: 'ML warming up' };
+    this.choice = { state: 'warming' };
     const port = host.start((m) => {
       if (this.host !== host || !this.probing) return;
       this.probing = false;
-      if (m.type === 'unavailable') return this.giveUp(`ML unavailable: ${m.reason}`);
-      if (m.p95 >= ML_WARMUP_P95_MS) return this.giveUp(`ML too slow (p95 ${m.p95.toFixed(1)} ms)`);
-      if (!this.chain.setEngine('ml', 'auto')) return this.giveUp('ML needs a 44.1 kHz audio context');
+      if (m.type === 'unavailable') return this.giveUp(m.reason);
+      if (m.p95 >= ML_WARMUP_P95_MS) return this.giveUp(`too slow on this device (p95 ${m.p95.toFixed(1)} ms)`);
+      if (!this.chain.setEngine('ml', 'auto')) return this.giveUp(RATE_CAUSE);
       this.mlActive = true;
-      this.fallback = { reason: 'auto' };
+      this.choice = { state: 'on' };
     });
     if (port) this.chain.setMlPort(port);
   }
 
-  /** Stay on DSP; the reason depends on the setting at the time the probe ended. */
+  /** Stay on the original mix. */
   private giveUp(cause: string): void {
     this.disposeHost();
-    this.fallback = { reason: this.reasonFor(), cause };
-  }
-
-  private reasonFor(): MlReason {
-    return this.quality === 'quality' ? 'deadline-miss' : 'auto';
+    this.choice = { state: 'unavailable', cause };
   }
 
   private disposeHost(): void {

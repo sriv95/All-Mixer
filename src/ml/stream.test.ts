@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FFT } from '../worklet/dsp/fft.js';
+import { FFT } from './fft.js';
 import { ML_BLOCK, ML_RESULT_OFFSET } from '../worklet/protocol';
 import { BINS, CTX, HOP, N_FFT, P_ACAP, SpleeterStream, TENSOR_LEN, type ModelFn } from './stream';
 

@@ -4,10 +4,10 @@
  * output device.
  */
 
-/** bypass = no separation (Default mode or separation off). */
-export type EngineKind = 'bypass' | 'dsp' | 'ml';
-/** Why this engine runs: picked automatically, fell back after missed deadlines, or chosen in settings. */
-export type EngineReason = 'auto' | 'deadline-miss' | 'user';
+/** bypass = the original mix, no added delay (Default mode, separation off, or ML not running). */
+export type EngineKind = 'bypass' | 'ml';
+/** Why this engine runs: picked automatically, or fell back after missed deadlines. */
+export type EngineReason = 'auto' | 'deadline-miss';
 
 export interface LatencyInfo {
   engine: EngineKind;
