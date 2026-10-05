@@ -12,6 +12,7 @@ import {
   type ToWorklet,
 } from '../../worklet/protocol';
 import { toPerformanceTime, type EngineReason, type LatencyInfo, type LatencyListener } from './latency';
+import type { AvProbe } from '../av-probe';
 import { createLimiter } from './limiter';
 
 /**
@@ -87,6 +88,7 @@ export class MasterChain {
   constructor(
     private readonly onStateChange: () => void = () => {},
     private readonly workletUrl: () => string = () => chrome.runtime.getURL(SEPARATOR_MODULE_PATH),
+    private readonly probe: AvProbe | null = null,
   ) {}
 
   get state(): AudioState {
@@ -367,6 +369,7 @@ export class MasterChain {
       source.connect(direct);
       if (this.sep) source.connect(this.sep);
       this.sources.set(video, source);
+      this.probe?.attachAudio(ctx, source, () => this.latency);
       this.lastError = undefined;
     } catch (e) {
       // Typically: another extension already owns this element's audio.
