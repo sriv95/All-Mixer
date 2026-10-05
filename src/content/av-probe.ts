@@ -164,11 +164,14 @@ export class AvProbe {
     if (!analyser || !detector || !audio) return;
     analyser.getFloatTimeDomainData(this.buf);
     const { ctx } = audio;
-    for (const edge of detector.feed(this.buf, ctx.currentTime)) {
-      // The detector works in ms on the context clock; map to performance.now() with no device delay (= the input).
-      const inputAt = toPerformanceTime(ctx, edge.at / 1000, 0);
+    const nowPerf = performance.now();
+    const nowCtx = ctx.currentTime;
+    for (const edge of detector.feed(this.buf, nowCtx)) {
+      const t = edge.at / 1000; // context seconds
+      // toPerformanceTime already yields the speaker time (device latency included), so inputAt must not use it.
+      const inputAt = nowPerf + (t - nowCtx) * 1000;
       const lat = audio.latency();
-      const v = { inputAt, audibleAt: inputAt + lat.processingMs + lat.deviceMs };
+      const v = { inputAt, audibleAt: toPerformanceTime(ctx, t, lat.deviceMs) + lat.processingMs };
       if (edge.kind === 'on') this.st.audioOn = v;
       else this.st.audioOff = v;
       console.log(PREFIX, edge.kind === 'on' ? 'audioOn' : 'audioOff', JSON.stringify({ ...v, engine: lat.engine }));
