@@ -8,6 +8,15 @@ CI builds the extension, creates tag `vx.y.z` and a GitHub release with this sec
 
 ## [Unreleased]
 
+### Added
+
+- Lyrics: a "Lyrics source" menu (Auto / LRCLIB / YouTube captions) in the lyrics footer. The pick is kept for the tab. If the picked source has nothing for a video, the automatic order is used and the footer says so.
+- Lyrics: the caption language menu lists every caption track (auto-generated ones are labelled) and an "Auto-translate" group with YouTube's machine translations of the song's captions.
+
+### Changed
+
+- Lyrics: new automatic order: manual song captions, LRCLIB synced, YouTube auto-generated captions, other captions, LRCLIB plain. Plain LRCLIB lyrics now rank below auto-generated captions.
+
 ## [0.2.0] - 2026-10-06
 
 ### Added
