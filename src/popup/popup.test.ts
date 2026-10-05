@@ -127,30 +127,11 @@ describe('popup', () => {
     expect(el<HTMLOutputElement>('master-value').value).toBe('100%');
   });
 
-  it('shows the stored separation quality on open', async () => {
-    await load({ stored: { mode: 'separate', separationQuality: 'quality' } });
-    expect(el<HTMLSelectElement>('separation-quality').value).toBe('quality');
+  it('has no engine selector', async () => {
+    await load({ stored: { mode: 'separate', separationQuality: 'light' } });
+    expect(document.getElementById('separation-quality')).toBeNull();
+    expect(document.querySelector('select')).toBeNull();
   });
-
-  it('defaults the separation quality select to auto', async () => {
-    await load();
-    expect(el<HTMLSelectElement>('separation-quality').value).toBe('auto');
-  });
-
-  it('changing separation quality saves and sends it', async () => {
-    await load({ stored: { mode: 'separate' } });
-    const select = el<HTMLSelectElement>('separation-quality');
-    select.value = 'light';
-    select.dispatchEvent(new Event('change', { bubbles: true }));
-    await settle();
-    expect(sent().at(-1)).toMatchObject({ tabId: 7, settings: { separationQuality: 'light' } });
-  });
-
-  it('disables the quality select on a non-YouTube tab', async () => {
-    await load({ tab: { id: 1, url: 'https://example.com/' } });
-    expect(el<HTMLSelectElement>('separation-quality').disabled).toBe(true);
-  });
-
   it('shows the waiting-for-gesture hint', async () => {
     await load({ status: { ...okStatus, audio: 'waiting-for-gesture' } });
     expect(el('status').textContent).toMatch(/Click anywhere/);
@@ -167,7 +148,7 @@ describe('popup', () => {
   });
 
   describe('Separate tab', () => {
-    const sep = (state: 'loading' | 'on' | 'error', extra: object = {}, engine = 'dsp', processingMs = 42.6) =>
+    const sep = (state: 'loading' | 'on' | 'error', extra: object = {}, engine = 'ml', processingMs = 120.2) =>
       ({ ...okStatus, separation: { state, latency: { engine, processingMs }, ...extra } }) as unknown as ContentStatus;
     const drag = async (id: string, v: string) => {
       const s = el<HTMLInputElement>(id);
@@ -213,19 +194,37 @@ describe('popup', () => {
       expect(el('status').textContent).toBe('Starting separation…');
     });
 
-    it('polls while loading and shows the engine once it is on', async () => {
+    it('polls while loading and shows the delay once ML is on', async () => {
       await load({ stored: { mode: 'separate' }, status: sep('loading') });
       expect(el('status').textContent).toBe('Starting separation…');
-      (chrome.tabs.sendMessage as ReturnType<typeof vi.fn>).mockResolvedValue(sep('on'));
+      (chrome.tabs.sendMessage as ReturnType<typeof vi.fn>).mockResolvedValue(sep('on', { choice: { state: 'on' } }));
       await new Promise((r) => setTimeout(r, 600));
-      expect(el('status').textContent).toBe('Light engine · 43 ms delay');
+      expect(el('status').textContent).toBe('Separation on · 120 ms delay');
     });
 
-    it('on status shows engine and rounded delay', async () => {
-      await load({ stored: { mode: 'separate' }, status: sep('on') });
-      expect(el('status').textContent).toBe('Light engine · 43 ms delay');
-      await load({ stored: { mode: 'separate' }, status: sep('on', {}, 'ml', 120.2) });
-      expect(el('status').textContent).toBe('Quality engine · 120 ms delay');
+    it('warming up: says the original mix plays, and keeps polling', async () => {
+      await load({ stored: { mode: 'separate' }, status: sep('on', { choice: { state: 'warming' } }, 'bypass', 0) });
+      expect(el('status').textContent).toBe('Separation warming up… Playing the original mix.');
+      (chrome.tabs.sendMessage as ReturnType<typeof vi.fn>).mockResolvedValue(sep('on', { choice: { state: 'on' } }));
+      await new Promise((r) => setTimeout(r, 600));
+      expect(el('status').textContent).toBe('Separation on · 120 ms delay');
+    });
+
+    it('on shows the rounded delay', async () => {
+      await load({ stored: { mode: 'separate' }, status: sep('on', { choice: { state: 'on' } }, 'ml', 303.4) });
+      expect(el('status').textContent).toBe('Separation on · 303 ms delay');
+    });
+
+    it('unavailable shows the cause and that the original plays', async () => {
+      await load({ stored: { mode: 'separate' }, status: sep('on', { choice: { state: 'unavailable', cause: 'no webgpu' } }, 'bypass', 0) });
+      expect(el('status').textContent).toBe('Separation unavailable: no webgpu. Playing the original mix.');
+    });
+
+    it('stopped says the device is too slow and how to retry', async () => {
+      await load({ stored: { mode: 'separate' }, status: sep('on', { choice: { state: 'stopped', cause: 'ML missed its deadline' } }, 'bypass', 0) });
+      expect(el('status').textContent).toBe(
+        'Separation stopped: this device is too slow (ML missed its deadline). Playing the original mix. Switch to Default and back to retry.',
+      );
     });
 
     it('error status', async () => {

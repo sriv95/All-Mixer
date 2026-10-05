@@ -39,6 +39,17 @@ describe('TabStore', () => {
     expect(area.data.get(tabKey(3))).toEqual(saved);
   });
 
+  it('drops separationQuality from settings stored by an older version', async () => {
+    const area = memoryArea();
+    area.data.set(tabKey(4), { ...DEFAULT_SETTINGS, mode: 'separate', separationQuality: 'light' });
+    const got = await new TabStore(area).get(4);
+    expect(got).toEqual({ ...DEFAULT_SETTINGS, mode: 'separate' });
+    expect('separationQuality' in got).toBe(false);
+    const saved = await new TabStore(area).set(4, { ...got, separationQuality: 'quality' });
+    expect('separationQuality' in saved).toBe(false);
+    expect('separationQuality' in (area.data.get(tabKey(4)) as object)).toBe(false);
+  });
+
   it('removes a closed tab', async () => {
     const area = memoryArea();
     const store = new TabStore(area);

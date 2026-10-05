@@ -26,16 +26,14 @@ describe('normalizeSettings', () => {
       masterPct: 600,
       vocalPct: 0,
       instrumentalPct: 100,
-      separationQuality: 'auto',
     });
     expect(normalizeSettings({ mode: 'weird' }).mode).toBe('default');
   });
-  it('keeps known separationQuality values and falls back to auto', () => {
-    expect(normalizeSettings({ separationQuality: 'light' }).separationQuality).toBe('light');
-    expect(normalizeSettings({ separationQuality: 'quality' }).separationQuality).toBe('quality');
-    expect(normalizeSettings({ separationQuality: 'ultra' }).separationQuality).toBe('auto');
-    expect(normalizeSettings({ separationQuality: 3 }).separationQuality).toBe('auto');
-    expect(DEFAULT_SETTINGS.separationQuality).toBe('auto');
+  it.each(['light', 'auto', 'quality', 'ultra', 3])('drops a stored separationQuality (%s) from older versions', (q) => {
+    const out = normalizeSettings({ mode: 'separate', masterPct: 200, separationQuality: q });
+    expect(out).toEqual({ mode: 'separate', masterPct: 200, vocalPct: 100, instrumentalPct: 100 });
+    expect('separationQuality' in out).toBe(false);
+    expect('separationQuality' in DEFAULT_SETTINGS).toBe(false);
   });
 });
 
@@ -56,7 +54,6 @@ describe('separationFor', () => {
       on: true,
       vocal: 0,
       instrumental: 6,
-      quality: 'auto',
     });
   });
 });
