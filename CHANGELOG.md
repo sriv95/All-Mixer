@@ -8,6 +8,14 @@ CI builds the extension, creates tag `vx.y.z` and a GitHub release with this sec
 
 ## [Unreleased]
 
+### Removed
+
+- The Light (DSP) separation engine and the Auto / Light / Quality selector in the popup. A stored `separationQuality` setting is ignored.
+
+### Changed
+
+- Separate mode always uses the ML engine. While it warms up, or when it cannot run (no WebGPU, model load failure, too slow, context not at 44.1 kHz) or stops after missed deadlines, the original mix plays unprocessed with no added delay, and the popup says why. Switching to Default and back retries ML.
+
 ## [0.1.0] - 2026-10-05
 
 First release. Chrome extension (Manifest V3) for youtube.com and music.youtube.com.
