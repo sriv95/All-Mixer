@@ -171,6 +171,7 @@ describe('popup', () => {
 
     it.each([
       ['preset-karaoke', 0, 100],
+      ['preset-half-karaoke', 50, 100],
       ['preset-acappella', 100, 0],
       ['preset-reset', 100, 100],
     ])('%s sets %i / %i and is aria-pressed', async (id, v, i) => {
