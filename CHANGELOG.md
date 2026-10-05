@@ -15,6 +15,7 @@ CI builds the extension, creates tag `vx.y.z` and a GitHub release with this sec
 
 ### Changed
 
+- Lyrics panel: the text grows when the panel is made wider, lines are centered, and the current line stays in the middle (also when the panel is resized). A "Centered / Free scroll" button in the footer unlocks scrolling. The YT Music Lyrics tab is unchanged.
 - Lyrics: new automatic order: manual song captions, LRCLIB synced, YouTube auto-generated captions, other captions, LRCLIB plain. Plain LRCLIB lyrics now rank below auto-generated captions.
 
 ## [0.2.0] - 2026-10-06

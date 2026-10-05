@@ -33,7 +33,7 @@ export class PanelSurface implements LyricsSurface {
   constructor(site: Site, view: LyricsViewOptions, onOpenChange: (open: boolean) => void) {
     // Per site: on YT Music the Lyrics tab is the main view, so the panel starts closed there.
     this.panel = new FloatingPanel({ id: 'all-mixer-lyrics-panel', title: 'Lyrics', storageKey: `lyricsPanel:${site}` });
-    this.view = new LyricsView(view);
+    this.view = new LyricsView({ ...view, panel: true });
     this.panel.body.append(this.view.el);
     this.panel.onOpenChange(onOpenChange);
   }
