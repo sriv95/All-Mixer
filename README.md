@@ -5,11 +5,13 @@ Chrome extension (Manifest V3) for youtube.com and music.youtube.com.
 ## Build
 
 ```sh
-npm install
-npm run build      # typecheck + vite build → dist/
-npm test           # unit tests (vitest + happy-dom)
-npm run lint
+bun install
+bun run build      # typecheck + vite build → dist/
+bun run test       # unit tests (vitest + happy-dom)
+bun run lint
 ```
+
+Use `bun run test`, not `bun test`. `bun test` starts Bun's own test runner; this repo uses vitest.
 
 ## Load in Chrome
 
