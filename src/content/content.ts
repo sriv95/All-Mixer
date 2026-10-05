@@ -2,6 +2,7 @@ import type { ContentRequest, ContentStatus, GetMyTabSettings } from '../shared/
 import { DEFAULT_SETTINGS, masterGainFor, normalizeSettings, separationFor, type MixerSettings } from '../shared/settings';
 import { EngineSelector } from './audio/engine-select';
 import { MasterChain } from './audio/master-chain';
+import { AvProbe } from './av-probe';
 import { initLyrics } from './lyrics/init';
 import { DelayedVideo } from './video-delay/delayed-video';
 import { overlayDelayMs } from './video-delay/schedule';
@@ -13,13 +14,16 @@ if (site) {
   let settings: MixerSettings = { ...DEFAULT_SETTINGS };
   let video: HTMLVideoElement | null = null;
   let overlay: DelayedVideo | null = null;
-  const chain = new MasterChain(() => syncDelay());
+  let debugBudget: number | null = null;
+  let debugDelayMs: number | null = null; // QA override, see debug-video-delay
+  const probe = new AvProbe();
+  const chain = new MasterChain(() => syncDelay(), undefined, probe);
   const selector = new EngineSelector(chain);
   // Lyrics follow what the user sees and hears, which trails currentTime by the picture delay (D1).
   const lyrics = initLyrics(site, () => (overlay?.state === 'on' ? overlay.delayMs / 1000 : 0));
 
   // D1: the picture trails by the graph's total audio delay (processing + device).
-  const wantedDelayMs = (videoDelayMs = chain.latency.videoDelayMs): number => overlayDelayMs(settings.mode, videoDelayMs);
+  const wantedDelayMs = (videoDelayMs = chain.latency.videoDelayMs): number => debugDelayMs ?? overlayDelayMs(settings.mode, videoDelayMs);
 
   /** Apply the wanted picture delay; ignore moves under 5 ms (latency jitter). */
   const syncDelay = (force = false, want = wantedDelayMs(), effectiveAt?: number) => {
@@ -47,9 +51,10 @@ if (site) {
   watchMainVideo(site, (v) => {
     video = v;
     chain.setVideo(v);
+    probe.attachVideo(v);
     lyrics.setVideo(v);
     overlay?.destroy();
-    overlay = new DelayedVideo(v);
+    overlay = new DelayedVideo(v, undefined, probe);
     syncDelay(true);
   });
 
@@ -57,15 +62,23 @@ if (site) {
     if (msg.type === 'apply-settings') {
       apply(msg.settings);
       sendResponse({ ok: true });
+    } else if (msg.type === 'debug-video-delay') {
+      // QA only: forced delay (lyrics follow it via overlay.delayMs) and budget.
+      debugDelayMs = msg.delayMs;
+      debugBudget = msg.budgetBytes ?? null;
+      overlay?.setBudget(debugBudget);
+      syncDelay(true);
+      sendResponse({ ok: true });
     } else if (msg.type === 'get-status') {
       const status: ContentStatus = {
         site,
         videoFound: video !== null,
         audio: chain.state,
         gain: chain.requestedGain,
-        videoDelay: { state: overlay?.state ?? 'off', delayMs: overlay?.delayMs ?? 0 },
+        videoDelay: { state: overlay?.state ?? 'off', delayMs: overlay?.delayMs ?? 0, stats: overlay?.stats },
         separation: { state: chain.separationState, latency: chain.latency, choice: selector.status, error: chain.separationError },
         error: chain.error,
+        avProbe: probe.on ? probe.status : undefined,
       };
       sendResponse(status);
     }

@@ -48,6 +48,20 @@ const canvas = () => document.querySelector<HTMLCanvasElement>('canvas.all-mixer
 const frame = (display: number) => vfcCb!(0, { expectedDisplayTime: display, mediaTime: 0 });
 
 describe('DelayedVideo', () => {
+  it('reports stats for drawn frames and honours the legacy budget', async () => {
+    const dv = new DelayedVideo(video);
+    dv.setDelay(100);
+    frame(0);
+    await flush();
+    rafCb!(1000);
+    const s = dv.stats;
+    expect(s.drawn).toBe(1);
+    expect(s.maxFrames).toBeGreaterThan(0);
+    expect(s.errMs.p95).toEqual(expect.any(Number));
+    dv.setBudget(1e15);
+    expect(dv.stats.maxFrames).toBe(120);
+  });
+
   it('keeps the canvas out of the DOM at delay 0', () => {
     const dv = new DelayedVideo(video);
     expect(canvas()).toBeNull();

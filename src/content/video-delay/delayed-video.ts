@@ -28,6 +28,30 @@ const FPS_MIN_SAMPLES = 10;
 /** Budgets at or above this mean "unbounded" (JSON turns Infinity into null, so QA sends a big number). */
 const LEGACY_BUDGET = 1e12;
 
+const STAT_WINDOW = 300;
+
+export interface VideoDelayStats {
+  captureW: number;
+  captureH: number;
+  fps: number;
+  queued: number;
+  queueBytes: number;
+  maxFrames: number;
+  skipped: number;
+  drawn: number;
+  /** performance.now() - frame.due at draw time, last 300 draws. */
+  errMs: { mean: number; p95: number };
+  /** (video.currentTime - frame.mediaTime) * 1000 - delay at draw time. */
+  avOffsetMs: { mean: number; p95: number };
+}
+
+function summarize(xs: number[]): { mean: number; p95: number } {
+  if (!xs.length) return { mean: 0, p95: 0 };
+  const sorted = [...xs].sort((a, b) => a - b);
+  const mean = xs.reduce((a, b) => a + b, 0) / xs.length;
+  return { mean, p95: sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))] };
+}
+
 export type OverlayState = 'off' | 'waiting' | 'on' | 'failed';
 
 export class DelayedVideo {
@@ -52,6 +76,9 @@ export class DelayedVideo {
   private fps = 60;
   private lastMediaTime = -1;
   private deltas: number[] = [];
+  private drawn = 0;
+  private errs: number[] = [];
+  private offsets: number[] = [];
   private stopTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(
@@ -96,6 +123,23 @@ export class DelayedVideo {
     const wait = effectiveAtMs - performance.now();
     if (wait > 0 && this.running) this.stopTimer = setTimeout(() => this.stop(), wait);
     else this.stop();
+  }
+
+  get stats(): VideoDelayStats {
+    let queueBytes = 0;
+    this.queue.forEach((b) => (queueBytes += b.width * b.height * 4));
+    return {
+      captureW: this.capW,
+      captureH: this.capH,
+      fps: this.fps,
+      queued: this.queue.size,
+      queueBytes,
+      maxFrames: this.queue.capacity,
+      skipped: this.queue.skipped,
+      drawn: this.drawn,
+      errMs: summarize(this.errs),
+      avOffsetMs: summarize(this.offsets),
+    };
   }
 
   /** QA only: override the memory budget (null restores the default). */
@@ -222,13 +266,14 @@ export class DelayedVideo {
     if (!this.running) return;
     this.vfc = this.video.requestVideoFrameCallback(this.onFrame);
     this.trackFps(md.mediaTime);
-    const due = md.expectedDisplayTime + this.schedule.at(md.expectedDisplayTime);
+    const delay = this.schedule.at(md.expectedDisplayTime);
+    const due = md.expectedDisplayTime + delay;
     const epoch = this.epoch;
     createImageBitmap(this.video, { resizeWidth: this.capW, resizeHeight: this.capH, resizeQuality: 'low' }).then(
       (bmp) => {
         this.captureErrors = 0;
         if (epoch !== this.epoch || !this.running) return bmp.close();
-        this.queue.push({ due, mediaTime: md.mediaTime, img: bmp });
+        this.queue.push({ due, mediaTime: md.mediaTime, delay, img: bmp });
       },
       () => {
         if (epoch === this.epoch && this.running && ++this.captureErrors >= MAX_CAPTURE_ERRORS) this.fail();
@@ -245,6 +290,13 @@ export class DelayedVideo {
     if (!frame) return;
     const { width, height } = this.canvas;
     this.ctx.drawImage(frame.img, 0, 0, width, height);
+    this.drawn++;
+    this.errs.push(performance.now() - frame.due);
+    this.offsets.push((this.video.currentTime - frame.mediaTime) * 1000 - (frame.delay ?? 0));
+    if (this.errs.length > STAT_WINDOW) {
+      this.errs.shift();
+      this.offsets.shift();
+    }
     const first = !this.shown;
     this.probe?.overlayFrame(frame.mediaTime, t);
     this.shown?.close();
