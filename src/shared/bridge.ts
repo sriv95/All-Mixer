@@ -12,6 +12,8 @@ export interface CaptionTrack {
   /** 'asr' for auto-generated tracks. */
   kind?: string;
   name?: string;
+  /** YouTube can auto-translate this track (see PlayerInfo.translationLanguages). */
+  isTranslatable?: boolean;
 }
 
 export interface PlayerInfo {
@@ -25,11 +27,13 @@ export interface PlayerInfo {
   captionTracks: CaptionTrack[];
   /** Language of the track the player would pick by default. */
   defaultCaptionLang?: string;
+  /** Languages YouTube can auto-translate translatable tracks into. */
+  translationLanguages?: { languageCode: string; name: string }[];
 }
 
 export type BridgeRequest =
   | { kind: 'player-info'; videoId: string }
-  | { kind: 'timedtext'; videoId: string; track: CaptionTrack };
+  | { kind: 'timedtext'; videoId: string; track: CaptionTrack; /** Auto-translate target language. */ tlang?: string };
 
 export interface BridgeRequestMsg {
   [BRIDGE_TAG]: 'req';

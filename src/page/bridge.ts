@@ -16,7 +16,9 @@ interface PlayerApi extends HTMLElement {
 interface PlayerResponse {
   videoDetails?: { videoId?: string; title?: string; author?: string; lengthSeconds?: string; musicVideoType?: string };
   captions?: {
-    playerCaptionsTracklistRenderer?: { captionTracks?: RawTrack[]; audioTracks?: { defaultCaptionTrackIndex?: number }[] };
+    playerCaptionsTracklistRenderer?: { captionTracks?: RawTrack[];
+      translationLanguages?: { languageCode?: string; languageName?: { simpleText?: string; runs?: { text: string }[] } }[];
+      audioTracks?: { defaultCaptionTrackIndex?: number }[] };
   };
 }
 
@@ -24,10 +26,11 @@ interface RawTrack {
   baseUrl?: string;
   languageCode?: string;
   kind?: string;
+  isTranslatable?: boolean;
   name?: { simpleText?: string; runs?: { text: string }[] };
 }
 
-const captured = new Map<string, string>(); // `${videoId}|${lang}|${asr}` → json3
+const captured = new Map<string, string>(); // `${videoId}|${lang}|${asr}|${tlang}` → json3
 const MAX_CAPTURED = 20;
 /** Extra query params (pot, c, cver …) from the player's own timedtext request, per video. */
 const playerParams = new Map<string, [string, string][]>();
@@ -43,8 +46,8 @@ function timedTextUrl(url: string): URL | null {
   }
 }
 
-function keyOf(videoId: string | null, lang: string | null, asr: boolean): string {
-  return `${videoId}|${lang}|${asr}`;
+function keyOf(videoId: string | null, lang: string | null, asr: boolean, tlang: string | null = null): string {
+  return `${videoId}|${lang}|${asr}|${tlang ?? ''}`;
 }
 
 function remember(key: string, body: string): void {
@@ -67,9 +70,11 @@ export function onPlayerTimedText(u: URL, body: string): void {
     playerParams.set(videoId, next);
     if (playerParams.size > MAX_CAPTURED) playerParams.delete(playerParams.keys().next().value!);
   }
-  if (body && u.searchParams.get('fmt') === 'json3' && !u.searchParams.get('tlang')) {
-    remember(keyOf(videoId, u.searchParams.get('lang'), u.searchParams.get('kind') === 'asr'), body);
-    notify = true;
+  if (body && u.searchParams.get('fmt') === 'json3') {
+    const tlang = u.searchParams.get('tlang');
+    remember(keyOf(videoId, u.searchParams.get('lang'), u.searchParams.get('kind') === 'asr', tlang), body);
+    // Translated tracks are cached but never announced: they are not what the lyrics engine starts from.
+    if (!tlang) notify = true;
   }
   if (!notify) return;
   const evt: BridgeEventMsg = { [BRIDGE_TAG]: 'evt', kind: 'captions', videoId };
@@ -109,7 +114,7 @@ function trackName(t: RawTrack): string | undefined {
   return t.name?.simpleText ?? t.name?.runs?.map((r) => r.text).join('');
 }
 
-function playerInfo(wantId: string): PlayerInfo | null {
+export function playerInfo(wantId: string): PlayerInfo | null {
   const p = player();
   const resp = p?.getPlayerResponse?.();
   const d = resp?.videoDetails;
@@ -120,7 +125,10 @@ function playerInfo(wantId: string): PlayerInfo | null {
   const def = list?.audioTracks?.[0]?.defaultCaptionTrackIndex;
   const tracks: CaptionTrack[] = raw
     .filter((t): t is RawTrack & { baseUrl: string } => typeof t.baseUrl === 'string')
-    .map((t) => ({ baseUrl: t.baseUrl, languageCode: t.languageCode ?? '', kind: t.kind, name: trackName(t) }));
+    .map((t) => ({ baseUrl: t.baseUrl, languageCode: t.languageCode ?? '', kind: t.kind, name: trackName(t), isTranslatable: t.isTranslatable === true }));
+  const translationLanguages = (list?.translationLanguages ?? [])
+    .filter((l): l is { languageCode: string; languageName?: RawTrack['name'] } => typeof l.languageCode === 'string')
+    .map((l) => ({ languageCode: l.languageCode, name: l.languageName?.simpleText ?? l.languageName?.runs?.map((r) => r.text).join('') ?? l.languageCode }));
   const duration = Number(d.lengthSeconds) || p?.getDuration?.() || 0;
   return {
     videoId: d.videoId,
@@ -129,18 +137,20 @@ function playerInfo(wantId: string): PlayerInfo | null {
     lengthSeconds: duration,
     musicVideoType: d.musicVideoType,
     captionTracks: tracks,
+    translationLanguages,
     defaultCaptionLang: def !== undefined ? raw[def]?.languageCode : undefined,
   };
 }
 
-async function timedText(videoId: string, track: CaptionTrack): Promise<string | null> {
-  const key = keyOf(videoId, track.languageCode, track.kind === 'asr');
+export async function timedText(videoId: string, track: CaptionTrack, tlang?: string): Promise<string | null> {
+  const key = keyOf(videoId, track.languageCode, track.kind === 'asr', tlang);
   const hit = captured.get(key);
   if (hit) return hit;
   // Without the player's token YouTube usually answers with an empty body.
   try {
     const u = new URL(track.baseUrl, location.href);
     for (const [k, v] of playerParams.get(videoId) ?? []) if (!u.searchParams.has(k)) u.searchParams.set(k, v);
+    if (tlang) u.searchParams.set('tlang', tlang);
     u.searchParams.set('fmt', 'json3');
     const res = await origFetch(u.href, { credentials: 'include' });
     const body = res.ok ? await res.text() : '';
@@ -160,5 +170,5 @@ window.addEventListener('message', (e: MessageEvent) => {
   };
   const req = msg.req;
   if (req.kind === 'player-info') reply(playerInfo(req.videoId));
-  else if (req.kind === 'timedtext') void timedText(req.videoId, req.track).then(reply);
+  else if (req.kind === 'timedtext') void timedText(req.videoId, req.track, req.tlang).then(reply);
 });
