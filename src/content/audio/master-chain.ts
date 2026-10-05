@@ -248,7 +248,7 @@ export class MasterChain {
       sep.parameters.get(PARAM_INSTRUMENTAL)?.setTargetAtTime(this.separation.instrumental, now, GAIN_TAU);
       if (this.separating) return;
       clearTimeout(this.offTimer);
-      let start = now + PRE_ROLL;
+      const start = now + PRE_ROLL;
       if (!this.workletOn) {
         // A fresh separator starts on the original mix (bypass, no delay): fade in at once.
         this.engine = 'bypass';
