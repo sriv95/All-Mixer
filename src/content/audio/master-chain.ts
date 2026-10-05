@@ -1,7 +1,5 @@
 import type { AudioState } from '../../shared/messages';
-import type { SeparationQuality } from '../../shared/settings';
 import {
-  DSP_LATENCY_SAMPLES,
   ML_LATENCY_SAMPLES,
   ML_SAMPLE_RATE,
   PARAM_INSTRUMENTAL,
@@ -23,10 +21,9 @@ import { createLimiter } from './limiter';
  *                                 └─ separator worklet (vocal/inst 0–6×) ─ sepOut (gain) ┘
  *
  * Default mode plays through `direct` with no added delay. Separate mode
- * crossfades to the separator, whose output is DSP_LATENCY_SAMPLES late (ML_LATENCY_SAMPLES
- * in the ML engine, which the worklet reports with an `engine` message); the
- * crossfade starts once the separator has primed, so there is no gap. The
- * worklet module is only loaded the first time Separate mode is used.
+ * crossfades to the separator, which starts on the original mix (no delay) and
+ * is ML_LATENCY_SAMPLES late once the ML engine runs (the worklet reports that
+ * with an `engine` message). The worklet module is only loaded the first time Separate mode is used.
  *
  * The page's audio is left untouched until a non-unity gain or Separate mode is
  * first requested. After that the element stays routed through the graph (Web
@@ -42,7 +39,6 @@ export interface SeparationRequest {
   /** Linear gains, 0–6. */
   vocal: number;
   instrumental: number;
-  quality: SeparationQuality;
 }
 
 export type SeparationState = 'off' | 'loading' | 'on' | 'error';
@@ -57,7 +53,7 @@ const DEVICE_POLL_MS = 2000;
 /** Device latency moves smaller than this are jitter, not a change. */
 const DEVICE_STEP_MS = 2;
 
-const OFF: SeparationRequest = { on: false, vocal: 1, instrumental: 1, quality: 'auto' };
+const OFF: SeparationRequest = { on: false, vocal: 1, instrumental: 1 };
 
 export class MasterChain {
   private ctx: AudioContext | null = null;
@@ -72,7 +68,7 @@ export class MasterChain {
   /** Worklet is running the separator (stays on briefly after a fade-out). */
   private workletOn = false;
   /** Engine the worklet runs, and why (kept in step with its `engine` messages). */
-  private engine: MlEngine = 'dsp';
+  private engine: MlEngine = 'bypass';
   private engineReason: EngineReason = 'auto';
   private pendingMlPort: MessagePort | null = null;
   private pendingEngine: { engine: MlEngine; reason: MlReason } | null = null;
@@ -129,12 +125,12 @@ export class MasterChain {
   /** Current total audio delay (D1). */
   get latency(): LatencyInfo {
     const sampleRate = this.ctx?.sampleRate ?? 48000;
-    const processingSamples = !this.separating ? 0 : this.engine === 'ml' ? ML_LATENCY_SAMPLES : DSP_LATENCY_SAMPLES;
+    const processingSamples = !this.separating ? 0 : this.engine === 'ml' ? ML_LATENCY_SAMPLES : 0;
     const processingMs = (processingSamples / sampleRate) * 1000;
     const deviceMs = this.deviceLatencyMs;
     return {
       engine: this.separating ? this.engine : 'bypass',
-      reason: this.separating ? this.engineReason : this.separation.quality === 'light' ? 'user' : 'auto',
+      reason: this.separating ? this.engineReason : 'auto',
       sampleRate,
       processingSamples,
       processingMs,
@@ -170,7 +166,7 @@ export class MasterChain {
 
   /** Switch engine while separating. The worklet confirms with an `engine` message (and the delay event). */
   setEngine(engine: MlEngine, reason: MlReason): boolean {
-    if (engine === 'dsp') this.pendingEngine = null;
+    if (engine === 'bypass') this.pendingEngine = null;
     // The model has no resampler: ML only runs when the context is at the model rate.
     if (engine === 'ml' && this.ctx?.sampleRate !== ML_SAMPLE_RATE) return false;
     if (this.workletOn) this.post({ type: 'engine', engine, reason });
@@ -210,8 +206,7 @@ export class MasterChain {
   private engage(): void {
     this.engaged = true;
     try {
-      // Always the model rate, whatever the quality setting: the worklet needs no resampler and
-      // switching Light -> Auto in the same tab can still run ML. Chrome resamples at the output.
+      // Always the model rate: the worklet needs no resampler. Chrome resamples at the output.
       const ctx = new AudioContext({ latencyHint: 'interactive', sampleRate: ML_SAMPLE_RATE });
       const gain = new GainNode(ctx, { gain: this.targetGain });
       const limiter = createLimiter(ctx);
@@ -255,14 +250,13 @@ export class MasterChain {
       clearTimeout(this.offTimer);
       let start = now + PRE_ROLL;
       if (!this.workletOn) {
-        // A fresh separator outputs silence for its first DSP_LATENCY_SAMPLES; fade in after that.
-        this.engine = 'dsp';
+        // A fresh separator starts on the original mix (bypass, no delay): fade in at once.
+        this.engine = 'bypass';
         this.engineReason = 'auto';
         this.post({ type: 'active', on: true });
         this.workletOn = true;
         if (this.pendingEngine) this.post({ type: 'engine', ...this.pendingEngine });
         this.pendingEngine = null;
-        start += DSP_LATENCY_SAMPLES / ctx.sampleRate;
       }
       this.crossfade(sepOut, direct, start);
       this.separating = true;

@@ -17,7 +17,7 @@
 // scipy's boundary='zeros' pre-roll is 2048 and would give 6144; 1024 is the smallest pre-roll that
 // still lets block b' = b − 1 run. The frame grid is therefore the python one on a stream
 // delayed by 1024 samples (the same model windows and masks, 1024 samples earlier in the output).
-import { FFT } from '../worklet/dsp/fft.js';
+import { FFT } from './fft.js';
 import { ML_BLOCK } from '../worklet/protocol';
 
 export const N_FFT = 4096;

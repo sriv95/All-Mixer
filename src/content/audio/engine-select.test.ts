@@ -32,135 +32,115 @@ function setup(accept = true, canRun = true) {
     hosts.push(h);
     return h;
   });
-  const miss = () => listener({ engine: 'dsp', reason: 'deadline-miss' } as never, 0);
+  const miss = () => listener({ engine: 'bypass', reason: 'deadline-miss' } as never, 0);
   return { chain, sel, hosts, miss };
 }
 const ready = (p95: number): FromMlWorker => ({ type: 'ready', p50: p95 / 2, p95, createMs: 1, adapter: 'x' });
-const req = (quality: 'auto' | 'light' | 'quality', on = true) => ({ on, quality });
+const req = (on = true) => ({ on });
 
 describe('EngineSelector', () => {
-  it('Light never creates the ML host', () => {
-    const { sel, hosts, chain } = setup();
-    sel.update(req('light'));
+  it('is off until Separate turns on, and never probes while off', () => {
+    const { sel, hosts } = setup();
+    sel.update(req(false));
     expect(hosts).toHaveLength(0);
-    expect(chain.setMlPort).not.toHaveBeenCalled();
-    expect(sel.status).toEqual({ engine: 'dsp', reason: 'user' });
+    expect(sel.status).toEqual({ state: 'off' });
   });
 
-  it('Auto: fast warm-up switches to ml', () => {
+  it('on → warming → on after a fast warm-up', () => {
     const { sel, hosts, chain } = setup();
-    sel.update(req('auto'));
+    sel.update(req());
     expect(hosts).toHaveLength(1);
     expect(chain.setMlPort).toHaveBeenCalledTimes(1);
-    expect(sel.status.engine).toBe('dsp');
+    expect(sel.status).toEqual({ state: 'warming' });
     hosts[0].onStatus!(ready(30));
     expect(chain.setEngine).toHaveBeenCalledWith('ml', 'auto');
-    expect(sel.status).toEqual({ engine: 'ml', reason: 'auto' });
+    expect(sel.status).toEqual({ state: 'on' });
   });
 
-  it('Auto: slow warm-up stays on dsp and disposes', () => {
+  it('unavailable: slow warm-up (p95 ≥ limit) disposes the host', () => {
     const { sel, hosts, chain } = setup();
-    sel.update(req('auto'));
+    sel.update(req());
     hosts[0].onStatus!(ready(56));
     expect(chain.setEngine).not.toHaveBeenCalled();
     expect(hosts[0].disposed).toBe(true);
-    expect(sel.status).toMatchObject({ engine: 'dsp', reason: 'auto' });
+    expect(sel.status.state).toBe('unavailable');
     expect(sel.status.cause).toMatch(/slow/);
   });
 
-  it('Auto: unavailable stays on dsp and disposes', () => {
+  it('unavailable: worker message carries its reason', () => {
     const { sel, hosts } = setup();
-    sel.update(req('auto'));
+    sel.update(req());
     hosts[0].onStatus!({ type: 'unavailable', reason: 'no webgpu' });
     expect(hosts[0].disposed).toBe(true);
-    expect(sel.status).toEqual({ engine: 'dsp', reason: 'auto', cause: 'ML unavailable: no webgpu' });
+    expect(sel.status).toEqual({ state: 'unavailable', cause: 'no webgpu' });
   });
 
-  it('Quality: unavailable or slow reports deadline-miss', () => {
-    const a = setup();
-    a.sel.update(req('quality'));
-    a.hosts[0].onStatus!({ type: 'unavailable', reason: 'x' });
-    expect(a.sel.status).toMatchObject({ engine: 'dsp', reason: 'deadline-miss' });
-    const b = setup();
-    b.sel.update(req('quality'));
-    b.hosts[0].onStatus!(ready(80));
-    expect(b.sel.status).toMatchObject({ engine: 'dsp', reason: 'deadline-miss' });
-  });
-
-  it('Quality while ml runs changes nothing', () => {
-    const { sel, hosts, chain } = setup();
-    sel.update(req('auto'));
+  it('unavailable: setEngine refuses (wrong sample rate)', () => {
+    const { sel, hosts } = setup(false);
+    sel.update(req());
     hosts[0].onStatus!(ready(20));
-    chain.setEngine.mockClear();
-    sel.update(req('quality'));
-    expect(hosts).toHaveLength(1);
-    expect(chain.setEngine).not.toHaveBeenCalled();
-    expect(sel.status.engine).toBe('ml');
+    expect(sel.status.state).toBe('unavailable');
+    expect(sel.status.cause).toMatch(/44\.1/);
+    expect(hosts[0].disposed).toBe(true);
   });
 
-  it('runtime deadline-miss pins dsp; gain updates do not restart ML', () => {
+  it('unavailable: gives up before creating a host when the context cannot run ML', () => {
+    const { sel, hosts, chain } = setup(true, false);
+    sel.update(req());
+    expect(hosts).toHaveLength(0);
+    expect(chain.setMlPort).not.toHaveBeenCalled();
+    expect(sel.status.state).toBe('unavailable');
+    expect(sel.status.cause).toMatch(/44\.1/);
+  });
+
+  it('runtime deadline-miss → stopped; gain updates do not restart ML; off/on retries', () => {
     const { sel, hosts, miss } = setup();
-    sel.update(req('auto'));
+    sel.update(req());
     hosts[0].onStatus!(ready(20));
     miss();
     expect(hosts[0].disposed).toBe(true);
-    expect(sel.status).toMatchObject({ engine: 'dsp', reason: 'deadline-miss' });
-    sel.update(req('auto'));
+    expect(sel.status).toEqual({ state: 'stopped', cause: 'ML missed its deadline' });
+    sel.update(req());
     expect(hosts).toHaveLength(1);
-    // Separate off and on again, or a setting change, allows a new probe.
-    sel.update(req('auto', false));
-    sel.update(req('auto'));
+    expect(sel.status.state).toBe('stopped');
+    sel.update(req(false));
+    sel.update(req());
     expect(hosts).toHaveLength(2);
-  });
-
-  it('setting change Light ↔ Auto', () => {
-    const { sel, hosts, chain } = setup();
-    sel.update(req('auto'));
-    hosts[0].onStatus!(ready(20));
-    sel.update(req('light'));
-    expect(chain.setEngine).toHaveBeenLastCalledWith('dsp', 'user');
-    expect(hosts[0].disposed).toBe(true);
-    expect(sel.status).toEqual({ engine: 'dsp', reason: 'user' });
-    sel.update(req('auto'));
-    expect(hosts).toHaveLength(2);
+    expect(sel.status).toEqual({ state: 'warming' });
     hosts[1].onStatus!(ready(20));
-    expect(sel.status.engine).toBe('ml');
+    expect(sel.status).toEqual({ state: 'on' });
   });
 
-  it('refused ML (wrong sample rate) falls back with a cause; separate off disposes', () => {
-    const { sel, hosts } = setup(false);
-    sel.update(req('auto'));
-    hosts[0].onStatus!(ready(20));
-    expect(sel.status.engine).toBe('dsp');
-    expect(sel.status.cause).toMatch(/44\.1/);
-    sel.update(req('auto', false));
-    sel.update(req('auto'));
-    sel.update(req('auto', false));
-    expect(hosts[1].disposed).toBe(true);
+  it('off/on retries after unavailable', () => {
+    const { sel, hosts } = setup();
+    sel.update(req());
+    hosts[0].onStatus!({ type: 'unavailable', reason: 'x' });
+    sel.update(req()); // other setting changes: no new probe
+    expect(hosts).toHaveLength(1);
+    sel.update(req(false));
+    sel.update(req());
+    expect(hosts).toHaveLength(2);
+    expect(sel.status.state).toBe('warming');
   });
 
-  it('Quality warm-up is reported as auto, not a failure', () => {
-    const { sel } = setup();
-    sel.update(req('quality'));
-    expect(sel.status).toMatchObject({ engine: 'dsp', reason: 'auto', cause: 'ML warming up' });
-  });
-
-  it('gives up before creating a host when the context cannot run ML', () => {
-    const { sel, hosts, chain } = setup(true, false);
-    sel.update(req('quality'));
-    expect(hosts).toHaveLength(0);
-    expect(chain.setMlPort).not.toHaveBeenCalled();
-    expect(sel.status).toMatchObject({ engine: 'dsp', reason: 'deadline-miss' });
-    expect(sel.status.cause).toMatch(/44\.1/);
-  });
-
-  it('Separate off while ML runs sends the worklet back to dsp', () => {
+  it('Separate off while ML runs sends the worklet back to bypass', () => {
     const { sel, hosts, chain } = setup();
-    sel.update(req('auto'));
+    sel.update(req());
     hosts[0].onStatus!(ready(20));
     chain.setEngine.mockClear();
-    sel.update(req('auto', false));
-    expect(chain.setEngine).toHaveBeenCalledWith('dsp', 'user');
+    sel.update(req(false));
+    expect(chain.setEngine).toHaveBeenCalledWith('bypass', 'auto');
     expect(hosts[0].disposed).toBe(true);
+    expect(sel.status).toEqual({ state: 'off' });
+  });
+
+  it('Separate off during warm-up disposes the host and ignores its late result', () => {
+    const { sel, hosts, chain } = setup();
+    sel.update(req());
+    sel.update(req(false));
+    expect(hosts[0].disposed).toBe(true);
+    hosts[0].onStatus!(ready(20));
+    expect(chain.setEngine).not.toHaveBeenCalled();
+    expect(sel.status).toEqual({ state: 'off' });
   });
 });

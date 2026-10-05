@@ -3,6 +3,7 @@ import type { TrackInfo } from '../lyrics/types';
 import type { OverlayState } from '../content/video-delay/delayed-video';
 import type { Site } from '../content/youtube-dom';
 import type { SeparationState } from '../content/audio/master-chain';
+import type { EngineChoice } from '../content/audio/engine-select';
 import type { LatencyInfo } from '../content/audio/latency';
 
 /** Content script → background: "what are my settings?" (tab id comes from sender). */
@@ -51,8 +52,8 @@ export interface ContentStatus {
   separation?: {
     state: SeparationState;
     latency: LatencyInfo;
-    /** Engine the quality setting settled on and why (cause: short text for the UI). */
-    choice?: { engine: 'dsp' | 'ml'; reason: 'auto' | 'deadline-miss' | 'user'; cause?: string };
+    /** ML probe state for the popup (cause: short text for the UI). */
+    choice?: EngineChoice;
     error?: string;
   };
   error?: string;
