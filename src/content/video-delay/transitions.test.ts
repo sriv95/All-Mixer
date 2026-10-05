@@ -1,0 +1,41 @@
+import { describe, expect, it } from 'vitest';
+import { pairTransition, type PairEdge } from './transitions';
+
+const e = (source: PairEdge['source'], kind: 'on' | 'off', t: number, inputAt?: number): PairEdge => ({ source, kind, t, inputAt });
+
+describe('pairTransition', () => {
+  it('pairs the first off edges inside the pause window', () => {
+    const tr = pairTransition('pause', 10000, [e('audio', 'off', 10100), e('audio', 'off', 10900), e('video', 'off', 10050), e('overlay', 'off', 10080)]);
+    expect(tr.pauseOffsetMs).toBe(20); // audio - overlay
+    expect(tr.missing).toEqual([]);
+  });
+
+  it('falls back to the video when there is no overlay', () => {
+    expect(pairTransition('pause', 10000, [e('audio', 'off', 10100), e('video', 'off', 10050)]).pauseOffsetMs).toBe(50);
+  });
+
+  it('accepts an edge 300 ms before the pause but ignores earlier or later ones', () => {
+    expect(pairTransition('pause', 10000, [e('audio', 'off', 9700), e('video', 'off', 9700)]).missing).toEqual([]);
+    const tr = pairTransition('pause', 10000, [e('audio', 'off', 9600), e('video', 'off', 11600)]);
+    expect(tr.pauseOffsetMs).toBeUndefined();
+    expect(tr.missing).toEqual(['audioOff', 'videoOff']);
+  });
+
+  it('ignores on edges for a pause and off edges for a play', () => {
+    expect(pairTransition('pause', 0, [e('audio', 'on', 100)]).missing).toContain('audioOff');
+    expect(pairTransition('play', 0, [e('audio', 'off', 100)]).missing).toContain('audioOn');
+  });
+
+  it('pairs play edges after the event and computes the pipeline offset', () => {
+    const tr = pairTransition('play', 5000, [e('audio', 'on', 5200, 5150), e('video', 'on', 5100), e('audio', 'on', 4900)]);
+    expect(tr.playOffsetMs).toBe(100);
+    expect(tr.pipelineMs).toBe(50);
+    expect(tr.missing).toEqual([]);
+  });
+
+  it('lists a missing edge', () => {
+    const tr = pairTransition('play', 5000, [e('video', 'on', 5100)]);
+    expect(tr.playOffsetMs).toBeUndefined();
+    expect(tr.missing).toEqual(['audioOn']);
+  });
+});

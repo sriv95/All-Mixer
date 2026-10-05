@@ -1,6 +1,7 @@
-import type { AvProbeStatus } from '../shared/messages';
+import type { AvProbeStatus, AvTransition } from '../shared/messages';
 import type { LatencyInfo } from './audio/latency';
 import { toPerformanceTime } from './audio/latency';
+import { pairTransition, windowFor, WINDOW_MS, type PairEdge } from './video-delay/transitions';
 import { ActivityEdges, AudioEdgeDetector, type Edge } from './video-delay/edge-detect';
 
 /**
@@ -14,6 +15,8 @@ const FLAG = 'allMixer.avProbe';
 const PREFIX = '[All Mixer! avProbe]';
 const MEDIA_EVENTS = ['play', 'pause', 'seeking', 'seeked', 'waiting', 'playing', 'ratechange', 'emptied'] as const;
 const FFT_SIZE = 2048;
+const MAX_TRANSITIONS = 20;
+const MAX_EDGES = 80;
 
 const readFlag = (): boolean => {
   try {
@@ -37,6 +40,10 @@ export class AvProbe {
   private vfc = 0;
   private raf = 0;
   private readonly st: AvProbeStatus = { events: {} };
+  private readonly edgeLog: PairEdge[] = [];
+  private readonly pending: { kind: 'pause' | 'play'; at: number }[] = [];
+  private readonly done: AvTransition[] = [];
+  private awaitingPlay = false;
 
   constructor(private readonly readEnabled: () => boolean = readFlag) {
     this.refresh();
@@ -51,8 +58,13 @@ export class AvProbe {
     const { audioOn, audioOff, videoOn, videoOff, overlayOn, overlayOff } = this.st;
     const playPic = overlayOn ?? videoOn;
     const pausePic = overlayOff ?? videoOff;
+    this.flush(performance.now());
     return {
       ...this.st,
+      transitions: [...this.done],
+      probeOn: this.enabled,
+      audioAttached: this.audio !== null,
+      ctxState: this.audio?.ctx.state,
       events: { ...this.st.events },
       playOffsetMs: audioOn && playPic !== undefined ? audioOn.audibleAt - playPic : undefined,
       pauseOffsetMs: audioOff && pausePic !== undefined ? audioOff.audibleAt - pausePic : undefined,
@@ -105,6 +117,16 @@ export class AvProbe {
     const at = performance.now();
     this.st.events[e.type] = at;
     console.log(PREFIX, e.type, JSON.stringify({ at }));
+    this.flush(at);
+    if (e.type === 'pause') {
+      this.pending.push({ kind: 'pause', at });
+      this.awaitingPlay = true;
+    } else if (e.type === 'seeking') {
+      this.awaitingPlay = true;
+    } else if ((e.type === 'play' || e.type === 'playing') && this.awaitingPlay) {
+      this.pending.push({ kind: 'play', at });
+      this.awaitingPlay = false;
+    }
   };
 
   private startVideo(): void {
@@ -155,6 +177,7 @@ export class AvProbe {
       this.record(this.videoEdges.poll(t), 'video');
       this.record(this.overlayEdges.poll(t), 'overlay');
       this.readAudio();
+      this.flush(performance.now());
     };
     this.raf = requestAnimationFrame(tick);
   }
@@ -172,6 +195,7 @@ export class AvProbe {
       const inputAt = nowPerf + (t - nowCtx) * 1000;
       const lat = audio.latency();
       const v = { inputAt, audibleAt: toPerformanceTime(ctx, t, lat.deviceMs) + lat.processingMs };
+      this.logEdge({ source: 'audio', kind: edge.kind, t: v.audibleAt, inputAt: v.inputAt });
       if (edge.kind === 'on') this.st.audioOn = v;
       else this.st.audioOff = v;
       console.log(PREFIX, edge.kind === 'on' ? 'audioOn' : 'audioOff', JSON.stringify({ ...v, engine: lat.engine }));
@@ -182,7 +206,24 @@ export class AvProbe {
     for (const e of edges) {
       const key = `${what}${e.kind === 'on' ? 'On' : 'Off'}` as 'videoOn' | 'videoOff' | 'overlayOn' | 'overlayOff';
       this.st[key] = e.at;
+      this.logEdge({ source: what, kind: e.kind, t: e.at });
       console.log(PREFIX, key, JSON.stringify({ at: e.at }));
+    }
+  }
+
+  private logEdge(e: PairEdge): void {
+    this.edgeLog.push(e);
+    if (this.edgeLog.length > MAX_EDGES) this.edgeLog.shift();
+  }
+
+  /** Finish every transition whose window has closed. */
+  private flush(now: number): void {
+    while (this.pending.length && windowFor(this.pending[0].kind, this.pending[0].at)[1] + WINDOW_MS / 10 <= now) {
+      const p = this.pending.shift()!;
+      const tr = pairTransition(p.kind, p.at, this.edgeLog);
+      this.done.push(tr);
+      if (this.done.length > MAX_TRANSITIONS) this.done.shift();
+      console.log(PREFIX, 'transition', JSON.stringify(tr));
     }
   }
 }
