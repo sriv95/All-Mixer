@@ -118,6 +118,9 @@ export interface QueuedFrame<T> {
  * Captured frames waiting for their due time, oldest first. `release` frees a
  * frame's GPU memory (ImageBitmap.close) once it is dropped or replaced.
  */
+/** A queued frame this far past due means rAF is not running (hidden tab). */
+const OVERDUE_MS = 100;
+
 export class FrameQueue<T> {
   private frames: QueuedFrame<T>[] = [];
   skipped = 0;
@@ -126,11 +129,18 @@ export class FrameQueue<T> {
     private readonly release: (img: T) => void,
     /** Safety cap (set at runtime from `captureSize`). More means rAF stopped (hidden tab). */
     private cap = 120,
-  ) {}
+  ) {
+    this.hardCap = cap;
+  }
 
+  /** Frames allowed while some queued frame is not yet due (lets the cap shrink without a freeze). */
+  private hardCap: number;
+
+  /** Never releases frames: lowering the cap must not drop frames that are not yet due. */
   setCap(n: number): void {
     this.cap = Math.max(1, Math.floor(n));
-    while (this.frames.length > this.cap) this.release(this.frames.shift()!.img);
+    // Keep the old bound until the queue drains below the new cap (see push).
+    this.hardCap = Math.max(this.cap, this.hardCap);
   }
 
   forEach(fn: (img: T) => void): void {
@@ -145,12 +155,16 @@ export class FrameQueue<T> {
     return this.frames.length;
   }
 
-  push(frame: QueuedFrame<T>): void {
+  push(frame: QueuedFrame<T>, now: number): void {
     // Captures resolve in order in practice; insert sorted to be safe.
     let i = this.frames.length;
     while (i > 0 && this.frames[i - 1].due > frame.due) i--;
     this.frames.splice(i, 0, frame);
-    while (this.frames.length > this.cap) this.release(this.frames.shift()!.img);
+    // Over the cap: trim only overdue frames (rAF stopped), or anything past the hard cap.
+    while (this.frames.length > this.cap && (this.frames[0].due < now - OVERDUE_MS || this.frames.length > this.hardCap)) {
+      this.release(this.frames.shift()!.img);
+    }
+    if (this.frames.length <= this.cap) this.hardCap = this.cap;
   }
 
   /**
