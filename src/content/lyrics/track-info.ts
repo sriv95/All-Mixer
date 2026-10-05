@@ -39,13 +39,36 @@ export function chooseCaptionTracks(tracks: readonly CaptionTrack[], defaultLang
 export interface CaptionOption {
   /** Index into `PlayerInfo.captionTracks`. */
   index: number;
+  /** Auto-translate target language (the track at `index` is machine-translated into it). */
+  tlang?: string;
   label: string;
+  group: 'track' | 'translate';
 }
 
-/** Menu entries for the caption language picker, one per track. */
-export function captionOptions(tracks: readonly CaptionTrack[]): CaptionOption[] {
-  return tracks.map((t, index) => {
+/** A chosen caption track, optionally auto-translated. */
+export interface CaptionPick {
+  index: number;
+  tlang?: string;
+}
+
+/**
+ * Menu entries for the caption language picker: every track (auto-generated ones labelled), then auto-translations
+ * of `sourceTrack` when YouTube offers them for it.
+ */
+export function captionOptions(
+  tracks: readonly CaptionTrack[],
+  translationLanguages: readonly { languageCode: string; name: string }[] = [],
+  sourceTrack?: CaptionTrack,
+): CaptionOption[] {
+  const options: CaptionOption[] = tracks.map((t, index) => {
     const name = t.name || t.languageCode || `Track ${index + 1}`;
-    return { index, label: t.kind === 'asr' && !/auto/i.test(name) ? `${name} (auto-generated)` : name };
+    return { index, label: t.kind === 'asr' && !/auto/i.test(name) ? `${name} (auto-generated)` : name, group: 'track' };
   });
+  const index = sourceTrack ? tracks.indexOf(sourceTrack) : -1;
+  if (index < 0 || !sourceTrack?.isTranslatable) return options;
+  for (const l of translationLanguages) {
+    if (l.languageCode === sourceTrack.languageCode) continue;
+    options.push({ index, tlang: l.languageCode, label: `${l.name} (auto-translated)`, group: 'translate' });
+  }
+  return options;
 }

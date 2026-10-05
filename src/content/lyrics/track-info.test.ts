@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CaptionTrack, PlayerInfo } from '../../shared/bridge';
-import { chooseCaptionTracks, trackFromPlayer } from './track-info';
+import { captionOptions, chooseCaptionTracks, trackFromPlayer } from './track-info';
 
 const info = (p: Partial<PlayerInfo>): PlayerInfo => ({
   videoId: 'abc',
@@ -52,5 +52,35 @@ describe('chooseCaptionTracks', () => {
   it("uses the player's default caption language when there is no ASR track", () => {
     expect(chooseCaptionTracks([t('ar'), t('en'), t('fr')], 'en')).toEqual({ asr: undefined, manual: t('en') });
     expect(chooseCaptionTracks([t('ar'), t('en-US')], 'en')).toEqual({ asr: undefined, manual: t('en-US') });
+  });
+});
+
+describe('captionOptions', () => {
+  const asr: CaptionTrack = { baseUrl: 'a', languageCode: 'en', kind: 'asr', name: 'English', isTranslatable: true };
+  const es: CaptionTrack = { baseUrl: 'b', languageCode: 'es', name: 'Spanish', isTranslatable: true };
+  const langs = [
+    { languageCode: 'de', name: 'German' },
+    { languageCode: 'es', name: 'Spanish' },
+  ];
+  const key = (o: { index: number; tlang?: string }) => `${o.index}:${o.tlang ?? ''}`;
+
+  it('labels auto-generated tracks and keeps one entry per track', () => {
+    const o = captionOptions([asr, es]);
+    expect(o.map((x) => x.label)).toEqual(['English (auto-generated)', 'Spanish']);
+    expect(o.every((x) => x.group === 'track')).toBe(true);
+  });
+
+  it('adds auto-translate entries for the translatable source track only', () => {
+    const o = captionOptions([asr, es], langs, asr);
+    expect(o.filter((x) => x.group === 'translate').map((x) => [x.index, x.tlang, x.label])).toEqual([
+      [0, 'de', 'German (auto-translated)'],
+      [0, 'es', 'Spanish (auto-translated)'],
+    ]);
+    expect(new Set(o.map(key)).size).toBe(o.length);
+    expect(captionOptions([{ ...asr, isTranslatable: false }, es], langs, { ...asr, isTranslatable: false })).toHaveLength(2);
+    expect(captionOptions([asr, es], langs)).toHaveLength(2);
+    expect(captionOptions([asr, es], undefined, asr)).toHaveLength(2);
+    // The source language itself is not offered as a translation.
+    expect(captionOptions([asr, es], [{ languageCode: 'en', name: 'English' }], asr)).toHaveLength(2);
   });
 });

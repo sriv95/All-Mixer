@@ -5,19 +5,29 @@ import { alignWithCaptions, linesFromAsrCaptions, linesFromCaptions, type Captio
 import { parseJson3 } from '../../lyrics/captions';
 import { parseLrc } from '../../lyrics/lrc';
 import type { Site } from '../youtube-dom';
-import { captionOptions, chooseCaptionTracks, trackFromPlayer, type CaptionOption } from './track-info';
+import { captionOptions, chooseCaptionTracks, trackFromPlayer, type CaptionOption, type CaptionPick } from './track-info';
 
-/** Caption track picker, shown while the lyrics come from captions and the video has more than one track. */
+/** Caption track picker, shown while the lyrics come from captions and the video has more than one option. */
 export interface CaptionPicker {
   options: CaptionOption[];
-  /** Index into the video's caption tracks. */
-  selected: number;
+  selected: CaptionPick;
+}
+
+/** Which lyrics source the user wants. */
+export type SourcePref = 'auto' | 'lrclib' | 'captions';
+
+/** What the footer's source menu needs. */
+export interface SourceMenu {
+  pref: SourcePref;
+  available: { lrclib: boolean; captions: boolean };
+  /** The pick could not be honoured for this video (missing source); the auto order was used instead. */
+  fellBack?: 'lrclib' | 'captions';
 }
 
 export type LyricsState =
   | { kind: 'idle' }
   | { kind: 'loading' }
-  | { kind: 'ready'; lyrics: Lyrics; track: TrackInfo; captions?: CaptionPicker }
+  | { kind: 'ready'; lyrics: Lyrics; track: TrackInfo; captions?: CaptionPicker; sources?: SourceMenu }
   | { kind: 'not-found'; track?: TrackInfo }
   | { kind: 'error' };
 
@@ -33,7 +43,7 @@ export interface LyricsSurface {
 
 export interface LyricsDeps {
   getPlayerInfo(videoId: string, signal: AbortSignal): Promise<PlayerInfo | null>;
-  getTimedText(videoId: string, track: CaptionTrack): Promise<string | null>;
+  getTimedText(videoId: string, track: CaptionTrack, tlang?: string): Promise<string | null>;
   fetchLyrics(track: TrackInfo): Promise<FoundLyrics | null>;
   /** Subscribe to "the player just loaded captions for this video" (user turned CC on). */
   onCaptionsAvailable?(cb: (videoId: string) => void): void;
@@ -43,8 +53,11 @@ export interface LyricsDeps {
 
 /** Fetched caption track. `index` points into `PlayerInfo.captionTracks`. */
 export interface FetchedCaptions extends CaptionTrackData {
+  /** Language of the cues (the auto-translate target for translated tracks). */
   lang?: string;
   index?: number;
+  /** Auto-translate target language, when this is a machine translation of the track at `index`. */
+  tlang?: string;
 }
 
 export interface CaptionSet {
@@ -54,42 +67,79 @@ export interface CaptionSet {
   manual?: FetchedCaptions;
   /** Track the user picked (or the language they picked before), shown instead of the default choice. */
   display?: FetchedCaptions;
-}
-
-/** The caption track to show when LRCLIB has no synced lyrics, or undefined. Plain LRCLIB lyrics beat an ASR transcript. */
-export function fallbackCaptions(found: FoundLyrics | null, c: CaptionSet): FetchedCaptions | undefined {
-  if (c.display) return c.display;
-  if (c.manual) return c.manual;
-  return found?.plain ? undefined : c.asr;
+  /** Foreign-language subtitles (default track, else the first): last resort when there is no ASR and no manual track in the song language. */
+  other?: FetchedCaptions;
 }
 
 const baseLang = (code: string) => code.split('-')[0];
 
-/** Turn LRCLIB + caption data into what we show. Pure, exported for tests. */
-export function resolveLyrics(found: FoundLyrics | null, captions: CaptionSet): Lyrics | null {
-  const evidence = captions.asr ?? captions.manual ?? null;
-  if (found?.synced) {
-    const lines = parseLrc(found.synced);
-    if (lines.length > 0) {
-      const base: SyncedLyrics = { kind: 'synced', lines, source: 'lrclib', offset: 0, hasWordTiming: lines.some((l) => l.words) };
-      return alignWithCaptions(base, evidence);
-    }
+const hasSynced = (found: FoundLyrics | null): boolean => !!found?.synced && parseLrc(found.synced).length > 0;
+
+/** The caption track shown when captions win: pick / preferred language, then song-language subtitles, ASR, any other track. */
+export const captionCandidate = (c: CaptionSet): FetchedCaptions | undefined => c.display ?? c.manual ?? c.asr ?? c.other;
+
+export interface SourceChoice {
+  use: 'lrclib-synced' | 'lrclib-plain' | 'captions' | null;
+  caption?: FetchedCaptions;
+  /** The user's pick had nothing for this video. */
+  fellBack?: 'lrclib' | 'captions';
+}
+
+/** Automatic order: song captions, LRCLIB synced, other captions (ASR first), LRCLIB plain. */
+function autoSource(found: FoundLyrics | null, c: CaptionSet): SourceChoice {
+  // A manual track in the preferred language counts as song captions too.
+  const song = (c.display && !c.display.asr && !c.display.tlang ? c.display : undefined) ?? c.manual;
+  if (song) return { use: 'captions', caption: song };
+  if (hasSynced(found)) return { use: 'lrclib-synced' };
+  const caption = captionCandidate(c);
+  if (caption) return { use: 'captions', caption };
+  if (found?.plain) return { use: 'lrclib-plain' };
+  return { use: null };
+}
+
+/**
+ * Pick the source to show. Pure, exported for tests.
+ * `picked`: the user chose a caption language for this video, which means "captions" even in auto mode.
+ */
+export function chooseSource(found: FoundLyrics | null, c: CaptionSet, pref: SourcePref = 'auto', picked = false): SourceChoice {
+  const want = picked ? 'captions' : pref;
+  if (want === 'lrclib') {
+    if (hasSynced(found)) return { use: 'lrclib-synced' };
+    if (found?.plain) return { use: 'lrclib-plain' };
+    return { ...autoSource(found, c), fellBack: 'lrclib' };
   }
-  // No synced lyrics: show the video's subtitles, or its auto-generated transcript.
-  const shown = fallbackCaptions(found, captions);
-  if (shown?.asr) {
+  if (want === 'captions') {
+    const caption = captionCandidate(c);
+    if (caption) return { use: 'captions', caption };
+    return { ...autoSource(found, c), fellBack: 'captions' };
+  }
+  return autoSource(found, c);
+}
+
+/** Build the lyrics for a choice. Pure, exported for tests. */
+export function buildLyrics(choice: SourceChoice, found: FoundLyrics | null, captions: CaptionSet): Lyrics | null {
+  if (choice.use === 'lrclib-synced' && found?.synced) {
+    const base: SyncedLyrics = { kind: 'synced', lines: parseLrc(found.synced), source: 'lrclib', offset: 0, hasWordTiming: false };
+    base.hasWordTiming = base.lines.some((l) => l.words);
+    return alignWithCaptions(base, captions.asr ?? captions.manual ?? null);
+  }
+  if (choice.use === 'lrclib-plain' && found?.plain) return { kind: 'plain', text: found.plain, source: 'lrclib' };
+  const shown = choice.caption;
+  if (choice.use !== 'captions' || !shown) return null;
+  if (shown.asr) {
     const lines = linesFromAsrCaptions(shown.cues);
     return { kind: 'synced', lines, source: 'youtube-auto-captions', offset: 0, hasWordTiming: lines.some((l) => l.words) };
   }
-  if (shown) {
-    const base: SyncedLyrics = { kind: 'synced', lines: linesFromCaptions(shown.cues), source: 'youtube-captions', offset: 0, hasWordTiming: false };
-    const asr = captions.asr;
-    // ASR word timing only fits subtitles in the same language.
-    const sameLang = !asr?.lang || !shown.lang || baseLang(asr.lang) === baseLang(shown.lang);
-    return asr && sameLang ? alignWithCaptions(base, asr) : base;
-  }
-  if (found?.plain) return { kind: 'plain', text: found.plain, source: 'lrclib' };
-  return null;
+  const base: SyncedLyrics = { kind: 'synced', lines: linesFromCaptions(shown.cues), source: 'youtube-captions', offset: 0, hasWordTiming: false };
+  const asr = captions.asr;
+  // ASR word timing only fits subtitles in the same language.
+  const sameLang = !asr?.lang || !shown.lang || baseLang(asr.lang) === baseLang(shown.lang);
+  return asr && sameLang ? alignWithCaptions(base, asr) : base;
+}
+
+/** Turn LRCLIB + caption data into what we show. Pure, exported for tests. */
+export function resolveLyrics(found: FoundLyrics | null, captions: CaptionSet, pref: SourcePref = 'auto', picked = false): Lyrics | null {
+  return buildLyrics(chooseSource(found, captions, pref, picked), found, captions);
 }
 
 export class LyricsController {
@@ -106,9 +156,11 @@ export class LyricsController {
   private pendingRealign: string | null = null;
   private retryTimers: ReturnType<typeof setTimeout>[] = [];
   /** Caption track the user picked for one video. */
-  private pick: { videoId: string; index: number } | null = null;
+  private pick: ({ videoId: string } & CaptionPick) | null = null;
   /** Language of the last picked track; preferred on later videos in this tab. */
-  private preferredLang: string | null = null;
+  private preferredLang: { lang: string; translated: boolean } | null = null;
+  /** Lyrics source the user chose; kept for later videos in this tab. */
+  private sourcePref: SourcePref = 'auto';
 
   constructor(
     private readonly site: Site,
@@ -170,14 +222,22 @@ export class LyricsController {
     this.refresh();
   }
 
-  /** The user picked another caption track (index into the video's caption tracks) in the language menu. */
-  selectCaptionTrack(index: number): void {
+  /** The user picked another caption track or an auto-translation (language menu). */
+  selectCaptionTrack(pick: CaptionPick): void {
     const base = this.base;
-    const t = base?.info.captionTracks[index];
+    const t = base?.info.captionTracks[pick.index];
     if (!base || !t || base.videoId !== this.videoId) return;
-    this.pick = { videoId: base.videoId, index };
-    this.preferredLang = t.languageCode;
+    this.pick = { videoId: base.videoId, index: pick.index, ...(pick.tlang ? { tlang: pick.tlang } : {}) };
+    this.preferredLang = { lang: pick.tlang ?? t.languageCode, translated: !!pick.tlang };
     void this.realign(base.videoId, true);
+  }
+
+  /** The user chose a lyrics source (source menu). Re-resolves from the loaded data, no new LRCLIB request. */
+  selectSource(pref: SourcePref): void {
+    this.sourcePref = pref;
+    this.pick = null;
+    const id = this.videoId;
+    if (id) void this.realign(id, true);
   }
 
   seek(time: number): void {
@@ -240,8 +300,9 @@ export class LyricsController {
       const [found, captions] = await Promise.all([this.deps.fetchLyrics(track).catch(() => null), this.captions(videoId, info)]);
       if (ctrl.signal.aborted) return;
       this.base = { videoId, info, track, found };
-      const lyrics = resolveLyrics(found, captions);
-      this.setState(lyrics ? this.ready(lyrics, info, track, found, captions) : { kind: 'not-found', track });
+      const choice = chooseSource(found, captions, this.sourcePref, this.pick?.videoId === videoId);
+      const lyrics = buildLyrics(choice, found, captions);
+      this.setState(lyrics ? this.ready(lyrics, choice, info, track, found, captions) : { kind: 'not-found', track });
       if (this.pendingRealign === videoId) {
         this.pendingRealign = null;
         void this.realign(videoId);
@@ -254,20 +315,30 @@ export class LyricsController {
     }
   }
 
-  private ready(lyrics: Lyrics, info: PlayerInfo, track: TrackInfo, found: FoundLyrics | null, captions: CaptionSet): LyricsState {
-    const shown = lyrics.source === 'lrclib' ? undefined : fallbackCaptions(found, captions);
-    const options = captionOptions(info.captionTracks);
-    if (shown?.index === undefined || options.length < 2) return { kind: 'ready', lyrics, track };
-    return { kind: 'ready', lyrics, track, captions: { options, selected: shown.index } };
+  private ready(lyrics: Lyrics, choice: SourceChoice, info: PlayerInfo, track: TrackInfo, found: FoundLyrics | null, captions: CaptionSet): LyricsState {
+    const sources: SourceMenu = {
+      pref: this.sourcePref,
+      available: { lrclib: !!found && (hasSynced(found) || !!found.plain), captions: !!captionCandidate(captions) },
+      ...(choice.fellBack ? { fellBack: choice.fellBack } : {}),
+    };
+    const shown = choice.use === 'captions' ? choice.caption : undefined;
+    if (shown?.index === undefined) return { kind: 'ready', lyrics, track, sources };
+    const { asr, manual } = chooseCaptionTracks(info.captionTracks, info.defaultCaptionLang);
+    const options = captionOptions(info.captionTracks, info.translationLanguages, manual ?? asr);
+    if (options.length < 2) return { kind: 'ready', lyrics, track, sources };
+    return { kind: 'ready', lyrics, track, sources, captions: { options, selected: { index: shown.index, ...(shown.tlang ? { tlang: shown.tlang } : {}) } } };
   }
 
-  /** Index of the caption track to show instead of the default choice, or -1. */
-  private displayIndex(videoId: string, tracks: readonly CaptionTrack[], defaultLang?: string): number {
-    if (this.pick?.videoId === videoId) return this.pick.index;
-    const lang = this.preferredLang ?? defaultLang;
-    if (!lang) return -1;
-    const manual = tracks.findIndex((t) => t.kind !== 'asr' && t.languageCode === lang);
-    return manual >= 0 ? manual : tracks.findIndex((t) => t.languageCode === lang);
+  /** Track (and auto-translation) to show instead of the default choice: this video's pick, else the tab's preferred language. */
+  private displayPick(videoId: string, tracks: readonly CaptionTrack[], info: PlayerInfo, sourceIdx: number): CaptionPick | null {
+    if (this.pick?.videoId === videoId) return this.pick;
+    const lang = this.preferredLang?.lang;
+    if (!lang) return null;
+    const native = nativeIndex(tracks, lang);
+    if (native >= 0) return { index: native };
+    const src = tracks[sourceIdx];
+    if (src?.isTranslatable && info.translationLanguages?.some((l) => l.languageCode === lang)) return { index: sourceIdx, tlang: lang };
+    return null;
   }
 
   private async captions(videoId: string, info: PlayerInfo): Promise<CaptionSet> {
@@ -275,20 +346,25 @@ export class LyricsController {
     const choice = chooseCaptionTracks(tracks, info.defaultCaptionLang);
     const asrIdx = choice.asr ? tracks.indexOf(choice.asr) : -1;
     const manualIdx = choice.manual ? tracks.indexOf(choice.manual) : -1;
-    let displayIdx = this.displayIndex(videoId, tracks);
-    // Only foreign-language subtitles (no ASR track, no manual track in the spoken language): show the default one, else the first.
-    if (displayIdx < 0 && asrIdx < 0 && manualIdx < 0 && tracks.length > 0) displayIdx = Math.max(0, this.displayIndex(videoId, tracks, info.defaultCaptionLang));
-    const get = async (i: number): Promise<FetchedCaptions | undefined> => {
+    const want = this.displayPick(videoId, tracks, info, manualIdx >= 0 ? manualIdx : asrIdx);
+    // Only foreign-language subtitles (no ASR track, no manual track in the spoken language): the default one, else the first.
+    const otherIdx = !want && asrIdx < 0 && manualIdx < 0 && tracks.length > 0 ? Math.max(0, nativeIndex(tracks, info.defaultCaptionLang)) : -1;
+    const get = async (i: number, tlang?: string): Promise<FetchedCaptions | undefined> => {
       const t = tracks[i];
       if (!t) return undefined;
-      const raw = await this.deps.getTimedText(videoId, t).catch(() => null);
+      const raw = await this.deps.getTimedText(videoId, t, tlang).catch(() => null);
       const cues = raw ? parseJson3(raw) : [];
-      return cues.length ? { cues, asr: t.kind === 'asr', lang: t.languageCode, index: i } : undefined;
+      return cues.length ? { cues, asr: t.kind === 'asr', lang: tlang ?? t.languageCode, index: i, ...(tlang ? { tlang } : {}) } : undefined;
     };
-    const extra = displayIdx >= 0 && displayIdx !== asrIdx && displayIdx !== manualIdx ? displayIdx : -1;
-    const [asr, manual, other] = await Promise.all([get(asrIdx), get(manualIdx), get(extra)]);
-    const display = displayIdx < 0 ? undefined : displayIdx === asrIdx ? asr : displayIdx === manualIdx ? manual : other;
-    return { asr, manual, display };
+    const plain = !!want && !want.tlang && (want.index === asrIdx || want.index === manualIdx);
+    const [asr, manual, extra, other] = await Promise.all([
+      get(asrIdx),
+      get(manualIdx),
+      want && !plain ? get(want.index, want.tlang) : undefined,
+      get(otherIdx),
+    ]);
+    const display = !want ? undefined : plain ? (want.index === asrIdx ? asr : manual) : extra;
+    return { asr, manual, display, other };
   }
 
   /**
@@ -304,11 +380,12 @@ export class LyricsController {
     }
     const captions = await this.captions(videoId, base.info);
     if (this.base !== base) return false;
-    const lyrics = resolveLyrics(base.found, captions);
+    const choice = chooseSource(base.found, captions, this.sourcePref, this.pick?.videoId === videoId);
+    const lyrics = buildLyrics(choice, base.found, captions);
     if (!lyrics) return false;
     const cur = this.state.kind === 'ready' ? this.state.lyrics : null;
     if (!force && cur && sameTiming(cur, lyrics)) return false;
-    this.setState(this.ready(lyrics, base.info, base.track, base.found, captions));
+    this.setState(this.ready(lyrics, choice, base.info, base.track, base.found, captions));
     return true;
   }
 
@@ -338,6 +415,13 @@ export class LyricsController {
 
 /** Delays after CC turns on, measured from the button press. */
 const REALIGN_RETRY_MS = [1000, 3000, 6000];
+
+/** Track in `lang`: a manual one first, else any (ASR). -1 if none. */
+function nativeIndex(tracks: readonly CaptionTrack[], lang?: string): number {
+  if (!lang) return -1;
+  const manual = tracks.findIndex((t) => t.kind !== 'asr' && t.languageCode === lang);
+  return manual >= 0 ? manual : tracks.findIndex((t) => t.languageCode === lang);
+}
 
 const VIDEO_EVENTS = ['play', 'pause', 'seeked', 'ratechange', 'loadedmetadata'] as const;
 

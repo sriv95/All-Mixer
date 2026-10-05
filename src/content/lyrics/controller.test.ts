@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PlayerInfo } from '../../shared/bridge';
 import type { FoundLyrics } from '../../lyrics/lrclib-types';
-import { LyricsController, resolveLyrics, type LyricsDeps, type LyricsState, type LyricsSurface } from './controller';
+import { LyricsController, chooseSource, resolveLyrics, type LyricsDeps, type LyricsState, type LyricsSurface } from './controller';
 
 const record = { id: 1, trackName: 'Song', artistName: 'Band', duration: 200 };
 const SYNCED = '[00:01.00]hello world\n[00:03.00]second line';
@@ -46,7 +46,7 @@ function deps(over: Partial<LyricsDeps> = {}): LyricsDeps {
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
 describe('resolveLyrics', () => {
-  it('prefers LRCLIB synced lyrics', () => {
+  it('uses LRCLIB synced lyrics', () => {
     const l = resolveLyrics({ synced: SYNCED, plain: 'x', record }, {});
     expect(l).toMatchObject({ kind: 'synced', source: 'lrclib' });
   });
@@ -65,8 +65,8 @@ describe('resolveLyrics', () => {
     // Overlapping ASR cue is cut at the next cue.
     expect(l.lines[0]).toMatchObject({ start: 1, end: 3, text: 'hello world' });
     expect(l.lines[0].words?.map((w) => w.text).join('')).toBe('hello world');
-    // Plain LRCLIB lyrics beat an ASR transcript.
-    expect(resolveLyrics({ plain: 'la la', record }, { asr })).toMatchObject({ kind: 'plain' });
+    // An ASR transcript beats plain LRCLIB lyrics.
+    expect(resolveLyrics({ plain: 'la la', record }, { asr })).toMatchObject({ source: 'youtube-auto-captions' });
   });
 
   it('shows the picked track and aligns it only with ASR in the same language', () => {
@@ -81,6 +81,53 @@ describe('resolveLyrics', () => {
   it('falls back to plain lyrics, then null', () => {
     expect(resolveLyrics({ plain: 'la la', record }, {})).toEqual({ kind: 'plain', text: 'la la', source: 'lrclib' });
     expect(resolveLyrics(null, {})).toBeNull();
+  });
+});
+
+const cap = (text: string, lang = 'en', asr = false) => ({ asr, lang, cues: [{ start: 1, end: 3, text }] });
+const kindOf = (c: ReturnType<typeof chooseSource>) => (c.use === 'captions' ? `captions:${c.caption?.cues[0]?.text}` : c.use);
+
+describe('chooseSource', () => {
+  const synced = { synced: SYNCED, record };
+  const plain = { plain: 'la la', record };
+  const manual = cap('manual');
+  const asr = cap('asr', 'en', true);
+  const foreign = cap('foreign', 'es');
+
+  it('follows the automatic order', () => {
+    expect(kindOf(chooseSource(synced, { manual, asr }))).toBe('captions:manual');
+    expect(kindOf(chooseSource(synced, { asr }))).toBe('lrclib-synced');
+    expect(kindOf(chooseSource(null, { asr }))).toBe('captions:asr');
+    expect(kindOf(chooseSource(plain, { asr }))).toBe('captions:asr');
+    expect(kindOf(chooseSource(plain, {}))).toBe('lrclib-plain');
+    expect(kindOf(chooseSource(synced, { other: foreign }))).toBe('lrclib-synced');
+    expect(kindOf(chooseSource(null, { other: foreign }))).toBe('captions:foreign');
+    expect(chooseSource(null, {}).use).toBeNull();
+  });
+
+  it('ranks a manual track in the preferred language as song captions', () => {
+    expect(kindOf(chooseSource(synced, { asr, display: foreign }))).toBe('captions:foreign');
+    // A translation or an ASR display is not song captions.
+    expect(kindOf(chooseSource(synced, { display: { ...foreign, tlang: 'es' } }))).toBe('lrclib-synced');
+    expect(kindOf(chooseSource(synced, { display: asr }))).toBe('lrclib-synced');
+  });
+
+  it("honours the 'lrclib' pick", () => {
+    expect(kindOf(chooseSource(synced, { manual }, 'lrclib'))).toBe('lrclib-synced');
+    expect(kindOf(chooseSource(plain, { manual }, 'lrclib'))).toBe('lrclib-plain');
+    expect(chooseSource(null, { manual }, 'lrclib')).toMatchObject({ use: 'captions', fellBack: 'lrclib' });
+    expect(chooseSource(null, {}, 'lrclib')).toMatchObject({ use: null, fellBack: 'lrclib' });
+  });
+
+  it("honours the 'captions' pick", () => {
+    const c = chooseSource(synced, { asr }, 'captions');
+    expect(kindOf(c)).toBe('captions:asr');
+    expect(c.fellBack).toBeUndefined();
+    expect(chooseSource(synced, {}, 'captions')).toMatchObject({ use: 'lrclib-synced', fellBack: 'captions' });
+  });
+
+  it('treats a per-video language pick as captions even in auto mode', () => {
+    expect(kindOf(chooseSource(synced, { asr, display: asr }, 'auto', true))).toBe('captions:asr');
   });
 });
 
@@ -328,20 +375,20 @@ describe('LyricsController', () => {
     c.addSurface(s);
     c.setVideoId('v');
     await flush();
-    expect(s.last).toMatchObject({ kind: 'ready', lyrics: { source: 'youtube-captions' }, captions: { selected: 1 } });
+    expect(s.last).toMatchObject({ kind: 'ready', lyrics: { source: 'youtube-captions' }, captions: { selected: { index: 1 } } });
     if (s.last.kind !== 'ready') throw new Error('ready expected');
     expect(s.last.captions?.options.map((o) => o.label)).toEqual(['English (auto-generated)', 'English', 'Spanish']);
 
-    c.selectCaptionTrack(2);
+    c.selectCaptionTrack({ index: 2 });
     await flush();
-    expect(s.last).toMatchObject({ kind: 'ready', captions: { selected: 2 } });
+    expect(s.last).toMatchObject({ kind: 'ready', captions: { selected: { index: 2 } } });
     if (s.last.kind !== 'ready' || s.last.lyrics.kind !== 'synced') throw new Error('synced expected');
     expect(s.last.lyrics.lines[0].text).toBe('Hola');
 
     // The picked language is preferred on the next video.
     c.setVideoId('w');
     await flush();
-    expect(s.last).toMatchObject({ kind: 'ready', captions: { selected: 2 } });
+    expect(s.last).toMatchObject({ kind: 'ready', captions: { selected: { index: 2 } } });
   });
 
   it('has no language menu for LRCLIB lyrics', async () => {
@@ -356,5 +403,93 @@ describe('LyricsController', () => {
     await flush();
     expect(s.last).toMatchObject({ kind: 'ready', lyrics: { source: 'lrclib' } });
     expect(s.last.kind === 'ready' && s.last.captions).toBeFalsy();
+  });
+  describe('source pick and translations', () => {
+    const tracks = [
+      { baseUrl: 'u-asr', languageCode: 'en', kind: 'asr', name: 'English', isTranslatable: true },
+      { baseUrl: 'u-es', languageCode: 'es', name: 'Spanish' },
+    ];
+    const translationLanguages = [{ languageCode: 'de', name: 'German' }];
+    const cue = (text: string) => JSON.stringify({ events: [{ tStartMs: 1000, dDurationMs: 2000, segs: [{ utf8: text }] }] });
+    const make = (over: Partial<LyricsDeps> = {}) =>
+      deps({
+        getPlayerInfo: vi.fn(async (id: string) => info(id, { captionTracks: tracks, translationLanguages })),
+        getTimedText: vi.fn(async (_id: string, t: { baseUrl: string }, tlang?: string) => cue(tlang ? `${t.baseUrl}>${tlang}` : t.baseUrl)),
+        ...over,
+      });
+    const srcOf = (st: LyricsState) => (st.kind === 'ready' ? st.lyrics.source : st.kind);
+
+    it('switches source without a new LRCLIB request and keeps the pick on the next video', async () => {
+      const d = make();
+      const c = new LyricsController('youtube', d);
+      const s = new FakeSurface();
+      c.addSurface(s);
+      c.setVideoId('v1');
+      await flush();
+      expect(srcOf(s.last)).toBe('lrclib');
+      expect(s.last).toMatchObject({ sources: { pref: 'auto', available: { lrclib: true, captions: true } } });
+
+      c.selectSource('captions');
+      await flush();
+      expect(srcOf(s.last)).toBe('youtube-auto-captions');
+      expect(s.last).toMatchObject({ sources: { pref: 'captions' } });
+      c.selectSource('lrclib');
+      await flush();
+      expect(srcOf(s.last)).toBe('lrclib');
+      expect(d.fetchLyrics).toHaveBeenCalledTimes(1);
+
+      c.selectSource('captions');
+      await flush();
+      c.setVideoId('v2');
+      await flush();
+      expect(srcOf(s.last)).toBe('youtube-auto-captions');
+      expect(d.fetchLyrics).toHaveBeenCalledTimes(2);
+    });
+
+    it('falls back to the auto order and says so when the picked source is missing', async () => {
+      const c = new LyricsController('youtube', make({ fetchLyrics: vi.fn(async () => null) }));
+      const s = new FakeSurface();
+      c.addSurface(s);
+      c.setVideoId('v1');
+      await flush();
+      expect(s.last).toMatchObject({ sources: { available: { lrclib: false, captions: true } } });
+      c.selectSource('lrclib');
+      await flush();
+      expect(s.last).toMatchObject({ lyrics: { source: 'youtube-auto-captions' }, sources: { pref: 'lrclib', fellBack: 'lrclib' } });
+    });
+
+    it('lists translations and fetches the translated track with tlang', async () => {
+      const d = make({ fetchLyrics: vi.fn(async () => null) });
+      const c = new LyricsController('youtube', d);
+      const s = new FakeSurface();
+      c.addSurface(s);
+      c.setVideoId('v1');
+      await flush();
+      if (s.last.kind !== 'ready') throw new Error('ready expected');
+      expect(s.last.captions?.options.map((o) => o.label)).toEqual(['English (auto-generated)', 'Spanish', 'German (auto-translated)']);
+
+      c.selectCaptionTrack({ index: 0, tlang: 'de' });
+      await flush();
+      expect(d.getTimedText).toHaveBeenCalledWith('v1', tracks[0], 'de');
+      expect(s.last).toMatchObject({ captions: { selected: { index: 0, tlang: 'de' } } });
+      if (s.last.kind !== 'ready' || s.last.lyrics.kind !== 'synced') throw new Error('synced expected');
+      expect(s.last.lyrics.lines[0].text).toBe('u-asr>de');
+
+      // The translated language is preferred on the next video, and a pick means captions even with LRCLIB lyrics.
+      c.setVideoId('v2');
+      await flush();
+      expect(s.last).toMatchObject({ captions: { selected: { index: 0, tlang: 'de' } } });
+    });
+
+    it('keeps a language pick on captions even when LRCLIB has synced lyrics', async () => {
+      const c = new LyricsController('youtube', make());
+      const s = new FakeSurface();
+      c.addSurface(s);
+      c.setVideoId('v1');
+      await flush();
+      c.selectCaptionTrack({ index: 1 });
+      await flush();
+      expect(s.last).toMatchObject({ lyrics: { source: 'youtube-captions' }, captions: { selected: { index: 1 } } });
+    });
   });
 });
