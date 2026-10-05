@@ -36,3 +36,7 @@ npm run lint
 - If Chrome's autoplay policy keeps the AudioContext suspended, the extension waits for one click / key press on the page before routing audio, so the video is never muted. The popup shows a hint.
 - Settings are per browser tab and survive SPA navigation and reloads; they are cleared when the tab closes.
 - Separate mode is a placeholder (unity gain) until the separation engine lands.
+
+## Debug
+
+- Force ML deadline misses (QA): in the extension service-worker console run `chrome.storage.local.set({'debug.mlStallMs': 400})`, then reload the YouTube tab. After `debug.mlStallAfterMs` (default 5000 ms, after warm-up) every ML block is held 400 ms, far past the block deadline, so 3 misses happen within about 2 s. Clear with `chrome.storage.local.remove(['debug.mlStallMs','debug.mlStallAfterMs'])`.

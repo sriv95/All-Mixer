@@ -26,10 +26,19 @@ window.addEventListener('message', (e: MessageEvent) => {
     worker = new Worker(new URL('./ml-worker.ts', import.meta.url), { type: 'module' });
     worker.onmessage = (ev: MessageEvent<FromMlWorker>) => window.parent.postMessage(ev.data, target!);
     worker.onerror = (ev) => window.parent.postMessage({ type: 'unavailable', reason: `worker: ${ev.message}` } satisfies FromMlWorker, target!);
-    worker.postMessage(
-      { type: 'init', port, modelUrl: chrome.runtime.getURL('ml/vocals.onnx'), wasmBase: chrome.runtime.getURL('ml/') },
-      [port],
-    );
+    const w = worker;
+    // Debug stall hook (off by default): see README, Debug.
+    void chrome.storage.local
+      .get(['debug.mlStallMs', 'debug.mlStallAfterMs'])
+      .catch(() => ({}) as Record<string, unknown>)
+      .then((o) => {
+        const stallMs = Number(o['debug.mlStallMs']) > 0 ? Number(o['debug.mlStallMs']) : 0;
+        const stallAfterMs = Number(o['debug.mlStallAfterMs']) >= 0 && o['debug.mlStallAfterMs'] != null ? Number(o['debug.mlStallAfterMs']) : 5000;
+        w.postMessage(
+          { type: 'init', port, modelUrl: chrome.runtime.getURL('ml/vocals.onnx'), wasmBase: chrome.runtime.getURL('ml/'), stallMs, stallAfterMs },
+          [port],
+        );
+      });
   } else if ((msg as ToMlWorker | null)?.type === 'dispose') {
     worker?.terminate();
     worker = null;
