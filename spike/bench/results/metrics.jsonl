@@ -18,3 +18,4 @@
 {"tag": "dsp_final", "bass_ret": -0.65, "drums_ret": -1.01, "kick_ret": -0.02, "vocal_leak": -9.41, "sub_energy": -0.03, "sdr_inst": 7.34, "sdr_voc": 2.9, "p10_bass_ret": -1.99, "p10_drums_ret": -2.13, "clips": 50}
 {"tag": "prod", "bass_ret": -0.65, "drums_ret": -1.01, "kick_ret": -0.02, "vocal_leak": -9.41, "sub_energy": -0.03, "sdr_inst": 7.34, "sdr_voc": 2.9, "p10_bass_ret": -1.99, "p10_drums_ret": -2.13, "clips": 50}
 {"tag": "spl_h4l2_single", "bass_ret": -0.14, "drums_ret": -0.35, "kick_ret": -0.02, "vocal_leak": -14.31, "sub_energy": -0.02, "sdr_inst": 10.73, "sdr_voc": 6.19, "p10_bass_ret": -0.64, "p10_drums_ret": -1.18, "clips": 50}
+{"tag": "spl_h4l2_single_g3072", "bass_ret": -0.15, "drums_ret": -0.35, "kick_ret": -0.02, "vocal_leak": -14.43, "sub_energy": -0.03, "sdr_inst": 10.9, "sdr_voc": 6.21, "p10_bass_ret": -0.64, "p10_drums_ret": -1.09, "clips": 50}

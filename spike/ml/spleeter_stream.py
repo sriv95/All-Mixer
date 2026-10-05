@@ -66,11 +66,15 @@ if __name__ == '__main__':
     ap.add_argument('--hop-frames', type=int, default=4); ap.add_argument('--lookahead', type=int, default=0)
     ap.add_argument('--single', action='store_true'); ap.add_argument('--offline', action='store_true')
     ap.add_argument('--clips', type=int, default=50)
+    ap.add_argument('--pre', type=int, default=0, help='prepend N zero samples, shift back (3072 = shipped worker frame/block phase)')
     a = ap.parse_args()
     voc, acc = session('vocals'), (None if a.single else session('accompaniment'))
     for d in sorted((ROOT / 'clips/wav').iterdir())[: a.clips]:
         x, sr = sf.read(d / 'mix.wav')
+        n = len(x)
+        if a.pre: x = np.concatenate([np.zeros((a.pre, x.shape[1])), x])
         vocal, inst = separate(x, sr, voc, acc, a.ctx, a.hop_frames, a.lookahead, a.single, a.offline)
+        if a.pre: x, vocal = x[a.pre:a.pre + n], vocal[a.pre:a.pre + n]; inst = x - vocal
         (d / a.tag).mkdir(exist_ok=True)
         sf.write(d / a.tag / 'vocal.wav', vocal, sr, subtype='FLOAT')
         sf.write(d / a.tag / 'instrumental.wav', inst, sr, subtype='FLOAT')
