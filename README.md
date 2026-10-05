@@ -37,7 +37,7 @@ Use `bun run test`, not `bun test`. `bun test` starts Bun's own test runner; thi
 - Page audio is untouched until the master slider leaves 100 %. After that the `<video>` stays routed through Web Audio for the life of the tab (Web Audio cannot undo this); 100 % is unity gain.
 - If Chrome's autoplay policy keeps the AudioContext suspended, the extension waits for one click / key press on the page before routing audio, so the video is never muted. The popup shows a hint.
 - Settings are per browser tab and survive SPA navigation and reloads; they are cleared when the tab closes.
-- Separate mode is a placeholder (unity gain) until the separation engine lands.
+- Separate mode uses the ML engine (Spleeter on WebGPU). Until it is running, or when it cannot run, the original mix plays and the popup says why.
 
 ## Debug
 
