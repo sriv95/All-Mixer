@@ -11,10 +11,13 @@ export interface LyricsViewOptions {
   onCaptionTrack?: (pick: CaptionPick) => void;
   /** The user picked a lyrics source in the source menu. */
   onSource?: (pref: SourcePref) => void;
+  /** Floating panel mode: text scales with width, the current line stays centered until the user unlocks it. */
+  panel?: boolean;
 }
 
 const USER_SCROLL_PAUSE_MS = 4000;
 const CURRENT_LINE_POSITION = 0.35;
+const PANEL_LINE_POSITION = 0.5;
 
 const DEFAULT_MESSAGES: Record<LyricsViewStatus, string> = {
   loading: 'Loading lyrics…',
@@ -54,6 +57,11 @@ const STYLE = `
 .plain { white-space: pre-wrap; opacity: 0.85; margin: 0; padding: 0 4px; }
 .status { display: flex; align-items: center; justify-content: center; height: 100%; text-align: center; opacity: 0.7; padding: 12px; box-sizing: border-box; }
 .footer { flex: none; font-size: 11px; text-align: center; padding: 4px; }
+.panel { container-type: inline-size; }
+.panel .scroll { padding: 0 12px; font-size: clamp(16px, 4.7cqw, 40px); }
+.panel .line, .panel .plain { text-align: center; }
+.lock { margin-left: 6px; font: inherit; color: #fff; background: #222; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; cursor: pointer; }
+.lock[aria-pressed="true"] { background: #3a3a3a; }
 .source { opacity: 0.5; }
 .lang, .src { margin-left: 6px; max-width: 60%; font: inherit; color: #fff; background: #222; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; }
 `;
@@ -75,19 +83,23 @@ export class LyricsView {
   private wordIdx = -1;
   private pausedUntil = 0;
   private destroyed = false;
+  private readonly panelMode: boolean;
+  private locked = true;
+  private resizeObserver: ResizeObserver | null = null;
 
   constructor(opts: LyricsViewOptions, doc: Document = document) {
     this.doc = doc;
     this.onSeek = opts.onSeek;
     this.onCaptionTrack = opts.onCaptionTrack;
     this.onSource = opts.onSource;
+    this.panelMode = opts.panel === true;
     this.el = doc.createElement('div');
     this.el.setAttribute('data-am-lyrics', '');
     this.root = this.el.attachShadow({ mode: 'open' });
     const style = doc.createElement('style');
     style.textContent = STYLE;
     const wrap = doc.createElement('div');
-    wrap.className = 'wrap';
+    wrap.className = this.panelMode ? 'wrap panel' : 'wrap';
     this.scroller = doc.createElement('div');
     this.scroller.className = 'scroll';
     this.footer = doc.createElement('div');
@@ -102,6 +114,13 @@ export class LyricsView {
     this.scroller.addEventListener('wheel', this.onUserScroll, { passive: true });
     this.scroller.addEventListener('touchmove', this.onUserScroll, { passive: true });
     this.scroller.addEventListener('pointerdown', this.onPointerDown);
+    if (this.panelMode) {
+      this.scroller.style.overflowY = 'hidden';
+      if (typeof ResizeObserver !== 'undefined') {
+        this.resizeObserver = new ResizeObserver(this.onResize);
+        this.resizeObserver.observe(this.scroller);
+      }
+    }
   }
 
   /** `picker` adds a caption language menu to the footer (only with two or more options), `sources` the source menu. */
@@ -139,6 +158,7 @@ export class LyricsView {
       frag.appendChild(div);
     });
     this.scroller.replaceChildren(frag);
+    this.updatePadding();
     this.setFooter(
       `Lyrics: ${SOURCE_LABELS[lyrics.source]}` + (lyrics.source === 'lrclib' && lyrics.offset !== 0 ? ' · timing aligned to captions' : ''),
       picker,
@@ -153,6 +173,7 @@ export class LyricsView {
     div.dataset.status = status;
     div.textContent = message ?? DEFAULT_MESSAGES[status];
     this.scroller.replaceChildren(div);
+    this.updatePadding();
     this.footer.replaceChildren();
   }
 
@@ -161,6 +182,7 @@ export class LyricsView {
     src.className = 'source';
     src.textContent = text + (sources?.fellBack ? ` · ${FALLBACK_NOTES[sources.fellBack]}` : '');
     this.footer.replaceChildren(src);
+    if (this.panelMode && this.lyrics) this.footer.append(this.lockButton());
     if (sources && this.onSource) this.footer.append(this.sourceMenu(sources, this.onSource));
     const onPick = this.onCaptionTrack;
     if (!picker || picker.options.length < 2 || !onPick) return;
@@ -189,6 +211,52 @@ export class LyricsView {
     });
     guardKeys(sel);
     this.footer.append(sel);
+  }
+
+  private lockButton(): HTMLButtonElement {
+    const btn = this.doc.createElement('button');
+    btn.type = 'button';
+    btn.className = 'lock';
+    const paint = (): void => {
+      btn.textContent = this.locked ? 'Centered' : 'Free scroll';
+      btn.setAttribute('aria-pressed', String(this.locked));
+      btn.title = this.locked
+        ? 'The current line stays centered. Click to scroll freely.'
+        : 'Scrolling is free. Click to center the current line again.';
+    };
+    paint();
+    btn.addEventListener('click', () => {
+      this.setLocked(!this.locked);
+      paint();
+    });
+    guardKeys(btn);
+    return btn;
+  }
+
+  private setLocked(locked: boolean): void {
+    this.locked = locked;
+    this.scroller.style.overflowY = locked ? 'hidden' : 'auto';
+    if (locked) this.centerCurrent('auto');
+  }
+
+  /** Head/tail space of half the height lets the first and last lines reach the center. */
+  private updatePadding(): void {
+    if (!this.panelMode) return;
+    this.scroller.style.paddingBlock = this.lyrics ? `${this.scroller.clientHeight / 2}px` : '';
+  }
+
+  private readonly onResize = (): void => {
+    if (this.destroyed) return;
+    this.updatePadding();
+    if (this.locked) this.centerCurrent('auto');
+  };
+
+  private centerCurrent(behavior: ScrollBehavior): void {
+    if (!this.lyrics) return;
+    const sc = this.scroller;
+    const el = this.lineEls[this.lineIdx];
+    const top = el ? el.offsetTop - sc.clientHeight * PANEL_LINE_POSITION + el.offsetHeight / 2 : 0;
+    sc.scrollTo({ top: Math.max(0, top), behavior });
   }
 
   private sourceMenu(sources: SourceMenu, onSource: (pref: SourcePref) => void): HTMLSelectElement {
@@ -242,6 +310,8 @@ export class LyricsView {
     this.scroller.removeEventListener('wheel', this.onUserScroll);
     this.scroller.removeEventListener('touchmove', this.onUserScroll);
     this.scroller.removeEventListener('pointerdown', this.onPointerDown);
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = null;
     this.el.remove();
   }
 
@@ -285,6 +355,10 @@ export class LyricsView {
   }
 
   private autoScroll(index: number): void {
+    if (this.panelMode) {
+      if (this.locked) this.centerCurrent('smooth');
+      return;
+    }
     if (Date.now() < this.pausedUntil) return;
     const el = this.lineEls[index];
     const sc = this.scroller;
@@ -293,6 +367,7 @@ export class LyricsView {
   }
 
   private readonly onUserScroll = (): void => {
+    if (this.panelMode) return;
     this.pausedUntil = Date.now() + USER_SCROLL_PAUSE_MS;
   };
 

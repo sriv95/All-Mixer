@@ -276,3 +276,91 @@ describe('LyricsView', () => {
     expect(view.el.isConnected).toBe(false);
   });
 });
+
+describe('LyricsView panel mode', () => {
+  let pv: LyricsView;
+  let resize: (() => void) | null;
+  let disconnect: Mock<() => void>;
+  const pq = (sel: string) => pv.el.shadowRoot!.querySelector(sel) as HTMLElement;
+
+  beforeEach(() => {
+    resize = null;
+    disconnect = vi.fn<() => void>();
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(cb: () => void) {
+          resize = cb;
+        }
+        observe() {}
+        disconnect = disconnect;
+      },
+    );
+    pv = new LyricsView({ onSeek: vi.fn(), panel: true });
+    document.body.appendChild(pv.el);
+  });
+  afterEach(() => {
+    pv.destroy();
+    vi.unstubAllGlobals();
+  });
+
+  it('adds the panel class only in panel mode', () => {
+    expect(pq('.wrap').classList.contains('panel')).toBe(true);
+    view.setLyrics(synced());
+    expect(q('.wrap').classList.contains('panel')).toBe(false);
+    expect(qa('.lock')).toHaveLength(0);
+  });
+
+  it('shows the lock button only with synced lyrics and toggles it', () => {
+    pv.setLyrics({ kind: 'plain', source: 'lrclib', text: 'x' });
+    expect(pv.el.shadowRoot!.querySelector('.lock')).toBeNull();
+    pv.setLyrics(synced());
+    const btn = pq('.lock');
+    expect(btn.textContent).toBe('Centered');
+    expect(btn.getAttribute('aria-pressed')).toBe('true');
+    expect(pq('.scroll').style.overflowY).toBe('hidden');
+    btn.click();
+    expect(btn.textContent).toBe('Free scroll');
+    expect(btn.getAttribute('aria-pressed')).toBe('false');
+    expect(pq('.scroll').style.overflowY).toBe('auto');
+  });
+
+  it('re-centers instantly on resize while locked', () => {
+    pv.setLyrics(synced());
+    pv.update(1.5);
+    const sc = pq('.scroll');
+    const scrollTo = vi.fn();
+    sc.scrollTo = scrollTo as unknown as HTMLElement['scrollTo'];
+    Object.defineProperty(sc, 'clientHeight', { value: 200, configurable: true });
+    Object.defineProperty(pv.el.shadowRoot!.querySelector('.line')!, 'offsetTop', { value: 500 });
+    resize!();
+    expect(sc.style.paddingBlock).toBe('100px');
+    expect(scrollTo).toHaveBeenCalledWith({ top: 400, behavior: 'auto' });
+  });
+
+  it('does not scroll when unlocked, and snaps back once on re-lock', () => {
+    pv.setLyrics(synced());
+    const sc = pq('.scroll');
+    const scrollTo = vi.fn();
+    sc.scrollTo = scrollTo as unknown as HTMLElement['scrollTo'];
+    pv.update(1.5);
+    scrollTo.mockClear();
+    pq('.lock').click();
+    pv.update(6.5);
+    resize!();
+    expect(scrollTo).not.toHaveBeenCalled();
+    pq('.lock').click();
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    expect(scrollTo.mock.calls[0][0].behavior).toBe('auto');
+  });
+
+  it('keeps the top in view before the first line, and disconnects on destroy', () => {
+    pv.setLyrics(synced());
+    const scrollTo = vi.fn();
+    pq('.scroll').scrollTo = scrollTo as unknown as HTMLElement['scrollTo'];
+    resize!();
+    expect(scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'auto' });
+    pv.destroy();
+    expect(disconnect).toHaveBeenCalled();
+  });
+});
