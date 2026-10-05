@@ -50,13 +50,15 @@ export type FromWorklet =
   | { type: 'engine'; engine: MlEngine; reason: MlReason; at: number };
 
 /**
- * Block buffers on the ML port: [epoch f64, start f64, L f32 × ML_BLOCK, R f32 × ML_BLOCK].
- * The worklet sends input at `start`; the worker sends the same buffer back with the vocal
- * and `start` moved back by ML_RESULT_OFFSET, or `start` = −1 when it has no result.
+ * Block buffers on the ML port: [epoch f64, start f64, sharpen f64, then f32 × ML_BLOCK ×4].
+ * The worklet sends input L, R at `start` with `sharpen` = a = clamp(1 − instrumentalGain, 0, 1)
+ * (the vocal mask power is 1 + (P_ACAP − 1)·a). The worker sends the same buffer back with the
+ * soft-mask vocal L, R (the instrumental is x − this) followed by the sharpened vocal L, R, and
+ * `start` moved back by ML_RESULT_OFFSET, or `start` = −1 when it has no result.
  * Buffers are transferred both ways, so the pool is reused without allocation.
  */
-export const ML_HEADER_BYTES = 16;
-export const ML_BUFFER_BYTES = ML_HEADER_BYTES + 2 * ML_BLOCK * 4;
+export const ML_HEADER_BYTES = 24;
+export const ML_BUFFER_BYTES = ML_HEADER_BYTES + 4 * ML_BLOCK * 4;
 
 /** Control messages between the content script and the ML worker (via the ml.html iframe). */
 export const ML_PAGE_PATH = 'ml/ml.html';

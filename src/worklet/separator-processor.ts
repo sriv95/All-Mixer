@@ -71,6 +71,7 @@ class SeparatorProcessor extends AudioWorkletProcessor {
       return true;
     }
     const { vL, vR, iL, iR } = this;
+    this.core.setSharpen(parameters[PARAM_INSTRUMENTAL][0]);
     this.core.process(inL, inR, vL, vR, iL, iR, currentTime);
 
     const vg1 = parameters[PARAM_VOCAL][0];

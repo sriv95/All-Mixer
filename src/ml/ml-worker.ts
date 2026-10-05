@@ -103,8 +103,8 @@ function serve(port: MessagePort, stream: SpleeterStream, model: (x: Float32Arra
     if (busy) return;
     busy = true;
     for (let buf = queue.shift(); buf; buf = queue.shift()) {
-      const head = new Float64Array(buf, 0, 2);
-      const data = new Float32Array(buf, ML_HEADER_BYTES, 2 * ML_BLOCK);
+      const head = new Float64Array(buf, 0, 3);
+      const data = new Float32Array(buf, ML_HEADER_BYTES, 4 * ML_BLOCK);
       const e = head[0], start = head[1];
       if (e < latestEpoch) {
         back(buf, head, -1); // stale: not worth an inference
@@ -116,8 +116,10 @@ function serve(port: MessagePort, stream: SpleeterStream, model: (x: Float32Arra
       }
       expected = start + ML_BLOCK;
       try {
-        const l = data.subarray(0, ML_BLOCK), r = data.subarray(ML_BLOCK);
-        await stream.process(l, r, model, l, r); // in place: the output goes over the input
+        const l = data.subarray(0, ML_BLOCK), r = data.subarray(ML_BLOCK, 2 * ML_BLOCK);
+        stream.setSharpen(head[2]);
+        // soft vocal in place over the input; the sharpened vocal in the second half of the buffer
+        await stream.process(l, r, model, l, r, data.subarray(2 * ML_BLOCK, 3 * ML_BLOCK), data.subarray(3 * ML_BLOCK));
         if (stall) await stall();
         back(buf, head, start - ML_RESULT_OFFSET);
       } catch {
