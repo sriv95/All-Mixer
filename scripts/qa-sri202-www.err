@@ -1,0 +1,21 @@
+2026-10-06T21:30:34.837Z start
+2026-10-06T21:30:40.351Z pause3 #1
+2026-10-06T21:30:41.867Z play-after-3s #1
+2026-10-06T21:30:50.881Z pause3 #2
+2026-10-06T21:30:52.399Z play-after-3s #2
+2026-10-06T21:31:01.415Z pause3 #3
+2026-10-06T21:31:02.929Z play-after-3s #3
+2026-10-06T21:31:28.948Z pause20 #1
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+page.evaluate: Target page, context or browser has been closed
+    at v (/Users/sriv/.paperclip/instances/default/projects/ff016047-201c-4ddd-afe4-919b8f7ce38c/770ffeee-21cf-4963-b438-a115c8cbb6ea/_default/scripts/qa-sri202.mjs:23:29)
+    at play0 (/Users/sriv/.paperclip/instances/default/projects/ff016047-201c-4ddd-afe4-919b8f7ce38c/770ffeee-21cf-4963-b438-a115c8cbb6ea/_default/scripts/qa-sri202.mjs:28:21)
+    at play (/Users/sriv/.paperclip/instances/default/projects/ff016047-201c-4ddd-afe4-919b8f7ce38c/770ffeee-21cf-4963-b438-a115c8cbb6ea/_default/scripts/qa-sri202.mjs:31:49)
+    at async file:///Users/sriv/.paperclip/instances/default/projects/ff016047-201c-4ddd-afe4-919b8f7ce38c/770ffeee-21cf-4963-b438-a115c8cbb6ea/_default/scripts/qa-sri202.mjs:45:102 {
+  log: []
+}
+
+Node.js v24.21.0

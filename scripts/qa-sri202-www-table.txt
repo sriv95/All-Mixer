@@ -1,0 +1,9 @@
+event                              ad  eng  vidDelay ov(state,delay,queue) cv   | firstAudio  firstVideo firstOverlay | audio-video audio-overlay | ml eng at audio edge
+start                              false ml    2000 on,2000,q50        block  |    -       -       -    |    -       -    | -
+pause3 #1                          false ml    2000 on,2000,q0         block  |    1997     -15    1985 |    2012      12 | ml
+play-after-3s #1                   false ml    2000 on,2000,q51        block  |    2001      37    2021 |    1965     -19 | ml
+pause3 #2                          false ml    2000 on,2000,q0         block  |    1998     -31    1970 |    2029      28 | ml
+play-after-3s #2                   false ml    2000 on,2000,q50        block  |    2002      25    2027 |    1977     -25 | ml
+pause3 #3                          false ml    2000 on,2000,q0         block  |    2001       4    2004 |    1997      -3 | ml
+play-after-3s #3                   false ml    2000 on,2000,q0         block  |    2001      25    -    |    1976    -    | ml
+pause20 #1                         false ml    2000 on,2000,q0         block  |    -       -       -    |    -       -    | -
