@@ -407,6 +407,49 @@ describe('LyricsView panel mode', () => {
     expect(scrollTo.mock.calls[0][0].behavior).toBe('auto');
   });
 
+  it('observes the host, and re-centers after setLyrics and fullscreenchange only while locked', () => {
+    vi.useFakeTimers();
+    try {
+      const observe = vi.fn();
+      const targets: unknown[] = [];
+      vi.stubGlobal(
+        'ResizeObserver',
+        class {
+          observe(t: unknown) {
+            targets.push(t);
+            observe();
+          }
+          disconnect() {}
+        },
+      );
+      const v = new LyricsView({ onSeek: vi.fn(), panel: true });
+      document.body.appendChild(v.el);
+      expect(targets).toContain(v.el);
+      const sc = v.el.shadowRoot!.querySelector('.scroll') as HTMLElement;
+      const scrollTo = vi.fn();
+      sc.scrollTo = scrollTo as unknown as HTMLElement['scrollTo'];
+      v.setLyrics(synced());
+      vi.advanceTimersByTime(20);
+      expect(scrollTo).toHaveBeenCalledTimes(1);
+      expect(scrollTo.mock.calls[0][0].behavior).toBe('auto');
+      scrollTo.mockClear();
+      document.dispatchEvent(new Event('fullscreenchange'));
+      vi.advanceTimersByTime(20);
+      expect(scrollTo).toHaveBeenCalledTimes(1);
+      vi.advanceTimersByTime(300);
+      expect(scrollTo).toHaveBeenCalledTimes(2);
+      (v.el.shadowRoot!.querySelector('.lock') as HTMLElement).click();
+      scrollTo.mockClear();
+      document.dispatchEvent(new Event('fullscreenchange'));
+      v.setLyrics(synced());
+      vi.advanceTimersByTime(400);
+      expect(scrollTo).not.toHaveBeenCalled();
+      v.destroy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('keeps the top in view before the first line, and disconnects on destroy', () => {
     pv.setLyrics(synced());
     const scrollTo = vi.fn();

@@ -88,6 +88,8 @@ export class LyricsView {
   private readonly panelMode: boolean;
   private locked = true;
   private resizeObserver: ResizeObserver | null = null;
+  private recenterRaf = 0;
+  private recenterTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(opts: LyricsViewOptions, doc: Document = document) {
     this.doc = doc;
@@ -121,7 +123,9 @@ export class LyricsView {
       if (typeof ResizeObserver !== 'undefined') {
         this.resizeObserver = new ResizeObserver(this.onResize);
         this.resizeObserver.observe(this.scroller);
+        this.resizeObserver.observe(this.el);
       }
+      this.doc.addEventListener('fullscreenchange', this.onFullscreenChange);
     }
   }
 
@@ -162,6 +166,7 @@ export class LyricsView {
     });
     this.scroller.replaceChildren(frag);
     this.updatePadding();
+    this.scheduleRecenter(false);
     this.setFooter(
       `Lyrics: ${SOURCE_LABELS[lyrics.source]}` + (lyrics.source === 'lrclib' && lyrics.offset !== 0 ? ' · timing aligned to captions' : ''),
       picker,
@@ -264,6 +269,26 @@ export class LyricsView {
     if (this.locked) this.centerCurrent('auto');
   };
 
+  private readonly onFullscreenChange = (): void => this.scheduleRecenter(true);
+
+  /** Re-center once after layout (rAF) and, when `animated`, again after YouTube's theater/fullscreen transition. Skipped while the user has Free scroll. */
+  private scheduleRecenter(animated: boolean): void {
+    if (!this.panelMode || this.destroyed) return;
+    this.cancelRecenter();
+    const run = (): void => {
+      if (!this.destroyed && this.locked) this.centerCurrent('auto');
+    };
+    this.recenterRaf = requestAnimationFrame(run);
+    if (animated) this.recenterTimer = setTimeout(run, 250);
+  }
+
+  private cancelRecenter(): void {
+    if (this.recenterRaf) cancelAnimationFrame(this.recenterRaf);
+    if (this.recenterTimer !== null) clearTimeout(this.recenterTimer);
+    this.recenterRaf = 0;
+    this.recenterTimer = null;
+  }
+
   private centerCurrent(behavior: ScrollBehavior): void {
     if (!this.lyrics) return;
     const sc = this.scroller;
@@ -326,6 +351,8 @@ export class LyricsView {
     this.scroller.removeEventListener('wheel', this.onUserScroll);
     this.scroller.removeEventListener('touchmove', this.onUserScroll);
     this.scroller.removeEventListener('pointerdown', this.onPointerDown);
+    this.doc.removeEventListener('fullscreenchange', this.onFullscreenChange);
+    this.cancelRecenter();
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
     this.el.remove();
