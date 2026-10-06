@@ -90,6 +90,17 @@ describe('captionOptions', () => {
     expect(o.map((x) => x.label)).toEqual(['English (en)', 'English (en-US)', 'Spanish']);
   });
 
+  it('makes identical labels unique and leaves distinct ones alone', () => {
+    const en = (baseUrl: string): CaptionTrack => ({ baseUrl, languageCode: 'en', name: 'English' });
+    const two = captionOptions([en('a'), en('b')]).map((x) => x.label);
+    expect(two).toEqual(['English (en)', 'English (en) #2']);
+    const three = captionOptions([en('a'), en('b'), en('c'), es]).map((x) => x.label);
+    expect(three).toEqual(['English (en)', 'English (en) #2', 'English (en) #3', 'Spanish']);
+    expect(new Set(three).size).toBe(4);
+    const withTr = captionOptions([en('a'), en('b')], [{ languageCode: 'de', name: 'English (en)' }], en('a'));
+    expect(new Set(withTr.map((x) => x.label)).size).toBe(withTr.length);
+  });
+
   it('adds auto-translate entries for the translatable source track only', () => {
     const o = captionOptions([asr, es], langs, asr);
     expect(o.filter((x) => x.group === 'translate').map((x) => [x.index, x.tlang, x.label])).toEqual([
