@@ -42,7 +42,7 @@ export class AvProbe {
   private raf = 0;
   private readonly st: AvProbeStatus = { events: {} };
   private readonly edgeLog: PairEdge[] = [];
-  private readonly pending: { kind: 'pause' | 'play'; at: number }[] = [];
+  private readonly pending: { kind: 'pause' | 'play'; at: number; delayMs: number; latencyMs: number }[] = [];
   private readonly done: AvTransition[] = [];
   private awaitingPlay = false;
   private readonly traceCounts: Record<string, number> = {};
@@ -148,12 +148,12 @@ export class AvProbe {
       );
     }
     if (e.type === 'pause') {
-      this.pending.push({ kind: 'pause', at });
+      this.pending.push({ kind: 'pause', at, ...this.windowExtra() });
       this.awaitingPlay = true;
     } else if (e.type === 'seeking') {
       this.awaitingPlay = true;
     } else if ((e.type === 'play' || e.type === 'playing') && this.awaitingPlay) {
-      this.pending.push({ kind: 'play', at });
+      this.pending.push({ kind: 'play', at, ...this.windowExtra() });
       this.awaitingPlay = false;
     }
   };
@@ -247,11 +247,18 @@ export class AvProbe {
     if (this.edgeLog.length > MAX_EDGES) this.edgeLog.shift();
   }
 
+  /** Overlay delay (schedule target) and separator latency at the event, to widen the pairing window. */
+  private windowExtra(): { delayMs: number; latencyMs: number } {
+    const delayMs = this.overlayInfo?.().delay ?? 0;
+    const latencyMs = delayMs > 0 ? (this.audio?.latency().videoDelayMs ?? 0) : 0;
+    return { delayMs, latencyMs };
+  }
+
   /** Finish every transition whose window has closed. */
   private flush(now: number): void {
-    while (this.pending.length && windowFor(this.pending[0].kind, this.pending[0].at)[1] + WINDOW_MS / 10 <= now) {
+    while (this.pending.length && windowFor(this.pending[0].kind, this.pending[0].at, this.pending[0].delayMs, this.pending[0].latencyMs)[1] + WINDOW_MS / 10 <= now) {
       const p = this.pending.shift()!;
-      const tr = pairTransition(p.kind, p.at, this.edgeLog);
+      const tr = pairTransition(p.kind, p.at, this.edgeLog, p.delayMs, p.latencyMs);
       this.done.push(tr);
       if (this.done.length > MAX_TRANSITIONS) this.done.shift();
       console.log(PREFIX, 'transition', JSON.stringify(tr));
