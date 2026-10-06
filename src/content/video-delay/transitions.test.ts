@@ -40,6 +40,18 @@ describe('pairTransition', () => {
   });
 });
 
+describe('pairTransition reuse', () => {
+  it('never pairs one edge with two transitions', () => {
+    const edges = [e('audio', 'on', 5200, 5150), e('video', 'on', 5100), e('overlay', 'on', 5120)];
+    const used = new Set<PairEdge>();
+    const a = pairTransition('play', 5000, edges, 0, 0, used);
+    const b = pairTransition('play', 5300, edges, 0, 0, used);
+    expect(a.missing).toEqual([]);
+    expect(b.missing).toEqual(['audioOn', 'videoOn']);
+    expect(b.playOffsetMs).toBeUndefined();
+  });
+});
+
 describe('windowFor with delay', () => {
   it('keeps 1500 ms without an overlay', () => {
     expect(windowFor('play', 1000)).toEqual([1000, 2500]);

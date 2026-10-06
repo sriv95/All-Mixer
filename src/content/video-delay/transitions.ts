@@ -42,11 +42,27 @@ export const windowFor = (kind: 'pause' | 'play', at: number, delayMs = 0, laten
   at + windowSpanMs(delayMs, latencyMs),
 ];
 
-export function pairTransition(kind: 'pause' | 'play', at: number, edges: readonly PairEdge[], delayMs = 0, latencyMs = 0): Transition {
+/**
+ * Pairing rule: a transition takes the first edge of each source that matches its kind
+ * (play: 'on', pause: 'off') inside its window, and each edge is taken by at most one
+ * transition (`used`, filled here). Overlapping windows (a quick pause/play, or a second
+ * play event) therefore never pair the same canvas or video frame twice.
+ */
+export function pairTransition(
+  kind: 'pause' | 'play',
+  at: number,
+  edges: readonly PairEdge[],
+  delayMs = 0,
+  latencyMs = 0,
+  used: Set<PairEdge> = new Set(),
+): Transition {
   const [lo, hi] = windowFor(kind, at, delayMs, latencyMs);
   const want = kind === 'pause' ? 'off' : 'on';
-  const first = (source: EdgeSource): PairEdge | undefined =>
-    edges.filter((e) => e.source === source && e.kind === want && e.t >= lo && e.t <= hi).sort((a, b) => a.t - b.t)[0];
+  const first = (source: EdgeSource): PairEdge | undefined => {
+    const e = edges.filter((x) => x.source === source && x.kind === want && x.t >= lo && x.t <= hi && !used.has(x)).sort((a, b) => a.t - b.t)[0];
+    if (e) used.add(e);
+    return e;
+  };
   const audio = first('audio');
   const video = first('video');
   const overlay = first('overlay');

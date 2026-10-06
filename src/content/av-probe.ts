@@ -36,6 +36,7 @@ export class AvProbe {
   private buf = new Float32Array(FFT_SIZE);
   private readonly videoEdges = new ActivityEdges();
   private readonly overlayEdges = new ActivityEdges();
+  private readonly usedEdges = new Set<PairEdge>();
   private lastVideoMedia = NaN;
   private lastOverlayMedia = NaN;
   private vfc = 0;
@@ -244,7 +245,7 @@ export class AvProbe {
 
   private logEdge(e: PairEdge): void {
     this.edgeLog.push(e);
-    if (this.edgeLog.length > MAX_EDGES) this.edgeLog.shift();
+    if (this.edgeLog.length > MAX_EDGES) this.usedEdges.delete(this.edgeLog.shift()!);
   }
 
   /** Overlay delay (schedule target) and separator latency at the event, to widen the pairing window. */
@@ -258,7 +259,7 @@ export class AvProbe {
   private flush(now: number): void {
     while (this.pending.length && windowFor(this.pending[0].kind, this.pending[0].at, this.pending[0].delayMs, this.pending[0].latencyMs)[1] + WINDOW_MS / 10 <= now) {
       const p = this.pending.shift()!;
-      const tr = pairTransition(p.kind, p.at, this.edgeLog, p.delayMs, p.latencyMs);
+      const tr = pairTransition(p.kind, p.at, this.edgeLog, p.delayMs, p.latencyMs, this.usedEdges);
       this.done.push(tr);
       if (this.done.length > MAX_TRANSITIONS) this.done.shift();
       console.log(PREFIX, 'transition', JSON.stringify(tr));
