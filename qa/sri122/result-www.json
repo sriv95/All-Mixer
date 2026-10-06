@@ -1,0 +1,426 @@
+{
+ "site": "www",
+ "steps": {
+  "s1_s2": {
+   "mode": "separate",
+   "vocal": "100",
+   "vocalTxt": "100%",
+   "instr": "100",
+   "instrTxt": "100%",
+   "presets": [
+    {
+     "t": "Karaoke",
+     "pressed": "false",
+     "w": 67,
+     "l": 10,
+     "r": 77,
+     "sw": 65,
+     "cw": 65
+    },
+    {
+     "t": "Half Karaoke",
+     "pressed": "false",
+     "w": 67,
+     "l": 81,
+     "r": 148,
+     "sw": 65,
+     "cw": 65
+    },
+    {
+     "t": "A cappella",
+     "pressed": "false",
+     "w": 67,
+     "l": 152,
+     "r": 219,
+     "sw": 65,
+     "cw": 65
+    },
+    {
+     "t": "Reset",
+     "pressed": "true",
+     "w": 67,
+     "l": 223,
+     "r": 290,
+     "sw": 65,
+     "cw": 65
+    }
+   ],
+   "row": {
+    "l": 10,
+    "r": 290,
+    "sw": 280,
+    "cw": 280,
+    "bodyW": 1400,
+    "winW": 1400
+   },
+   "status": "Separation warming up… Playing the original mix."
+  },
+  "s3": {
+   "mode": "separate",
+   "vocal": "50",
+   "vocalTxt": "50%",
+   "instr": "100",
+   "instrTxt": "100%",
+   "presets": [
+    {
+     "t": "Karaoke",
+     "pressed": "false",
+     "w": 67,
+     "l": 10,
+     "r": 77,
+     "sw": 65,
+     "cw": 65
+    },
+    {
+     "t": "Half Karaoke",
+     "pressed": "true",
+     "w": 67,
+     "l": 81,
+     "r": 148,
+     "sw": 65,
+     "cw": 65
+    },
+    {
+     "t": "A cappella",
+     "pressed": "false",
+     "w": 67,
+     "l": 152,
+     "r": 219,
+     "sw": 65,
+     "cw": 65
+    },
+    {
+     "t": "Reset",
+     "pressed": "false",
+     "w": 67,
+     "l": 223,
+     "r": 290,
+     "sw": 65,
+     "cw": 65
+    }
+   ],
+   "row": {
+    "l": 10,
+    "r": 290,
+    "sw": 280,
+    "cw": 280,
+    "bodyW": 1400,
+    "winW": 1400
+   },
+   "status": "Separation unavailable: too slow on this device (p95 200.4 ms). Playing the original mix."
+  },
+  "s5": {
+   "mode": "separate",
+   "vocal": "60",
+   "vocalTxt": "60%",
+   "instr": "100",
+   "instrTxt": "100%",
+   "presets": [
+    {
+     "t": "Karaoke",
+     "pressed": "false",
+     "w": 67,
+     "l": 10,
+     "r": 77,
+     "sw": 65,
+     "cw": 65
+    },
+    {
+     "t": "Half Karaoke",
+     "pressed": "false",
+     "w": 67,
+     "l": 81,
+     "r": 148,
+     "sw": 65,
+     "cw": 65
+    },
+    {
+     "t": "A cappella",
+     "pressed": "false",
+     "w": 67,
+     "l": 152,
+     "r": 219,
+     "sw": 65,
+     "cw": 65
+    },
+    {
+     "t": "Reset",
+     "pressed": "false",
+     "w": 67,
+     "l": 223,
+     "r": 290,
+     "sw": 65,
+     "cw": 65
+    }
+   ],
+   "row": {
+    "l": 10,
+    "r": 290,
+    "sw": 280,
+    "cw": 280,
+    "bodyW": 1400,
+    "winW": 1400
+   },
+   "status": "Separation unavailable: too slow on this device (p95 200.4 ms). Playing the original mix."
+  },
+  "s6": {
+   "karaoke": {
+    "mode": "separate",
+    "vocal": "0",
+    "vocalTxt": "0%",
+    "instr": "100",
+    "instrTxt": "100%",
+    "presets": [
+     {
+      "t": "Karaoke",
+      "pressed": "true",
+      "w": 67,
+      "l": 10,
+      "r": 77,
+      "sw": 65,
+      "cw": 65
+     },
+     {
+      "t": "Half Karaoke",
+      "pressed": "false",
+      "w": 67,
+      "l": 81,
+      "r": 148,
+      "sw": 65,
+      "cw": 65
+     },
+     {
+      "t": "A cappella",
+      "pressed": "false",
+      "w": 67,
+      "l": 152,
+      "r": 219,
+      "sw": 65,
+      "cw": 65
+     },
+     {
+      "t": "Reset",
+      "pressed": "false",
+      "w": 67,
+      "l": 223,
+      "r": 290,
+      "sw": 65,
+      "cw": 65
+     }
+    ],
+    "row": {
+     "l": 10,
+     "r": 290,
+     "sw": 280,
+     "cw": 280,
+     "bodyW": 1400,
+     "winW": 1400
+    },
+    "status": "Separation unavailable: too slow on this device (p95 200.4 ms). Playing the original mix."
+   },
+   "acap": {
+    "mode": "separate",
+    "vocal": "100",
+    "vocalTxt": "100%",
+    "instr": "0",
+    "instrTxt": "0%",
+    "presets": [
+     {
+      "t": "Karaoke",
+      "pressed": "false",
+      "w": 67,
+      "l": 10,
+      "r": 77,
+      "sw": 65,
+      "cw": 65
+     },
+     {
+      "t": "Half Karaoke",
+      "pressed": "false",
+      "w": 67,
+      "l": 81,
+      "r": 148,
+      "sw": 65,
+      "cw": 65
+     },
+     {
+      "t": "A cappella",
+      "pressed": "true",
+      "w": 67,
+      "l": 152,
+      "r": 219,
+      "sw": 65,
+      "cw": 65
+     },
+     {
+      "t": "Reset",
+      "pressed": "false",
+      "w": 67,
+      "l": 223,
+      "r": 290,
+      "sw": 65,
+      "cw": 65
+     }
+    ],
+    "row": {
+     "l": 10,
+     "r": 290,
+     "sw": 280,
+     "cw": 280,
+     "bodyW": 1400,
+     "winW": 1400
+    },
+    "status": "Separation unavailable: too slow on this device (p95 200.4 ms). Playing the original mix."
+   },
+   "half": {
+    "mode": "separate",
+    "vocal": "50",
+    "vocalTxt": "50%",
+    "instr": "100",
+    "instrTxt": "100%",
+    "presets": [
+     {
+      "t": "Karaoke",
+      "pressed": "false",
+      "w": 67,
+      "l": 10,
+      "r": 77,
+      "sw": 65,
+      "cw": 65
+     },
+     {
+      "t": "Half Karaoke",
+      "pressed": "true",
+      "w": 67,
+      "l": 81,
+      "r": 148,
+      "sw": 65,
+      "cw": 65
+     },
+     {
+      "t": "A cappella",
+      "pressed": "false",
+      "w": 67,
+      "l": 152,
+      "r": 219,
+      "sw": 65,
+      "cw": 65
+     },
+     {
+      "t": "Reset",
+      "pressed": "false",
+      "w": 67,
+      "l": 223,
+      "r": 290,
+      "sw": 65,
+      "cw": 65
+     }
+    ],
+    "row": {
+     "l": 10,
+     "r": 290,
+     "sw": 280,
+     "cw": 280,
+     "bodyW": 1400,
+     "winW": 1400
+    },
+    "status": "Separation unavailable: too slow on this device (p95 200.4 ms). Playing the original mix."
+   }
+  },
+  "s8": {
+   "mode": "separate",
+   "vocal": "50",
+   "vocalTxt": "50%",
+   "instr": "100",
+   "instrTxt": "100%",
+   "presets": [
+    {
+     "t": "Karaoke",
+     "pressed": "false",
+     "w": 67,
+     "l": 10,
+     "r": 77,
+     "sw": 65,
+     "cw": 65
+    },
+    {
+     "t": "Half Karaoke",
+     "pressed": "true",
+     "w": 67,
+     "l": 81,
+     "r": 148,
+     "sw": 65,
+     "cw": 65
+    },
+    {
+     "t": "A cappella",
+     "pressed": "false",
+     "w": 67,
+     "l": 152,
+     "r": 219,
+     "sw": 65,
+     "cw": 65
+    },
+    {
+     "t": "Reset",
+     "pressed": "false",
+     "w": 67,
+     "l": 223,
+     "r": 290,
+     "sw": 65,
+     "cw": 65
+    }
+   ],
+   "row": {
+    "l": 10,
+    "r": 290,
+    "sw": 280,
+    "cw": 280,
+    "bodyW": 1400,
+    "winW": 1400
+   },
+   "status": "Separation unavailable: too slow on this device (p95 200.4 ms). Playing the original mix."
+  }
+ },
+ "title": "Rick Astley - Never Gonna Give You Up (Official Video) (4K Remaster) - YouTube",
+ "audio": {
+  "reset": {
+   "rmsDb": 0.024375,
+   "meanRmsDb": -16.13,
+   "peakDb": -2.7,
+   "n": 192,
+   "ad": false,
+   "cur": 55.968792
+  },
+  "half": {
+   "rmsDb": 0.024356,
+   "meanRmsDb": -16.13,
+   "peakDb": -2.7,
+   "n": 192,
+   "ad": false,
+   "cur": 55.993078
+  },
+  "karaoke": {
+   "rmsDb": 0.024255,
+   "meanRmsDb": -16.15,
+   "peakDb": -2.6,
+   "n": 192,
+   "ad": false,
+   "cur": 55.989333
+  },
+  "acap": {
+   "rmsDb": 0.02431,
+   "meanRmsDb": -16.14,
+   "peakDb": -2.6,
+   "n": 192,
+   "ad": false,
+   "cur": 56.015009
+  }
+ },
+ "yt": {
+  "paused": true,
+  "playing": true,
+  "seekOk": true,
+  "vol": 0.5
+ }
+}
