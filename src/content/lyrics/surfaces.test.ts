@@ -134,3 +134,17 @@ describe('PanelSurface hides YouTube captions', () => {
     s.destroy();
   });
 });
+
+describe('PanelSurface mode gating', () => {
+  it('is active only when open in window mode', () => {
+    let mode: 'window' | 'karaoke' = 'karaoke';
+    const s = new PanelSurface('youtube', { onSeek: () => {} }, () => {}, () => mode === 'window');
+    s.panel.show();
+    expect(s.active).toBe(false);
+    mode = 'window';
+    expect(s.active).toBe(true);
+    s.panel.hide();
+    expect(s.active).toBe(false);
+    s.destroy();
+  });
+});

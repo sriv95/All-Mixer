@@ -34,6 +34,8 @@ export class PanelSurface implements LyricsSurface {
     private readonly site: Site,
     view: LyricsViewOptions,
     onOpenChange: (open: boolean) => void,
+    /** The floating window only shows in the `window` display mode; karaoke mode has its own surface. */
+    private readonly windowMode: () => boolean = () => true,
   ) {
     // Per site: on YT Music the Lyrics tab is the main view, so the panel starts closed there.
     this.panel = new FloatingPanel({ id: 'all-mixer-lyrics-panel', title: 'Lyrics', storageKey: `lyricsPanel:${site}` });
@@ -52,7 +54,7 @@ export class PanelSurface implements LyricsSurface {
   }
 
   get active(): boolean {
-    return this.panel.isOpen;
+    return this.panel.isOpen && this.windowMode();
   }
 
   render(state: LyricsState): void {
