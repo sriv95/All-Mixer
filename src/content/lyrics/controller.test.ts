@@ -107,8 +107,9 @@ describe('chooseSource', () => {
 
   it('ranks a manual track in the preferred language as song captions', () => {
     expect(kindOf(chooseSource(synced, { asr, display: foreign }))).toBe('captions:foreign');
-    // A translation or an ASR display is not song captions.
-    expect(kindOf(chooseSource(synced, { display: { ...foreign, tlang: 'es' } }))).toBe('lrclib-synced');
+    // An ASR display is not song captions; a translation is (it wins over the manual track).
+    expect(kindOf(chooseSource(synced, { display: { ...foreign, tlang: 'es' } }))).toBe('captions:foreign');
+    expect(kindOf(chooseSource(synced, { manual: foreign, display: { ...foreign, tlang: 'fr' } }))).toBe('captions:foreign');
     expect(kindOf(chooseSource(synced, { display: asr }))).toBe('lrclib-synced');
   });
 
@@ -557,6 +558,51 @@ describe('LyricsController', () => {
       c.setVideoId('v2');
       await flush();
       expect(s.last).toMatchObject({ captions: { selected: { index: 0, tlang: 'de' } } });
+    });
+
+    it('keeps a preferred translated language on the next video, with lines matching the select', async () => {
+      const esOnly = [{ baseUrl: 'u-es2', languageCode: 'es', name: 'Spanish', isTranslatable: true }];
+      const langs = [{ languageCode: 'fr', name: 'French' }];
+      const d = make({
+        getPlayerInfo: vi.fn(async (id: string) =>
+          info(id, id === 'v1' ? { captionTracks: tracks, translationLanguages: langs } : { captionTracks: esOnly, translationLanguages: langs, defaultCaptionLang: 'es' }),
+        ),
+      });
+      const c = new LyricsController('youtube', d);
+      const s = new FakeSurface();
+      c.addSurface(s);
+      c.setVideoId('v1');
+      await flush();
+      c.selectCaptionTrack({ index: 0, tlang: 'fr' });
+      await flush();
+      c.setVideoId('v2');
+      await flush();
+      if (s.last.kind !== 'ready' || s.last.lyrics.kind !== 'synced') throw new Error('synced expected');
+      expect(s.last.captions?.selected).toEqual({ index: 0, tlang: 'fr' });
+      expect(s.last.lyrics.lines[0].text).toBe('u-es2>fr');
+    });
+
+    it('falls back to the track really shown when the translated fetch fails', async () => {
+      const esOnly = [{ baseUrl: 'u-es2', languageCode: 'es', name: 'Spanish', isTranslatable: true }, { baseUrl: 'u-en2', languageCode: 'en', name: 'English' }];
+      const langs = [{ languageCode: 'fr', name: 'French' }];
+      const d = make({
+        getPlayerInfo: vi.fn(async (id: string) =>
+          info(id, id === 'v1' ? { captionTracks: tracks, translationLanguages: langs } : { captionTracks: esOnly, translationLanguages: langs, defaultCaptionLang: 'es' }),
+        ),
+        getTimedText: vi.fn(async (_id: string, t: { baseUrl: string }, tlang?: string) => (tlang && t.baseUrl === 'u-es2' ? null : cue(tlang ? `${t.baseUrl}>${tlang}` : t.baseUrl))),
+      });
+      const c = new LyricsController('youtube', d);
+      const s = new FakeSurface();
+      c.addSurface(s);
+      c.setVideoId('v1');
+      await flush();
+      c.selectCaptionTrack({ index: 0, tlang: 'fr' });
+      await flush();
+      c.setVideoId('v2');
+      await flush();
+      if (s.last.kind !== 'ready' || s.last.lyrics.kind !== 'synced') throw new Error('synced expected');
+      expect(s.last.captions?.selected).toEqual({ index: 0 });
+      expect(s.last.lyrics.lines[0].text).toBe('u-es2');
     });
 
     it('keeps a language pick on captions even when LRCLIB has synced lyrics', async () => {
