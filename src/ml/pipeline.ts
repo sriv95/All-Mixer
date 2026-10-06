@@ -16,6 +16,12 @@ import { MdxStream, type MdxModelFn } from './mdx';
 import { BINS, SPL_BLOCK, SpleeterStream, type ModelFn } from './stream';
 
 const H = ML_BLOCK;
+/**
+ * Longest wait for Spleeter masks after the MDX step of a block (SRI-130). Slack to the deadline is 319 ms
+ * (14080 samples + block); MDX p95 is 160 ms, so 60 ms keeps ~100 ms margin for the post and the worklet read.
+ * Still missing → the block is combined with mask 0 (ungated x − V_mdx).
+ */
+export const SPL_WAIT_MS = 60;
 const FIFO = 65536; // > H + SPL_BLOCK, power of two
 const FMASK = FIFO - 1;
 
@@ -42,11 +48,24 @@ export class MlPipeline {
   /** Input received so far ends here. */
   private inEnd = 0;
 
-  constructor(g?: number) {
+  /** Blocks whose Spleeter masks were still missing after the wait (combined with mask 0). */
+  splMisses = 0;
+  /** Running Spleeter loop (one step at a time, in order); null when idle. */
+  private splRun: Promise<void> | null = null;
+  private splTarget = -1;
+  private splModel: ModelFn | null = null;
+  /** Bumped by reset: a step still in flight from the old stream is dropped. */
+  private gen = 0;
+
+  constructor(g?: number, private readonly splWaitMs: number = SPL_WAIT_MS) {
     this.kara = new KaraokeCombiner(g);
   }
 
   reset(): void {
+    this.gen++;
+    this.splTarget = -1;
+    this.splRun = null;
+    this.splMisses = 0;
     this.mdx.reset();
     this.spl.reset();
     this.kara.reset();
@@ -81,9 +100,19 @@ export class MlPipeline {
     // 1. MDX first.
     await this.mdx.process(inL, inR, models.mdx, regL, regR);
     kara.writeVocal(pos - H, regL, regR, H);
-    // 2. The Spleeter steps the combine needs, then the combine.
-    await this.spleeterUntil(kara.neededMask(pos), models.spleeter);
-    kara.advance(pos);
+    // 2. The Spleeter steps the combine needs (bounded wait), then the combine; missing masks count as 0.
+    const need = kara.neededMask(pos);
+    if (kara.maskFrame < need) {
+      const run = this.spleeterUntil(need, models.spleeter);
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const late = await Promise.race([
+        run.then(() => false),
+        new Promise<boolean>((r) => (timer = setTimeout(() => r(true), this.splWaitMs))),
+      ]);
+      clearTimeout(timer);
+      if (late && kara.maskFrame < need) this.splMisses++;
+    }
+    kara.advance(pos, true);
     // 3. Output [pos − H − TAIL, pos − TAIL): complete because every frame starting before it ends by `pos`.
     const o = pos - H - KARAOKE_TAIL;
     kara.emit(o, H, vkL, vkR);
@@ -92,21 +121,40 @@ export class MlPipeline {
     this.b++;
   }
 
-  /** Run the Spleeter steps that are left for the input received so far. */
+  /** Run the Spleeter steps that are left for the input received so far (also finishes a late run). */
   catchUp(model: ModelFn): Promise<void> {
     return this.spleeterUntil(Infinity, model);
   }
 
-  private async spleeterUntil(frame: number, model: ModelFn): Promise<void> {
+  /**
+   * Raise the target and return the loop that reaches it. A late loop keeps running in the background and is
+   * shared, so Spleeter's steps stay one at a time and in order.
+   */
+  private spleeterUntil(frame: number, model: ModelFn): Promise<void> {
+    this.splModel = model;
+    if (frame > this.splTarget) this.splTarget = frame;
+    if (this.splRun) return this.splRun;
+    const run: Promise<void> = this.spleeterLoop().finally(() => {
+      if (this.splRun === run) {
+        this.splRun = null;
+        this.splTarget = -1;
+      }
+    });
+    return (this.splRun = run);
+  }
+
+  private async spleeterLoop(): Promise<void> {
     const { fifo, sL, sR, kara } = this;
-    while (this.splPos + SPL_BLOCK <= this.inEnd && kara.maskFrame < frame) {
+    const gen = this.gen;
+    while (gen === this.gen && this.splPos + SPL_BLOCK <= this.inEnd && kara.maskFrame < this.splTarget) {
       for (let i = 0; i < SPL_BLOCK; i++) {
         const j = (this.splPos + i) & FMASK;
         sL[i] = fifo[j];
         sR[i] = fifo[FIFO + j];
       }
       this.spl.analyze(sL, sR);
-      const v = await model(this.spl.x);
+      const v = await this.splModel!(this.spl.x);
+      if (gen !== this.gen) return;
       const t0 = this.spl.masks(v, this.maskBlock);
       kara.pushMasks(t0, this.maskBlock);
       this.splPos += SPL_BLOCK;

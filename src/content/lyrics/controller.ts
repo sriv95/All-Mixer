@@ -47,8 +47,8 @@ export interface LyricsDeps {
   fetchLyrics(track: TrackInfo): Promise<FoundLyrics | null>;
   /** Subscribe to "the player just loaded captions for this video" (user turned CC on). */
   onCaptionsAvailable?(cb: (videoId: string) => void): void;
-  /** Seconds between `video.currentTime` and what the user hears (Separate-mode latency, D1). */
-  audioDelay?(): number;
+  /** Media time of the picture on screen (delayed-video overlay, D1); null when there is no overlay. */
+  presentedTime?(): number | null;
 }
 
 /** Fetched caption track. `index` points into `PlayerInfo.captionTracks`. */
@@ -150,6 +150,8 @@ export class LyricsController {
   private abort: AbortController | null = null;
   private video: HTMLVideoElement | null = null;
   private raf = 0;
+  private lastPresented: number | null = null;
+  private lastMoved = 0;
   /** LRCLIB result and caption tracks for `loadedFor`, kept for re-alignment. */
   private base: { videoId: string; info: PlayerInfo; track: TrackInfo; found: FoundLyrics | null } | null = null;
   /** A captions event arrived while `load()` was still running; re-align as soon as `base` is set. */
@@ -252,7 +254,7 @@ export class LyricsController {
     const active = this.anyActive();
     const wanted = active || [...this.surfaces].some((s) => s.prefetch);
     if (wanted && this.videoId && this.loadedFor !== this.videoId) void this.load(this.videoId);
-    if (active && this.video && !this.video.paused) this.startLoop();
+    if (active && this.video && (!this.video.paused || this.draining())) this.startLoop();
     else this.stopLoop();
     if (active) this.tick();
   }
@@ -392,16 +394,30 @@ export class LyricsController {
   private tick = (): void => {
     const v = this.video;
     if (!v || this.state.kind !== 'ready') return;
-    const t = v.currentTime - (this.deps.audioDelay?.() ?? 0);
+    const t = this.deps.presentedTime?.() ?? v.currentTime;
     for (const s of this.surfaces) if (s.active) s.update(t);
   };
 
   private readonly onVideoEvent = (): void => this.refresh();
 
+  /** Paused, but the delayed picture may still be playing out its queue; the loop stops itself once the time stops moving. */
+  private draining(): boolean {
+    return this.deps.presentedTime?.() != null;
+  }
+
   private startLoop(): void {
     if (this.raf) return;
+    this.lastMoved = performance.now();
     const loop = () => {
       this.tick();
+      const p = this.deps.presentedTime?.() ?? null;
+      const now = performance.now();
+      if (p !== this.lastPresented) this.lastMoved = now;
+      this.lastPresented = p;
+      if (this.video?.paused && now - this.lastMoved > DRAIN_IDLE_MS) {
+        this.raf = 0;
+        return;
+      }
       this.raf = requestAnimationFrame(loop);
     };
     this.raf = requestAnimationFrame(loop);
@@ -413,6 +429,9 @@ export class LyricsController {
   }
 }
 
+/** After a pause, stop the frame loop once the presented time has not moved for this long. */
+const DRAIN_IDLE_MS = 250;
+
 /** Delays after CC turns on, measured from the button press. */
 const REALIGN_RETRY_MS = [1000, 3000, 6000];
 
@@ -423,7 +442,7 @@ function nativeIndex(tracks: readonly CaptionTrack[], lang?: string): number {
   return manual >= 0 ? manual : tracks.findIndex((t) => t.languageCode === lang);
 }
 
-const VIDEO_EVENTS = ['play', 'pause', 'seeked', 'ratechange', 'loadedmetadata'] as const;
+const VIDEO_EVENTS = ['play', 'pause', 'waiting', 'seeked', 'ratechange', 'loadedmetadata'] as const;
 
 function sameTiming(a: Lyrics, b: Lyrics): boolean {
   if (a.kind !== 'synced' || b.kind !== 'synced') return a.kind === b.kind;
