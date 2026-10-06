@@ -153,6 +153,9 @@ def evaluate(tag):
     with ProcessPoolExecutor() as ex:
         for r, x in zip(rows, ex.map(_extra, [(d, tag) for d in dirs])):
             r.update(x)
+    pc = ROOT.parents[1] / 'bench/results/perclip'
+    if pc.is_dir():  # per-clip vocal_leak, for 'clips at or below c0' counts
+        json.dump({r['clip']: (None if np.isnan(r['vocal_leak']) else float(r['vocal_leak'])) for r in rows}, open(pc / f'{tag}.json', 'w'))
     keys = [k for k in rows[0] if k != 'clip']
     summary = {k: round(float(np.nanmedian([r[k] for r in rows])), 2) for k in keys}
     summary['p10_bass_ret'] = round(float(np.nanpercentile([r['bass_ret'] for r in rows], 10)), 2)
