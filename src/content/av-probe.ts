@@ -17,6 +17,7 @@ const MEDIA_EVENTS = ['play', 'pause', 'seeking', 'seeked', 'waiting', 'playing'
 const FFT_SIZE = 2048;
 const MAX_TRANSITIONS = 20;
 const MAX_EDGES = 80;
+const TRACE_FRAMES = 10;
 
 const readFlag = (): boolean => {
   try {
@@ -44,6 +45,8 @@ export class AvProbe {
   private readonly pending: { kind: 'pause' | 'play'; at: number }[] = [];
   private readonly done: AvTransition[] = [];
   private awaitingPlay = false;
+  private readonly traceCounts: Record<string, number> = {};
+  private overlayInfo: (() => Record<string, number>) | null = null;
 
   constructor(private readonly readEnabled: () => boolean = readFlag) {
     this.refresh();
@@ -85,11 +88,29 @@ export class AvProbe {
     if (this.enabled) this.startAudio();
   }
 
+  /** Overlay state (queue size etc.) for the resume trace. */
+  setOverlayInfo(fn: (() => Record<string, number>) | null): void {
+    this.overlayInfo = fn;
+  }
+
+  /**
+   * SRI-131 resume frame trace: logs the first ~10 `kind` entries after each
+   * pause / play event. Returns true if it logged (caller can skip work otherwise).
+   */
+  trace(kind: string, data: Record<string, unknown>): boolean {
+    if (!this.enabled || (this.traceCounts[kind] ?? 0) >= TRACE_FRAMES) return false;
+    this.traceCounts[kind] = (this.traceCounts[kind] ?? 0) + 1;
+    console.log(PREFIX, 'trace', JSON.stringify({ kind, now: performance.now(), n: this.traceCounts[kind], ...data }));
+    return true;
+  }
+
   /** The overlay drew a frame (rAF time `t`). */
   overlayFrame(mediaTime: number, t: number): void {
     if (!this.enabled || mediaTime === this.lastOverlayMedia) return;
     this.lastOverlayMedia = mediaTime;
-    this.record(this.overlayEdges.event(t), 'overlay');
+    const edges = this.overlayEdges.event(t);
+    this.trace('probeOverlayFrame', { mediaTime, rafT: t, edge: edges.map((e) => e.kind + '@' + e.at) });
+    this.record(edges, 'overlay');
   }
 
   /** The overlay stopped: picture offsets fall back to the real video. */
@@ -118,6 +139,14 @@ export class AvProbe {
     this.st.events[e.type] = at;
     console.log(PREFIX, e.type, JSON.stringify({ at }));
     this.flush(at);
+    if (e.type === 'play' || e.type === 'pause') for (const k of Object.keys(this.traceCounts)) this.traceCounts[k] = 0;
+    if (e.type === 'play' || e.type === 'playing' || e.type === 'pause') {
+      console.log(
+        PREFIX,
+        'trace',
+        JSON.stringify({ kind: e.type, now: at, currentTime: this.video?.currentTime, ...this.overlayInfo?.() }),
+      );
+    }
     if (e.type === 'pause') {
       this.pending.push({ kind: 'pause', at });
       this.awaitingPlay = true;
@@ -135,7 +164,9 @@ export class AvProbe {
       this.vfc = this.video?.requestVideoFrameCallback(cb) ?? 0;
       if (md.mediaTime === this.lastVideoMedia) return;
       this.lastVideoMedia = md.mediaTime;
-      this.record(this.videoEdges.event(md.expectedDisplayTime), 'video');
+      const edges = this.videoEdges.event(md.expectedDisplayTime);
+      this.trace('probeVideoFrame', { mediaTime: md.mediaTime, expectedDisplayTime: md.expectedDisplayTime, edge: edges.map((e) => e.kind + '@' + e.at) });
+      this.record(edges, 'video');
     };
     this.vfc = this.video.requestVideoFrameCallback(cb);
     this.loop();
