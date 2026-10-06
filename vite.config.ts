@@ -2,15 +2,15 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from
 import { resolve } from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
 
-// ML engine assets (SRI-24): the model is fetched at build time (public/ml/vocals.onnx, copied by
+// ML engine assets (SRI-24, SRI-117): the models are fetched at build time (public/ml/vocals.onnx + mdx.onnx, copied by
 // publicDir) and ORT's WebGPU wasm is copied next to the worker, which loads it by URL.
 const ORT_FILES = ['ort-wasm-simd-threaded.asyncify.wasm', 'ort-wasm-simd-threaded.asyncify.mjs'];
 function mlAssets(): Plugin {
   return {
     name: 'all-mixer-ml-assets',
     buildStart() {
-      if (!existsSync(resolve(__dirname, 'public/ml/vocals.onnx'))) {
-        this.error('public/ml/vocals.onnx is missing: run bun run fetch-model');
+      for (const f of ['vocals.onnx', 'mdx.onnx']) {
+        if (!existsSync(resolve(__dirname, 'public/ml', f))) this.error(`public/ml/${f} is missing: run bun run fetch-model (mdx.onnx needs PY=python with onnx + onnxconverter-common)`);
       }
     },
     closeBundle() {

@@ -9,6 +9,7 @@ spike/ml/models/
 # model packaging (SRI-29)
 .cache/
 public/ml/vocals.onnx
+public/ml/mdx.onnx
 __pycache__/
 # local QA harness scratch (Shadow)
 .qa-out/
