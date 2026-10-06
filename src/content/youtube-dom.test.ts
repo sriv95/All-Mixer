@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { HIDE_CAPTIONS_STYLE_ID, findControlBar, findPlayer, setYtCaptionsHidden, NAVIGATION_EVENTS, onCaptionsButtonOn, detectSite, findMainVideo, getVideoId, onNavigate, watchMainVideo } from './youtube-dom';
+import { HIDE_CAPTIONS_STYLE_ID, findSettingsButton, findSettingsMainMenu, findSettingsPopup, findControlBar, findPlayer, setYtCaptionsHidden, NAVIGATION_EVENTS, onCaptionsButtonOn, detectSite, findMainVideo, getVideoId, onNavigate, watchMainVideo } from './youtube-dom';
 
 const fixture = (name: string) => readFileSync(`src/content/__fixtures__/${name}.html`, 'utf8');
 
@@ -203,5 +203,38 @@ describe('player hooks (karaoke)', () => {
     const player = document.getElementById('movie_player')!;
     expect(findControlBar('youtube', player)).toBe(player.firstElementChild);
     expect(findControlBar('ytmusic', player)).toBeNull();
+  });
+});
+
+describe('settings menu hooks', () => {
+  afterEach(() => {
+    document.body.replaceChildren();
+  });
+
+  const build = () => {
+    document.body.innerHTML = `
+      <button class="ytp-button ytp-settings-button"></button>
+      <div class="ytp-popup ytp-settings-menu">
+        <div class="ytp-panel" id="sub"><div class="ytp-panel-header"><button class="ytp-panel-back-button"></button></div><div class="ytp-panel-menu" id="subm"></div></div>
+        <div class="ytp-panel" id="ours" data-own><div class="ytp-panel-menu" id="ourm"></div></div>
+        <div class="ytp-panel" id="main"><div class="ytp-panel-menu" id="mainm"><div class="ytp-menuitem"><div class="ytp-menuitem-label"></div><div class="ytp-menuitem-content"></div></div></div></div>
+      </div>`;
+  };
+
+  it('finds the gear button and the popup', () => {
+    build();
+    expect(findSettingsButton()).toBe(document.querySelector('.ytp-settings-button'));
+    expect(findSettingsPopup()).toBe(document.querySelector('.ytp-settings-menu'));
+  });
+
+  it('finds the main panel menu, skipping header panels and our own', () => {
+    build();
+    expect(findSettingsMainMenu(findSettingsPopup()!, 'data-own')?.id).toBe('mainm');
+  });
+
+  it('returns null without a popup or main panel', () => {
+    expect(findSettingsPopup()).toBeNull();
+    expect(findSettingsButton()).toBeNull();
+    expect(findSettingsMainMenu(document.createElement('div'), 'data-own')).toBeNull();
   });
 });
