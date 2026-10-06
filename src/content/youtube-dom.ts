@@ -194,6 +194,13 @@ export function findPlayer(site: Site, doc: ParentNode = document): HTMLElement 
   return doc.querySelector<HTMLElement>(PLAYER_SELECTORS.player[site]);
 }
 
+/** Classes the player carries while it plays an ad. */
+export const AD_PLAYER_SELECTOR = '.ad-showing, .ad-interrupting';
+
+export function isAdShowing(player: Element): boolean {
+  return player.matches(AD_PLAYER_SELECTOR);
+}
+
 export function findControlBar(site: Site, player: ParentNode): HTMLElement | null {
   const selector = PLAYER_SELECTORS.controlBar[site];
   return selector ? player.querySelector<HTMLElement>(selector) : null;
