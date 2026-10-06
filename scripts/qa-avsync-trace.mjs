@@ -23,7 +23,9 @@ const setS = async (s) => { const id = await tabId(); await sw.evaluate(([id, s]
 const probe = async () => { const id = await tabId(); return (await sw.evaluate((id) => chrome.tabs.sendMessage(id, { type: 'get-status' }), id)).avProbe; };
 const v = (fn, arg) => page.evaluate(fn, arg);
 // HIDE_CANVAS=1: experiment, hide the overlay canvas (display:none) so the real <video> is not covered while it resumes.
-const play = () => v((hide) => { if (hide) document.querySelectorAll('canvas.all-mixer-delayed-video').forEach((c) => (c.style.display = 'none')); return document.querySelector('video').play().catch(() => {}); }, !!process.env.HIDE_CANVAS);
+// SRI-137: first rVFC after each play(): delay (ms since play()) and mediaTime lag vs currentTime.
+await v((nh) => { window.__rv = []; window.__noHook = nh; }, !!process.env.NOHOOK);
+const play = () => v((hide) => { const e0 = document.querySelector('video'); const t0 = performance.now(); if (!window.__noHook) e0.requestVideoFrameCallback((n, md) => window.__rv.push({ delay: n - t0, lag: (e0.currentTime - md.mediaTime) * 1000 }));  if (hide) document.querySelectorAll('canvas.all-mixer-delayed-video').forEach((c) => (c.style.display = 'none')); return document.querySelector('video').play().catch(() => {}); }, !!process.env.HIDE_CANVAS);
 const pause = () => v(() => document.querySelector('video').pause());
 const f = (x) => (x === undefined || x === null ? '   -  ' : x.toFixed(1).padStart(6));
 const rows = []; let seen = 0;
@@ -49,10 +51,16 @@ const VARS = {
   'separate+overlay0': { mode: 'separate', pct: 100, wait: 8000, debug: 0 },
   'separate+bypass': { mode: 'separate', pct: 100, wait: 1000 },
 };
+const LAYOUTS = (process.env.LAYOUTS || '').split(',').map((x) => x.trim()).filter((x) => x !== '');
 const want = (process.env.VARIANTS || 'default150+overlay2000,separate').split(',').map((x) => x.trim()).filter(Boolean);
-for (const name of want) {
+const runs = LAYOUTS.length ? LAYOUTS.flatMap((l) => want.map((n) => [n, l])) : want.map((n) => [n, '']);
+const rvStats = [];
+for (const [name0, layout] of runs) {
+  const name = name0;
+  await v((l) => { if (l && l !== 'default') localStorage.setItem('allMixer.avProbeLayout', l); else localStorage.removeItem('allMixer.avProbeLayout'); }, layout);
+  await v(() => { window.__rv = []; });
   const c = VARS[name]; if (!c) { console.error('unknown variant', name); continue; }
-  const mode = name; await dbg(null); await sleep(500);
+  const mode = layout ? `${name}@${layout}` : name; await dbg(null); await sleep(500);
   // 100% Default leaves the page audio untouched (no graph, nothing to probe), so Default runs at 150%.
   await setS({ ...base, mode: c.mode, masterPct: c.pct });
   if (c.debug !== undefined) await dbg(c.debug);
@@ -61,12 +69,14 @@ for (const name of want) {
   await pause(); await sleep(1000);
   await v(() => { const e = document.querySelector('video'); e.currentTime = Math.max(0, e.currentTime + 30); }, 0); await sleep(2000);
   await play(); await step(mode, 'seek +30');
+  rvStats.push([mode, await v(() => window.__rv)]);
 }
 await dbg(null);
 const st = (a) => (a.length ? `mean ${(a.reduce((x, y) => x + y, 0) / a.length).toFixed(1)} range [${Math.min(...a).toFixed(1)}, ${Math.max(...a).toFixed(1)}] n=${a.length}` : 'n=0');
 console.log('variant                 step      kind  offset(ms; sound - picture)  pipeline  missing');
 for (const r of rows) console.log(`${r.mode.padEnd(22)} ${r.label.padEnd(9)} ${r.kind.padEnd(5)} ${f(r.off)}  ${f(r.pipe)}  ${(r.missing ?? []).join(',')}`);
-for (const name of want) { const pl = rows.filter((r) => r.mode === name && r.kind === 'play'); console.log(`${name}: resume playOffsetMs ${st(pl.map((r) => r.off).filter((x) => x != null))}; pipelineMs ${st(pl.map((r) => r.pipe).filter((x) => x != null))}`); }
+for (const name of want.flatMap((n) => (LAYOUTS.length ? LAYOUTS.map((l) => `${n}@${l}`) : [n]))) { const pl = rows.filter((r) => r.mode === name && r.kind === 'play'); console.log(`${name}: resume playOffsetMs ${st(pl.map((r) => r.off).filter((x) => x != null))}; pipelineMs ${st(pl.map((r) => r.pipe).filter((x) => x != null))}`); }
+for (const [m, rv] of rvStats) console.log(`${m}: first rVFC after play() delay ms [${rv.map((x) => x.delay.toFixed(0))}]; mediaTime lag ms [${rv.map((x) => x.lag.toFixed(0))}]`);
 fs.writeFileSync(path.join(OUT, 'qa-avsync-trace.json'), JSON.stringify({ rows, logs }, null, 1));
 console.error(`raw rows + ${logs.length} probe log lines: ${path.join(OUT, 'qa-avsync-trace.json')}`);
 await ctx.close();
