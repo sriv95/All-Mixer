@@ -65,7 +65,6 @@ export class MlPipeline {
     this.gen++;
     this.splTarget = -1;
     this.splRun = null;
-    this.splMisses = 0;
     this.mdx.reset();
     this.spl.reset();
     this.kara.reset();
