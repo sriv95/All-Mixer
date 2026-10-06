@@ -246,4 +246,22 @@ describe('KaraokeSurface mount on YT Music', () => {
     expect(root()!.style.width).toBe('800px');
     expect(root()!.style.height).toBe('450px');
   });
+
+  it('mounts inside the player while the player itself is fullscreen', () => {
+    document.body.innerHTML = '<ytmusic-player><div id="movie_player"></div></ytmusic-player>';
+    const p = document.getElementById('movie_player')!;
+    p.getBoundingClientRect = () => rect({ left: 0, top: 0, width: 800, height: 450, right: 800, bottom: 450 });
+    const s = new KaraokeSurface({ site: 'ytmusic', getPrefs: () => prefs, onPosition: () => {} });
+    s.render(synced);
+    s.update(1.5);
+    const own = () => (s as unknown as { root: HTMLElement }).root.parentElement;
+    expect(own()!.tagName.toLowerCase()).toBe('ytmusic-player');
+    Object.defineProperty(document, 'fullscreenElement', { configurable: true, get: () => p });
+    document.dispatchEvent(new Event('fullscreenchange'));
+    expect(own()).toBe(p);
+    Object.defineProperty(document, 'fullscreenElement', { configurable: true, get: () => null });
+    document.dispatchEvent(new Event('fullscreenchange'));
+    expect(own()!.tagName.toLowerCase()).toBe('ytmusic-player');
+    s.destroy();
+  });
 });

@@ -87,7 +87,7 @@ export class KaraokeSurface implements LyricsSurface {
     this.block.addEventListener('pointermove', this.onMove);
     this.block.addEventListener('pointerup', this.onUp);
     this.block.addEventListener('pointercancel', this.onUp);
-    doc.addEventListener('fullscreenchange', this.layout);
+    doc.addEventListener('fullscreenchange', this.onFullscreen);
   }
 
   get active(): boolean {
@@ -145,7 +145,7 @@ export class KaraokeSurface implements LyricsSurface {
   destroy(): void {
     this.observe(null);
     this.root.remove();
-    this.doc.removeEventListener('fullscreenchange', this.layout);
+    this.doc.removeEventListener('fullscreenchange', this.onFullscreen);
   }
 
   private observe(player: HTMLElement | null): void {
@@ -222,11 +222,16 @@ export class KaraokeSurface implements LyricsSurface {
     this.place(this.pos);
   };
 
+  private onFullscreen = (): void => {
+    this.sync();
+    this.layout();
+  };
+
   /** When mounted outside the player, cover exactly the player rect. */
   private fitRoot(): void {
     const s = this.root.style;
     if (!this.player || this.root.parentNode === this.player) {
-      s.left = s.top = s.width = s.height = '';
+      s.inset = s.left = s.top = s.width = s.height = '';
       return;
     }
     const p = this.player.getBoundingClientRect();
