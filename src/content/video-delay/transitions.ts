@@ -19,6 +19,7 @@ export interface Transition {
   playOffsetMs?: number;
   pauseOffsetMs?: number;
   pipelineMs?: number;
+  level?: { rms: number; peak: number; firstAboveMs?: number };
   /** Edges not seen in the window, e.g. 'audioOff'. */
   missing: string[];
 }
@@ -61,8 +62,10 @@ export function pairTransition(
   const [lo0, hi] = windowFor(kind, at, delayMs, latencyMs);
   const lo = kind === 'play' ? lo0 - PLAY_SLACK_MS : lo0;
   const want = kind === 'pause' ? 'off' : 'on';
+  // A seek resets the overlay: it emits on and off at the same ms. That pair is stale, not a picture edge.
+  const stale = (x: PairEdge): boolean => x.source === 'overlay' && edges.some((y) => y !== x && y.source === 'overlay' && y.kind !== x.kind && y.t === x.t);
   const first = (source: EdgeSource): PairEdge | undefined => {
-    const e = edges.filter((x) => x.source === source && x.kind === want && x.t >= lo && x.t <= hi && !used.has(x)).sort((a, b) => a.t - b.t)[0];
+    const e = edges.filter((x) => x.source === source && x.kind === want && x.t >= lo && x.t <= hi && !used.has(x) && !stale(x)).sort((a, b) => a.t - b.t)[0];
     if (e) used.add(e);
     return e;
   };
