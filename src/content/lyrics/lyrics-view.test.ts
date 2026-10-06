@@ -188,6 +188,7 @@ describe('LyricsView', () => {
   it('shows a caption language menu with an auto-translate group and reports the pick', () => {
     const onCaptionTrack = vi.fn();
     const v = new LyricsView({ onSeek, onCaptionTrack });
+    document.body.append(v.el);
     const options = [
       { index: 0, label: 'English', group: 'track' as const },
       { index: 1, label: 'Spanish', group: 'track' as const },
@@ -199,9 +200,13 @@ describe('LyricsView', () => {
     expect(sel.selectedOptions[0].textContent).toBe('Spanish');
     expect(sel.querySelector('optgroup')?.label).toBe('Auto-translate');
     expect(sel.querySelectorAll('optgroup option')).toHaveLength(1);
+    sel.focus();
+    expect(root.activeElement).toBe(sel);
     sel.value = '2';
     sel.dispatchEvent(new Event('change'));
+    expect(onCaptionTrack).toHaveBeenCalledTimes(1);
     expect(onCaptionTrack).toHaveBeenLastCalledWith({ index: 1, tlang: 'de' });
+    expect(root.activeElement).not.toBe(sel);
     sel.value = '0';
     sel.dispatchEvent(new Event('change'));
     expect(onCaptionTrack).toHaveBeenLastCalledWith({ index: 0 });
@@ -214,6 +219,31 @@ describe('LyricsView', () => {
     v.destroy();
   });
 
+  it('blurs the language and source selects after a pick so keys go back to the page', () => {
+    const onCaptionTrack = vi.fn();
+    const onSource = vi.fn();
+    const v = new LyricsView({ onSeek, onCaptionTrack, onSource });
+    document.body.append(v.el);
+    const options = [
+      { index: 0, label: 'English', group: 'track' as const },
+      { index: 1, label: 'Spanish', group: 'track' as const },
+    ];
+    v.setLyrics(synced(), { options, selected: { index: 0 } }, { pref: 'auto', available: { lrclib: true, captions: true } });
+    const root = v.el.shadowRoot!;
+    for (const [cls, value, cb, arg] of [['lang', '1', onCaptionTrack, { index: 1 }], ['src', 'captions', onSource, 'captions']] as const) {
+      const sel = root.querySelector<HTMLSelectElement>(`select.${cls}`)!;
+      sel.focus();
+      expect(root.activeElement).toBe(sel);
+      sel.value = value;
+      sel.dispatchEvent(new Event('change'));
+      expect(root.activeElement).not.toBe(sel);
+      expect(cb).toHaveBeenCalledTimes(1);
+      expect(cb).toHaveBeenCalledWith(arg);
+    }
+    v.destroy();
+    v.el.remove();
+  });
+
   it('shows a source menu with disabled unavailable sources, reports the pick and keeps keys from the page', () => {
     const onSource = vi.fn();
     const v = new LyricsView({ onSeek, onSource });
@@ -224,9 +254,13 @@ describe('LyricsView', () => {
     const opts = [...sel.options].map((o) => [o.textContent, o.disabled]);
     expect(opts).toEqual([['Auto', false], ['LRCLIB (not found)', true], ['YouTube captions', false]]);
     expect(sel.value).toBe('auto');
+    sel.focus();
+    expect(root.activeElement).toBe(sel);
     sel.value = 'captions';
     sel.dispatchEvent(new Event('change'));
+    expect(onSource).toHaveBeenCalledTimes(1);
     expect(onSource).toHaveBeenCalledWith('captions');
+    expect(root.activeElement).not.toBe(sel);
     const seen: string[] = [];
     const spy = (e: Event) => seen.push(e.type);
     for (const t of ['keydown', 'keypress', 'keyup']) document.addEventListener(t, spy);
