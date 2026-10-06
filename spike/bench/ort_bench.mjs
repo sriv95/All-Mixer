@@ -33,6 +33,8 @@ const models = [
   { name: 'spleeter-accomp-fp16', url: M + 'sherpa-onnx-spleeter-2stems-fp16/accompaniment.fp16_dynT.onnx', shape: (T) => [2, 1, T, 1024], Ts: [64, 128], frames: (T) => T * 1024 },
   { name: 'mdx-9482', url: M + 'UVR_MDXNET_9482_dynT.onnx', shape: (T) => [1, 4, 2048, T], Ts: [32, 64], frames: (T) => T * 1024 },
 ];
+const concurrent = args.includes('--concurrent');
+const concSeconds = +(args[args.indexOf('--seconds') + 1] || 60);
 const eps = [{ ep: 'webgpu', threads: 1 }, { ep: 'wasm', threads: 4 }, { ep: 'wasm', threads: 1 }];
 
 const browser = await chromium.launch({ headless, args: ['--enable-unsafe-webgpu', '--enable-features=Vulkan,WebGPU', '--enable-webgpu-developer-features', '--ignore-gpu-blocklist'] });
@@ -56,6 +58,18 @@ const software = !g || g.isFallback || /swiftshader|llvmpipe|software/i.test(JSO
 results.webgpuUsable = !software;
 if (software) console.error('!!! WebGPU adapter missing or software (SwiftShader): WebGPU rows will be skipped');
 
+if (concurrent) {
+  if (software) throw new Error('concurrent bench needs a hardware WebGPU adapter');
+  results.concurrent = [];
+  for (const splT of [64, 128]) {
+    await fresh();
+    const r = await page.evaluate((a) => window.concurrent(a), { ep: 'webgpu', seconds: concSeconds, mdxUrl: models[2].url, mdxShape: models[2].shape(64), splUrl: models[0].url, splShape: models[0].shape(splT) });
+    results.concurrent.push({ splT, ...r });
+    console.log(`concurrent MDX T=64 + Spleeter vocals T=${splT}`, JSON.stringify(r));
+  }
+  fs.writeFileSync(path.join(root, 'bench/results/ort_concurrent.json'), JSON.stringify(results, null, 2));
+  await browser.close(); server.close(); process.exit(0);
+}
 for (const m of models) for (const T of m.Ts) for (const e of eps) {
   const label = `${m.name} T=${T} ${e.ep}${e.ep === 'wasm' ? e.threads : ''}`;
   if (only && !label.includes(only)) continue;

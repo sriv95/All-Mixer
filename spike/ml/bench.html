@@ -31,5 +31,44 @@ window.bench = async ({ url, ep, threads, shape, runs }) => {
   await sess.release();
   return { outDims: window.__dims, downloadBytes: buf.byteLength, fetchMs, createMs, firstMs, p50: pct(times, 0.5), p95: pct(times, 0.95), min: Math.min(...times), jsHeapDeltaMB: heap1 && heap0 ? (heap1 - heap0) / 1048576 : null };
 };
+// Both models on one page / one WebGPU device, driven on the real schedule: MDX every 32768 samples, Spleeter every 4096 samples (wall-clock paced).
+window.concurrent = async ({ mdxUrl, mdxShape, splUrl, splShape, seconds, ep }) => {
+  const mk = async (url, shape) => {
+    const sess = await ort.InferenceSession.create(await (await fetch(url)).arrayBuffer(), { executionProviders: [ep], graphOptimizationLevel: 'all' });
+    const n = shape.reduce((a, b) => a * b, 1), d = new Float32Array(n);
+    for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    const feeds = { [sess.inputNames[0]]: new ort.Tensor('float32', d, shape) };
+    const run = async () => { const t0 = performance.now(); const o = await sess.run(feeds); await o[sess.outputNames[0]].getData(); return performance.now() - t0; };
+    await run(); await run();
+    return { sess, run, times: [], late: [], resp: [] };
+  };
+  let chain = Promise.resolve();
+  const exclusive = (f) => { const p = chain.then(f); chain = p.catch(() => {}); return p; };  // concurrent sess.run on two sessions never returns in ORT-web WebGPU (observed), so one run in flight
+  const mdx = await mk(mdxUrl, mdxShape), spl = await mk(splUrl, splShape);
+  const tick = (m, periodMs, tEnd, t0) => new Promise((res) => {
+    let k = 0;
+    const fire = async () => {
+      const due = t0 + k * periodMs; k++;
+      if (due > tEnd) return res();
+      const wait = due - performance.now();
+      if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+      const start = performance.now();
+      m.late.push(start - due);
+      m.times.push(await exclusive(m.run)); m.resp.push(performance.now() - due);
+      fire();
+    };
+    fire();
+  });
+  const t0 = performance.now() + 50, tEnd = t0 + seconds * 1000;
+  await Promise.all([tick(mdx, 32768 / 44.1, tEnd, t0), tick(spl, 4096 / 44.1, tEnd, t0)]);
+  const wall = performance.now() - t0;
+  const sum = (a) => a.reduce((x, y) => x + y, 0);
+  const st = (m) => ({ runs: m.times.length, p50: pct(m.times, 0.5), p95: pct(m.times, 0.95), max: Math.max(...m.times), respP50: pct(m.resp, 0.5), respP95: pct(m.resp, 0.95), respMax: Math.max(...m.resp), meanMs: sum(m.times) / m.times.length });
+  const out = { seconds, wallMs: wall, mdx: st(mdx), spl: st(spl), rtMean: (sum(mdx.times) + sum(spl.times)) / wall,
+    // per-period ratio at p95: (MDX p95 per hop + Spleeter p95 per block * blocks per hop) / audio hop time
+    rtP95: (pct(mdx.times, 0.95) + pct(spl.times, 0.95) * 8) / (32768 / 44.1) };
+  await mdx.sess.release(); await spl.sess.release();
+  return out;
+};
 window.ready = true;
 </script>
