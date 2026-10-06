@@ -97,6 +97,7 @@ export class DelayedVideo {
     // changes; a ResizeObserver alone misses position-only changes.
     this.styleObserver = new MutationObserver(() => this.layout());
     video.addEventListener('seeking', this.onSeeking);
+    probe?.setOverlayInfo(() => ({ queue: this.queue.size, delay: this.schedule.target, shown: this.shown ? 1 : 0 }));
   }
 
   get state(): OverlayState {
@@ -283,10 +284,21 @@ export class DelayedVideo {
     const delay = this.schedule.at(md.expectedDisplayTime);
     const due = md.expectedDisplayTime + delay;
     const epoch = this.epoch;
+    const rvfcAt = performance.now();
+    this.probe?.trace('rvfc', {
+      rvfcNow: _now,
+      mediaTime: md.mediaTime,
+      expectedDisplayTime: md.expectedDisplayTime,
+      due,
+      delay,
+      currentTime: this.video.currentTime,
+      queue: this.queue.size,
+    });
     createImageBitmap(this.video, { resizeWidth: this.capW, resizeHeight: this.capH, resizeQuality: 'low' }).then(
       (bmp) => {
         this.captureErrors = 0;
         if (epoch !== this.epoch || !this.running) return bmp.close();
+        this.probe?.trace('bitmap', { mediaTime: md.mediaTime, due, captureMs: performance.now() - rvfcAt });
         this.queue.push({ due, mediaTime: md.mediaTime, delay, img: bmp }, performance.now());
       },
       () => {
@@ -312,6 +324,14 @@ export class DelayedVideo {
       this.offsets.shift();
     }
     const first = !this.shown;
+    this.probe?.trace('draw', {
+      rafT: t,
+      mediaTime: frame.mediaTime,
+      due: frame.due,
+      lateMs: performance.now() - frame.due,
+      currentTime: this.video.currentTime,
+      queue: this.queue.size,
+    });
     this.probe?.overlayFrame(frame.mediaTime, t);
     this.shown?.close();
     this.shown = frame.img;
