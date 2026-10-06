@@ -31,10 +31,19 @@ export interface PairEdge extends LoggedEdge {
   inputAt?: number;
 }
 
-export const windowFor = (kind: 'pause' | 'play', at: number): [number, number] => [kind === 'pause' ? at - PRE_PAUSE_MS : at, at + WINDOW_MS];
+export const MARGIN_MS = 1000;
 
-export function pairTransition(kind: 'pause' | 'play', at: number, edges: readonly PairEdge[]): Transition {
-  const [lo, hi] = windowFor(kind, at);
+/** Window end offset: WINDOW_MS, or more when the overlay delay and separator latency push the edges later. */
+export const windowSpanMs = (delayMs = 0, latencyMs = 0): number =>
+  delayMs > 0 || latencyMs > 0 ? Math.max(WINDOW_MS, Math.max(0, delayMs) + Math.max(0, latencyMs) + MARGIN_MS) : WINDOW_MS;
+
+export const windowFor = (kind: 'pause' | 'play', at: number, delayMs = 0, latencyMs = 0): [number, number] => [
+  kind === 'pause' ? at - PRE_PAUSE_MS : at,
+  at + windowSpanMs(delayMs, latencyMs),
+];
+
+export function pairTransition(kind: 'pause' | 'play', at: number, edges: readonly PairEdge[], delayMs = 0, latencyMs = 0): Transition {
+  const [lo, hi] = windowFor(kind, at, delayMs, latencyMs);
   const want = kind === 'pause' ? 'off' : 'on';
   const first = (source: EdgeSource): PairEdge | undefined =>
     edges.filter((e) => e.source === source && e.kind === want && e.t >= lo && e.t <= hi).sort((a, b) => a.t - b.t)[0];

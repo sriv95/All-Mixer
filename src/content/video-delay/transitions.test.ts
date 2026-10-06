@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { pairTransition, type PairEdge } from './transitions';
+import { pairTransition, windowFor, type PairEdge } from './transitions';
 
 const e = (source: PairEdge['source'], kind: 'on' | 'off', t: number, inputAt?: number): PairEdge => ({ source, kind, t, inputAt });
 
@@ -37,5 +37,30 @@ describe('pairTransition', () => {
     const tr = pairTransition('play', 5000, [e('video', 'on', 5100)]);
     expect(tr.playOffsetMs).toBeUndefined();
     expect(tr.missing).toEqual(['audioOn']);
+  });
+});
+
+describe('windowFor with delay', () => {
+  it('keeps 1500 ms without an overlay', () => {
+    expect(windowFor('play', 1000)).toEqual([1000, 2500]);
+    expect(windowFor('pause', 1000, 0, 0)).toEqual([700, 2500]);
+  });
+  it('extends to delay + latency + 1000 ms', () => {
+    expect(windowFor('play', 1000, 2000, 2000)[1]).toBe(6000);
+    expect(windowFor('pause', 1000, 2000, 0)).toEqual([700, 4000]);
+  });
+  it('never shrinks below 1500 ms', () => {
+    expect(windowFor('play', 0, 100, 0)[1]).toBe(1500);
+  });
+  it('pairs late overlay and audio edges only with the wide window', () => {
+    const edges: PairEdge[] = [
+      { source: 'video', kind: 'on', t: 1100 },
+      { source: 'overlay', kind: 'on', t: 3100 },
+      { source: 'audio', kind: 'on', t: 3000, inputAt: 1000 },
+    ];
+    expect(pairTransition('play', 1000, edges).missing).toContain('audioOn');
+    const t = pairTransition('play', 1000, edges, 2000, 2000);
+    expect(t.missing).toEqual([]);
+    expect(t.playOffsetMs).toBe(-100);
   });
 });
