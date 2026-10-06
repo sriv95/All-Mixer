@@ -37,22 +37,33 @@ async function step(mode, label) {
 // One real gesture (neutral spot, not the player) so the AudioContext may start.
 await page.mouse.click(5, 450); await sleep(500);
 await play(); await sleep(4000);
-for (const mode of ['default', 'separate']) {
+// SRI-128: VARIANTS (comma list, default all) bisects the resume lead. Steps per variant: 3x pause/play + 1 seek.
+const dbg = async (delayMs) => { const id = await tabId(); await sw.evaluate(([id, d]) => chrome.tabs.sendMessage(id, { type: 'debug-video-delay', delayMs: d }), [id, delayMs]); };
+const VARS = {
+  default150: { mode: 'default', pct: 150, wait: 2500 },
+  'default150+overlay2000': { mode: 'default', pct: 150, wait: 2500, debug: 2000 },
+  separate: { mode: 'separate', pct: 100, wait: 8000 },
+  'separate+overlay0': { mode: 'separate', pct: 100, wait: 8000, debug: 0 },
+  'separate+bypass': { mode: 'separate', pct: 100, wait: 1000 },
+};
+const want = (process.env.VARIANTS || Object.keys(VARS).join(',')).split(',').map((x) => x.trim()).filter(Boolean);
+for (const name of want) {
+  const c = VARS[name]; if (!c) { console.error('unknown variant', name); continue; }
+  const mode = name; await dbg(null); await sleep(500);
   // 100% Default leaves the page audio untouched (no graph, nothing to probe), so Default runs at 150%.
-  await setS({ ...base, mode, masterPct: mode === 'default' ? 150 : 100 }); await sleep(mode === 'separate' ? 8000 : 2500); await play(); await sleep(1500);
-  if (mode === 'default') console.error('Default raw avProbe:', JSON.stringify({ ...(await probe()), events: undefined, transitions: undefined }));
+  await setS({ ...base, mode: c.mode, masterPct: c.pct });
+  if (c.debug !== undefined) await dbg(c.debug);
+  await sleep(c.wait); await play(); await sleep(1500);
   for (let i = 1; i <= 3; i++) { await pause(); await sleep(2000); await step(mode, `pause ${i}`); await play(); await step(mode, `play ${i}`); }
-  for (const d of [30, -10]) {
-    await pause(); await sleep(1000);
-    await v((d) => { const e = document.querySelector('video'); e.currentTime = Math.max(0, e.currentTime + d); }, d); await sleep(2000);
-    await play(); await step(mode, `seek ${d > 0 ? '+' : ''}${d}`);
-  }
-  for (const r of [1.5, 1]) {
-    await pause(); await sleep(1000); await v((r) => { document.querySelector('video').playbackRate = r; }, r); await play(); await step(mode, `rate ${r}`);
-  }
+  await pause(); await sleep(1000);
+  await v(() => { const e = document.querySelector('video'); e.currentTime = Math.max(0, e.currentTime + 30); }, 0); await sleep(2000);
+  await play(); await step(mode, 'seek +30');
 }
-console.log('mode      step      kind  offset(ms; sound - picture)  pipeline  missing');
-for (const r of rows) console.log(`${r.mode.padEnd(9)} ${r.label.padEnd(9)} ${r.kind.padEnd(5)} ${f(r.off)}  ${f(r.pipe)}  ${(r.missing ?? []).join(',')}`);
+await dbg(null);
+const st = (a) => (a.length ? `mean ${(a.reduce((x, y) => x + y, 0) / a.length).toFixed(1)} range [${Math.min(...a).toFixed(1)}, ${Math.max(...a).toFixed(1)}] n=${a.length}` : 'n=0');
+console.log('variant                 step      kind  offset(ms; sound - picture)  pipeline  missing');
+for (const r of rows) console.log(`${r.mode.padEnd(22)} ${r.label.padEnd(9)} ${r.kind.padEnd(5)} ${f(r.off)}  ${f(r.pipe)}  ${(r.missing ?? []).join(',')}`);
+for (const name of want) { const pl = rows.filter((r) => r.mode === name && r.kind === 'play'); console.log(`${name}: resume playOffsetMs ${st(pl.map((r) => r.off).filter((x) => x != null))}; pipelineMs ${st(pl.map((r) => r.pipe).filter((x) => x != null))}`); }
 fs.writeFileSync(path.join(OUT, 'qa-avsync.json'), JSON.stringify({ rows, logs }, null, 1));
 console.error(`raw rows + ${logs.length} probe log lines: ${path.join(OUT, 'qa-avsync.json')}`);
 await ctx.close();
