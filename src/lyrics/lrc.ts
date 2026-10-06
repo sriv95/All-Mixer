@@ -14,6 +14,8 @@ function toSeconds(min: string, sec: string, frac?: string): number {
   return Number(min) * 60 + Number(sec) + f;
 }
 
+import { stripMarkup } from './markup';
+
 interface RawWord {
   start: number;
   text: string;
@@ -26,6 +28,7 @@ function splitWords(body: string): RawWord[] | null {
   let pending: number | null = null;
   let found = false;
   const push = (text: string) => {
+    text = stripMarkup(text);
     if (pending !== null && text !== '') words.push({ start: pending, text });
   };
   for (const m of body.matchAll(WORD_TIME)) {
@@ -70,7 +73,7 @@ export function parseLrc(text: string, opts: ParseLrcOptions = {}): LyricLine[] 
       words = words.filter((w) => w.text !== '');
       lineText = words.map((w) => w.text).join('');
     } else {
-      lineText = rest.replace(WORD_TIME, '').trim();
+      lineText = stripMarkup(rest.replace(WORD_TIME, '')).trim();
     }
     for (const t of times) {
       const shift = t - times[0];
