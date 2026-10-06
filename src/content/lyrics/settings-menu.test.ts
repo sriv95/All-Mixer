@@ -189,6 +189,42 @@ describe('YtSettingsMenu', () => {
     expect((document.getElementById('main') as HTMLElement).style.display).toBe('');
   });
 
+  it('keeps the open submenu panel when nothing changed (no re-render loop)', () => {
+    const m = new YtSettingsMenu();
+    m.setRows(mkRows());
+    rowEls()[0].click();
+    const panel = document.querySelector('[data-am-panel]')!;
+    for (let i = 0; i < 5; i++) m.ensure();
+    expect(document.querySelectorAll('[data-am-panel]')).toHaveLength(1);
+    expect(document.querySelector('[data-am-panel]')).toBe(panel);
+  });
+
+  it('re-renders the open submenu when its row changes', () => {
+    const a = actions();
+    let p = prefs();
+    const m = new YtSettingsMenu();
+    m.setRows(mkRows(a, p));
+    rowEls().find((e) => e.getAttribute('data-am-row') === 'size')!.click();
+    const panel = document.querySelector('[data-am-panel]')!;
+    p = { ...p, karaokeFontScale: 1.5 } as LyricsPrefs;
+    m.setRows(mkRows(a, p));
+    const next = document.querySelector('[data-am-panel]');
+    expect(next).not.toBeNull();
+    expect(next).not.toBe(panel);
+    expect(document.querySelectorAll('[data-am-panel]')).toHaveLength(1);
+  });
+
+  it('closes cleanly when YouTube removes our panel', () => {
+    const m = new YtSettingsMenu();
+    m.setRows(mkRows());
+    rowEls()[0].click();
+    document.querySelector('[data-am-panel]')!.remove();
+    m.ensure();
+    m.ensure();
+    expect(document.querySelectorAll('[data-am-panel]').length).toBeLessThanOrEqual(1);
+    expect((document.getElementById('main') as HTMLElement).style.display).toBe('');
+  });
+
   it('does nothing without a settings popup', () => {
     document.body.replaceChildren();
     const m = new YtSettingsMenu();
