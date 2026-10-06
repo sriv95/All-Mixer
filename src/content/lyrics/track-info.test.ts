@@ -70,6 +70,26 @@ describe('captionOptions', () => {
     expect(o.every((x) => x.group === 'track')).toBe(true);
   });
 
+  it('cleans raw YouTube track names', () => {
+    const t = (name: string, languageCode = 'en'): CaptionTrack => ({ baseUrl: 'x', languageCode, name });
+    const labels = (...names: [string, string?][]) => captionOptions(names.map(([n, c]) => t(n, c))).map((x) => x.label);
+    expect(labels(['English - en'])).toEqual(['English']);
+    expect(labels(['English - English'])).toEqual(['English']);
+    expect(labels(['English (United States) - English - United States'])).toEqual(['English (United States)']);
+    expect(labels(['Spanish (Spain) - Spanish - Spain', 'es'])).toEqual(['Spanish (Spain)']);
+    expect(labels(['English - Lyrics'])).toEqual(['English (Lyrics)']);
+    expect(captionOptions([{ ...asr, name: 'English - en' }]).map((x) => x.label)).toEqual(['English (auto-generated)']);
+  });
+
+  it('adds the language code when cleaned labels collide', () => {
+    const o = captionOptions([
+      { baseUrl: 'a', languageCode: 'en', name: 'English - en' },
+      { baseUrl: 'b', languageCode: 'en-US', name: 'English - English' },
+      { baseUrl: 'c', languageCode: 'es', name: 'Spanish' },
+    ]);
+    expect(o.map((x) => x.label)).toEqual(['English (en)', 'English (en-US)', 'Spanish']);
+  });
+
   it('adds auto-translate entries for the translatable source track only', () => {
     const o = captionOptions([asr, es], langs, asr);
     expect(o.filter((x) => x.group === 'translate').map((x) => [x.index, x.tlang, x.label])).toEqual([

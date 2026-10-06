@@ -55,14 +55,32 @@ export interface CaptionPick {
  * Menu entries for the caption language picker: every track (auto-generated ones labelled), then auto-translations
  * of `sourceTrack` when YouTube offers them for it.
  */
+/** "English - en" -> "English"; "English - Lyrics" -> "English (Lyrics)"; drops parts repeated from the first part or equal to the language code. */
+export function cleanTrackName(name: string, languageCode?: string): string {
+  const [first, ...rest] = name.split(' - ').map((p) => p.trim()).filter(Boolean);
+  if (!first) return name;
+  const code = languageCode?.toLowerCase();
+  const extra = rest.filter((p) => p.toLowerCase() !== code && !first.toLowerCase().includes(p.toLowerCase()));
+  return extra.length ? `${first} (${extra.join(', ')})` : first;
+}
+
+function appendInParens(label: string, code: string): string {
+  return code ? `${label} (${code})` : label;
+}
+
 export function captionOptions(
   tracks: readonly CaptionTrack[],
   translationLanguages: readonly { languageCode: string; name: string }[] = [],
   sourceTrack?: CaptionTrack,
 ): CaptionOption[] {
+  const labels = tracks.map((t, index) => {
+    const name = cleanTrackName(t.name || t.languageCode || `Track ${index + 1}`, t.languageCode);
+    return t.kind === 'asr' && !/auto/i.test(name) ? `${name} (auto-generated)` : name;
+  });
   const options: CaptionOption[] = tracks.map((t, index) => {
-    const name = t.name || t.languageCode || `Track ${index + 1}`;
-    return { index, label: t.kind === 'asr' && !/auto/i.test(name) ? `${name} (auto-generated)` : name, group: 'track' };
+    const dup = labels.some((l, i) => i !== index && l === labels[index]);
+    const label = dup ? appendInParens(labels[index], t.languageCode) : labels[index];
+    return { index, label, group: 'track' };
   });
   const index = sourceTrack ? tracks.indexOf(sourceTrack) : -1;
   if (index < 0 || !sourceTrack?.isTranslatable) return options;
