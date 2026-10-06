@@ -1,10 +1,12 @@
 import type { FetchLyrics } from '../../shared/messages';
 import type { FoundLyrics } from '../../lyrics/lrclib-types';
-import { findLyricsControls, getVideoId, onCaptionsButtonOn, onNavigate, type Site } from '../youtube-dom';
+import { findLyricsControls, getVideoId, onCaptionsButtonOn, onNavigate, setYtCaptionsHidden, type Site } from '../youtube-dom';
 import { getPlayerInfo, getTimedText, onCaptionsAvailable } from './bridge-client';
 import { LyricsController, type SourcePref } from './controller';
 import type { CaptionPick } from './track-info';
 import { PanelSurface, YtmTabSurface } from './surfaces';
+import { KaraokeSurface } from './karaoke-overlay';
+import { DEFAULT_LYRICS_PREFS, loadLyricsPrefs, saveLyricsPrefs, watchLyricsPrefs, type LyricsPrefs } from '../../shared/lyrics-prefs';
 
 const BUTTON_ATTR = 'data-allmixer-lyrics-btn';
 
@@ -32,11 +34,56 @@ export function initLyrics(site: Site, presentedTime: () => number | null, prese
     onSource: (p: SourcePref) => controller.selectSource(p),
   };
 
-  const panel = new PanelSurface(site, view, () => {
-    syncButton();
-    controller.refresh();
-  });
+  // Display prefs are global (chrome.storage.local); defaults until the first load answers.
+  let prefs: LyricsPrefs = DEFAULT_LYRICS_PREFS;
+  const storage = typeof chrome !== 'undefined' ? chrome.storage?.local : undefined;
+
+  const panel = new PanelSurface(
+    site,
+    view,
+    () => {
+      syncButton();
+      syncCaptions();
+      controller.refresh();
+    },
+    () => prefs.lyricsDisplayMode === 'window',
+  );
   controller.addSurface(panel);
+
+  const karaoke = new KaraokeSurface({
+    site,
+    getPrefs: () => prefs,
+    onPosition: (karaokePosition) => {
+      prefs = { ...prefs, karaokePosition };
+      if (storage) void saveLyricsPrefs(storage, { karaokePosition });
+    },
+  });
+  controller.addSurface(karaoke);
+
+  // YouTube's own captions don't sync with our lyrics: hide them while karaoke text or the window shows (www only).
+  const syncCaptions = () => {
+    if (site === 'youtube') setYtCaptionsHidden(karaoke.active || panel.active);
+  };
+  const applyPrefs = (next: LyricsPrefs) => {
+    const leftWindow = prefs.lyricsDisplayMode === 'window' && next.lyricsDisplayMode === 'karaoke';
+    prefs = next;
+    if (leftWindow && panel.panel.isOpen) panel.panel.hide();
+    karaoke.refreshPrefs();
+    syncButton();
+    syncCaptions();
+    controller.refresh();
+  };
+  if (storage) {
+    void loadLyricsPrefs(storage).then(applyPrefs);
+    watchLyricsPrefs(chrome.storage.onChanged, applyPrefs);
+  }
+  /** ♪: karaoke text <-> floating window. */
+  const toggleMode = () => {
+    const next = prefs.lyricsDisplayMode === 'karaoke' ? 'window' : 'karaoke';
+    applyPrefs({ ...prefs, lyricsDisplayMode: next });
+    if (next === 'window') panel.panel.show();
+    if (storage) void saveLyricsPrefs(storage, { lyricsDisplayMode: next });
+  };
 
   let tab: YtmTabSurface | null = null;
   if (site === 'ytmusic') {
@@ -91,11 +138,12 @@ export function initLyrics(site: Site, presentedTime: () => number | null, prese
   }
   button.addEventListener('click', (e) => {
     e.stopPropagation();
-    panel.panel.toggle();
+    toggleMode();
   });
   const syncButton = () => {
-    button.style.opacity = panel.active ? '1' : '0.7';
-    button.setAttribute('aria-pressed', String(panel.active));
+    const on = panel.active || karaoke.active;
+    button.style.opacity = on ? '1' : '0.7';
+    button.setAttribute('aria-pressed', String(on));
   };
   // Player controls are re-created now and then; re-insert cheaply.
   const ensureButton = () => {
@@ -111,11 +159,12 @@ export function initLyrics(site: Site, presentedTime: () => number | null, prese
     setVideo(v) {
       video = v;
       controller.setVideo(v);
+      karaoke.sync();
       // New track without SPA navigation (autoplay, YT Music queue).
       v.addEventListener('loadedmetadata', () => void checkVideo());
       tab?.sync();
       void checkVideo();
     },
-    togglePanel: () => panel.panel.toggle(),
+    togglePanel: toggleMode,
   };
 }
