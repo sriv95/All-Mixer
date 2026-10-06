@@ -96,4 +96,21 @@ describe('stale overlay pair', () => {
     const t = pairTransition('play', 1000, edges, 2000, 0);
     expect(t.playOffsetMs).toBe(-28);
   });
+  it('keeps a real overlay on with no partner', () => {
+    const edges: PairEdge[] = [
+      { source: 'video', kind: 'on', t: 1300 },
+      { source: 'overlay', kind: 'on', t: 3300 },
+      { source: 'audio', kind: 'on', t: 3000, inputAt: 1000 },
+    ];
+    expect(pairTransition('play', 1000, edges, 2000, 0).playOffsetMs).toBe(-300);
+  });
+  it('keeps an off then on at the same ms (real edge)', () => {
+    const edges: PairEdge[] = [
+      { source: 'video', kind: 'on', t: 1000 },
+      { source: 'overlay', kind: 'off', t: 3000 },
+      { source: 'overlay', kind: 'on', t: 3000 },
+      { source: 'audio', kind: 'on', t: 2990, inputAt: 990 },
+    ];
+    expect(pairTransition('play', 1000, edges, 2000, 0).playOffsetMs).toBe(-10);
+  });
 });
