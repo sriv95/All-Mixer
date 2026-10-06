@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ML_WARMUP_P95_MS, type FromMlWorker } from '../../worklet/protocol';
+import { ML_WARMUP_P90_MS, type FromMlWorker } from '../../worklet/protocol';
 import { EngineSelector, type MlHostLike } from './engine-select';
 import type { LatencyListener } from './latency';
 
@@ -35,7 +35,7 @@ function setup(accept = true, canRun = true) {
   const miss = () => listener({ engine: 'bypass', reason: 'deadline-miss' } as never, 0);
   return { chain, sel, hosts, miss };
 }
-const ready = (p95: number): FromMlWorker => ({ type: 'ready', p50: p95 / 2, p95, createMs: 1, adapter: 'x' });
+const ready = (p90: number): FromMlWorker => ({ type: 'ready', p50: p90 / 2, p90, p95: p90, createMs: 1, adapter: 'x' });
 const req = (on = true) => ({ on });
 
 describe('EngineSelector', () => {
@@ -52,15 +52,15 @@ describe('EngineSelector', () => {
     expect(hosts).toHaveLength(1);
     expect(chain.setMlPort).toHaveBeenCalledTimes(1);
     expect(sel.status).toEqual({ state: 'warming' });
-    hosts[0].onStatus!(ready(ML_WARMUP_P95_MS - 30));
+    hosts[0].onStatus!(ready(ML_WARMUP_P90_MS - 30));
     expect(chain.setEngine).toHaveBeenCalledWith('ml', 'auto');
     expect(sel.status).toEqual({ state: 'on' });
   });
 
-  it('unavailable: slow warm-up (p95 ≥ limit) disposes the host', () => {
+  it('unavailable: slow warm-up (p90 ≥ limit) disposes the host', () => {
     const { sel, hosts, chain } = setup();
     sel.update(req());
-    hosts[0].onStatus!(ready(ML_WARMUP_P95_MS));
+    hosts[0].onStatus!(ready(ML_WARMUP_P90_MS));
     expect(chain.setEngine).not.toHaveBeenCalled();
     expect(hosts[0].disposed).toBe(true);
     expect(sel.status.state).toBe('unavailable');

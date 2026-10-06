@@ -1,5 +1,5 @@
 import {
-  ML_WARMUP_P95_MS,
+  ML_WARMUP_P90_MS,
   type FromMlWorker,
   type MlEngine,
   type MlReason,
@@ -97,9 +97,7 @@ export class EngineSelector {
       if (this.host !== host || !this.probing) return;
       this.probing = false;
       if (m.type === 'unavailable') return this.giveUp(m.reason);
-      const slow = m.p95 >= ML_WARMUP_P95_MS;
-      if (slow) console.info(`[all-mixer ml] warm-up p50 ${m.p50.toFixed(1)} p95 ${m.p95.toFixed(1)} ms (gate ${ML_WARMUP_P95_MS.toFixed(1)}), create ${m.createMs.toFixed(0)} ms, ${m.adapter}`);
-      if (slow) return this.giveUp(`too slow on this device (p95 ${m.p95.toFixed(1)} ms)`);
+      if (m.p90 >= ML_WARMUP_P90_MS) return this.giveUp(`too slow on this device (p90 ${m.p90.toFixed(1)} ms)`);
       if (!this.chain.setEngine('ml', 'auto')) return this.giveUp(RATE_CAUSE);
       this.mlActive = true;
       this.choice = { state: 'on' };
