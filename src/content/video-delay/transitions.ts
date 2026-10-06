@@ -32,6 +32,8 @@ export interface PairEdge extends LoggedEdge {
 }
 
 export const MARGIN_MS = 1000;
+/** A play edge may precede the event stamp by a hair (expectedDisplayTime is rounded); never by a whole frame or two. */
+export const PLAY_SLACK_MS = 50;
 
 /** Window end offset: WINDOW_MS, or more when the overlay delay and separator latency push the edges later. */
 export const windowSpanMs = (delayMs = 0, latencyMs = 0): number =>
@@ -56,7 +58,8 @@ export function pairTransition(
   latencyMs = 0,
   used: Set<PairEdge> = new Set(),
 ): Transition {
-  const [lo, hi] = windowFor(kind, at, delayMs, latencyMs);
+  const [lo0, hi] = windowFor(kind, at, delayMs, latencyMs);
+  const lo = kind === 'play' ? lo0 - PLAY_SLACK_MS : lo0;
   const want = kind === 'pause' ? 'off' : 'on';
   const first = (source: EdgeSource): PairEdge | undefined => {
     const e = edges.filter((x) => x.source === source && x.kind === want && x.t >= lo && x.t <= hi && !used.has(x)).sort((a, b) => a.t - b.t)[0];

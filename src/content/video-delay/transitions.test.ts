@@ -40,6 +40,13 @@ describe('pairTransition', () => {
   });
 });
 
+describe('play slack', () => {
+  it('pairs a video edge stamped a hair before the play event, not one 100 ms before', () => {
+    expect(pairTransition('play', 5000, [e('audio', 'on', 5100, 5050), e('video', 'on', 4999.9)]).missing).toEqual([]);
+    expect(pairTransition('play', 5000, [e('audio', 'on', 5100, 5050), e('video', 'on', 4900)]).missing).toEqual(['videoOn']);
+  });
+});
+
 describe('pairTransition reuse', () => {
   it('never pairs one edge with two transitions', () => {
     const edges = [e('audio', 'on', 5200, 5150), e('video', 'on', 5100), e('overlay', 'on', 5120)];
