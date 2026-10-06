@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { FromMlWorker } from '../../worklet/protocol';
+import { ML_WARMUP_P95_MS, type FromMlWorker } from '../../worklet/protocol';
 import { EngineSelector, type MlHostLike } from './engine-select';
 import type { LatencyListener } from './latency';
 
@@ -52,7 +52,7 @@ describe('EngineSelector', () => {
     expect(hosts).toHaveLength(1);
     expect(chain.setMlPort).toHaveBeenCalledTimes(1);
     expect(sel.status).toEqual({ state: 'warming' });
-    hosts[0].onStatus!(ready(30));
+    hosts[0].onStatus!(ready(ML_WARMUP_P95_MS - 30));
     expect(chain.setEngine).toHaveBeenCalledWith('ml', 'auto');
     expect(sel.status).toEqual({ state: 'on' });
   });
@@ -60,7 +60,7 @@ describe('EngineSelector', () => {
   it('unavailable: slow warm-up (p95 ≥ limit) disposes the host', () => {
     const { sel, hosts, chain } = setup();
     sel.update(req());
-    hosts[0].onStatus!(ready(56));
+    hosts[0].onStatus!(ready(ML_WARMUP_P95_MS));
     expect(chain.setEngine).not.toHaveBeenCalled();
     expect(hosts[0].disposed).toBe(true);
     expect(sel.status.state).toBe('unavailable');

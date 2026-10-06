@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ML_LATENCY_SAMPLES } from '../../worklet/protocol';
 import { MasterChain } from './master-chain';
 
 // Minimal Web Audio fakes: enough to observe graph wiring and context state.
@@ -287,12 +288,12 @@ describe('MasterChain separation', () => {
     chain.setEngine('ml', 'auto');
     expect(sep.messages.at(-1)).toEqual({ type: 'engine', engine: 'ml', reason: 'auto' });
     port.onmessage!({ data: { type: 'engine', engine: 'ml', reason: 'auto', at: ctx.currentTime + 1 } });
-    expect(chain.latency).toMatchObject({ engine: 'ml', reason: 'auto', processingSamples: 13440 });
-    expect(chain.latency.processingMs).toBeCloseTo((13440 / 44100) * 1000, 3);
-    expect(changes.at(-1)![0]).toBe(13440);
+    expect(chain.latency).toMatchObject({ engine: 'ml', reason: 'auto', processingSamples: ML_LATENCY_SAMPLES });
+    expect(chain.latency.processingMs).toBeCloseTo((ML_LATENCY_SAMPLES / 44100) * 1000, 3);
+    expect(changes.at(-1)![0]).toBe(ML_LATENCY_SAMPLES);
     // heard one processing delay after the input sample; device latency is added by the fake ctx
     const heard = (at: number, n: number) => performance.now() + (at + n / 44100 - ctx.currentTime) * 1000 + chain.latency.deviceMs;
-    expect(changes.at(-1)![1]).toBeCloseTo(heard(ctx.currentTime + 1, 13440), -1);
+    expect(changes.at(-1)![1]).toBeCloseTo(heard(ctx.currentTime + 1, ML_LATENCY_SAMPLES), -1);
     port.onmessage!({ data: { type: 'engine', engine: 'bypass', reason: 'deadline-miss', at: ctx.currentTime + 2 } });
     expect(chain.latency).toMatchObject({ engine: 'bypass', reason: 'deadline-miss', processingSamples: 0 });
     expect(changes.at(-1)![0]).toBe(0);

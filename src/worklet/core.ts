@@ -4,8 +4,8 @@
 //
 // Both engines read from rings indexed by absolute input sample:
 //   dry  input,  ml  vocal blocks back from the ML worker.
-// Output at input position p reads index p − delay; instrumental = dry − vocal, so
-// vocal + instrumental is the delayed input (exactly, when the vocal is not sharpened).
+// Output at input position p reads index p − delay; instrumental = dry − Vk, where Vk = x − the Karaoke
+// instrumental (MDX vocal plus the Spleeter-mask cleanup, src/ml/karaoke.ts); the vocal stem is the MDX vocal V.
 //
 // Bypass engine: delay 0, bypass weight b = 1, vocal 0, instrumental = dry: the original mix.
 // ML engine: delay = ML_LATENCY_SAMPLES. Input goes to the worker in ML_BLOCK blocks. Each
@@ -37,10 +37,21 @@ import {
 } from './protocol';
 
 export const QUANTUM = 128;
-const RING = 16384; // > ML_LATENCY_SAMPLES + QUANTUM, power of two
+/** Smallest power of two ≥ n. */
+const pow2Ceil = (n: number): number => 2 ** Math.ceil(Math.log2(n));
+/** A block is ready ML_LATENCY_SAMPLES after its start and spans ML_BLOCK, plus one quantum: 131072 for 86912 + 128 + 34304. */
+export const RING = pow2Ceil(ML_LATENCY_SAMPLES + QUANTUM + ML_BLOCK);
 const MASK = RING - 1;
-const SLOTS = RING / ML_BLOCK;
-const POOL = 8;
+/** Block slots, a power of two ≥ RING / ML_BLOCK (3.8 → 4): slot m & (SLOTS − 1) holds block m. */
+export const SLOTS = pow2Ceil(Math.ceil(RING / ML_BLOCK));
+/** Block buffers: one filling, ≤ 2 at the worker (MDX hop 743 ms vs ≤ 0.4 s response), the rest spare. */
+const POOL = 4;
+
+/** Ring sizing rule (unit tested): a power of two, holding latency + one quantum + one block. */
+export function ringOk(ring: number, latency: number, block: number): boolean {
+  return ring > 0 && (ring & (ring - 1)) === 0 && ring >= latency + QUANTUM + block;
+}
+if (!ringOk(RING, ML_LATENCY_SAMPLES, ML_BLOCK)) throw new Error('separator ring too small');
 const MISS_WINDOW_S = 10;
 /** ML vocal block m covers input [streamStart + ML_BASE + ML_BLOCK·m, … + ML_BLOCK). */
 const ML_BASE = ML_BLOCK - ML_RESULT_OFFSET;
@@ -63,11 +74,9 @@ export class SeparatorCore {
   private readonly dryR = new Float32Array(RING);
   private readonly mlL = new Float32Array(RING);
   private readonly mlR = new Float32Array(RING);
-  /** Sharpened ML vocal (A cappella); the instrumental uses mlL/mlR. */
+  /** MDX vocal (A cappella); the instrumental uses mlL/mlR (Vk = x − Karaoke instrumental). */
   private readonly mlSL = new Float32Array(RING);
   private readonly mlSR = new Float32Array(RING);
-  /** a = clamp(1 − instrumentalGain, 0, 1), stamped on each block sent to the worker. */
-  private sharpen = 0;
   /** Absolute start of the ML block held in each slot (NaN = empty). */
   private readonly slotStart = new Float64Array(SLOTS).fill(NaN);
 
@@ -158,12 +167,6 @@ export class SeparatorCore {
       this.wantMl = null;
       this.wantBypass = reason;
     }
-  }
-
-  /** a = clamp(1 − instrumentalGain, 0, 1); sent with the next ML block. */
-  setSharpen(instrumentalGain: number): void {
-    const a = 1 - instrumentalGain;
-    this.sharpen = a > 0 ? (a < 1 ? a : 1) : 0;
   }
 
   /**
@@ -348,7 +351,6 @@ export class SeparatorCore {
     if (fill + QUANTUM === ML_BLOCK) {
       cur.head[0] = this.epoch;
       cur.head[1] = this.pos + QUANTUM - ML_BLOCK;
-      cur.head[2] = this.sharpen;
       this.xfer[0] = cur.buf;
       this.port!.postMessage(cur.buf, this.xfer);
       this.cur = null;
@@ -414,5 +416,5 @@ export class SeparatorCore {
 }
 
 function entry(buf: ArrayBuffer): PoolEntry {
-  return { buf, head: new Float64Array(buf, 0, 3), data: new Float32Array(buf, ML_HEADER_BYTES, 4 * ML_BLOCK) };
+  return { buf, head: new Float64Array(buf, 0, 2), data: new Float32Array(buf, ML_HEADER_BYTES, 4 * ML_BLOCK) };
 }
