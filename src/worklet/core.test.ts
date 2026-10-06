@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { QUANTUM, SeparatorCore } from './core';
+import { QUANTUM, RING, SLOTS, SeparatorCore, ringOk } from './core';
 import {
   ML_BLOCK,
   ML_BUFFER_BYTES,
@@ -10,6 +10,9 @@ import {
 } from './protocol';
 
 const SR = 44100;
+/** Block m covers input [S + BASE + m·ML_BLOCK, + ML_BLOCK) of the stream that starts at S. */
+const BASE = ML_BLOCK - ML_RESULT_OFFSET;
+const L = ML_LATENCY_SAMPLES;
 
 /** Deterministic noise in [-0.5, 0.5): every sample is unique, so a repeat or a skip shows up. */
 function noise(n: number, seed: number): Float32Array {
@@ -54,7 +57,7 @@ class FakePort {
     this.seen.add(buf);
     const k = this.posted++;
     const how = this.policy(k);
-    const head = new Float64Array(buf, 0, 3);
+    const head = new Float64Array(buf, 0, 2);
     if (how === 'hold') {
       this.held.push(buf);
       return;
@@ -171,22 +174,56 @@ function maxErr(r: Rig, d: number, from: number, to: number): number {
 
 const blocks = (n: number) => (n * ML_BLOCK) / QUANTUM; // quanta
 
+describe('ring geometry', () => {
+  it('RING is the next power of two ≥ latency + QUANTUM + one ML block: 131072', () => {
+    expect(RING).toBe(131072);
+    expect(RING).toBeGreaterThanOrEqual(ML_LATENCY_SAMPLES + QUANTUM + ML_BLOCK);
+    expect(RING / 2).toBeLessThan(ML_LATENCY_SAMPLES + QUANTUM + ML_BLOCK);
+    expect(SLOTS).toBe(4);
+    expect(SLOTS & (SLOTS - 1)).toBe(0);
+    expect(SLOTS * ML_BLOCK).toBeGreaterThanOrEqual(RING - ML_BLOCK);
+  });
+
+  it('a ring that is too small or not a power of two fails', () => {
+    expect(ringOk(RING, ML_LATENCY_SAMPLES, ML_BLOCK)).toBe(true);
+    expect(ringOk(65536, ML_LATENCY_SAMPLES, ML_BLOCK)).toBe(false); // too small
+    expect(ringOk(ML_LATENCY_SAMPLES + QUANTUM + ML_BLOCK - 1, ML_LATENCY_SAMPLES, ML_BLOCK)).toBe(false);
+    expect(ringOk(120000, ML_LATENCY_SAMPLES, ML_BLOCK)).toBe(false); // big enough, not a power of two
+    expect(ringOk(0, 0, 0)).toBe(false);
+  });
+});
+
 describe('SeparatorCore, ML engine and bypass', () => {
+  it('an impulse in the input comes out exactly ML_LATENCY_SAMPLES later (both stems)', () => {
+    const P = 5 * ML_BLOCK + 321;
+    const r = rig(12, (n) => {
+      const x = new Float32Array(n);
+      x[P] = 1;
+      return x;
+    });
+    r.core.setActive(true, 'ml');
+    r.run(blocks(10));
+    let at = -1;
+    for (let i = 0; i < r.vL.length; i++) if (Math.abs(r.vL[i] + r.iL[i]) > 0.5) at = i;
+    expect(at).toBe(P + L);
+    expect(r.vL[P + L]).toBeGreaterThan(0.99); // the vocal stem carries it
+  });
+
   it('with every block back in time, output is the input delayed by exactly ML_LATENCY_SAMPLES', () => {
-    expect(ML_LATENCY_SAMPLES).toBe(13440);
-    const r = rig(3);
+    expect(ML_LATENCY_SAMPLES).toBe(86912);
+    const r = rig(14);
     r.core.setActive(true, 'ml');
     expect(r.core.engine).toBe('ml');
-    expect(r.core.latencySamples).toBe(13440);
-    r.run(blocks(30));
+    expect(r.core.latencySamples).toBe(86912);
+    r.run(blocks(14));
     const n = r.vL.length;
     // vocal is the echoed input, instrumental is what is left: both stems sum to the delayed input.
-    expect(maxErr(r, 13440, 0, n)).toBeLessThanOrEqual(1e-6);
+    expect(maxErr(r, L, 0, n)).toBeLessThanOrEqual(1e-6);
     // After the first block the vocal stem itself is the delayed input and the instrumental is ~0.
     let vocErr = 0;
     let insMax = 0;
-    for (let i = 13440 + QUANTUM; i < n; i++) {
-      vocErr = Math.max(vocErr, Math.abs(r.vL[i] - r.sigL[i - 13440]), Math.abs(r.vR[i] - r.sigR[i - 13440]));
+    for (let i = L + QUANTUM; i < n; i++) {
+      vocErr = Math.max(vocErr, Math.abs(r.vL[i] - r.sigL[i - L]), Math.abs(r.vR[i] - r.sigR[i - L]));
       insMax = Math.max(insMax, Math.abs(r.iL[i]), Math.abs(r.iR[i]));
     }
     expect(vocErr).toBeLessThanOrEqual(1e-6);
@@ -196,20 +233,20 @@ describe('SeparatorCore, ML engine and bypass', () => {
   });
 
   it('a dropped block plays the original mix at unity for that block: same delay, crossfade has no step above the bound', () => {
-    const r = rig(3, tones);
-    r.port.policy = (k) => (k === 12 ? 'drop' : 'echo');
+    const r = rig(14, tones);
+    r.port.policy = (k) => (k === 4 ? 'drop' : 'echo');
     r.core.setActive(true, 'ml');
-    r.run(blocks(30));
+    r.run(blocks(12));
     const n = r.vL.length;
     expect(r.core.stats.misses).toBe(1);
     expect(r.core.engine).toBe('ml');
     expect(r.msgs).toEqual([]);
-    // Delay unchanged: the stems still sum to the input delayed by 13440.
-    expect(maxErr(r, 13440, 0, n)).toBeLessThanOrEqual(1e-6);
-    // The dropped posted block 12 is vocal block 11: input [S − 1024 + 11·4096, + 4096), heard 13440 later.
-    const from = 13440 - 1024 + 11 * ML_BLOCK;
+    // Delay unchanged: the stems still sum to the input delayed by ML_LATENCY_SAMPLES.
+    expect(maxErr(r, L, 0, n)).toBeLessThanOrEqual(1e-6);
+    // The dropped posted block 4 is vocal block 3: input [S + BASE + 3·H, + H), heard ML_LATENCY_SAMPLES later.
+    const from = L + BASE + 3 * ML_BLOCK;
     const to = from + ML_BLOCK;
-    const echo = (i: number) => r.sigL[i - 13440];
+    const echo = (i: number) => r.sigL[i - L];
     // delta: how far the vocal stem is from the echo at the two block-edge quanta (sensitivity of the test).
     let delta = 0;
     for (const [a, b] of [
@@ -254,10 +291,10 @@ describe('SeparatorCore, ML engine and bypass', () => {
   });
 
   it('3 misses in 10 s switch to bypass for good, once, with reason deadline-miss', () => {
-    const r = rig(4, tones);
-    r.port.policy = (k) => (k === 12 || k === 14 || k === 16 ? 'drop' : 'echo');
+    const r = rig(15, tones);
+    r.port.policy = (k) => (k === 4 || k === 6 || k === 8 ? 'drop' : 'echo');
     r.core.setActive(true, 'ml');
-    r.run(blocks(40));
+    r.run(blocks(14));
     expect(r.msgs).toHaveLength(1);
     const m = r.msgs[0] as Extract<FromWorklet, { type: 'engine' }>;
     expect(m).toMatchObject({ type: 'engine', engine: 'bypass', reason: 'deadline-miss' });
@@ -270,7 +307,7 @@ describe('SeparatorCore, ML engine and bypass', () => {
     // `at`: context time of the first input sample heard with no delay. Find the first
     // quantum whose last sample is the undelayed input (not the ML-delayed one).
     let n0 = -1;
-    for (let s = 12 * ML_BLOCK; s < n; s += QUANTUM) {
+    for (let s = 6 * ML_BLOCK; s < n; s += QUANTUM) {
       const e = s + QUANTUM - 1;
       if (
         Math.abs(r.vL[e] + r.iL[e] - r.sigL[e]) < 1e-6 &&
@@ -283,16 +320,16 @@ describe('SeparatorCore, ML engine and bypass', () => {
     expect(n0).toBeGreaterThan(0);
     expect(m.at).toBeCloseTo(n0 / SR, 9);
     // It stays on bypass: no further messages even after more blocks.
-    r.run(blocks(10));
+    r.run(blocks(4));
     expect(r.msgs).toHaveLength(1);
   });
 
   it('3 misses spread over more than 10 s do not switch', () => {
-    // 10 s = 107.7 blocks. Misses at blocks 20, 130 and 240.
-    const r = rig(24, tones);
-    r.port.policy = (k) => (k === 20 || k === 130 || k === 240 ? 'drop' : 'echo');
+    // 10 s = 12.9 blocks. Misses at blocks 4, 20 and 36.
+    const r = rig(32, tones);
+    r.port.policy = (k) => (k === 4 || k === 20 || k === 36 ? 'drop' : 'echo');
     r.core.setActive(true, 'ml');
-    r.run(blocks(250));
+    r.run(blocks(40));
     expect(r.core.stats.misses).toBe(3);
     expect(r.msgs).toEqual([]);
     expect(r.core.engine).toBe('ml');
@@ -303,7 +340,7 @@ describe('SeparatorCore, ML engine and bypass', () => {
     const r = rig(1);
     r.core.setActive(true, 'bypass');
     expect(r.core.latencySamples).toBe(0);
-    r.run(blocks(4));
+    r.run(blocks(1));
     const n = r.vL.length;
     expect(maxErr(r, 0, 0, n)).toBeLessThanOrEqual(0);
     expect(Math.min(...r.b)).toBe(1);
@@ -312,12 +349,12 @@ describe('SeparatorCore, ML engine and bypass', () => {
   });
 
   it('bypass → ML: no input sample repeats, `at` is the first input sample with the ML delay', () => {
-    const r = rig(3);
+    const r = rig(8);
     r.core.setActive(true, 'bypass');
-    r.run(blocks(10) + 3);
+    r.run(blocks(1) + 3);
     const P = r.q * QUANTUM + QUANTUM; // the switch starts at the next quantum, which fades the original out
     r.core.requestEngine('ml', 'auto');
-    r.run(blocks(20));
+    r.run(blocks(7));
     expect(r.msgs).toEqual([{ type: 'engine', engine: 'ml', reason: 'auto', at: P / SR }]);
     expect(r.core.engine).toBe('ml');
     const n = r.vL.length;
@@ -337,50 +374,52 @@ describe('SeparatorCore, ML engine and bypass', () => {
   });
 
   it('ML → bypass on request: skips ahead, nothing repeats, `at` is the first input with no delay', () => {
-    const r = rig(3);
+    const r = rig(8);
     r.core.setActive(true, 'ml');
-    r.run(blocks(12) + 5);
+    r.run(blocks(5) + 5);
     const pos = r.q * QUANTUM;
     r.core.requestEngine('bypass', 'auto');
-    r.run(blocks(10));
+    r.run(blocks(4));
     // Handled at the start of quantum `pos`; the original follows from the quantum after it.
-    expect(r.msgs).toEqual([{ type: 'engine', engine: 'bypass', reason: 'auto', at: (pos + QUANTUM) / SR }]);
+    expect(r.msgs).toHaveLength(1);
+    expect(r.msgs[0]).toMatchObject({ type: 'engine', engine: 'bypass', reason: 'auto' });
+    expect((r.msgs[0] as { at: number }).at).toBeCloseTo((pos + QUANTUM) / SR, 9); // one sample is 22.7 µs
     const n = r.vL.length;
-    expect(maxErr(r, ML_LATENCY_SAMPLES, 3 * ML_BLOCK, pos)).toBeLessThanOrEqual(1e-6);
+    expect(maxErr(r, ML_LATENCY_SAMPLES, L, pos)).toBeLessThanOrEqual(1e-6);
     expect(maxErr(r, 0, pos + 2 * QUANTUM, n)).toBeLessThanOrEqual(1e-6);
-    // The first bypass output (input pos + 128) is past the last ML input (pos − 13440 + 128).
+    // The first bypass output (input pos + 128) is past the last ML input (pos − ML_LATENCY_SAMPLES + 128).
     expect(pos + QUANTUM).toBeGreaterThan(pos - ML_LATENCY_SAMPLES + QUANTUM);
   });
 
   it('the pool is reused: no buffer is created after warm-up', () => {
-    const r = rig(10);
+    const r = rig(24);
     r.core.setActive(true, 'ml');
-    r.run(blocks(10));
+    r.run(blocks(5));
     const warm = r.port.seen.size;
-    r.run(blocks(90));
-    expect(r.port.posted).toBeGreaterThan(90);
+    r.run(blocks(25));
+    expect(r.port.posted).toBeGreaterThan(25);
     expect(r.port.seen.size).toBe(warm);
-    expect(r.port.seen.size).toBeLessThanOrEqual(8);
-    expect(r.core.stats.returned).toBeGreaterThan(80);
+    expect(r.port.seen.size).toBeLessThanOrEqual(4);
+    expect(r.core.stats.returned).toBeGreaterThan(20);
   });
 
   it('a worker that never answers (pool exhausted) falls back to bypass', () => {
-    const r = rig(4, tones);
+    const r = rig(6, tones);
     r.port.policy = () => 'hold';
     r.core.setActive(true, 'ml');
-    r.run(blocks(30));
+    r.run(blocks(6));
     expect(r.msgs).toHaveLength(1);
     expect(r.msgs[0]).toMatchObject({ engine: 'bypass', reason: 'deadline-miss' });
-    expect(r.port.seen.size).toBeLessThanOrEqual(8);
+    expect(r.port.seen.size).toBeLessThanOrEqual(4);
   });
 
   it('flush() during ML drops in-flight blocks: no stale vocal is played', () => {
-    const r = rig(3);
+    const r = rig(14);
     r.core.setActive(true, 'ml');
-    r.run(blocks(12));
+    r.run(blocks(5));
     // Hold the next blocks (in flight at the seek), then flush.
     r.port.policy = () => 'hold';
-    r.run(blocks(2) + 3);
+    r.run(blocks(1) + 3);
     expect(r.port.held.length).toBeGreaterThan(0);
     const F = r.q * QUANTUM;
     const returned = r.core.stats.returned;
@@ -388,14 +427,14 @@ describe('SeparatorCore, ML engine and bypass', () => {
     r.port.releaseHeld(); // old-epoch blocks arrive late
     expect(r.core.stats.returned).toBe(returned);
     r.port.policy = () => 'echo';
-    r.run(blocks(10));
+    r.run(blocks(7));
     // Nothing is played from before the flush: silent until the new input reaches the output.
     let loud = 0;
     for (let i = F; i < F + ML_LATENCY_SAMPLES; i++) {
       loud = Math.max(loud, Math.abs(r.vL[i]), Math.abs(r.vR[i]), Math.abs(r.iL[i]), Math.abs(r.iR[i]));
     }
     expect(loud).toBeLessThan(1e-6); // a stale vocal would be ~0.5
-    // Then the new stream plays, delayed by the same 13440 samples, from input F.
+    // Then the new stream plays, delayed by the same ML_LATENCY_SAMPLES, from input F.
     const n = r.vL.length;
     expect(maxErr(r, ML_LATENCY_SAMPLES, F + ML_LATENCY_SAMPLES + 2 * ML_BLOCK, n)).toBeLessThanOrEqual(1e-6);
     expect(r.core.stats.returned).toBeGreaterThan(returned);

@@ -35,7 +35,7 @@ window.addEventListener('message', (e: MessageEvent) => {
         const stallMs = Number(o['debug.mlStallMs']) > 0 ? Number(o['debug.mlStallMs']) : 0;
         const stallAfterMs = Number(o['debug.mlStallAfterMs']) >= 0 && o['debug.mlStallAfterMs'] != null ? Number(o['debug.mlStallAfterMs']) : 5000;
         w.postMessage(
-          { type: 'init', port, modelUrl: chrome.runtime.getURL('ml/vocals.onnx'), wasmBase: chrome.runtime.getURL('ml/'), stallMs, stallAfterMs },
+          { type: 'init', port, modelUrl: chrome.runtime.getURL('ml/vocals.onnx'), mdxUrl: chrome.runtime.getURL('ml/mdx.onnx'), wasmBase: chrome.runtime.getURL('ml/'), stallMs, stallAfterMs },
           [port],
         );
       });
