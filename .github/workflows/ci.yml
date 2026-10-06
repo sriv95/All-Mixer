@@ -1,17 +1,25 @@
-# CI (SRI-73, SRI-194): lint, typecheck and unit tests when a PR is merged to main
-# (a push to main). Not run on every PR push or branch push.
+# CI (SRI-73, SRI-194): lint, typecheck and unit tests only when a PR is merged to main.
+# Also runs on a push to main that changes package.json (new version).
+# Not run on PR pushes, branch pushes or other pushes to main.
 # The full build needs the ML model and runs in release.yml.
 name: CI
 
 on:
   push:
     branches: [main]
+    paths: [package.json]
+  pull_request:
+    types: [closed]
+    branches: [main]
 
 jobs:
   check:
+    if: github.event_name == 'push' || github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: package.json

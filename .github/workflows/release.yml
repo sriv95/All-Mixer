@@ -51,12 +51,13 @@ jobs:
           path: .cache/models
           key: model-${{ hashFiles('scripts/fetch-model.mjs') }}
 
-      - name: Install, fetch model, lint, test, build
+      - name: Install, fetch model, lint, typecheck, test, build
         if: steps.version.outputs.exists == 'false'
         run: |
           bun install --frozen-lockfile
           bun run fetch-model
           bun run lint
+          bun run typecheck
           bun run test
           bun run build
 
