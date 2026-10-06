@@ -142,6 +142,49 @@ describe('captureSize', () => {
     expect(q.skipped).toBe(0);
   });
 
+  it('holds delay + 250 ms of frames at 24, 30 and 60 fps', () => {
+    for (const fps of [24, 30, 60]) {
+      for (const delayMs of [500, 2000]) {
+        const r = captureSize({ ...base, delayMs, fps });
+        expect(r.maxFrames).toBeGreaterThanOrEqual(Math.ceil(((delayMs + 250) / 1000) * fps));
+      }
+    }
+  });
+
+  it('fits a 2560x1440 display at 2 s / 60 fps in the 512 MiB budget', () => {
+    const r = captureSize({ ...base, displayW: 2560, displayH: 1440, videoW: 3840, videoH: 2160, delayMs: 2000 });
+    expect(r.width * r.height * 4 * r.maxFrames).toBeLessThanOrEqual(VIDEO_DELAY_BUDGET_BYTES * 2);
+    expect(r.width * r.height * 4 * (Math.ceil(2.25 * 60) + 8)).toBeLessThanOrEqual(VIDEO_DELAY_BUDGET_BYTES);
+    expect(r.width).toBeLessThan(2560);
+  });
+
+  it('does not upscale a small video and keeps at least 320 px', () => {
+    const r = captureSize({ ...base, displayW: 1920, displayH: 1080, videoW: 640, videoH: 360, delayMs: 300 });
+    expect([r.width, r.height]).toEqual([640, 360]);
+    const t = captureSize({ ...base, displayW: 8000, displayH: 4500, videoW: 8000, videoH: 4500, delayMs: 2000 });
+    expect(t.width).toBeGreaterThanOrEqual(320);
+  });
+
+  it('stays in order and within cap at 2x playback (every other frame)', () => {
+    const { maxFrames } = captureSize({ ...base, delayMs: 2000 });
+    const q = new FrameQueue<number>(() => {});
+    q.setCap(maxFrames);
+    const step = 1000 / 60;
+    let last = -1;
+    for (let n = 0; n < 600; n++) {
+      const t = n * step;
+      // rVFC delivers a frame every other vsync at 2x; due is wall clock + D.
+      if (n % 2 === 0) q.push({ due: t + 2000, mediaTime: n * 2 * step, img: n }, t);
+      expect(q.size).toBeLessThanOrEqual(maxFrames);
+      const f = q.take(t, step);
+      if (f) {
+        expect(f.mediaTime).toBeGreaterThan(last);
+        last = f.mediaTime;
+      }
+    }
+    expect(q.skipped).toBe(0);
+  });
+
   it('keeps not-yet-due frames when the cap shrinks (2000 -> 0 ms)', () => {
     const { maxFrames } = captureSize({ ...base, delayMs: 2000 });
     const small = captureSize({ ...base, delayMs: 0 }).maxFrames;

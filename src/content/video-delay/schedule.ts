@@ -112,7 +112,10 @@ export class PresentedClock {
 }
 
 /** Memory budget for queued delay frames (RGBA, 4 bytes per pixel). */
-export const VIDEO_DELAY_BUDGET_BYTES = 384 * 1024 * 1024;
+export const VIDEO_DELAY_BUDGET_BYTES = 512 * 1024 * 1024;
+
+const QUEUE_SLACK_MS = 250;
+const MIN_CAPTURE_W = 320;
 
 export interface CaptureSizeInput {
   /** Display size in device pixels. */
@@ -138,13 +141,19 @@ export function captureSize(i: CaptureSizeInput): { width: number; height: numbe
     w *= k;
     h *= k;
   }
-  // Margin of 8 for in-flight captures and jitter.
-  const frames = Math.ceil((i.delayMs / 1000) * i.fps) + 8;
+  // Delay plus 250 ms of slack, and 8 frames for in-flight captures and jitter.
+  const frames = Math.ceil(((i.delayMs + QUEUE_SLACK_MS) / 1000) * i.fps) + 8;
   const maxPx = i.budgetBytes / (4 * frames);
   if (w * h > maxPx) {
     const k = Math.sqrt(maxPx / (w * h));
     w *= k;
     h *= k;
+  }
+  // Not below 320 px wide (unless the display is smaller: never upscale).
+  const minW = Math.min(MIN_CAPTURE_W, Math.max(2, i.displayW));
+  if (w < minW) {
+    h *= minW / w;
+    w = minW;
   }
   // Floor, so rounding never pushes the total over the budget.
   w = Math.max(2, Math.floor(w));
