@@ -1,11 +1,11 @@
-# CI (SRI-73): lint, typecheck and unit tests on every push and pull request.
+# CI (SRI-73, SRI-194): lint, typecheck and unit tests when a PR is merged to main
+# (a push to main). Not run on every PR push or branch push.
 # The full build needs the ML model and runs in release.yml.
 name: CI
 
 on:
   push:
     branches: [main]
-  pull_request:
 
 jobs:
   check:
