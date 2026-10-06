@@ -15,6 +15,7 @@ import { MDX_BINS, MDX_T } from './mdx';
 import { MlPipeline, type Models } from './pipeline';
 import { warmUp } from './warmup';
 import { makeStall, type StallOpts } from './stall';
+import { MlTiming } from './timing';
 
 type Ort = typeof import('onnxruntime-web/webgpu');
 type Session = Awaited<ReturnType<Ort['InferenceSession']['create']>>;
@@ -91,11 +92,11 @@ async function start(init: MlWorkerInit): Promise<void> {
   pipeline.reset();
   ctx.postMessage({ type: 'ready', p50: wu.p50, p95: wu.p95, createMs: createMs + wu.firstMs, adapter: adapterName });
 
-  serve(init.port, pipeline, models, { stallMs: init.stallMs ?? 0, stallAfterMs: init.stallAfterMs ?? 5000 });
+  serve(init.port, pipeline, models, { stallMs: init.stallMs ?? 0, stallAfterMs: init.stallAfterMs ?? 5000 }, init.timing ? new MlTiming() : null);
 }
 
 /** Block loop. Blocks are handled one at a time, in order; stale ones are returned unprocessed. */
-function serve(port: MessagePort, pipeline: MlPipeline, models: Models, dbg: StallOpts): void {
+function serve(port: MessagePort, pipeline: MlPipeline, models: Models, dbg: StallOpts, timing: MlTiming | null): void {
   const stall = makeStall(dbg); // debug flag; null when off
   let latestEpoch = -1; // newest epoch seen on the port
   let epoch = -1; // epoch the stream state belongs to
@@ -124,6 +125,7 @@ function serve(port: MessagePort, pipeline: MlPipeline, models: Models, dbg: Sta
         epoch = e;
       }
       expected = start + ML_BLOCK;
+      const tIn = timing ? performance.now() : 0; // the block is at the worker
       let sent = false;
       try {
         const l = data.subarray(0, ML_BLOCK), r = data.subarray(ML_BLOCK, 2 * ML_BLOCK);
@@ -132,7 +134,11 @@ function serve(port: MessagePort, pipeline: MlPipeline, models: Models, dbg: Sta
         if (stall) await stall();
         back(buf, head, start - ML_RESULT_OFFSET);
         sent = true;
+        const tBack = timing ? performance.now() : 0;
+        const line = timing?.block(tBack - tIn, pipeline.splMisses);
+        if (line) console.log(line);
         await pipeline.catchUp(models.spleeter); // after the reply, so MDX results never wait for it
+        timing?.catchUp(performance.now() - tBack);
       } catch {
         pipeline.reset();
         epoch = -1;

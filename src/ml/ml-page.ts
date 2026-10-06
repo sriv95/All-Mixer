@@ -34,8 +34,10 @@ window.addEventListener('message', (e: MessageEvent) => {
       .then((o) => {
         const stallMs = Number(o['debug.mlStallMs']) > 0 ? Number(o['debug.mlStallMs']) : 0;
         const stallAfterMs = Number(o['debug.mlStallAfterMs']) >= 0 && o['debug.mlStallAfterMs'] != null ? Number(o['debug.mlStallAfterMs']) : 5000;
+        // Timing log (off by default): localStorage['all-mixer-ml-timing'] = '1' on this page (the ml.html iframe).
+        const timing = localStorage.getItem('all-mixer-ml-timing') === '1' || o['debug.mlTiming'] === true;
         w.postMessage(
-          { type: 'init', port, modelUrl: chrome.runtime.getURL('ml/vocals.onnx'), mdxUrl: chrome.runtime.getURL('ml/mdx.onnx'), wasmBase: chrome.runtime.getURL('ml/'), stallMs, stallAfterMs },
+          { type: 'init', port, modelUrl: chrome.runtime.getURL('ml/vocals.onnx'), mdxUrl: chrome.runtime.getURL('ml/mdx.onnx'), wasmBase: chrome.runtime.getURL('ml/'), stallMs, stallAfterMs, timing },
           [port],
         );
       });
