@@ -52,6 +52,15 @@ function summarize(xs: number[]): { mean: number; p95: number } {
   return { mean, p95: sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))] };
 }
 
+/** Dev-only layout experiment (SRI-137); only honoured with allMixer.avProbe=1. */
+function probeLayout(): string {
+  try {
+    return localStorage.getItem('allMixer.avProbe') === '1' ? (localStorage.getItem('allMixer.avProbeLayout') ?? '') : '';
+  } catch {
+    return '';
+  }
+}
+
 export type OverlayState = 'off' | 'waiting' | 'on' | 'failed';
 
 export class DelayedVideo {
@@ -239,6 +248,7 @@ export class DelayedVideo {
     this.shown?.close();
     this.shown = null;
     this.canvas.style.display = 'none';
+    this.video.style.opacity = '';
     this.canvas.remove();
     this.clock.reset();
     this.probe?.overlayReset();
@@ -264,12 +274,19 @@ export class DelayedVideo {
       if (this.shown) this.ctx.drawImage(this.shown, 0, 0, w, h);
     }
     this.updateCapture();
+    const variant = probeLayout();
     Object.assign(this.canvas.style, {
       left: `${v.offsetLeft}px`,
       top: `${v.offsetTop}px`,
       width: `${v.clientWidth}px`,
-      height: `${v.clientHeight}px`,
+      height: `${v.clientHeight - (variant === 'corner' ? 1 : 0)}px`,
+      opacity: variant === 'opacity' ? '0.01' : '',
+      clipPath:
+        variant === 'clip'
+          ? 'polygon(0 0,100% 0,100% calc(100% - 4px),calc(100% - 4px) calc(100% - 4px),calc(100% - 4px) 100%,0 100%)'
+          : '',
     });
+    v.style.opacity = variant === 'under' ? '0' : '';
   }
 
   private readonly onSeeking = (): void => {
