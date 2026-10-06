@@ -280,6 +280,38 @@ describe('LyricsController', () => {
     }
   });
 
+  it('keeps the loop alive while frames are queued, even if the time sits still', async () => {
+    vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'] });
+    try {
+      let presented = 10;
+      let busy = true;
+      const c = new LyricsController('youtube', { ...deps(), presentedTime: () => presented, presentedBusy: () => busy });
+      const s = new FakeSurface();
+      const video = document.createElement('video');
+      Object.defineProperty(video, 'currentTime', { value: 60, writable: true });
+      Object.defineProperty(video, 'paused', { value: true, writable: true });
+      c.addSurface(s);
+      c.setVideo(video);
+      c.setVideoId('v');
+      await vi.advanceTimersByTimeAsync(0);
+      await flush();
+      // Seek while paused: the old picture holds for 1 s before the first new frame is drawn.
+      video.dispatchEvent(new Event('seeked'));
+      await vi.advanceTimersByTimeAsync(1000);
+      presented = 20;
+      await vi.advanceTimersByTimeAsync(34);
+      expect(s.times.at(-1)).toBeCloseTo(20);
+      // Queue empty: the loop stops 250 ms after the time stopped moving.
+      busy = false;
+      await vi.advanceTimersByTimeAsync(600);
+      const n = s.times.length;
+      await vi.advanceTimersByTimeAsync(200);
+      expect(s.times.length).toBe(n);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('re-aligns when the player loads captions later (CC turned on)', async () => {
     let notify!: (id: string) => void;
     let captions: string | null = null;

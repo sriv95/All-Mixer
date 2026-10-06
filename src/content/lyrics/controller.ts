@@ -49,6 +49,8 @@ export interface LyricsDeps {
   onCaptionsAvailable?(cb: (videoId: string) => void): void;
   /** Media time of the picture on screen (delayed-video overlay, D1); null when there is no overlay. */
   presentedTime?(): number | null;
+  /** True while the delayed overlay still has frames queued (the presented time may sit still before the next one is drawn). */
+  presentedBusy?(): boolean;
 }
 
 /** Fetched caption track. `index` points into `PlayerInfo.captionTracks`. */
@@ -402,7 +404,7 @@ export class LyricsController {
 
   /** Paused, but the delayed picture may still be playing out its queue; the loop stops itself once the time stops moving. */
   private draining(): boolean {
-    return this.deps.presentedTime?.() != null;
+    return this.deps.presentedTime?.() != null || this.deps.presentedBusy?.() === true;
   }
 
   private startLoop(): void {
@@ -414,7 +416,7 @@ export class LyricsController {
       const now = performance.now();
       if (p !== this.lastPresented) this.lastMoved = now;
       this.lastPresented = p;
-      if (this.video?.paused && now - this.lastMoved > DRAIN_IDLE_MS) {
+      if (this.video?.paused && !this.deps.presentedBusy?.() && now - this.lastMoved > DRAIN_IDLE_MS) {
         this.raf = 0;
         return;
       }

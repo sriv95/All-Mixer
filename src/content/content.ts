@@ -20,7 +20,7 @@ if (site) {
   const chain = new MasterChain(() => syncDelay(), undefined, probe);
   const selector = new EngineSelector(chain);
   // Lyrics follow what the user sees and hears, which trails currentTime by the picture delay (D1).
-  const lyrics = initLyrics(site, () => overlay?.presentedTime() ?? null);
+  const lyrics = initLyrics(site, () => overlay?.presentedTime() ?? null, () => overlay?.presentedBusy() ?? false);
 
   // D1: the picture trails by the graph's total audio delay (processing + device).
   const wantedDelayMs = (videoDelayMs = chain.latency.videoDelayMs): number => debugDelayMs ?? overlayDelayMs(settings.mode, videoDelayMs);
