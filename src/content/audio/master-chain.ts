@@ -44,9 +44,9 @@ export interface SeparationRequest {
 
 export type SeparationState = 'off' | 'loading' | 'on' | 'error';
 
-/** Crossfade time constant (s); settles in ≈ 30 ms. */
 /** Media events after which the separator holds stale audio (seek, ad break, source change). */
 const FLUSH_EVENTS = ['seeking', 'emptied', 'loadstart'] as const;
+/** Crossfade time constant (s); settles in ≈ 30 ms. */
 const FADE_TAU = 0.006;
 /** Margin between scheduling and the start of a ramp (s). */
 const PRE_ROLL = 0.01;
