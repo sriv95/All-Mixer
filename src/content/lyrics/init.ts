@@ -1,10 +1,11 @@
 import type { FetchLyrics } from '../../shared/messages';
 import type { FoundLyrics } from '../../lyrics/lrclib-types';
-import { CC_BUTTON_SELECTOR, findLyricsControls, findPlayer, getVideoId, onCaptionsButtonOn, onNavigate, setYtCaptionsHidden, type Site } from '../youtube-dom';
+import { CC_BUTTON_SELECTOR, clickCaptionsButton, findLyricsControls, getCaptionsButtonState, findPlayer, getVideoId, onCaptionsButtonOn, onNavigate, setYtCaptionsHidden, type Site } from '../youtube-dom';
 import { getPlayerInfo, getTimedText, onCaptionsAvailable } from './bridge-client';
 import { LyricsController, type LyricsState } from './controller';
 import { YtSettingsMenu, YtmSettingsPopover, buildMenuButtons, buildMenuRows, type LyricsMenu } from './settings-menu';
 import { PanelSurface, YtmTabSurface } from './surfaces';
+import { CaptionBoot } from './caption-boot';
 import { KaraokeSurface } from './karaoke-overlay';
 import { DEFAULT_LYRICS_PREFS, loadLyricsPrefs, saveLyricsPrefs, watchLyricsPrefs, type LyricsPrefs } from '../../shared/lyrics-prefs';
 
@@ -20,10 +21,24 @@ export interface LyricsFeature {
  * (D1 delay), or null without an overlay, so the highlight follows what the user sees and hears.
  */
 export function initLyrics(site: Site, presentedTime: () => number | null, presentedBusy: () => boolean = () => false): LyricsFeature {
+  // YT Music shows lyrics in its Lyrics tab only: no karaoke text (the song tab has no video) and no lyrics window.
+  const tabOnly = site === 'ytmusic';
+  // CC at the start of each video (www): see CaptionBoot. Set up below with the caption hiding it drives.
+  const boot: CaptionBoot = new CaptionBoot({
+    state: () => getCaptionsButtonState(),
+    toggle: () => clickCaptionsButton(),
+    onInitial: (wasOn) => {
+      if (wasOn) forceCaptions();
+    },
+  });
   const controller = new LyricsController(site, {
     getPlayerInfo,
     getTimedText,
-    onCaptionsAvailable,
+    onCaptionsAvailable: (cb) =>
+      onCaptionsAvailable((id) => {
+        boot.captionsLoaded(id);
+        cb(id);
+      }),
     fetchLyrics: (track) => chrome.runtime.sendMessage({ type: 'fetch-lyrics', track } satisfies FetchLyrics) as Promise<FoundLyrics | null>,
     presentedTime,
     presentedBusy,
@@ -36,7 +51,7 @@ export function initLyrics(site: Site, presentedTime: () => number | null, prese
   let prefs: LyricsPrefs = DEFAULT_LYRICS_PREFS;
   const storage = typeof chrome !== 'undefined' ? chrome.storage?.local : undefined;
 
-  const wantWindow = () => prefs.lyricsVisible && prefs.lyricsDisplayMode === 'window';
+  const wantWindow = () => !tabOnly && prefs.lyricsVisible && prefs.lyricsDisplayMode === 'window';
 
   const panel = new PanelSurface(
     site,
@@ -62,13 +77,22 @@ export function initLyrics(site: Site, presentedTime: () => number | null, prese
       if (storage) void saveLyricsPrefs(storage, { karaokePosition });
     },
   });
-  controller.addSurface(karaoke);
+  if (!tabOnly) controller.addSurface(karaoke);
 
   // YouTube's own captions don't sync with our lyrics: hide them while karaoke text or the window shows (www only),
   // from the start of each video. The user can show them again by pressing the CC button (`captionsForced`).
   let captionsForced = false;
+  let lastVideoId: string | null = null;
+  let bootedFor: string | null = null;
   const syncCaptions = () => {
-    if (site === 'youtube') setYtCaptionsHidden((karaoke.active || panel.active) && !captionsForced);
+    if (site !== 'youtube') return;
+    const wanted = karaoke.active || panel.active;
+    setYtCaptionsHidden(wanted && !captionsForced);
+    // Lyrics are wanted for this video: read the CC state (once) and load the captions.
+    if (wanted && lastVideoId && bootedFor !== lastVideoId) {
+      bootedFor = lastVideoId;
+      boot.start(lastVideoId);
+    }
   };
   const forceCaptions = () => {
     if (captionsForced) return;
@@ -77,6 +101,7 @@ export function initLyrics(site: Site, presentedTime: () => number | null, prese
   };
   const applyPrefs = (next: LyricsPrefs) => {
     prefs = next;
+    controller.applyStored(next.lyricsSource, next.captionLang);
     if (wantWindow() && !panel.panel.isOpen) panel.panel.show();
     if (!wantWindow() && panel.panel.isOpen) panel.panel.hide();
     karaoke.refreshPrefs();
@@ -103,13 +128,19 @@ export function initLyrics(site: Site, presentedTime: () => number | null, prese
   const popover = site === 'ytmusic' ? new YtmSettingsPopover() : null;
   const menus: LyricsMenu[] = [ytMenu, popover].filter((m): m is YtSettingsMenu | YtmSettingsPopover => m !== null);
   const actions = {
-    selectSource: (p: Parameters<LyricsController['selectSource']>[0]) => controller.selectSource(p),
-    selectCaptionTrack: (p: Parameters<LyricsController['selectCaptionTrack']>[0]) => controller.selectCaptionTrack(p),
+    selectSource: (p: Parameters<LyricsController['selectSource']>[0]) => {
+      controller.selectSource(p);
+      setPrefs({ lyricsSource: p });
+    },
+    selectCaptionTrack: (p: Parameters<LyricsController['selectCaptionTrack']>[0]) => {
+      controller.selectCaptionTrack(p);
+      setPrefs({ captionLang: controller.captionLang });
+    },
     setPrefs,
   };
   const syncMenu = () => {
     const ready = lastState.kind === 'ready' ? lastState : null;
-    const input = { sources: ready?.sources, captions: ready?.captions, prefs };
+    const input = { sources: ready?.sources, captions: ready?.captions, prefs, site };
     const rows = buildMenuRows(input, actions);
     const buttons = buildMenuButtons(input, actions);
     for (const m of menus) m.setRows(rows, buttons);
@@ -145,18 +176,20 @@ export function initLyrics(site: Site, presentedTime: () => number | null, prese
   // CC turned on: the event from the page bridge can be missed, so re-align a few times on our own.
   if (site === 'youtube') {
     onCaptionsButtonOn(() => {
-      forceCaptions();
+      // Our own start-of-video press does not count as the user taking over.
+      if (!boot.isOwnChange()) forceCaptions();
       controller.realignWithRetries();
     });
     // Any press on CC (also turning it off) means the user wants control over YouTube's captions now.
     document.addEventListener('click', (e) => {
-      if ((e.target as Element | null)?.closest?.(CC_BUTTON_SELECTOR)) forceCaptions();
+      if (!e.isTrusted || !(e.target as Element | null)?.closest?.(CC_BUTTON_SELECTOR)) return;
+      boot.userToggled();
+      forceCaptions();
     }, true);
   }
 
   // Which video is this? The URL on watch pages; the player itself elsewhere (miniplayer, YT Music player bar).
   let checkSeq = 0;
-  let lastVideoId: string | null = null;
   const checkVideo = async () => {
     const seq = ++checkSeq;
     let id = getVideoId(location.href);
@@ -168,6 +201,7 @@ export function initLyrics(site: Site, presentedTime: () => number | null, prese
     if (id !== lastVideoId) {
       lastVideoId = id;
       captionsForced = false;
+      boot.cancel();
       syncCaptions();
     }
     controller.setVideoId(id);
