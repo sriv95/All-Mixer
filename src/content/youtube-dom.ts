@@ -190,6 +190,20 @@ export const PLAYER_SELECTORS = {
   controlBar: { youtube: '.ytp-chrome-bottom', ytmusic: null } satisfies Record<Site, string | null>,
 } as const;
 
+/**
+ * Where the karaoke root is mounted. On YT Music the player is a stacking context under `#song-media-window`
+ * (the video-mode overlay), so the root is mounted in `ytmusic-player` above it, sized to the player rect.
+ */
+export const KARAOKE_MOUNT = {
+  youtube: { host: null, zIndex: 10 },
+  ytmusic: { host: 'ytmusic-player', zIndex: 1000 },
+} as const satisfies Record<Site, { host: string | null; zIndex: number }>;
+
+export function findKaraokeHost(site: Site, player: HTMLElement): HTMLElement {
+  const host = KARAOKE_MOUNT[site].host;
+  return (host && player.closest<HTMLElement>(host)) || player;
+}
+
 export function findPlayer(site: Site, doc: ParentNode = document): HTMLElement | null {
   return doc.querySelector<HTMLElement>(PLAYER_SELECTORS.player[site]);
 }
