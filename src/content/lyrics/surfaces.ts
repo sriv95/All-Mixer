@@ -12,7 +12,7 @@ function show(view: LyricsView, state: LyricsState): void {
       view.setStatus('loading');
       break;
     case 'ready':
-      view.setLyrics(state.lyrics, state.captions, state.sources);
+      view.setLyrics(state.lyrics, state.sources);
       break;
     case 'not-found': {
       const t = state.track;
@@ -109,7 +109,7 @@ export class YtmTabSurface implements LyricsSurface {
 
   render(state: LyricsState): void {
     this.state = state;
-    if (state.kind === 'ready') this.view.setLyrics(state.lyrics, state.captions, state.sources);
+    if (state.kind === 'ready') this.view.setLyrics(state.lyrics, state.sources);
     this.sync();
   }
 
@@ -129,7 +129,7 @@ export class YtmTabSurface implements LyricsSurface {
       if (this.view.el.parentNode !== content) {
         content.append(this.view.el);
         // Reset the highlight so the next update scrolls to the current line.
-        this.view.setLyrics(s.lyrics, s.captions, s.sources);
+        this.view.setLyrics(s.lyrics, s.sources);
       }
       content.setAttribute(YTM_MOUNT_ATTR, '');
     } else {
