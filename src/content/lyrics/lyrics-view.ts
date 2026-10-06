@@ -7,7 +7,7 @@ export type LyricsViewStatus = 'loading' | 'not-found' | 'error';
 
 export interface LyricsViewOptions {
   onSeek: (time: number) => void;
-  /** The user picked another caption track or an auto-translation in the language menu. */
+  /** The user picked another caption track in the language menu. */
   onCaptionTrack?: (pick: CaptionPick) => void;
   /** The user picked a lyrics source in the source menu. */
   onSource?: (pref: SourcePref) => void;
@@ -198,24 +198,16 @@ export class LyricsView {
     sel.className = 'lang';
     sel.title = 'Caption language';
     sel.setAttribute('aria-label', 'Caption language');
-    let group: HTMLOptGroupElement | null = null;
     picker.options.forEach((o, i) => {
       const opt = this.doc.createElement('option');
       opt.value = String(i);
       opt.textContent = o.label;
-      if (o.group === 'translate') {
-        if (!group) {
-          group = this.doc.createElement('optgroup');
-          group.label = 'Auto-translate';
-          sel.append(group);
-        }
-        group.append(opt);
-      } else sel.append(opt);
+      sel.append(opt);
     });
-    sel.value = String(picker.options.findIndex((o) => o.index === picker.selected.index && o.tlang === picker.selected.tlang));
+    sel.value = String(picker.options.findIndex((o) => o.index === picker.selected.index));
     sel.addEventListener('change', () => {
       const o = picker.options[Number(sel.value)];
-      if (o) onPick({ index: o.index, ...(o.tlang ? { tlang: o.tlang } : {}) });
+      if (o) onPick({ index: o.index });
       // Hand focus back to the page so later keys (k, Space, arrows) reach YouTube, not the select.
       sel.blur();
     });

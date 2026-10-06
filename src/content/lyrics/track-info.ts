@@ -39,22 +39,14 @@ export function chooseCaptionTracks(tracks: readonly CaptionTrack[], defaultLang
 export interface CaptionOption {
   /** Index into `PlayerInfo.captionTracks`. */
   index: number;
-  /** Auto-translate target language (the track at `index` is machine-translated into it). */
-  tlang?: string;
   label: string;
-  group: 'track' | 'translate';
 }
 
-/** A chosen caption track, optionally auto-translated. */
+/** A chosen caption track. */
 export interface CaptionPick {
   index: number;
-  tlang?: string;
 }
 
-/**
- * Menu entries for the caption language picker: every track (auto-generated ones labelled), then auto-translations
- * of `sourceTrack` when YouTube offers them for it.
- */
 /** "English - en" -> "English"; "English - Lyrics" -> "English (Lyrics)"; drops parts repeated from the first part or equal to the language code. */
 export function cleanTrackName(name: string, languageCode?: string): string {
   const [first, ...rest] = name.split(' - ').map((p) => p.trim()).filter(Boolean);
@@ -68,11 +60,8 @@ function appendInParens(label: string, code: string): string {
   return code ? `${label} (${code})` : label;
 }
 
-export function captionOptions(
-  tracks: readonly CaptionTrack[],
-  translationLanguages: readonly { languageCode: string; name: string }[] = [],
-  sourceTrack?: CaptionTrack,
-): CaptionOption[] {
+/** Menu entries for the caption language picker: every track, auto-generated ones labelled. */
+export function captionOptions(tracks: readonly CaptionTrack[]): CaptionOption[] {
   const labels = tracks.map((t, index) => {
     const name = cleanTrackName(t.name || t.languageCode || `Track ${index + 1}`, t.languageCode);
     return t.kind === 'asr' && !/auto/i.test(name) ? `${name} (auto-generated)` : name;
@@ -83,19 +72,9 @@ export function captionOptions(
   });
   // Still identical (same name and code): number the 2nd and later ones.
   const seen = new Map<string, number>();
-  const options: CaptionOption[] = coded.map((base, index) => {
+  return coded.map((base, index) => {
     const n = (seen.get(base) ?? 0) + 1;
     seen.set(base, n);
-    return { index, label: n > 1 ? `${base} #${n}` : base, group: 'track' };
+    return { index, label: n > 1 ? `${base} #${n}` : base };
   });
-  const index = sourceTrack ? tracks.indexOf(sourceTrack) : -1;
-  if (index < 0 || !sourceTrack?.isTranslatable) return options;
-  for (const l of translationLanguages) {
-    if (l.languageCode === sourceTrack.languageCode) continue;
-    const base = `${l.name} (auto-translated)`;
-    let label = base;
-    for (let n = 2; options.some((o) => o.label === label); n++) label = `${base} #${n}`;
-    options.push({ index, tlang: l.languageCode, label, group: 'translate' });
-  }
-  return options;
 }
