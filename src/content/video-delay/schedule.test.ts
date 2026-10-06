@@ -153,8 +153,7 @@ describe('captureSize', () => {
 
   it('fits a 2560x1440 display at 2 s / 60 fps in the 512 MiB budget', () => {
     const r = captureSize({ ...base, displayW: 2560, displayH: 1440, videoW: 3840, videoH: 2160, delayMs: 2000 });
-    expect(r.width * r.height * 4 * r.maxFrames).toBeLessThanOrEqual(VIDEO_DELAY_BUDGET_BYTES * 2);
-    expect(r.width * r.height * 4 * (Math.ceil(2.25 * 60) + 8)).toBeLessThanOrEqual(VIDEO_DELAY_BUDGET_BYTES);
+    expect(r.width * r.height * 4 * r.maxFrames).toBeLessThanOrEqual(VIDEO_DELAY_BUDGET_BYTES);
     expect(r.width).toBeLessThan(2560);
   });
 
