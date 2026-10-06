@@ -113,6 +113,11 @@ export class DelayedVideo {
   }
 
   get delayMs(): number {
+  /** True while frames are queued for the overlay (it is still playing out or about to show a new position). */
+  presentedBusy(): boolean {
+    return this.state === 'on' && this.queue.size > 0;
+  }
+
     return this.schedule.target;
   }
 

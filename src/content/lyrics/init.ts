@@ -17,13 +17,14 @@ export interface LyricsFeature {
  * F1 + F2 wiring. `presentedTime` returns the media time of the delayed picture on screen
  * (D1 delay), or null without an overlay, so the highlight follows what the user sees and hears.
  */
-export function initLyrics(site: Site, presentedTime: () => number | null): LyricsFeature {
+export function initLyrics(site: Site, presentedTime: () => number | null, presentedBusy: () => boolean = () => false): LyricsFeature {
   const controller = new LyricsController(site, {
     getPlayerInfo,
     getTimedText,
     onCaptionsAvailable,
     fetchLyrics: (track) => chrome.runtime.sendMessage({ type: 'fetch-lyrics', track } satisfies FetchLyrics) as Promise<FoundLyrics | null>,
     presentedTime,
+    presentedBusy,
   });
   const view = {
     onSeek: (t: number) => controller.seek(t),
