@@ -24,10 +24,12 @@ const v = (fn, arg) => page.evaluate(fn, arg);
 const play = () => v(() => document.querySelector('video').play().catch(() => {}));
 const pause = () => v(() => document.querySelector('video').pause());
 const f = (x) => (x === undefined || x === null ? '   -  ' : x.toFixed(1).padStart(6));
+// Must outlast the widest pairing window (overlay delay + latency + margin, ~5.3 s) or transitions land on the wrong step.
+const STEP_WAIT = Number(process.env.STEP_WAIT || 6500);
 const rows = []; let seen = 0;
 // Collect transitions the probe finished since the last step, tagged with the step label.
 async function step(mode, label) {
-  await sleep(2200); const p = await probe();
+  await sleep(STEP_WAIT); const p = await probe();
   if (process.env.RAW) console.error(JSON.stringify({ mode, label, probeOn: p?.probeOn, audioAttached: p?.audioAttached, ctxState: p?.ctxState }));
   if (!p) { rows.push({ mode, label, kind: '-', missing: ['avProbe absent (probe off)'] }); return; }
   const all = p.transitions ?? []; const fresh = all.filter((t) => t.at > seen);

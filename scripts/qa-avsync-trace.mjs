@@ -38,7 +38,7 @@ async function collect(mode) {
   for (const m of marks.filter((x) => x.mode === mode)) {
     const hit = all.filter((t) => t.kind === 'play' && t.at >= m.at - 50 && t.at <= m.at + 400);
     if (hit.length !== 1) { rows.push({ mode, label: m.label, kind: 'play', missing: [`${hit.length} play transitions matched`] }); continue; }
-    rows.push({ mode, label: m.label, kind: 'play', off: hit[0].playOffsetMs, pipe: hit[0].pipelineMs, missing: hit[0].missing, at: hit[0].at });
+    rows.push({ mode, label: m.label, kind: 'play', off: hit[0].playOffsetMs, pipe: hit[0].pipelineMs, level: hit[0].level, missing: hit[0].missing, at: hit[0].at });
   }
 }
 // One real gesture (neutral spot, not the player) so the AudioContext may start.
@@ -73,7 +73,7 @@ for (const name of want) {
 await dbg(null);
 const st = (a) => (a.length ? `mean ${(a.reduce((x, y) => x + y, 0) / a.length).toFixed(1)} range [${Math.min(...a).toFixed(1)}, ${Math.max(...a).toFixed(1)}] n=${a.length}` : 'n=0');
 console.log('variant                 step      kind  offset(ms; sound - picture)  pipeline  missing');
-for (const r of rows) console.log(`${r.mode.padEnd(22)} ${r.label.padEnd(9)} ${r.kind.padEnd(5)} ${f(r.off)}  ${f(r.pipe)}  ${(r.missing ?? []).join(',')}`);
+for (const r of rows) console.log(`${r.mode.padEnd(22)} ${r.label.padEnd(9)} ${r.kind.padEnd(5)} ${f(r.off)}  ${f(r.pipe)}  ${(r.missing ?? []).join(',')}${r.level ? ` level rms=${r.level.rms.toFixed(4)} peak=${r.level.peak.toFixed(4)} firstAbove=${r.level.firstAboveMs?.toFixed(0) ?? '-'}` : ''}`);
 for (const name of want) { const pl = rows.filter((r) => r.mode === name && r.kind === 'play'); console.log(`${name}: resume playOffsetMs ${st(pl.map((r) => r.off).filter((x) => x != null))}; pipelineMs ${st(pl.map((r) => r.pipe).filter((x) => x != null))}`); }
 for (const [m, rv] of rvStats) console.log(`${m}: first rVFC after play() delay ms [${rv.map((x) => x.delay.toFixed(0))}]; mediaTime lag ms [${rv.map((x) => x.lag.toFixed(0))}]`);
 fs.writeFileSync(path.join(OUT, 'qa-avsync-trace.json'), JSON.stringify({ rows, logs }, null, 1));

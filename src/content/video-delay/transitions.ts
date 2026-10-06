@@ -62,8 +62,13 @@ export function pairTransition(
   const [lo0, hi] = windowFor(kind, at, delayMs, latencyMs);
   const lo = kind === 'play' ? lo0 - PLAY_SLACK_MS : lo0;
   const want = kind === 'pause' ? 'off' : 'on';
-  // A seek resets the overlay: it emits on and off at the same ms. That pair is stale, not a picture edge.
-  const stale = (x: PairEdge): boolean => x.source === 'overlay' && edges.some((y) => y !== x && y.source === 'overlay' && y.kind !== x.kind && y.t === x.t);
+  // A seek resets the overlay: it emits on, then off, at the same ms (net state off). That pair is stale, not a picture edge.
+  // Order matters (edges is in emit order): an off then on at one ms, or a lone edge, is real.
+  const stale = (x: PairEdge): boolean => {
+    if (x.source !== 'overlay') return false;
+    const i = edges.indexOf(x);
+    return edges.some((y, j) => y.source === 'overlay' && y.t === x.t && y.kind !== x.kind && (x.kind === 'on' ? j > i : j < i));
+  };
   const first = (source: EdgeSource): PairEdge | undefined => {
     const e = edges.filter((x) => x.source === source && x.kind === want && x.t >= lo && x.t <= hi && !used.has(x) && !stale(x)).sort((a, b) => a.t - b.t)[0];
     if (e) used.add(e);
