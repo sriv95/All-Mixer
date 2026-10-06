@@ -51,16 +51,12 @@ const VARS = {
   'separate+overlay0': { mode: 'separate', pct: 100, wait: 8000, debug: 0 },
   'separate+bypass': { mode: 'separate', pct: 100, wait: 1000 },
 };
-const LAYOUTS = (process.env.LAYOUTS || '').split(',').map((x) => x.trim()).filter((x) => x !== '');
 const want = (process.env.VARIANTS || 'default150+overlay2000,separate').split(',').map((x) => x.trim()).filter(Boolean);
-const runs = LAYOUTS.length ? LAYOUTS.flatMap((l) => want.map((n) => [n, l])) : want.map((n) => [n, '']);
 const rvStats = [];
-for (const [name0, layout] of runs) {
-  const name = name0;
-  await v((l) => { if (l && l !== 'default') localStorage.setItem('allMixer.avProbeLayout', l); else localStorage.removeItem('allMixer.avProbeLayout'); }, layout);
+for (const name of want) {
   await v(() => { window.__rv = []; });
   const c = VARS[name]; if (!c) { console.error('unknown variant', name); continue; }
-  const mode = layout ? `${name}@${layout}` : name; await dbg(null); await sleep(500);
+  const mode = name; await dbg(null); await sleep(500);
   // 100% Default leaves the page audio untouched (no graph, nothing to probe), so Default runs at 150%.
   await setS({ ...base, mode: c.mode, masterPct: c.pct });
   if (c.debug !== undefined) await dbg(c.debug);
@@ -75,7 +71,7 @@ await dbg(null);
 const st = (a) => (a.length ? `mean ${(a.reduce((x, y) => x + y, 0) / a.length).toFixed(1)} range [${Math.min(...a).toFixed(1)}, ${Math.max(...a).toFixed(1)}] n=${a.length}` : 'n=0');
 console.log('variant                 step      kind  offset(ms; sound - picture)  pipeline  missing');
 for (const r of rows) console.log(`${r.mode.padEnd(22)} ${r.label.padEnd(9)} ${r.kind.padEnd(5)} ${f(r.off)}  ${f(r.pipe)}  ${(r.missing ?? []).join(',')}`);
-for (const name of want.flatMap((n) => (LAYOUTS.length ? LAYOUTS.map((l) => `${n}@${l}`) : [n]))) { const pl = rows.filter((r) => r.mode === name && r.kind === 'play'); console.log(`${name}: resume playOffsetMs ${st(pl.map((r) => r.off).filter((x) => x != null))}; pipelineMs ${st(pl.map((r) => r.pipe).filter((x) => x != null))}`); }
+for (const name of want) { const pl = rows.filter((r) => r.mode === name && r.kind === 'play'); console.log(`${name}: resume playOffsetMs ${st(pl.map((r) => r.off).filter((x) => x != null))}; pipelineMs ${st(pl.map((r) => r.pipe).filter((x) => x != null))}`); }
 for (const [m, rv] of rvStats) console.log(`${m}: first rVFC after play() delay ms [${rv.map((x) => x.delay.toFixed(0))}]; mediaTime lag ms [${rv.map((x) => x.lag.toFixed(0))}]`);
 fs.writeFileSync(path.join(OUT, 'qa-avsync-trace.json'), JSON.stringify({ rows, logs }, null, 1));
 console.error(`raw rows + ${logs.length} probe log lines: ${path.join(OUT, 'qa-avsync-trace.json')}`);
