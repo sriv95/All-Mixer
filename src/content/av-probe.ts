@@ -2,7 +2,7 @@ import type { AvProbeStatus, AvTransition } from '../shared/messages';
 import type { LatencyInfo } from './audio/latency';
 import { toPerformanceTime } from './audio/latency';
 import { pairTransition, windowFor, WINDOW_MS, type PairEdge } from './video-delay/transitions';
-import { ActivityEdges, AudioEdgeDetector, type Edge } from './video-delay/edge-detect';
+import { ActivityEdges, AudioEdgeDetector, AUDIO_THRESHOLD, type Edge } from './video-delay/edge-detect';
 
 /**
  * Debug-only A/V sync probe (SRI-95). Measures when picture and sound start
@@ -45,6 +45,7 @@ export class AvProbe {
   private readonly edgeLog: PairEdge[] = [];
   private readonly pending: { kind: 'pause' | 'play'; at: number; delayMs: number; latencyMs: number }[] = [];
   private readonly done: AvTransition[] = [];
+  private readonly levels: { t: number; rms: number; peak: number }[] = [];
   private awaitingPlay = false;
   private readonly traceCounts: Record<string, number> = {};
   private overlayInfo: (() => Record<string, number>) | null = null;
@@ -220,6 +221,14 @@ export class AvProbe {
     analyser.getFloatTimeDomainData(this.buf);
     const { ctx } = audio;
     const nowPerf = performance.now();
+    let sum = 0;
+    let peak = 0;
+    for (const x of this.buf) {
+      sum += x * x;
+      peak = Math.max(peak, Math.abs(x));
+    }
+    this.levels.push({ t: nowPerf, rms: Math.sqrt(sum / this.buf.length), peak });
+    if (this.levels.length > 600) this.levels.shift();
     const nowCtx = ctx.currentTime;
     for (const edge of detector.feed(this.buf, nowCtx)) {
       const t = edge.at / 1000; // context seconds
@@ -260,6 +269,11 @@ export class AvProbe {
     while (this.pending.length && windowFor(this.pending[0].kind, this.pending[0].at, this.pending[0].delayMs, this.pending[0].latencyMs)[1] + WINDOW_MS / 10 <= now) {
       const p = this.pending.shift()!;
       const tr = pairTransition(p.kind, p.at, this.edgeLog, p.delayMs, p.latencyMs, this.usedEdges);
+      if (p.kind === 'play') {
+        const w = this.levels.filter((l) => l.t >= p.at && l.t <= p.at + 1500);
+        const over = w.find((l) => l.peak > AUDIO_THRESHOLD);
+        tr.level = { rms: Math.max(0, ...w.map((l) => l.rms)), peak: Math.max(0, ...w.map((l) => l.peak)), firstAboveMs: over ? over.t - p.at : undefined };
+      }
       this.done.push(tr);
       if (this.done.length > MAX_TRANSITIONS) this.done.shift();
       console.log(PREFIX, 'transition', JSON.stringify(tr));

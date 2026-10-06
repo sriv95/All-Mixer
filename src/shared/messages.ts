@@ -70,6 +70,8 @@ export interface AvTransition {
   playOffsetMs?: number;
   pauseOffsetMs?: number;
   pipelineMs?: number;
+  /** Analyser level in the 1.5 s after the event (SRI-184): max RMS / peak and ms to the first sample over the edge threshold. */
+  level?: { rms: number; peak: number; firstAboveMs?: number };
   /** Edges not seen in the window. */
   missing: string[];
 }

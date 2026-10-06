@@ -32,7 +32,7 @@ async function step(mode, label) {
   if (!p) { rows.push({ mode, label, kind: '-', missing: ['avProbe absent (probe off)'] }); return; }
   const all = p.transitions ?? []; const fresh = all.filter((t) => t.at > seen);
   if (!fresh.length) rows.push({ mode, label, kind: '-', missing: [`no transition (probeOn=${p.probeOn} audioAttached=${p.audioAttached} ctx=${p.ctxState})`] });
-  for (const t of fresh) { seen = Math.max(seen, t.at); rows.push({ mode, label, kind: t.kind, off: t.kind === 'pause' ? t.pauseOffsetMs : t.playOffsetMs, pipe: t.pipelineMs, missing: t.missing, ctx: p.ctxState }); }
+  for (const t of fresh) { seen = Math.max(seen, t.at); rows.push({ mode, label, kind: t.kind, off: t.kind === 'pause' ? t.pauseOffsetMs : t.playOffsetMs, pipe: t.pipelineMs, level: t.level, missing: t.missing, ctx: p.ctxState }); }
 }
 // One real gesture (neutral spot, not the player) so the AudioContext may start.
 await page.mouse.click(5, 450); await sleep(500);
@@ -62,7 +62,7 @@ for (const name of want) {
 await dbg(null);
 const st = (a) => (a.length ? `mean ${(a.reduce((x, y) => x + y, 0) / a.length).toFixed(1)} range [${Math.min(...a).toFixed(1)}, ${Math.max(...a).toFixed(1)}] n=${a.length}` : 'n=0');
 console.log('variant                 step      kind  offset(ms; sound - picture)  pipeline  missing');
-for (const r of rows) console.log(`${r.mode.padEnd(22)} ${r.label.padEnd(9)} ${r.kind.padEnd(5)} ${f(r.off)}  ${f(r.pipe)}  ${(r.missing ?? []).join(',')}`);
+for (const r of rows) console.log(`${r.mode.padEnd(22)} ${r.label.padEnd(9)} ${r.kind.padEnd(5)} ${f(r.off)}  ${f(r.pipe)}  ${(r.missing ?? []).join(',')}${r.level ? ` level rms=${r.level.rms.toFixed(4)} peak=${r.level.peak.toFixed(4)} firstAbove=${r.level.firstAboveMs?.toFixed(0) ?? '-'}` : ''}`);
 for (const name of want) { const pl = rows.filter((r) => r.mode === name && r.kind === 'play'); console.log(`${name}: resume playOffsetMs ${st(pl.map((r) => r.off).filter((x) => x != null))}; pipelineMs ${st(pl.map((r) => r.pipe).filter((x) => x != null))}`); }
 fs.writeFileSync(path.join(OUT, 'qa-avsync.json'), JSON.stringify({ rows, logs }, null, 1));
 console.error(`raw rows + ${logs.length} probe log lines: ${path.join(OUT, 'qa-avsync.json')}`);

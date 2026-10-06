@@ -83,3 +83,17 @@ describe('windowFor with delay', () => {
     expect(t.playOffsetMs).toBe(-100);
   });
 });
+
+describe('stale overlay pair', () => {
+  it('skips an overlay on/off pair at the same ms and takes the real edge', () => {
+    const edges: PairEdge[] = [
+      { source: 'video', kind: 'on', t: 1000 },
+      { source: 'overlay', kind: 'on', t: 1000 },
+      { source: 'overlay', kind: 'off', t: 1000 },
+      { source: 'overlay', kind: 'on', t: 3000 },
+      { source: 'audio', kind: 'on', t: 2972, inputAt: 972 },
+    ];
+    const t = pairTransition('play', 1000, edges, 2000, 0);
+    expect(t.playOffsetMs).toBe(-28);
+  });
+});
