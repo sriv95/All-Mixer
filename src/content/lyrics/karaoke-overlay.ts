@@ -1,7 +1,7 @@
 import type { LyricLine } from '../../lyrics/types';
 import { selectKaraokeLines, type KaraokeSlot } from '../../lyrics/karaoke-lines';
 import type { LyricsPrefs } from '../../shared/lyrics-prefs';
-import { findControlBar, findPlayer, isAdShowing, type Site } from '../youtube-dom';
+import { findControlBar, findKaraokeHost, findPlayer, KARAOKE_MOUNT, isAdShowing, type Site } from '../youtube-dom';
 import type { LyricsState, LyricsSurface } from './controller';
 
 export interface Size {
@@ -123,8 +123,10 @@ export class KaraokeSurface implements LyricsSurface {
       this.observe(null);
       return false;
     }
-    if (this.root.parentNode !== player) {
-      player.append(this.root);
+    const host = findKaraokeHost(this.opts.site, player);
+    if (this.root.parentNode !== host) {
+      this.root.style.zIndex = String(KARAOKE_MOUNT[this.opts.site].zIndex);
+      host.append(this.root);
       this.layout();
     }
     this.observe(player);
@@ -215,9 +217,28 @@ export class KaraokeSurface implements LyricsSurface {
     if (!this.player) return;
     const player = this.playerSize();
     if (player.w <= 0 || player.h <= 0) return;
+    this.fitRoot();
     this.block.style.fontSize = `${karaokeFontPx(player.h, this.opts.getPrefs().karaokeFontSize)}px`;
     this.place(this.pos);
   };
+
+  /** When mounted outside the player, cover exactly the player rect. */
+  private fitRoot(): void {
+    const s = this.root.style;
+    if (!this.player || this.root.parentNode === this.player) {
+      s.left = s.top = s.width = s.height = '';
+      return;
+    }
+    const p = this.player.getBoundingClientRect();
+    s.inset = 'auto';
+    s.left = '0px';
+    s.top = '0px';
+    s.width = `${p.width}px`;
+    s.height = `${p.height}px`;
+    const r = this.root.getBoundingClientRect();
+    s.left = `${p.left - r.left}px`;
+    s.top = `${p.top - r.top}px`;
+  }
 
   /** Clamps and applies a position; returns the clamped fractions. */
   private place(pos: Pos): Pos {

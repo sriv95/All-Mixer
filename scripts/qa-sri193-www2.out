@@ -1,0 +1,19 @@
+0_kar {"exists":true,"vis":true,"lines":2,"fs":"21.8px","h":57}
+0_blk {"w":575,"h":57,"disp":"block","rootDisp":"block","lineH":[28,28],"text":["Your heart's been aching, but you're too","Inside, we both know what's been going o"]}
+D2_row0 "Lyrics sourceAuto"
+D2_items0 ["true:Auto","false:LRCLIB","false:DIS:YouTube captions (none)"]
+D2_pick_lrclib true
+D2_immediate1 {"checked":[],"row":"Lyrics source\tLRCLIB","panelVisible":false}
+D2_after2s {"checked":[],"row":"Lyrics source\tLRCLIB","panelVisible":false}
+D2_stored1 null
+D2_reopen_row "Lyrics source\tLRCLIB"
+D2_reopen_items ["false:Auto","true:LRCLIB","false:DIS:YouTube captions (none)"]
+D2_pick_yt true
+D2_immediate2 {"checked":["false:Auto","true:LRCLIB","false:YouTube captions (none)"],"row":"Lyrics sourceLRCLIB","panelVisible":true}
+D2_after3s {"checked":["false:Auto","true:LRCLIB","false:YouTube captions (none)"],"row":"Lyrics sourceLRCLIB","panelVisible":true}
+D2_stored2 null
+D2_row_closed "Lyrics sourceLRCLIB"
+D3_ad_native false
+D3_before {"k":{"exists":true,"vis":true,"lines":2,"fs":"21.8px","h":57},"b":{"w":575,"h":57,"disp":"block","rootDisp":"block","lineH":[28,28],"text":["We've known each other for so long","Your heart's been aching, but you're too"]}}
+D3_synthetic_ad {"k":{"exists":true,"vis":true,"lines":2,"fs":"21.8px","h":0},"b":{"w":0,"h":0,"disp":"none","rootDisp":"block","lineH":[0,0],"text":["We've known each other for so long","Your heart's been aching, but you're too"]}}
+D3_after {"k":{"exists":true,"vis":true,"lines":2,"fs":"21.8px","h":57},"b":{"w":575,"h":57,"disp":"block","rootDisp":"block","lineH":[28,28],"text":["We've known each other for so long","Your heart's been aching, but you're too"]}}

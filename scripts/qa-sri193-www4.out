@@ -1,0 +1,19 @@
+0_kar {"exists":true,"vis":true,"lines":2,"fs":"21.8px","h":57}
+0_blk {"w":182,"h":57,"disp":"block","rootDisp":"block","lineH":[28,28],"text":["오빤 강남스타일 (uh)","강남스타일"]}
+D2_row0 "Lyrics sourceAuto"
+D2_items0 ["true:Auto","false:LRCLIB","false:DIS:YouTube captions (none)"]
+D2_pick_lrclib true
+D2_immediate1 {"checked":[],"row":"Lyrics source\tLRCLIB","panelVisible":false}
+D2_after2s {"checked":[],"row":"Lyrics source\tLRCLIB","panelVisible":false}
+D2_stored1 null
+D2_reopen_row "Lyrics source\tLRCLIB"
+D2_reopen_items ["false:Auto","true:LRCLIB","false:DIS:YouTube captions (none)"]
+D2_pick_yt true
+D2_immediate2 {"checked":["false:Auto","true:LRCLIB","false:YouTube captions (none)"],"row":"Lyrics sourceLRCLIB","panelVisible":true}
+D2_after3s {"checked":["false:Auto","true:LRCLIB","false:YouTube captions (none)"],"row":"Lyrics sourceLRCLIB","panelVisible":true}
+D2_stored2 null
+D2_row_closed "Lyrics sourceLRCLIB"
+D3_ad_native false
+D3_before {"k":{"exists":true,"vis":true,"lines":2,"fs":"21.8px","h":57},"b":{"w":137,"h":57,"disp":"block","rootDisp":"block","lineH":[28,28],"text":["오빤 강남스타일","강남스타일"]}}
+D3_synthetic_ad {"k":{"exists":true,"vis":true,"lines":2,"fs":"21.8px","h":57},"b":{"w":137,"h":57,"disp":"block","rootDisp":"block","lineH":[28,28],"text":["오빤 강남스타일","강남스타일"]}}
+D3_after {"k":{"exists":true,"vis":true,"lines":2,"fs":"21.8px","h":57},"b":{"w":137,"h":57,"disp":"block","rootDisp":"block","lineH":[28,28],"text":["오빤 강남스타일","강남스타일"]}}

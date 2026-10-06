@@ -232,3 +232,18 @@ describe('karaoke block width and ads', () => {
     expect(root()!.classList.contains('am-ad')).toBe(false);
   });
 });
+
+describe('KaraokeSurface mount on YT Music', () => {
+  it('mounts in ytmusic-player above #song-media-window, not inside the player', () => {
+    document.body.innerHTML = '<ytmusic-player><div id="movie_player"></div><div id="song-media-window"></div></ytmusic-player>';
+    const p = document.getElementById('movie_player')!;
+    p.getBoundingClientRect = () => rect({ left: 10, top: 20, width: 800, height: 450, right: 810, bottom: 470 });
+    const s = new KaraokeSurface({ site: 'ytmusic', getPrefs: () => prefs, onPosition: () => {} });
+    s.render(synced);
+    s.update(1.5);
+    expect(root()!.parentElement!.tagName.toLowerCase()).toBe('ytmusic-player');
+    expect(Number(root()!.style.zIndex)).toBeGreaterThan(10);
+    expect(root()!.style.width).toBe('800px');
+    expect(root()!.style.height).toBe('450px');
+  });
+});
