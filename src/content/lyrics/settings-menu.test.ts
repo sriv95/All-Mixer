@@ -206,7 +206,7 @@ describe('YtSettingsMenu', () => {
     m.setRows(mkRows(a, p));
     rowEls().find((e) => e.getAttribute('data-am-row') === 'size')!.click();
     const panel = document.querySelector('[data-am-panel]')!;
-    p = { ...p, karaokeFontScale: 1.5 } as LyricsPrefs;
+    p = { ...p, karaokeFontSize: 150 };
     m.setRows(mkRows(a, p));
     const next = document.querySelector('[data-am-panel]');
     expect(next).not.toBeNull();
