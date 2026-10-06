@@ -91,9 +91,12 @@ export class KaraokeCombiner {
     }
   }
 
-  /** Add every frame whose 4096 samples end at or before `limit` and whose mask is stored. */
-  advance(limit: number): void {
-    while (HOP * this.next - HOP + N_FFT <= limit && this.next <= this.maskTo) this.frame(this.next++);
+  /**
+   * Add every frame whose 4096 samples end at or before `limit` and whose mask is stored. With `force`, frames
+   * whose mask is missing are added too, with mask 0 (ungated x − V_mdx, SRI-130); their late masks are then unused.
+   */
+  advance(limit: number, force = false): void {
+    while (HOP * this.next - HOP + N_FFT <= limit && (force || this.next <= this.maskTo)) this.frame(this.next++);
   }
 
   /** Frame index the next `advance` needs a mask for, given the samples available up to `limit`. */
@@ -146,6 +149,7 @@ export class KaraokeCombiner {
     }
     fft.transform(re, im);
     if (t >= 0) {
+      const have = t <= this.maskTo;
       const m = (t & MMASK) * 2 * BINS;
       for (let k = KARAOKE_GATE_BIN; k < BINS; k++) {
         const nk = N_FFT - k;
@@ -153,7 +157,7 @@ export class KaraokeCombiner {
         const li = 0.5 * (im[k] - im[nk]);
         const rr = 0.5 * (im[k] + im[nk]);
         const ri = -0.5 * (re[k] - re[nk]);
-        const ml = masks[m + k], mr = masks[m + BINS + k];
+        const ml = have ? masks[m + k] : 0, mr = have ? masks[m + BINS + k] : 0;
         const gl = 1 - g * ml * ml, gr = 1 - g * mr * mr;
         const alr = lr * gl, ali = li * gl, arr = rr * gr, ari = ri * gr;
         re[k] = alr - ari;

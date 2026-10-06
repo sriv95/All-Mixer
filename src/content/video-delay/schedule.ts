@@ -68,6 +68,49 @@ export class DelaySchedule {
   }
 }
 
+/** With an empty queue the clock may run this far past the last shown frame (one frame at 30 fps, plus jitter). */
+export const MAX_EXTRAPOLATE_S = 0.05;
+
+/** A queued frame further ahead than this is a seek, not the next frame of normal playback. */
+const DISCONTINUITY_S = 1;
+
+/**
+ * Media time of the picture on screen, for things that must follow what the
+ * user sees and hears (lyrics). Driven by the overlay: `show` when a frame is
+ * drawn, `pending` with the oldest queued frame. Between frames it advances at
+ * the playback rate, but never past the next queued frame, and by at most
+ * MAX_EXTRAPOLATE_S when nothing is queued. So it freezes on pause or a stall,
+ * and holds through a seek until the first new frame is drawn.
+ */
+export class PresentedClock {
+  private frame: { mediaTime: number; shownAt: number; rate: number } | null = null;
+  private next: number | null = null;
+
+  show(mediaTime: number, shownAt: number, rate: number): void {
+    this.frame = { mediaTime, shownAt, rate };
+  }
+
+  /** Media time of the oldest queued frame, or null when the queue is empty. */
+  pending(nextMediaTime: number | null): void {
+    this.next = nextMediaTime;
+  }
+
+  at(now: number): number | null {
+    const f = this.frame;
+    if (!f) return null;
+    const t = f.mediaTime + (Math.max(0, now - f.shownAt) / 1000) * f.rate;
+    const n = this.next;
+    // A queued frame behind or far ahead of the shown one is a seek: treat the queue as empty until it is drawn.
+    const limit = n !== null && n >= f.mediaTime && n - f.mediaTime <= DISCONTINUITY_S ? n : f.mediaTime + MAX_EXTRAPOLATE_S;
+    return Math.min(t, limit);
+  }
+
+  reset(): void {
+    this.frame = null;
+    this.next = null;
+  }
+}
+
 /** Memory budget for queued delay frames (RGBA, 4 bytes per pixel). */
 export const VIDEO_DELAY_BUDGET_BYTES = 384 * 1024 * 1024;
 
@@ -158,6 +201,11 @@ export class FrameQueue<T> {
 
   get size(): number {
     return this.frames.length;
+  }
+
+  /** Media time of the oldest queued frame, or null when empty. */
+  get nextMediaTime(): number | null {
+    return this.frames.length ? this.frames[0].mediaTime : null;
   }
 
   push(frame: QueuedFrame<T>, now: number): void {

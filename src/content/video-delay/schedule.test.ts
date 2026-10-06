@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DelaySchedule, FrameQueue, VIDEO_DELAY_BUDGET_BYTES, captureSize, overlayDelayMs } from './schedule';
+import { DelaySchedule, FrameQueue, PresentedClock, VIDEO_DELAY_BUDGET_BYTES, captureSize, overlayDelayMs } from './schedule';
 
 describe('overlayDelayMs', () => {
   it('matches the graph in Separate mode', () => {
@@ -163,5 +163,160 @@ describe('captureSize', () => {
     const q = new FrameQueue<number>(() => {}, 10);
     for (let n = 0; n < 30; n++) q.push({ due: n, mediaTime: n, img: n }, 1000);
     expect(q.size).toBeLessThanOrEqual(10);
+  });
+});
+
+/**
+ * Simulated overlay: a 30 fps stream of frames captured at `t` (media time `m0 + (t - t0) * rate`)
+ * and drawn at `t + D`. `run(from, to)` steps 1 ms at a time, feeding the clock as DelayedVideo does.
+ */
+class Sim {
+  clock = new PresentedClock();
+  now = 0;
+  private frames: { shownAt: number; media: number }[] = [];
+  private shownIdx = 0;
+  rate = 1;
+  constructor(readonly d: number) {}
+
+  /** Capture frames over [from, to) ms; media time advances from `media0` at `rate`. */
+  capture(from: number, to: number, media0: number, rate = 1): void {
+    for (let t = from; t < to; t += 1000 / 30) this.frames.push({ shownAt: t + this.d, media: media0 + ((t - from) / 1000) * rate });
+    this.rate = rate;
+  }
+
+  /** Drop frames not shown yet (a seek clears the queue). */
+  clearQueue(): void {
+    this.frames = this.frames.filter((f) => f.shownAt <= this.now);
+  }
+
+  run(to: number, onStep?: (now: number) => void): void {
+    for (; this.now <= to; this.now++) {
+      const due = this.frames.filter((f) => f.shownAt <= this.now);
+      const last = due[due.length - 1];
+      if (last && this.frames.indexOf(last) >= this.shownIdx) {
+        this.clock.show(last.media, last.shownAt, this.rate);
+        this.shownIdx = this.frames.indexOf(last) + 1;
+      }
+      this.clock.pending(this.frames.find((f) => f.shownAt > this.now)?.media ?? null);
+      onStep?.(this.now);
+    }
+  }
+}
+
+describe.each([500, 2000])('PresentedClock at D = %i ms', (D) => {
+  it('is null before the first frame and after reset', () => {
+    const c = new PresentedClock();
+    expect(c.at(100)).toBeNull();
+    c.show(5, 100, 1);
+    expect(c.at(100)).toBe(5);
+    c.reset();
+    expect(c.at(200)).toBeNull();
+  });
+
+  it('steady play: equals the media time of the audio heard now (within a frame)', () => {
+    const sim = new Sim(D);
+    sim.capture(0, 20000, 10);
+    sim.run(D + 5000, (now) => {
+      if (now < D + 100) return;
+      const heard = 10 + (now - D) / 1000;
+      expect(Math.abs(sim.clock.at(now)! - heard)).toBeLessThan(0.034);
+    });
+  });
+
+  it('pause: keeps advancing for D, then freezes at the last frame with no jump back', () => {
+    const sim = new Sim(D);
+    const P = 3000;
+    sim.capture(0, P, 0);
+    let prev = -1;
+    let atP = 0;
+    sim.run(P + D + 3000, (now) => {
+      const v = sim.clock.at(now);
+      if (v === null) return;
+      expect(v).toBeGreaterThanOrEqual(prev - 1e-9);
+      prev = v;
+      if (now === P) atP = v;
+    });
+    // Between P and P + D the user still hears the tail.
+    expect(atP).toBeCloseTo((P - D) / 1000, 1);
+    const last = (P - 1000 / 30) / 1000;
+    expect(sim.clock.at(P + D + 3000)).toBeGreaterThan(last - 0.001);
+    expect(sim.clock.at(P + D + 3000)).toBeLessThanOrEqual(last + 0.05 + 1e-9);
+    expect(sim.clock.at(P + D + 1000)).toBe(sim.clock.at(P + D + 3000));
+  });
+
+  it('play after pause: frozen until the first new frame is shown at play + D, then advances without a jump', () => {
+    const sim = new Sim(D);
+    sim.capture(0, 2000, 0);
+    const resume = 6000;
+    sim.capture(resume, resume + 4000, 2.0);
+    const samples: [number, number][] = [];
+    sim.run(resume + D + 1000, (now) => samples.push([now, sim.clock.at(now) ?? NaN]));
+    const frozen = samples.find(([n]) => n === 2000 + D + 500)![1];
+    for (const [n, v] of samples) if (n >= 2000 + D + 100 && n < resume + D) expect(v).toBe(frozen);
+    let prev = frozen;
+    for (const [n, v] of samples) {
+      if (n < resume + D) continue;
+      expect(v - prev).toBeLessThan(0.05);
+      prev = v;
+    }
+    expect(samples.find(([n]) => n === resume + D + 900)![1]).toBeCloseTo(2.9, 1);
+  });
+
+  it('seek 60 s -> 10 s: holds the old time until the first new frame at seek + D, then 10 s', () => {
+    const sim = new Sim(D);
+    sim.capture(0, 5000, 55);
+    const seekAt = 5000;
+    let held = 0;
+    sim.run(seekAt);
+    sim.clearQueue();
+    const lastShown = sim.clock.at(seekAt)!;
+    sim.capture(seekAt + 100, seekAt + 4000, 10);
+    let after = 0;
+    sim.run(seekAt + D + 1000, (now) => {
+      const v = sim.clock.at(now)!;
+      if (now === seekAt + D + 100 + 500) after = v;
+      if (now >= seekAt + D - 50 && now < seekAt + 100 + D) {
+        expect(v).toBeGreaterThan(lastShown - 0.05);
+        expect(v).toBeLessThan(lastShown + 0.06);
+        held++;
+      }
+    });
+    expect(held).toBeGreaterThan(0);
+    expect(after).toBeCloseTo(10.5, 1);
+  });
+
+  it('rate 1.5x: advances 1.5 s per s', () => {
+    const sim = new Sim(D);
+    sim.capture(0, 20000, 0, 1.5);
+    let a = 0;
+    let b = 0;
+    sim.run(D + 6000, (now) => {
+      if (now === D + 3000) a = sim.clock.at(now)!;
+      if (now === D + 5000) b = sim.clock.at(now)!;
+    });
+    // Allow one frame of quantisation (clamped to the next frame).
+    expect((b - a) / 2).toBeGreaterThan(1.4);
+    expect((b - a) / 2).toBeLessThan(1.6);
+  });
+
+  it('buffering stall: freezes, resumes without a jump', () => {
+    const sim = new Sim(D);
+    sim.capture(0, 2000, 0);
+    sim.capture(5000, 8000, 2.0); // no frames for 3 s, no pause event
+    let prev = -1;
+    let maxStep = 0;
+    let stalled = 0;
+    sim.run(5000 + D + 1500, (now) => {
+      const v = sim.clock.at(now);
+      if (v === null) return;
+      if (now === 2000 + D + 500) stalled = v;
+      if (prev >= 0) {
+        expect(v).toBeGreaterThanOrEqual(prev - 1e-9);
+        maxStep = Math.max(maxStep, v - prev);
+      }
+      prev = v;
+    });
+    expect(maxStep).toBeLessThan(0.05);
+    expect(stalled).toBeLessThan(2.1);
   });
 });

@@ -1,5 +1,5 @@
 import type { AvProbe } from '../av-probe';
-import { DelaySchedule, FrameQueue, VIDEO_DELAY_BUDGET_BYTES, captureSize } from './schedule';
+import { DelaySchedule, FrameQueue, PresentedClock, VIDEO_DELAY_BUDGET_BYTES, captureSize } from './schedule';
 
 /**
  * Shows the <video> D ms late so it lines up with audio that the separation
@@ -58,6 +58,7 @@ export class DelayedVideo {
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
   private readonly schedule = new DelaySchedule(0);
+  private readonly clock = new PresentedClock();
   private readonly queue = new FrameQueue<ImageBitmap>((b) => b.close());
   private readonly resizeObserver: ResizeObserver;
   private readonly styleObserver: MutationObserver;
@@ -102,6 +103,13 @@ export class DelayedVideo {
     if (this.failed) return 'failed';
     if (!this.running) return 'off';
     return this.shown ? 'on' : 'waiting';
+  }
+
+  /** Media time (s) of the picture on screen now; null while the overlay is not showing one. */
+  presentedTime(now = performance.now()): number | null {
+    if (this.state !== 'on') return null;
+    this.clock.pending(this.queue.nextMediaTime);
+    return this.clock.at(now);
   }
 
   get delayMs(): number {
@@ -226,6 +234,7 @@ export class DelayedVideo {
     this.shown = null;
     this.canvas.style.display = 'none';
     this.canvas.remove();
+    this.clock.reset();
     this.probe?.overlayReset();
     this.onStateChange(this.state);
   }
@@ -301,6 +310,7 @@ export class DelayedVideo {
     this.probe?.overlayFrame(frame.mediaTime, t);
     this.shown?.close();
     this.shown = frame.img;
+    this.clock.show(frame.mediaTime, t, this.video.playbackRate);
     const prevMax = this.schedule.max;
     this.schedule.prune(t);
     if (this.schedule.max < prevMax) this.updateCapture();

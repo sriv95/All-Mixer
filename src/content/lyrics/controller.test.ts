@@ -220,8 +220,8 @@ describe('LyricsController', () => {
     expect(s2.last.kind).toBe('error');
   });
 
-  it('ticks with the audio delay applied and seeks the video', async () => {
-    const c = new LyricsController('youtube', { ...deps(), audioDelay: () => 0.25 });
+  it('ticks with the presented time and seeks the video', async () => {
+    const c = new LyricsController('youtube', { ...deps(), presentedTime: () => 4.75 });
     const s = new FakeSurface();
     const video = document.createElement('video');
     Object.defineProperty(video, 'currentTime', { value: 5, writable: true });
@@ -232,6 +232,52 @@ describe('LyricsController', () => {
     expect(s.times.at(-1)).toBeCloseTo(4.75);
     c.seek(42);
     expect(video.currentTime).toBe(42);
+  });
+
+  it('falls back to currentTime without a presented time', async () => {
+    const c = new LyricsController('youtube', { ...deps(), presentedTime: () => null });
+    const s = new FakeSurface();
+    const video = document.createElement('video');
+    Object.defineProperty(video, 'currentTime', { value: 5, writable: true });
+    c.addSurface(s);
+    c.setVideo(video);
+    c.setVideoId('v');
+    await flush();
+    expect(s.times.at(-1)).toBe(5);
+  });
+
+  it('keeps updating from the presented time after pause, then stops', async () => {
+    vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'] });
+    try {
+      let presented = 10;
+      const c = new LyricsController('youtube', { ...deps(), presentedTime: () => presented });
+      const s = new FakeSurface();
+      const video = document.createElement('video');
+      Object.defineProperty(video, 'currentTime', { value: 12, writable: true });
+      Object.defineProperty(video, 'paused', { value: false, writable: true });
+      c.addSurface(s);
+      c.setVideo(video);
+      c.setVideoId('v');
+      await vi.advanceTimersByTimeAsync(0);
+      await flush();
+      await vi.advanceTimersByTimeAsync(50);
+      // Pause: currentTime froze at 12, but the picture plays on for another 0.5 s.
+      (video as { paused: boolean }).paused = true;
+      video.dispatchEvent(new Event('pause'));
+      for (let i = 0; i < 30; i++) {
+        presented += 1 / 60;
+        await vi.advanceTimersByTimeAsync(17);
+      }
+      expect(s.times.at(-1)).toBeCloseTo(presented, 1);
+      expect(s.times.at(-1)).toBeLessThan(12);
+      // Frozen: the loop gives up.
+      await vi.advanceTimersByTimeAsync(600);
+      const n = s.times.length;
+      await vi.advanceTimersByTimeAsync(200);
+      expect(s.times.length).toBe(n);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('re-aligns when the player loads captions later (CC turned on)', async () => {
