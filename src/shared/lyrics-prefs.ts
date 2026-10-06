@@ -1,6 +1,8 @@
 export type LyricsDisplayMode = 'karaoke' | 'window';
 
 export interface LyricsPrefs {
+  /** The ♪ button: show or hide the lyrics (karaoke text or window, whichever the display mode is). */
+  lyricsVisible: boolean;
   lyricsDisplayMode: LyricsDisplayMode;
   karaokeLines: 1 | 2;
   /** Percent of the base size, integer 50-200. */
@@ -12,6 +14,7 @@ export interface LyricsPrefs {
 export const LYRICS_PREFS_KEY = 'lyricsPrefs';
 
 export const DEFAULT_LYRICS_PREFS: LyricsPrefs = {
+  lyricsVisible: true,
   lyricsDisplayMode: 'karaoke',
   karaokeLines: 2,
   karaokeFontSize: 100,
@@ -27,6 +30,7 @@ export function normalizeLyricsPrefs(raw: unknown): LyricsPrefs {
   const pos = (r.karaokePosition && typeof r.karaokePosition === 'object' ? r.karaokePosition : {}) as Record<string, unknown>;
   const d = DEFAULT_LYRICS_PREFS;
   return {
+    lyricsVisible: typeof r.lyricsVisible === 'boolean' ? r.lyricsVisible : d.lyricsVisible,
     lyricsDisplayMode: r.lyricsDisplayMode === 'karaoke' || r.lyricsDisplayMode === 'window' ? r.lyricsDisplayMode : d.lyricsDisplayMode,
     karaokeLines: r.karaokeLines === 1 || r.karaokeLines === 2 ? r.karaokeLines : d.karaokeLines,
     karaokeFontSize: Math.round(num(r.karaokeFontSize, d.karaokeFontSize, 50, 200)),

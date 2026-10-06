@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_LYRICS_PREFS, type LyricsPrefs } from '../../shared/lyrics-prefs';
 import type { CaptionPicker, SourceMenu } from './controller';
-import { YtSettingsMenu, YtmSettingsPopover, buildMenuRows, type MenuActions } from './settings-menu';
+import { YtSettingsMenu, YtmSettingsPopover, buildMenuButtons, buildMenuRows, type MenuActions } from './settings-menu';
 
 const sources: SourceMenu = { pref: 'auto', available: { lrclib: false, captions: true } };
 const captions: CaptionPicker = {
@@ -58,6 +58,15 @@ describe('buildMenuRows', () => {
     expect(rows.size.options.map((o) => o.label)).toEqual(['50%', '75%', '100%', '125%', '150%', '200%']);
   });
 
+  it('offers Reset position in karaoke mode only', () => {
+    const a = actions();
+    const buttons = buildMenuButtons({ prefs: prefs() }, a);
+    expect(buttons.map((b) => b.label)).toEqual(['Reset position']);
+    buttons[0].run();
+    expect(a.setPrefs).toHaveBeenCalledWith({ karaokePosition: DEFAULT_LYRICS_PREFS.karaokePosition });
+    expect(buildMenuButtons({ prefs: prefs({ lyricsDisplayMode: 'window' }) }, a)).toEqual([]);
+  });
+
   it('shows the nearest size step for an off-step stored size', () => {
     const rows = buildMenuRows({ prefs: prefs({ karaokeFontSize: 110 }) }, actions());
     expect(rows.find((r) => r.id === 'size')!.selected).toBe('100');
@@ -83,142 +92,187 @@ describe('YtSettingsMenu', () => {
   });
 
   const mkRows = (a = actions(), p = prefs(), c: CaptionPicker | undefined = captions) => buildMenuRows({ sources, captions: c, prefs: p }, a);
-  const rowEls = () => [...document.querySelectorAll<HTMLElement>('[data-am-row]')];
+  const mkButtons = (a = actions(), p = prefs()) => buildMenuButtons({ sources, captions, prefs: p }, a);
+  const setAll = (m: YtSettingsMenu, a = actions(), p = prefs()) => m.setRows(mkRows(a, p), mkButtons(a, p));
+  const rowEls = () => [...document.querySelectorAll<HTMLElement>('[data-am-row="lyrics"]')];
+  const group = () => rowEls()[0];
+  const popup = () => document.querySelector<HTMLElement>('.ytp-settings-menu')!;
+  const sub = () => document.querySelector<HTMLElement>('[data-am-panel]')!;
+  const settingEl = (id: string) => sub().querySelector<HTMLElement>(`[data-am-row-setting="${id}"]`)!;
+  const titles = () => [...document.querySelectorAll('[data-am-panel] .ytp-panel-title')].map((e) => e.textContent);
 
-  it('appends our rows after the native ones, once', () => {
+  it('adds one Lyrics row with the ♪ icon after the native ones, once', () => {
     const m = new YtSettingsMenu();
-    m.setRows(mkRows());
+    setAll(m);
     const menu = document.getElementById('mainm')!;
-    expect([...menu.children].map((c) => c.getAttribute('data-am-row'))).toEqual([null, 'source', 'captionLanguage', 'display', 'lines', 'size']);
-    expect(rowEls()[0].querySelector('.ytp-menuitem-content')!.textContent).toBe('Auto');
-    m.setRows(mkRows());
+    expect([...menu.children].map((c) => c.getAttribute('data-am-row'))).toEqual([null, 'lyrics']);
+    expect(group().querySelector('.ytp-menuitem-icon')!.textContent).toBe('♪');
+    expect(group().querySelector('.ytp-menuitem-label')!.textContent).toBe('Lyrics');
+    expect(group().querySelector('.ytp-menuitem-content')!.textContent).toBe('Karaoke text');
+    setAll(m);
     m.ensure();
-    expect(rowEls()).toHaveLength(5);
+    expect(rowEls()).toHaveLength(1);
     expect(document.getElementById('speed')).not.toBeNull();
   });
 
-  it('re-inserts rows when YouTube re-renders the menu, without duplicates', () => {
+  it('adds no row without settings', () => {
     const m = new YtSettingsMenu();
-    m.setRows(mkRows());
+    m.setRows([]);
+    expect(rowEls()).toHaveLength(0);
+  });
+
+  it('re-inserts the row when YouTube re-renders the menu, without duplicates', () => {
+    const m = new YtSettingsMenu();
+    setAll(m);
     const menu = document.getElementById('mainm')!;
     menu.replaceChildren(menu.firstElementChild!);
     expect(rowEls()).toHaveLength(0);
     m.ensure();
-    expect(rowEls()).toHaveLength(5);
+    expect(rowEls()).toHaveLength(1);
     // Whole popup replaced.
-    const popup = document.querySelector('.ytp-settings-menu')!;
-    const fresh = popup.cloneNode(true) as HTMLElement;
+    const fresh = popup().cloneNode(true) as HTMLElement;
     fresh.querySelectorAll('[data-am-row]').forEach((e) => e.remove());
-    popup.replaceWith(fresh);
+    popup().replaceWith(fresh);
     m.ensure();
-    expect(rowEls()).toHaveLength(5);
+    expect(rowEls()).toHaveLength(1);
   });
 
   it('re-inserts through the MutationObserver on the player', async () => {
     const m = new YtSettingsMenu();
     m.observe(document.getElementById('movie_player')!);
-    m.setRows(mkRows());
+    setAll(m);
     document.getElementById('mainm')!.querySelectorAll('[data-am-row]').forEach((e) => e.remove());
     await new Promise((r) => setTimeout(r, 60));
-    expect(rowEls()).toHaveLength(5);
+    expect(rowEls()).toHaveLength(1);
     m.destroy();
     expect(rowEls()).toHaveLength(0);
   });
 
-  it('opens a submenu with checked options, selects, and goes back', () => {
+  it('opens the Lyrics panel with all settings and the reset button, then goes back', () => {
     const a = actions();
     const m = new YtSettingsMenu();
-    m.setRows(mkRows(a));
-    rowEls().find((e) => e.getAttribute('data-am-row') === 'captionLanguage')!.click();
-    const popup = document.querySelector('.ytp-settings-menu')!;
-    const sub = popup.querySelector<HTMLElement>('[data-am-panel]')!;
-    expect(sub.querySelector('.ytp-panel-title')!.textContent).toBe('Caption language');
+    setAll(m, a);
+    group().click();
+    expect(titles()).toEqual(['Lyrics']);
     expect((document.getElementById('main') as HTMLElement).style.display).toBe('none');
-    const items = [...sub.querySelectorAll('.ytp-menuitem')];
-    expect(items.map((i) => i.getAttribute('aria-checked'))).toEqual(['false', 'true']);
-    sub.querySelector<HTMLElement>('.ytp-panel-back-button')!.click();
-    expect(popup.querySelector('[data-am-panel]')).toBeNull();
+    const items = [...sub().querySelectorAll<HTMLElement>('.ytp-menuitem')];
+    expect(items.map((i) => i.querySelector('.ytp-menuitem-label')!.textContent)).toEqual([
+      'Lyrics source',
+      'Caption language',
+      'Lyrics display',
+      'Karaoke lines',
+      'Karaoke size',
+      'Reset position',
+    ]);
+    expect(items[4].querySelector('.ytp-menuitem-content')!.textContent).toBe('100%');
+    sub().querySelector<HTMLElement>('.ytp-panel-back-button')!.click();
+    expect(document.querySelector('[data-am-panel]')).toBeNull();
     expect((document.getElementById('main') as HTMLElement).style.display).toBe('');
-    expect(a.selectCaptionTrack).not.toHaveBeenCalled();
-
-    rowEls().find((e) => e.getAttribute('data-am-row') === 'captionLanguage')!.click();
-    popup.querySelectorAll<HTMLElement>('[data-am-panel] .ytp-menuitem')[0].click();
-    expect(a.selectCaptionTrack).toHaveBeenCalledWith({ index: 0 });
-    expect(popup.querySelector('[data-am-panel]')).toBeNull();
   });
 
-  it('updates the row value text after a selection and ignores disabled options', () => {
+  it('Reset position runs the action and keeps the panel open', () => {
+    const a = actions();
+    const m = new YtSettingsMenu();
+    setAll(m, a, prefs({ karaokePosition: { x: 0.1, y: 0.1 } }));
+    group().click();
+    sub().querySelector<HTMLElement>('[data-am-row-button="resetPosition"]')!.click();
+    expect(a.setPrefs).toHaveBeenCalledWith({ karaokePosition: DEFAULT_LYRICS_PREFS.karaokePosition });
+    expect(sub()).not.toBeNull();
+  });
+
+  it('opens a setting’s choices, selects, and returns to the Lyrics panel', () => {
+    const a = actions();
+    const m = new YtSettingsMenu();
+    setAll(m, a);
+    group().click();
+    settingEl('captionLanguage').click();
+    expect(titles()).toEqual(['Caption language']);
+    expect([...sub().querySelectorAll('.ytp-menuitem')].map((i) => i.getAttribute('aria-checked'))).toEqual(['false', 'true']);
+    // Back from the choices goes to the Lyrics panel, back again leaves.
+    sub().querySelector<HTMLElement>('.ytp-panel-back-button')!.click();
+    expect(titles()).toEqual(['Lyrics']);
+    expect(a.selectCaptionTrack).not.toHaveBeenCalled();
+    settingEl('captionLanguage').click();
+    sub().querySelectorAll<HTMLElement>('.ytp-menuitem')[0].click();
+    expect(a.selectCaptionTrack).toHaveBeenCalledWith({ index: 0 });
+    expect(titles()).toEqual(['Lyrics']);
+    sub().querySelector<HTMLElement>('.ytp-panel-back-button')!.click();
+    expect(document.querySelector('[data-am-panel]')).toBeNull();
+  });
+
+  it('updates the shown values after a selection and ignores disabled options', () => {
     const a = actions();
     let p = prefs();
     const m = new YtSettingsMenu();
     a.setPrefs.mockImplementation((patch: Partial<LyricsPrefs>) => {
       p = { ...p, ...patch };
-      m.setRows(mkRows(a, p));
+      setAll(m, a, p);
     });
-    m.setRows(mkRows(a, p));
-    const row = (id: string) => rowEls().find((e) => e.getAttribute('data-am-row') === id)!;
-    row('size').click();
-    document.querySelectorAll<HTMLElement>('[data-am-panel] .ytp-menuitem')[4].click();
-    expect(row('size').querySelector('.ytp-menuitem-content')!.textContent).toBe('150%');
-    // Disabled source option: no callback, submenu stays.
-    row('source').click();
-    const opts = document.querySelectorAll<HTMLElement>('[data-am-panel] .ytp-menuitem');
+    setAll(m, a, p);
+    group().click();
+    settingEl('size').click();
+    sub().querySelectorAll<HTMLElement>('.ytp-menuitem')[4].click();
+    expect(settingEl('size').querySelector('.ytp-menuitem-content')!.textContent).toBe('150%');
+    // Disabled source option: no callback, choices stay.
+    settingEl('source').click();
+    const opts = sub().querySelectorAll<HTMLElement>('.ytp-menuitem');
     opts[1].click();
     expect(a.selectSource).not.toHaveBeenCalled();
-    expect(document.querySelector('[data-am-panel]')).not.toBeNull();
+    expect(titles()).toEqual(['Lyrics source']);
     opts[2].click();
     expect(a.selectSource).toHaveBeenCalledWith('captions');
-    // Window mode drops the karaoke rows.
-    row('display').click();
-    document.querySelectorAll<HTMLElement>('[data-am-panel] .ytp-menuitem')[1].click();
-    expect(rowEls().map((e) => e.getAttribute('data-am-row'))).toEqual(['source', 'captionLanguage', 'display']);
+    // Window mode drops the karaoke settings and the reset button.
+    settingEl('display').click();
+    sub().querySelectorAll<HTMLElement>('.ytp-menuitem')[1].click();
+    expect([...sub().querySelectorAll('[data-am-row-setting]')].map((e) => e.getAttribute('data-am-row-setting'))).toEqual(['source', 'captionLanguage', 'display']);
+    expect(sub().querySelector('[data-am-row-button]')).toBeNull();
+    expect(group().querySelector('.ytp-menuitem-content')!.textContent).toBe('Lyrics window');
   });
 
-  it('restores the popup size on back and closes the submenu when YouTube hides the popup', () => {
-    const popup = document.querySelector<HTMLElement>('.ytp-settings-menu')!;
-    popup.style.width = '251px';
-    popup.style.height = '200px';
+  it('restores the popup size on back and closes the panel when YouTube hides the popup', () => {
+    popup().style.width = '251px';
+    popup().style.height = '200px';
     const m = new YtSettingsMenu();
-    m.setRows(mkRows());
-    rowEls()[0].click();
-    popup.style.display = 'none';
+    setAll(m);
+    group().click();
+    popup().style.display = 'none';
     m.ensure();
-    expect(popup.querySelector('[data-am-panel]')).toBeNull();
-    expect(popup.style.width).toBe('251px');
-    expect(popup.style.height).toBe('200px');
+    expect(popup().querySelector('[data-am-panel]')).toBeNull();
+    expect(popup().style.width).toBe('251px');
+    expect(popup().style.height).toBe('200px');
     expect((document.getElementById('main') as HTMLElement).style.display).toBe('');
   });
 
-  it('keeps the open submenu panel when nothing changed (no re-render loop)', () => {
+  it('keeps the open panel when nothing changed (no re-render loop)', () => {
     const m = new YtSettingsMenu();
-    m.setRows(mkRows());
-    rowEls()[0].click();
-    const panel = document.querySelector('[data-am-panel]')!;
+    setAll(m);
+    group().click();
+    const panel = sub();
     for (let i = 0; i < 5; i++) m.ensure();
     expect(document.querySelectorAll('[data-am-panel]')).toHaveLength(1);
-    expect(document.querySelector('[data-am-panel]')).toBe(panel);
+    expect(sub()).toBe(panel);
   });
 
-  it('re-renders the open submenu when its row changes', () => {
+  it('re-renders the open panel when a setting changes', () => {
     const a = actions();
     let p = prefs();
     const m = new YtSettingsMenu();
-    m.setRows(mkRows(a, p));
-    rowEls().find((e) => e.getAttribute('data-am-row') === 'size')!.click();
-    const panel = document.querySelector('[data-am-panel]')!;
+    setAll(m, a, p);
+    group().click();
+    settingEl('size').click();
+    const panel = sub();
     p = { ...p, karaokeFontSize: 150 };
-    m.setRows(mkRows(a, p));
-    const next = document.querySelector('[data-am-panel]');
-    expect(next).not.toBeNull();
-    expect(next).not.toBe(panel);
+    setAll(m, a, p);
+    expect(sub()).not.toBeNull();
+    expect(sub()).not.toBe(panel);
     expect(document.querySelectorAll('[data-am-panel]')).toHaveLength(1);
   });
 
   it('closes cleanly when YouTube removes our panel', () => {
     const m = new YtSettingsMenu();
-    m.setRows(mkRows());
-    rowEls()[0].click();
-    document.querySelector('[data-am-panel]')!.remove();
+    setAll(m);
+    group().click();
+    sub().remove();
     m.ensure();
     m.ensure();
     expect(document.querySelectorAll('[data-am-panel]').length).toBeLessThanOrEqual(1);
@@ -228,7 +282,7 @@ describe('YtSettingsMenu', () => {
   it('does nothing without a settings popup', () => {
     document.body.replaceChildren();
     const m = new YtSettingsMenu();
-    expect(() => m.setRows(mkRows())).not.toThrow();
+    expect(() => setAll(m)).not.toThrow();
   });
 });
 
@@ -281,6 +335,18 @@ describe('YtmSettingsPopover', () => {
     expect(root.querySelectorAll('select')).toHaveLength(4);
     pop.setRows(buildMenuRows({ sources, prefs: prefs({ lyricsDisplayMode: 'window' }) }, actions()));
     expect(root.querySelectorAll('select')).toHaveLength(2);
+    pop.destroy();
+  });
+
+  it('shows the reset button and runs it', () => {
+    const a = actions();
+    const pop = new YtmSettingsPopover();
+    document.body.append(pop.button);
+    const input = { sources, prefs: prefs() };
+    pop.setRows(buildMenuRows(input, a), buildMenuButtons(input, a));
+    pop.button.click();
+    document.querySelector<HTMLElement>('[data-allmixer-lyrics-popover] [data-am-row="resetPosition"]')!.click();
+    expect(a.setPrefs).toHaveBeenCalledWith({ karaokePosition: DEFAULT_LYRICS_PREFS.karaokePosition });
     pop.destroy();
   });
 });

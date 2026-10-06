@@ -13,9 +13,13 @@ CI builds the extension, creates tag `vx.y.z` and a GitHub release with this sec
 - Separation: the Karaoke / A cappella ML engine now uses MDX-Net 9482 (T = 64, 50 % overlap, WebGPU) for the vocal, so A cappella is a cleaner voice with no mask buzz. Karaoke keeps the MDX instrumental and removes the leftover voice with the Spleeter vocal mask (H3, power 2, margin 0.8). Added audio delay in Separate mode is now 1.97 s (was 0.30 s); the video is delayed to match, and lyrics follow. Without WebGPU, or if it cannot keep up, the original mix plays as before. New model: `public/ml/mdx.onnx` (fp16, 14.9 MB; `bun run fetch-model`), credited in `ml/THIRD_PARTY_NOTICES.txt`.
 - Lyrics: a "Lyrics source" menu (Auto / LRCLIB / YouTube captions) in the lyrics footer. The pick is kept for the tab. If the picked source has nothing for a video, the automatic order is used and the footer says so.
 - Lyrics: the caption language menu lists every caption track, including auto-generated ones, which are labelled (e.g. "English (auto-generated)").
+- Karaoke text: the current line turns blue from left to right while it is sung, over the line's own time (by word timing when known). A "Reset position" button in the lyrics settings puts the text back at its default place.
 
 ### Changed
 
+- Karaoke text, 2 lines: the two rows stay in place. When a line ends, the next line replaces it in the same row; nothing scrolls up.
+- The ♪ button now shows or hides the lyrics. It no longer switches between karaoke text and the lyrics window; choose that in the settings ("Lyrics display"). Closing the lyrics window hides the lyrics.
+- youtube.com: the lyrics settings are grouped in one "Lyrics" row (with the ♪ icon) in the player's settings menu. YouTube's own captions stay hidden while lyrics show, but pressing the CC button shows them again for that video.
 - Lyrics panel: the text grows when the panel is made wider, lines are centered, and the current line stays in the middle (also when the panel is resized). A "Centered / Free scroll" button in the footer unlocks scrolling. The YT Music Lyrics tab is unchanged.
 - Lyrics: new automatic order: manual song captions, LRCLIB synced, YouTube auto-generated captions, other captions, LRCLIB plain. Plain LRCLIB lyrics now rank below auto-generated captions.
 

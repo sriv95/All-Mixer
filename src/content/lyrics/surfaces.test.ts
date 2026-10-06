@@ -106,31 +106,11 @@ describe('findLyricsControls', () => {
   });
 });
 
-describe('PanelSurface hides YouTube captions', () => {
-  const view = { onSeek: () => {} };
-  const count = () => document.querySelectorAll(`#${HIDE_CAPTIONS_STYLE_ID}`).length;
-  afterEach(() => {
-    document.getElementById('all-mixer-lyrics-panel')?.remove();
-    document.getElementById(HIDE_CAPTIONS_STYLE_ID)?.remove();
-  });
-
-  it('adds the style once while open, removes on close and destroy', () => {
-    const s = new PanelSurface('youtube', view, () => {});
+describe('PanelSurface and YouTube captions', () => {
+  it('leaves the caption style to the lyrics wiring (so the user can force captions back)', () => {
+    const s = new PanelSurface('youtube', { onSeek: () => {} }, () => {});
     s.panel.show();
-    s.panel.show();
-    expect(count()).toBe(1);
-    s.panel.hide();
-    s.panel.hide();
-    expect(count()).toBe(0);
-    s.panel.show();
-    s.destroy();
-    expect(count()).toBe(0);
-  });
-
-  it('does nothing on music.youtube.com', () => {
-    const s = new PanelSurface('ytmusic', view, () => {});
-    s.panel.show();
-    expect(count()).toBe(0);
+    expect(document.getElementById(HIDE_CAPTIONS_STYLE_ID)).toBeNull();
     s.destroy();
   });
 });
