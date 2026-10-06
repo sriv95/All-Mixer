@@ -89,8 +89,8 @@ export interface SourceChoice {
 
 /** Automatic order: song captions, LRCLIB synced, other captions (ASR first), LRCLIB plain. */
 function autoSource(found: FoundLyrics | null, c: CaptionSet): SourceChoice {
-  // A manual track in the preferred language counts as song captions too.
-  const song = (c.display && !c.display.asr && !c.display.tlang ? c.display : undefined) ?? c.manual;
+  // A fetched human track or translation in the picked / preferred language counts as song captions, and wins over the default manual track.
+  const song = (c.display && !c.display.asr ? c.display : undefined) ?? c.manual;
   if (song) return { use: 'captions', caption: song };
   if (hasSynced(found)) return { use: 'lrclib-synced' };
   const caption = captionCandidate(c);

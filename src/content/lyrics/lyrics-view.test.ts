@@ -213,6 +213,12 @@ describe('LyricsView', () => {
     // The translated pick is the selected entry.
     v.setLyrics({ ...synced(), source: 'youtube-captions' }, { options, selected: { index: 1, tlang: 'de' } });
     expect(root.querySelector<HTMLSelectElement>('select.lang')!.selectedOptions[0].textContent).toBe('German (auto-translated)');
+    // A new video's state replaces the select: its value follows the new selection, never the previous one.
+    const next = [options[0], { index: 0, tlang: 'fr', label: 'French (auto-translated)', group: 'translate' as const }];
+    v.setLyrics({ ...synced(), source: 'youtube-captions' }, { options: next, selected: { index: 0, tlang: 'fr' } });
+    expect(root.querySelector<HTMLSelectElement>('select.lang')!.selectedOptions[0].textContent).toBe('French (auto-translated)');
+    v.setLyrics({ ...synced(), source: 'youtube-captions' }, { options: next, selected: { index: 0 } });
+    expect(root.querySelector<HTMLSelectElement>('select.lang')!.selectedOptions[0].textContent).toBe('English');
     // One option: nothing to pick.
     v.setLyrics({ ...synced(), source: 'youtube-captions' }, { options: options.slice(0, 1), selected: { index: 0 } });
     expect(root.querySelector('select.lang')).toBeNull();
