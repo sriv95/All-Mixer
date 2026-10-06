@@ -140,6 +140,9 @@ describe('position math', () => {
   });
   it('leaves a valid position alone and centers a block that does not fit', () => {
     expect(clampKaraokePosition({ x: 0.5, y: 0.5 }, { w: 200, h: 40 }, player, 50)).toEqual({ x: 0.5, y: 0.5 });
+    // narrow block near the right edge / bottom: clamped by half its own size
+    expect(clampKaraokePosition({ x: 0.9, y: 0.5 }, { w: 300, h: 40 }, player, 0).x).toBeCloseTo(650 / 800);
+    expect(clampKaraokePosition({ x: 0.5, y: 0.99 }, { w: 300, h: 80 }, player, 50).y).toBeCloseTo((450 - 50 - 40) / 450);
     expect(clampKaraokePosition({ x: 0.1, y: 0.5 }, { w: 900, h: 40 }, player, 0).x).toBe(0.5);
   });
   it('scales the font with player height and size pref', () => {
@@ -200,5 +203,32 @@ describe('KaraokeSurface layout and drag', () => {
     for (const t of ['click', 'dblclick', 'keydown']) player.addEventListener(t, seen);
     for (const t of ['click', 'dblclick', 'keydown']) block().dispatchEvent(new Event(t, { bubbles: true }));
     expect(seen).not.toHaveBeenCalled();
+  });
+});
+
+describe('karaoke block width and ads', () => {
+  it('keeps its natural width up to 90% of the player', () => {
+    const k = make();
+    k.render(synced);
+    k.update(1.5);
+    expect(block().style.width).toBe('');
+    expect(document.getElementById('all-mixer-karaoke')!.querySelector('style')!.textContent).toMatch(/width:max-content; max-width:90%/);
+  });
+
+  it('hides the text while the player shows an ad', () => {
+    const k = make();
+    k.render(synced);
+    k.update(1.5);
+    expect(root()!.classList.contains('am-ad')).toBe(false);
+    player.classList.add('ad-showing');
+    k.update(1.5);
+    expect(root()!.classList.contains('am-ad')).toBe(true);
+    player.classList.remove('ad-showing');
+    player.classList.add('ad-interrupting');
+    k.update(1.5);
+    expect(root()!.classList.contains('am-ad')).toBe(true);
+    player.classList.remove('ad-interrupting');
+    k.update(1.5);
+    expect(root()!.classList.contains('am-ad')).toBe(false);
   });
 });

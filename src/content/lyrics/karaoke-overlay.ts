@@ -1,7 +1,7 @@
 import type { LyricLine } from '../../lyrics/types';
 import { selectKaraokeLines, type KaraokeSlot } from '../../lyrics/karaoke-lines';
 import type { LyricsPrefs } from '../../shared/lyrics-prefs';
-import { findControlBar, findPlayer, type Site } from '../youtube-dom';
+import { findControlBar, findPlayer, isAdShowing, type Site } from '../youtube-dom';
 import type { LyricsState, LyricsSurface } from './controller';
 
 export interface Size {
@@ -36,9 +36,10 @@ export function clampKaraokePosition(pos: Pos, block: Size, player: Size, bottom
 const ROOT_ID = 'all-mixer-karaoke';
 const STYLE = `
 #${ROOT_ID} { position:absolute; inset:0; z-index:10; pointer-events:none; overflow:hidden; }
-#${ROOT_ID} .am-k-block { position:absolute; transform:translate(-50%,-50%); max-width:90%; text-align:center; color:#fff;
+#${ROOT_ID} .am-k-block { position:absolute; transform:translate(-50%,-50%); width:max-content; max-width:90%; text-align:center; color:#fff;
   font-family:"YouTube Noto",Roboto,Arial,sans-serif; font-weight:500; line-height:1.3; cursor:grab; user-select:none; touch-action:none;
   pointer-events:auto; text-shadow:-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000,1px 1px 0 #000,0 0 6px rgba(0,0,0,.8); }
+#${ROOT_ID}.am-ad .am-k-block { display:none !important; }
 #${ROOT_ID} .am-k-block.dragging { cursor:grabbing; }
 #${ROOT_ID} .am-k-line { display:block; }
 #${ROOT_ID} .am-k-line.upcoming { opacity:.6; }
@@ -127,6 +128,7 @@ export class KaraokeSurface implements LyricsSurface {
       this.layout();
     }
     this.observe(player);
+    this.root.classList.toggle('am-ad', isAdShowing(player));
     return true;
   }
 
