@@ -325,6 +325,18 @@ describe('LyricsView panel mode', () => {
     expect(pq('.scroll').style.overflowY).toBe('auto');
   });
 
+  it('keeps plain lyrics and status messages scrollable', () => {
+    pv.setLyrics({ kind: 'plain', source: 'lrclib', text: 'x' });
+    expect(pq('.scroll').style.overflowY).toBe('auto');
+    pv.setLyrics(synced());
+    expect(pq('.scroll').style.overflowY).toBe('hidden');
+    pv.setStatus('loading');
+    expect(pq('.scroll').style.overflowY).toBe('auto');
+    pv.setLyrics(synced());
+    pq('.lock').click();
+    expect(pq('.scroll').style.overflowY).toBe('auto');
+  });
+
   it('re-centers instantly on resize while locked', () => {
     pv.setLyrics(synced());
     pv.update(1.5);

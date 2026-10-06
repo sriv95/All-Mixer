@@ -115,7 +115,7 @@ export class LyricsView {
     this.scroller.addEventListener('touchmove', this.onUserScroll, { passive: true });
     this.scroller.addEventListener('pointerdown', this.onPointerDown);
     if (this.panelMode) {
-      this.scroller.style.overflowY = 'hidden';
+      this.applyOverflow();
       if (typeof ResizeObserver !== 'undefined') {
         this.resizeObserver = new ResizeObserver(this.onResize);
         this.resizeObserver.observe(this.scroller);
@@ -131,6 +131,7 @@ export class LyricsView {
       p.className = 'plain';
       p.textContent = lyrics.text;
       this.scroller.replaceChildren(p);
+      this.updatePadding();
       this.setFooter(`Lyrics: ${SOURCE_LABELS[lyrics.source]}`, picker, sources);
       return;
     }
@@ -235,14 +236,22 @@ export class LyricsView {
 
   private setLocked(locked: boolean): void {
     this.locked = locked;
-    this.scroller.style.overflowY = locked ? 'hidden' : 'auto';
+    this.applyOverflow();
     if (locked) this.centerCurrent('auto');
   }
 
   /** Head/tail space of half the height lets the first and last lines reach the center. */
   private updatePadding(): void {
     if (!this.panelMode) return;
-    this.scroller.style.paddingBlock = this.lyrics ? `${this.scroller.clientHeight / 2}px` : '';
+    const synced = this.lyrics !== null;
+    this.scroller.style.paddingBlock = synced ? `${this.scroller.clientHeight / 2}px` : this.scroller.querySelector('.plain') ? '12px' : '';
+    this.applyOverflow();
+  }
+
+  /** Only synced lyrics with the lock on are non-scrollable; plain text and status messages must stay readable. */
+  private applyOverflow(): void {
+    if (!this.panelMode) return;
+    this.scroller.style.overflowY = this.lyrics && this.locked ? 'hidden' : 'auto';
   }
 
   private readonly onResize = (): void => {
