@@ -24,11 +24,11 @@ function make(): KaraokeSurface {
 }
 const root = () => document.getElementById('all-mixer-karaoke');
 const lineEls = () => [...document.querySelectorAll<HTMLElement>('.am-k-line')];
-const textOf = (e: HTMLElement) => e.querySelector('.am-k-text')!.textContent;
+const textOf = (e: HTMLElement) => e.textContent;
 const block = () => document.querySelector<HTMLElement>('.am-k-block')!;
 
 beforeEach(() => {
-  prefs = { ...DEFAULT_LYRICS_PREFS };
+  prefs = { ...DEFAULT_LYRICS_PREFS, karaokeLines: 2 };
   saved = [];
   size = { width: 800, height: 450 };
   document.body.innerHTML = '<div id="movie_player"><div class="ytp-chrome-bottom"></div></div>';
@@ -92,29 +92,6 @@ describe('KaraokeSurface slots', () => {
     s.update(1.5);
     expect(lineEls()).toHaveLength(0);
     expect(document.body.textContent).not.toMatch(/lyrics|loading|found/i);
-  });
-
-  it('sweeps blue across the current line by its time', () => {
-    const s = make();
-    s.render(synced);
-    s.update(1);
-    const fill = () => document.querySelector<HTMLElement>('.am-k-fill')!;
-    expect(fill().style.clipPath).toBe('inset(0 100.0% 0 0)');
-    s.update(2);
-    expect(fill().style.clipPath).toBe('inset(0 50.0% 0 0)');
-    expect(fill().textContent).toBe('one');
-    s.update(2.9);
-    expect(fill().style.clipPath).toBe('inset(0 5.0% 0 0)');
-  });
-
-  it('sweeps by word timing and only on the current line', () => {
-    const s = make();
-    s.render(synced);
-    s.update(4);
-    expect(document.querySelectorAll('.am-k-fill')).toHaveLength(1);
-    expect(document.querySelector<HTMLElement>('.am-k-fill')!.style.clipPath).toBe('inset(0 33.3% 0 0)'); // 'tw' done, 'o' starts
-    s.update(4.5);
-    expect(document.querySelector<HTMLElement>('.am-k-fill')!.style.clipPath).toBe('inset(0 16.7% 0 0)');
   });
 
   it('keeps each line in its row: the ended line is replaced in place', () => {

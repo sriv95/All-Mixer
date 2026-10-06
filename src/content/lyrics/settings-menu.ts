@@ -1,5 +1,5 @@
 import { DEFAULT_LYRICS_PREFS, type LyricsDisplayMode, type LyricsPrefs } from '../../shared/lyrics-prefs';
-import { SETTINGS_SELECTORS, findSettingsMainMenu, findSettingsPopup } from '../youtube-dom';
+import { SETTINGS_SELECTORS, findSettingsMainMenu, findSettingsPopup, type Site } from '../youtube-dom';
 import type { CaptionPicker, SourceMenu, SourcePref } from './controller';
 import type { CaptionPick } from './track-info';
 
@@ -37,6 +37,8 @@ export interface MenuInput {
   sources?: SourceMenu;
   captions?: CaptionPicker;
   prefs: LyricsPrefs;
+  /** YT Music has no karaoke text or lyrics window (the Lyrics tab only), so it gets no display rows. Default: www. */
+  site?: Site;
 }
 
 export const KARAOKE_SIZES = [50, 75, 100, 125, 150, 200] as const;
@@ -46,7 +48,7 @@ const FALLBACK_NOTES = {
   captions: 'This video has no usable captions, so the automatic order is used.',
 } as const;
 
-/** Builds the rows to show: no source row before lyrics load, caption language only with two or more tracks, karaoke rows only in karaoke mode. */
+/** Builds the rows to show: no source row before lyrics load, caption language only with two or more tracks, karaoke rows only in karaoke mode, no display rows on YT Music. */
 export function buildMenuRows(input: MenuInput, actions: MenuActions): MenuRow[] {
   const { sources, captions, prefs } = input;
   const rows: MenuRow[] = [];
@@ -74,6 +76,7 @@ export function buildMenuRows(input: MenuInput, actions: MenuActions): MenuRow[]
       select: (v) => actions.selectCaptionTrack({ index: Number(v) }),
     });
   }
+  if (input.site === 'ytmusic') return rows;
   rows.push({
     id: 'display',
     label: 'Lyrics display',
@@ -110,7 +113,7 @@ export function buildMenuRows(input: MenuInput, actions: MenuActions): MenuRow[]
 
 /** Buttons for the lyrics settings: reset position (karaoke text only; the window remembers its own place). */
 export function buildMenuButtons(input: MenuInput, actions: MenuActions): MenuButton[] {
-  if (input.prefs.lyricsDisplayMode !== 'karaoke') return [];
+  if (input.site === 'ytmusic' || input.prefs.lyricsDisplayMode !== 'karaoke') return [];
   return [{ id: 'resetPosition', label: 'Reset position', run: () => actions.setPrefs({ karaokePosition: { ...DEFAULT_LYRICS_PREFS.karaokePosition } }) }];
 }
 

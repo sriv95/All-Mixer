@@ -1,9 +1,15 @@
 export type LyricsDisplayMode = 'karaoke' | 'window';
+/** Which lyrics source the user wants. */
+export type LyricsSource = 'auto' | 'lrclib' | 'captions';
 
 export interface LyricsPrefs {
   /** The ♪ button: show or hide the lyrics (karaoke text or window, whichever the display mode is). */
   lyricsVisible: boolean;
   lyricsDisplayMode: LyricsDisplayMode;
+  /** Lyrics source menu pick. */
+  lyricsSource: LyricsSource;
+  /** Language code of the caption track the user picked last; preferred on later videos. null = none picked. */
+  captionLang: string | null;
   karaokeLines: 1 | 2;
   /** Percent of the base size, integer 50-200. */
   karaokeFontSize: number;
@@ -16,7 +22,9 @@ export const LYRICS_PREFS_KEY = 'lyricsPrefs';
 export const DEFAULT_LYRICS_PREFS: LyricsPrefs = {
   lyricsVisible: true,
   lyricsDisplayMode: 'karaoke',
-  karaokeLines: 2,
+  lyricsSource: 'auto',
+  captionLang: null,
+  karaokeLines: 1,
   karaokeFontSize: 100,
   karaokePosition: { x: 0.5, y: 0.82 },
 };
@@ -32,6 +40,8 @@ export function normalizeLyricsPrefs(raw: unknown): LyricsPrefs {
   return {
     lyricsVisible: typeof r.lyricsVisible === 'boolean' ? r.lyricsVisible : d.lyricsVisible,
     lyricsDisplayMode: r.lyricsDisplayMode === 'karaoke' || r.lyricsDisplayMode === 'window' ? r.lyricsDisplayMode : d.lyricsDisplayMode,
+    lyricsSource: r.lyricsSource === 'auto' || r.lyricsSource === 'lrclib' || r.lyricsSource === 'captions' ? r.lyricsSource : d.lyricsSource,
+    captionLang: typeof r.captionLang === 'string' && /^[A-Za-z0-9-]{1,35}$/.test(r.captionLang) ? r.captionLang : d.captionLang,
     karaokeLines: r.karaokeLines === 1 || r.karaokeLines === 2 ? r.karaokeLines : d.karaokeLines,
     karaokeFontSize: Math.round(num(r.karaokeFontSize, d.karaokeFontSize, 50, 200)),
     karaokePosition: { x: num(pos.x, d.karaokePosition.x, 0, 1), y: num(pos.y, d.karaokePosition.y, 0, 1) },

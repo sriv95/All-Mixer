@@ -141,6 +141,19 @@ export function findLyricsControls(site: Site, doc: ParentNode = document): HTML
 /** The player's CC button (youtube.com only; YT Music has none in the same place). */
 export const CC_BUTTON_SELECTOR = '.ytp-subtitles-button';
 
+/** State of the CC button; null when it is missing or not shown (no captions, ad, player not ready). */
+export function getCaptionsButtonState(doc: Document = document): 'on' | 'off' | null {
+  const b = doc.querySelector<HTMLElement>(CC_BUTTON_SELECTOR);
+  if (!b || b.hidden || b.style.display === 'none') return null;
+  const pressed = b.getAttribute('aria-pressed');
+  return pressed === 'true' ? 'on' : pressed === 'false' ? 'off' : null;
+}
+
+/** Press the CC button. */
+export function clickCaptionsButton(doc: Document = document): void {
+  doc.querySelector<HTMLElement>(CC_BUTTON_SELECTOR)?.click();
+}
+
 /**
  * Call `cb` when the CC button's aria-pressed goes from not-true to true.
  * One observer for the page's lifetime: it matches the button by selector, so it survives

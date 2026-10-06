@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { lineProgress, selectKaraokeLines } from './karaoke-lines';
+import { selectKaraokeLines } from './karaoke-lines';
 import type { LyricLine } from './types';
 
 const L = (start: number, end: number, text: string): LyricLine => ({ start, end, text });
@@ -14,7 +14,7 @@ const rows = (t: number, n: 1 | 2) => selectKaraokeLines(lines, t, n).slots.map(
 describe('selectKaraokeLines', () => {
   it('before the first line', () => {
     expect(view(2, 1)).toEqual([]);
-    expect(view(2, 2)).toEqual(['0:upcoming', '1:upcoming']);
+    expect(view(2, 2)).toEqual(['0:upcoming']); // only one idle line
     expect(selectKaraokeLines(lines, 2, 2).currentIndex).toBe(-1);
   });
   it('mid-song: 1 vs 2 lines', () => {
@@ -27,7 +27,7 @@ describe('selectKaraokeLines', () => {
   });
   it('gap between lines', () => {
     expect(view(19, 1)).toEqual([]);
-    expect(view(19, 2)).toEqual(['2:upcoming', '4:upcoming']);
+    expect(view(19, 2)).toEqual(['2:upcoming']);
   });
   it('blank line is a gap and is skipped', () => {
     expect(view(25, 1)).toEqual([]);
@@ -52,8 +52,8 @@ describe('selectKaraokeLines', () => {
     // a ended: b is current in the same row, c takes a's row.
     expect(rows(15, 2)).toEqual(['0=2:upcoming', '1=1:current']);
     expect(rows(21, 2)).toEqual(['0=2:current']); // next line is blank
-    // gap after c: d (row 1) next; the ended c row (0) has nothing to show yet.
-    expect(rows(19, 2)).toEqual(['0=2:upcoming', '1=4:upcoming']);
+    // gap after b: only c (row 0) shows, never two idle lines.
+    expect(rows(19, 2)).toEqual(['0=2:upcoming']);
     expect(rows(31, 2)).toEqual(['1=4:current']);
   });
   it('1 line always uses row 0', () => {
@@ -61,28 +61,5 @@ describe('selectKaraokeLines', () => {
   });
   it('empty list', () => {
     expect(selectKaraokeLines([], 3, 2)).toEqual({ slots: [], currentIndex: -1 });
-  });
-});
-
-describe('lineProgress', () => {
-  it('sweeps evenly over the line time without word timing', () => {
-    const l = L(10, 14, 'abcd');
-    expect(lineProgress(l, 9)).toBe(0);
-    expect(lineProgress(l, 10)).toBe(0);
-    expect(lineProgress(l, 11)).toBe(0.25);
-    expect(lineProgress(l, 12)).toBe(0.5);
-    expect(lineProgress(l, 14)).toBe(1);
-    expect(lineProgress(l, 20)).toBe(1);
-  });
-  it('follows word timing, weighted by word length', () => {
-    const l: LyricLine = { start: 0, end: 10, text: 'ab cdef', words: [{ start: 0, end: 1, text: 'ab ' }, { start: 5, end: 9, text: 'cdef' }] };
-    expect(lineProgress(l, 0.5)).toBeCloseTo(1.5 / 7);
-    expect(lineProgress(l, 3)).toBeCloseTo(3 / 7); // waiting between words
-    expect(lineProgress(l, 7)).toBeCloseTo((3 + 2) / 7);
-    expect(lineProgress(l, 9.5)).toBe(1);
-  });
-  it('a line without a duration is done once it starts', () => {
-    expect(lineProgress(L(5, 0, 'x'), 4)).toBe(0);
-    expect(lineProgress(L(5, 0, 'x'), 5)).toBe(1);
   });
 });

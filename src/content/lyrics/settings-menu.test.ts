@@ -29,6 +29,11 @@ describe('buildMenuRows', () => {
     expect(buildMenuRows({ prefs: prefs() }, actions()).map((r) => r.id)).toEqual(['display', 'lines', 'size']);
   });
 
+  it('YT Music: only source and caption language, no display rows or reset button', () => {
+    expect(buildMenuRows({ sources, captions, prefs: prefs(), site: 'ytmusic' }, actions()).map((r) => r.id)).toEqual(['source', 'captionLanguage']);
+    expect(buildMenuButtons({ prefs: prefs(), site: 'ytmusic' }, actions())).toEqual([]);
+  });
+
   it('hides karaoke lines and size in window mode', () => {
     const rows = buildMenuRows({ sources, prefs: prefs({ lyricsDisplayMode: 'window' }) }, actions());
     expect(rows.map((r) => r.id)).toEqual(['source', 'display']);

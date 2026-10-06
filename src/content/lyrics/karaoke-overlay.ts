@@ -1,5 +1,5 @@
 import type { LyricLine } from '../../lyrics/types';
-import { lineProgress, selectKaraokeLines, type KaraokeSlot } from '../../lyrics/karaoke-lines';
+import { selectKaraokeLines, type KaraokeSlot } from '../../lyrics/karaoke-lines';
 import type { LyricsPrefs } from '../../shared/lyrics-prefs';
 import { findControlBar, findKaraokeHost, findPlayer, KARAOKE_MOUNT, isAdShowing, type Site } from '../youtube-dom';
 import type { LyricsState, LyricsSurface } from './controller';
@@ -34,8 +34,6 @@ export function clampKaraokePosition(pos: Pos, block: Size, player: Size, bottom
 }
 
 const ROOT_ID = 'all-mixer-karaoke';
-/** Colour the line turns while it is sung (a left-to-right sweep). */
-const SWEEP_COLOR = '#4da3ff';
 const STYLE = `
 #${ROOT_ID} { position:absolute; inset:0; z-index:10; pointer-events:none; overflow:hidden; }
 #${ROOT_ID} .am-k-block { position:absolute; transform:translate(-50%,-50%); width:max-content; max-width:90%; text-align:center; color:#fff;
@@ -45,8 +43,6 @@ const STYLE = `
 #${ROOT_ID} .am-k-block.dragging { cursor:grabbing; }
 #${ROOT_ID} .am-k-line { display:block; }
 #${ROOT_ID} .am-k-line.upcoming { opacity:.6; }
-#${ROOT_ID} .am-k-wrap { position:relative; display:inline-block; }
-#${ROOT_ID} .am-k-fill { position:absolute; left:0; top:0; width:100%; height:100%; color:${SWEEP_COLOR}; clip-path:inset(0 100% 0 0); pointer-events:none; }
 `;
 
 export interface KaraokeOptions {
@@ -65,9 +61,6 @@ export class KaraokeSurface implements LyricsSurface {
   private lines: LyricLine[] | null = null;
   private key: string | null = null;
   private lastTime = 0;
-  /** Blue overlay of the current line and the line it belongs to; clipped from the right as the line is sung. */
-  private fill: { el: HTMLElement; line: LyricLine } | null = null;
-  private progress = -1;
   private pos: Pos;
   private dragging: { pointerId: number; dx: number; dy: number } | null = null;
 
@@ -117,7 +110,6 @@ export class KaraokeSurface implements LyricsSurface {
       this.build(slots);
       this.layout();
     }
-    this.markProgress(time);
   }
 
   /** Mounts into the current player (it may have been re-created) or unmounts when inactive. Returns whether it is mounted. */
@@ -166,43 +158,16 @@ export class KaraokeSurface implements LyricsSurface {
 
   private build(slots: KaraokeSlot[]): void {
     this.block.replaceChildren();
-    this.fill = null;
-    this.progress = -1;
     // 2-line mode keeps both rows even when one has no line, so a lone line does not jump.
     const rows: (KaraokeSlot | null)[] = this.opts.getPrefs().karaokeLines === 2 && slots.length > 0 ? [null, null] : [];
     for (const slot of slots) rows[slot.row] = slot;
     rows.forEach((slot) => {
       const el = this.doc.createElement('span');
-      const wrap = this.doc.createElement('span');
-      wrap.className = 'am-k-wrap';
-      const text = this.doc.createElement('span');
-      text.className = 'am-k-text';
-      text.textContent = slot ? slot.text : '\u200b';
-      wrap.append(text);
       el.className = slot ? `am-k-line ${slot.state}` : 'am-k-line empty';
-      const line = slot?.state === 'current' ? this.lines?.[slot.index] : undefined;
-      if (slot && line) {
-        const fill = this.doc.createElement('span');
-        fill.className = 'am-k-fill';
-        fill.setAttribute('aria-hidden', 'true');
-        fill.textContent = slot.text;
-        wrap.append(fill);
-        this.fill = { el: fill, line };
-      }
-      el.append(wrap);
+      el.textContent = slot ? slot.text : '\u200b';
       this.block.append(el);
     });
     this.block.style.display = slots.length > 0 ? '' : 'none';
-  }
-
-  /** Sweeps the blue overlay across the current line. */
-  private markProgress(time: number): void {
-    const f = this.fill;
-    if (!f) return;
-    const p = Math.round(lineProgress(f.line, time) * 1000) / 10;
-    if (p === this.progress) return;
-    this.progress = p;
-    f.el.style.clipPath = `inset(0 ${(100 - p).toFixed(1)}% 0 0)`;
   }
 
   private playerSize(): Size {

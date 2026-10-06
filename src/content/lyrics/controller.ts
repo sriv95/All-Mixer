@@ -4,6 +4,7 @@ import type { Lyrics, SyncedLyrics, TrackInfo } from '../../lyrics/types';
 import { alignWithCaptions, linesFromAsrCaptions, linesFromCaptions, type CaptionTrackData } from '../../lyrics/align';
 import { parseJson3 } from '../../lyrics/captions';
 import { parseLrc } from '../../lyrics/lrc';
+import type { LyricsSource } from '../../shared/lyrics-prefs';
 import type { Site } from '../youtube-dom';
 import { captionOptions, chooseCaptionTracks, trackFromPlayer, type CaptionOption, type CaptionPick } from './track-info';
 
@@ -14,7 +15,7 @@ export interface CaptionPicker {
 }
 
 /** Which lyrics source the user wants. */
-export type SourcePref = 'auto' | 'lrclib' | 'captions';
+export type SourcePref = LyricsSource;
 
 /** What the footer's source menu needs. */
 export interface SourceMenu {
@@ -232,6 +233,17 @@ export class LyricsController {
     this.pick = { videoId: base.videoId, index: pick.index };
     this.preferredLang = t.languageCode;
     void this.realign(base.videoId, true);
+  }
+
+  /** Language of the last picked caption track (kept in the stored settings). */
+  get captionLang(): string | null {
+    return this.preferredLang;
+  }
+
+  /** Stored settings arrived (or changed in another tab): take the source and caption language. No-op when they match. */
+  applyStored(source: SourcePref, captionLang: string | null): void {
+    this.preferredLang = captionLang;
+    if (source !== this.sourcePref) this.selectSource(source);
   }
 
   /** The user chose a lyrics source (source menu). Re-resolves from the loaded data, no new LRCLIB request. */

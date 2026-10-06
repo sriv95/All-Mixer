@@ -21,6 +21,13 @@ describe('normalizeLyricsPrefs', () => {
   it('keeps window and fills the rest', () => {
     expect(normalizeLyricsPrefs({ lyricsDisplayMode: 'window' })).toEqual({ ...DEFAULT_LYRICS_PREFS, lyricsDisplayMode: 'window' });
   });
+  it('defaults to one karaoke line, auto source and no caption language', () => {
+    expect(DEFAULT_LYRICS_PREFS).toMatchObject({ karaokeLines: 1, lyricsSource: 'auto', captionLang: null });
+  });
+  it('keeps a stored source and caption language, drops bad ones', () => {
+    expect(normalizeLyricsPrefs({ lyricsSource: 'captions', captionLang: 'pt-BR' })).toMatchObject({ lyricsSource: 'captions', captionLang: 'pt-BR' });
+    expect(normalizeLyricsPrefs({ lyricsSource: 'x', captionLang: '<b>' })).toMatchObject({ lyricsSource: 'auto', captionLang: null });
+  });
   it('clamps and rounds', () => {
     const p = normalizeLyricsPrefs({ karaokeFontSize: 300.4, karaokePosition: { x: -1, y: 2 } });
     expect(p.karaokeFontSize).toBe(200);
