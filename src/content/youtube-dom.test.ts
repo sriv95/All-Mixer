@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { NAVIGATION_EVENTS, onCaptionsButtonOn, detectSite, findMainVideo, getVideoId, onNavigate, watchMainVideo } from './youtube-dom';
+import { HIDE_CAPTIONS_STYLE_ID, setYtCaptionsHidden, NAVIGATION_EVENTS, onCaptionsButtonOn, detectSite, findMainVideo, getVideoId, onNavigate, watchMainVideo } from './youtube-dom';
 
 const fixture = (name: string) => readFileSync(`src/content/__fixtures__/${name}.html`, 'utf8');
 
@@ -171,5 +171,20 @@ describe('onCaptionsButtonOn', () => {
     expect(cb).toHaveBeenCalledTimes(2);
     stop();
     document.body.innerHTML = '';
+  });
+});
+
+describe('setYtCaptionsHidden', () => {
+  afterEach(() => setYtCaptionsHidden(false));
+  const count = () => document.querySelectorAll(`#${HIDE_CAPTIONS_STYLE_ID}`).length;
+
+  it('adds one style, idempotently, and removes it', () => {
+    setYtCaptionsHidden(true);
+    setYtCaptionsHidden(true);
+    expect(count()).toBe(1);
+    expect(document.getElementById(HIDE_CAPTIONS_STYLE_ID)!.textContent).toContain('.ytp-caption-window-container');
+    setYtCaptionsHidden(false);
+    setYtCaptionsHidden(false);
+    expect(count()).toBe(0);
   });
 });
