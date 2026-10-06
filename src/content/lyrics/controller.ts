@@ -238,6 +238,10 @@ export class LyricsController {
   selectSource(pref: SourcePref): void {
     this.sourcePref = pref;
     this.pick = null;
+    // Show the pick right away; realign() may wait on caption fetches or find nothing to show.
+    if (this.state.kind === 'ready' && this.state.sources && this.state.sources.pref !== pref) {
+      this.setState({ ...this.state, sources: { ...this.state.sources, pref } });
+    }
     const id = this.videoId;
     if (id) void this.realign(id, true);
   }

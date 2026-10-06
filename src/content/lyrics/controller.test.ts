@@ -506,6 +506,7 @@ describe('LyricsController', () => {
       expect(s.last).toMatchObject({ sources: { pref: 'auto', available: { lrclib: true, captions: true } } });
 
       c.selectSource('captions');
+      expect(s.last).toMatchObject({ sources: { pref: 'captions' } }); // shown before the realign finishes
       await flush();
       expect(srcOf(s.last)).toBe('youtube-auto-captions');
       expect(s.last).toMatchObject({ sources: { pref: 'captions' } });
