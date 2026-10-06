@@ -45,6 +45,8 @@ export interface SeparationRequest {
 export type SeparationState = 'off' | 'loading' | 'on' | 'error';
 
 /** Crossfade time constant (s); settles in ≈ 30 ms. */
+/** Media events after which the separator holds stale audio (seek, ad break, source change). */
+const FLUSH_EVENTS = ['seeking', 'emptied', 'loadstart'] as const;
 const FADE_TAU = 0.006;
 /** Margin between scheduling and the start of a ramp (s). */
 const PRE_ROLL = 0.01;
@@ -178,8 +180,8 @@ export class MasterChain {
 
   setVideo(video: HTMLMediaElement): void {
     if (this.video !== video) {
-      this.video?.removeEventListener('seeking', this.onSeeking);
-      video.addEventListener('seeking', this.onSeeking);
+      for (const e of FLUSH_EVENTS) this.video?.removeEventListener(e, this.onSeeking);
+      for (const e of FLUSH_EVENTS) video.addEventListener(e, this.onSeeking);
     }
     this.video = video;
     if (this.engaged) this.connectIfReady();

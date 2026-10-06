@@ -26,6 +26,8 @@ const FPS_SAMPLES = 30;
 const FPS_MIN_SAMPLES = 10;
 
 /** Budgets at or above this mean "unbounded" (JSON turns Infinity into null, so QA sends a big number). */
+/** Like a seek: frames from the old position / source must not be shown. */
+const RESET_EVENTS = ['seeking', 'emptied', 'loadstart'] as const;
 const LEGACY_BUDGET = 1e12;
 
 const STAT_WINDOW = 300;
@@ -105,7 +107,7 @@ export class DelayedVideo {
     // YouTube moves the video with inline left/top on theater/fullscreen
     // changes; a ResizeObserver alone misses position-only changes.
     this.styleObserver = new MutationObserver(() => this.layout());
-    video.addEventListener('seeking', this.onSeeking);
+    for (const e of RESET_EVENTS) video.addEventListener(e, this.onSeeking);
     probe?.setOverlayInfo(() => ({ queue: this.queue.size, delay: this.schedule.target, shown: this.shown ? 1 : 0 }));
   }
 
@@ -198,7 +200,7 @@ export class DelayedVideo {
   }
 
   private trackFps(mediaTime: number): void {
-    const d = mediaTime - this.lastMediaTime;
+    const d = (mediaTime - this.lastMediaTime) / (this.video.playbackRate || 1);
     this.lastMediaTime = mediaTime;
     if (!(d > 0) || d > 1) return;
     this.deltas.push(d);
@@ -217,7 +219,7 @@ export class DelayedVideo {
     clearTimeout(this.stopTimer);
     this.stop();
     this.destroyed = true;
-    this.video.removeEventListener('seeking', this.onSeeking);
+    for (const e of RESET_EVENTS) this.video.removeEventListener(e, this.onSeeking);
   }
 
   private start(): void {

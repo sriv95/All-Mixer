@@ -137,6 +137,8 @@ describe('DelayedVideo', () => {
     dv.destroy();
     expect(canvas()).toBeNull();
     expect(removeSpy).toHaveBeenCalledWith('seeking', expect.any(Function));
+    expect(removeSpy).toHaveBeenCalledWith('emptied', expect.any(Function));
+    expect(removeSpy).toHaveBeenCalledWith('loadstart', expect.any(Function));
     dv.setDelay(100); // no-op after destroy
     expect(canvas()).toBeNull();
   });
