@@ -69,8 +69,8 @@ export const ML_BUFFER_BYTES = ML_HEADER_BYTES + 4 * ML_BLOCK * 4;
 /** Control messages between the content script and the ML worker (via the ml.html iframe). */
 export const ML_PAGE_PATH = 'ml/ml.html';
 export const ML_INIT = 'all-mixer-ml-init';
-/** Warm-up gate: p95 of one MDX block step (analyze + model + synthesize) must leave ≥ 2× in the compute slack (160 ms). */
-export const ML_WARMUP_P95_MS = (ML_SLACK_SAMPLES / ML_SAMPLE_RATE) * 1000 / 2;
+/** Warm-up gate: p95 of one MDX block step (analyze + model + synthesize) must leave ≥ 1.5× in the 319 ms compute slack (~213 ms). The runtime deadline-miss fallback is the final guard. */
+export const ML_WARMUP_P95_MS = (ML_SLACK_SAMPLES / ML_SAMPLE_RATE) * 1000 / 1.5;
 
 export type ToMlWorker = { type: 'dispose' };
 
