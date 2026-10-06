@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_LYRICS_PREFS, loadLyricsPrefs, normalizeLyricsPrefs, saveLyricsPrefs, watchLyricsPrefs } from './lyrics-prefs';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function fakeArea(init: Record<string, unknown> = {}): any {
   const store = { ...init };
   return {

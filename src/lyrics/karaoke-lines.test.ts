@@ -3,7 +3,7 @@ import { selectKaraokeLines } from './karaoke-lines';
 import type { LyricLine } from './types';
 
 const L = (start: number, end: number, text: string): LyricLine => ({ start, end, text });
-const lines = [L(10, 14, 'a'), L(14, 18, 'b'), L(20, 24, 'c'), L(24, 26, '♪'), L(30, 34, 'd')];
+const lines = [L(10, 14, 'a'), L(14, 18, 'b'), L(20, 24, 'c'), L(24, 26, ''), L(30, 34, 'd')];
 const view = (t: number, n: 1 | 2) => selectKaraokeLines(lines, t, n).slots.map((s) => `${s.index}:${s.state}`);
 
 describe('selectKaraokeLines', () => {
