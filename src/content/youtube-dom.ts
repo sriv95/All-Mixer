@@ -201,7 +201,10 @@ export const KARAOKE_MOUNT = {
 
 export function findKaraokeHost(site: Site, player: HTMLElement): HTMLElement {
   const host = KARAOKE_MOUNT[site].host;
-  return (host && player.closest<HTMLElement>(host)) || player;
+  const outer = (host && player.closest<HTMLElement>(host)) || player;
+  // Only the fullscreen element's subtree is painted in fullscreen: if it is the player itself, mount inside it.
+  const fs = player.ownerDocument.fullscreenElement;
+  return fs && !fs.contains(outer) && fs.contains(player) ? player : outer;
 }
 
 export function findPlayer(site: Site, doc: ParentNode = document): HTMLElement | null {
