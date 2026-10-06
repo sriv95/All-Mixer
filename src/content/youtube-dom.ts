@@ -182,3 +182,19 @@ export function setYtCaptionsHidden(hidden: boolean, doc: Document = document): 
   style.textContent = '.ytp-caption-window-container, .caption-window { display: none !important; }';
   (doc.head ?? doc.documentElement).append(style);
 }
+
+/** Karaoke text hooks: the player element the video lives in, and (www only) the control bar over its bottom edge. */
+export const PLAYER_SELECTORS = {
+  player: { youtube: '#movie_player', ytmusic: 'ytmusic-player #movie_player, #movie_player' } satisfies Record<Site, string>,
+  /** On YT Music the player bar is outside the player, so there is no inset. */
+  controlBar: { youtube: '.ytp-chrome-bottom', ytmusic: null } satisfies Record<Site, string | null>,
+} as const;
+
+export function findPlayer(site: Site, doc: ParentNode = document): HTMLElement | null {
+  return doc.querySelector<HTMLElement>(PLAYER_SELECTORS.player[site]);
+}
+
+export function findControlBar(site: Site, player: ParentNode): HTMLElement | null {
+  const selector = PLAYER_SELECTORS.controlBar[site];
+  return selector ? player.querySelector<HTMLElement>(selector) : null;
+}

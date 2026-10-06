@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { HIDE_CAPTIONS_STYLE_ID, setYtCaptionsHidden, NAVIGATION_EVENTS, onCaptionsButtonOn, detectSite, findMainVideo, getVideoId, onNavigate, watchMainVideo } from './youtube-dom';
+import { HIDE_CAPTIONS_STYLE_ID, findControlBar, findPlayer, setYtCaptionsHidden, NAVIGATION_EVENTS, onCaptionsButtonOn, detectSite, findMainVideo, getVideoId, onNavigate, watchMainVideo } from './youtube-dom';
 
 const fixture = (name: string) => readFileSync(`src/content/__fixtures__/${name}.html`, 'utf8');
 
@@ -186,5 +186,22 @@ describe('setYtCaptionsHidden', () => {
     setYtCaptionsHidden(false);
     setYtCaptionsHidden(false);
     expect(count()).toBe(0);
+  });
+});
+
+describe('player hooks (karaoke)', () => {
+  it('finds the player on both sites', () => {
+    document.body.innerHTML = '<div id="movie_player"><div class="ytp-chrome-bottom"></div></div>';
+    const player = document.getElementById('movie_player');
+    expect(findPlayer('youtube')).toBe(player);
+    expect(findPlayer('ytmusic')).toBe(player);
+    expect(findPlayer('youtube', document.createElement('div'))).toBeNull();
+  });
+
+  it('finds the control bar on www only', () => {
+    document.body.innerHTML = '<div id="movie_player"><div class="ytp-chrome-bottom"></div></div>';
+    const player = document.getElementById('movie_player')!;
+    expect(findControlBar('youtube', player)).toBe(player.firstElementChild);
+    expect(findControlBar('ytmusic', player)).toBeNull();
   });
 });
