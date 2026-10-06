@@ -55,10 +55,12 @@ const STYLE = `
 .line.current { opacity: 1; font-weight: 700; font-size: 1.15em; }
 .word.sung { color: #ffd54f; }
 .plain { white-space: pre-wrap; opacity: 0.85; margin: 0; padding: 0 4px; }
-.status { display: flex; align-items: center; justify-content: center; height: 100%; text-align: center; opacity: 0.7; padding: 12px; box-sizing: border-box; }
+.status { display: flex; align-items: safe center; justify-content: safe center; height: 100%; text-align: center; opacity: 0.7; padding: 12px; box-sizing: border-box; }
 .footer { flex: none; font-size: 11px; text-align: center; padding: 4px; }
 .panel { container-type: inline-size; }
 .panel .scroll { padding: 0 12px; font-size: clamp(16px, 4.7cqw, 40px); }
+.panel .scroll.synced { padding-block: 0; }
+.panel .scroll.synced::before, .panel .scroll.synced::after { content: ''; display: block; height: 50%; }
 .panel .line, .panel .plain { text-align: center; }
 .lock { margin-left: 6px; font: inherit; color: #fff; background: #222; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; cursor: pointer; }
 .lock[aria-pressed="true"] { background: #3a3a3a; }
@@ -242,11 +244,12 @@ export class LyricsView {
     if (locked) this.centerCurrent('auto');
   }
 
-  /** Head/tail space of half the height lets the first and last lines reach the center. */
+  /** Synced lyrics get half-height ::before/::after spacers (CSS, content-box percent) so the first and last lines reach the center without sizing from the scroller's own height. */
   private updatePadding(): void {
     if (!this.panelMode) return;
     const synced = this.lyrics !== null;
-    this.scroller.style.paddingBlock = synced ? `${this.scroller.clientHeight / 2}px` : this.scroller.querySelector('.plain') ? '12px' : '';
+    this.scroller.classList.toggle('synced', synced);
+    this.scroller.style.paddingBlock = synced ? '' : this.scroller.querySelector('.plain') ? '12px' : '';
     this.applyOverflow();
   }
 
@@ -258,7 +261,6 @@ export class LyricsView {
 
   private readonly onResize = (): void => {
     if (this.destroyed) return;
-    this.updatePadding();
     if (this.locked) this.centerCurrent('auto');
   };
 
