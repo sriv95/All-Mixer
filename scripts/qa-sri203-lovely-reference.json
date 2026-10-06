@@ -1,0 +1,28 @@
+{
+ "label": "lovely",
+ "site": "music",
+ "vid": "V1Pl8CzNzCw",
+ "startS": 50,
+ "modes": {
+  "reference": {
+   "sr": 44100,
+   "n": 2646016,
+   "adDuring": false,
+   "videoSec": [
+    69.024936,
+    132.04
+   ],
+   "sep": {
+    "state": "off",
+    "choice": "off",
+    "engine": "bypass",
+    "procMs": 0
+   }
+  }
+ },
+ "load": [
+  2.42724609375,
+  2.82470703125,
+  2.79248046875
+ ]
+}
