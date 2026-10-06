@@ -1,16 +1,11 @@
 import { findLineIndex, findWordIndex } from '../../lyrics/sync';
 import type { Lyrics, LyricsSource, SyncedLyrics } from '../../lyrics/types';
-import type { CaptionPicker, SourceMenu, SourcePref } from './controller';
-import type { CaptionPick } from './track-info';
+import type { SourceMenu } from './controller';
 
 export type LyricsViewStatus = 'loading' | 'not-found' | 'error';
 
 export interface LyricsViewOptions {
   onSeek: (time: number) => void;
-  /** The user picked another caption track in the language menu. */
-  onCaptionTrack?: (pick: CaptionPick) => void;
-  /** The user picked a lyrics source in the source menu. */
-  onSource?: (pref: SourcePref) => void;
   /** Floating panel mode: text scales with width, the current line stays centered until the user unlocks it. */
   panel?: boolean;
 }
@@ -65,7 +60,6 @@ const STYLE = `
 .lock { margin-left: 6px; font: inherit; color: #fff; background: #222; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; cursor: pointer; }
 .lock[aria-pressed="true"] { background: #3a3a3a; }
 .source { opacity: 0.5; }
-.lang, .src { margin-left: 6px; max-width: 60%; font: inherit; color: #fff; background: #222; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; }
 `;
 
 export class LyricsView {
@@ -75,8 +69,6 @@ export class LyricsView {
   private readonly scroller: HTMLElement;
   private readonly footer: HTMLElement;
   private readonly onSeek: (time: number) => void;
-  private readonly onCaptionTrack?: (pick: CaptionPick) => void;
-  private readonly onSource?: (pref: SourcePref) => void;
 
   private lyrics: SyncedLyrics | null = null;
   private lineEls: HTMLElement[] = [];
@@ -94,8 +86,6 @@ export class LyricsView {
   constructor(opts: LyricsViewOptions, doc: Document = document) {
     this.doc = doc;
     this.onSeek = opts.onSeek;
-    this.onCaptionTrack = opts.onCaptionTrack;
-    this.onSource = opts.onSource;
     this.panelMode = opts.panel === true;
     this.el = doc.createElement('div');
     this.el.setAttribute('data-am-lyrics', '');
@@ -129,8 +119,8 @@ export class LyricsView {
     }
   }
 
-  /** `picker` adds a caption language menu to the footer (only with two or more options), `sources` the source menu. */
-  setLyrics(lyrics: Lyrics, picker?: CaptionPicker, sources?: SourceMenu): void {
+  /** `sources` adds the "used the auto order instead" note to the footer. Source and caption language are picked in the player settings menu. */
+  setLyrics(lyrics: Lyrics, sources?: SourceMenu): void {
     this.reset();
     if (lyrics.kind === 'plain') {
       const p = this.doc.createElement('p');
@@ -138,7 +128,7 @@ export class LyricsView {
       p.textContent = lyrics.text;
       this.scroller.replaceChildren(p);
       this.updatePadding();
-      this.setFooter(`Lyrics: ${SOURCE_LABELS[lyrics.source]}`, picker, sources);
+      this.setFooter(`Lyrics: ${SOURCE_LABELS[lyrics.source]}`, sources);
       return;
     }
     this.lyrics = lyrics;
@@ -169,7 +159,6 @@ export class LyricsView {
     this.scheduleRecenter(false);
     this.setFooter(
       `Lyrics: ${SOURCE_LABELS[lyrics.source]}` + (lyrics.source === 'lrclib' && lyrics.offset !== 0 ? ' · timing aligned to captions' : ''),
-      picker,
       sources,
     );
   }
@@ -185,34 +174,12 @@ export class LyricsView {
     this.footer.replaceChildren();
   }
 
-  private setFooter(text: string, picker?: CaptionPicker, sources?: SourceMenu): void {
+  private setFooter(text: string, sources?: SourceMenu): void {
     const src = this.doc.createElement('span');
     src.className = 'source';
     src.textContent = text + (sources?.fellBack ? ` · ${FALLBACK_NOTES[sources.fellBack]}` : '');
     this.footer.replaceChildren(src);
     if (this.panelMode && this.lyrics) this.footer.append(this.lockButton());
-    if (sources && this.onSource) this.footer.append(this.sourceMenu(sources, this.onSource));
-    const onPick = this.onCaptionTrack;
-    if (!picker || picker.options.length < 2 || !onPick) return;
-    const sel = this.doc.createElement('select');
-    sel.className = 'lang';
-    sel.title = 'Caption language';
-    sel.setAttribute('aria-label', 'Caption language');
-    picker.options.forEach((o, i) => {
-      const opt = this.doc.createElement('option');
-      opt.value = String(i);
-      opt.textContent = o.label;
-      sel.append(opt);
-    });
-    sel.value = String(picker.options.findIndex((o) => o.index === picker.selected.index));
-    sel.addEventListener('change', () => {
-      const o = picker.options[Number(sel.value)];
-      if (o) onPick({ index: o.index });
-      // Hand focus back to the page so later keys (k, Space, arrows) reach YouTube, not the select.
-      sel.blur();
-    });
-    guardKeys(sel);
-    this.footer.append(sel);
   }
 
   private lockButton(): HTMLButtonElement {
@@ -287,32 +254,6 @@ export class LyricsView {
     const el = this.lineEls[this.lineIdx];
     const top = el ? el.offsetTop - sc.clientHeight * PANEL_LINE_POSITION + el.offsetHeight / 2 : 0;
     sc.scrollTo({ top: Math.max(0, top), behavior });
-  }
-
-  private sourceMenu(sources: SourceMenu, onSource: (pref: SourcePref) => void): HTMLSelectElement {
-    const sel = this.doc.createElement('select');
-    sel.className = 'src';
-    sel.title = 'Lyrics source';
-    sel.setAttribute('aria-label', 'Lyrics source');
-    const entries: [SourcePref, string, boolean, string][] = [
-      ['auto', 'Auto', true, ''],
-      ['lrclib', 'LRCLIB', sources.available.lrclib, ' (not found)'],
-      ['captions', 'YouTube captions', sources.available.captions, ' (none)'],
-    ];
-    for (const [value, label, available, hint] of entries) {
-      const opt = this.doc.createElement('option');
-      opt.value = value;
-      opt.textContent = available ? label : label + hint;
-      opt.disabled = !available;
-      opt.selected = value === sources.pref;
-      sel.append(opt);
-    }
-    sel.addEventListener('change', () => {
-      onSource(sel.value as SourcePref);
-      sel.blur();
-    });
-    guardKeys(sel);
-    return sel;
   }
 
   update(time: number): void {

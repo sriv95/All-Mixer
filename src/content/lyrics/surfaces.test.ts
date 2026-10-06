@@ -107,7 +107,7 @@ describe('findLyricsControls', () => {
 });
 
 describe('PanelSurface hides YouTube captions', () => {
-  const view = { onSeek: () => {}, onCaptionTrack: () => {}, onSource: () => {} };
+  const view = { onSeek: () => {} };
   const count = () => document.querySelectorAll(`#${HIDE_CAPTIONS_STYLE_ID}`).length;
   afterEach(() => {
     document.getElementById('all-mixer-lyrics-panel')?.remove();
