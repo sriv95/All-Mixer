@@ -209,6 +209,8 @@ export class LyricsView {
     sel.addEventListener('change', () => {
       const o = picker.options[Number(sel.value)];
       if (o) onPick({ index: o.index, ...(o.tlang ? { tlang: o.tlang } : {}) });
+      // Hand focus back to the page so later keys (k, Space, arrows) reach YouTube, not the select.
+      sel.blur();
     });
     guardKeys(sel);
     this.footer.append(sel);
@@ -286,7 +288,10 @@ export class LyricsView {
       opt.selected = value === sources.pref;
       sel.append(opt);
     }
-    sel.addEventListener('change', () => onSource(sel.value as SourcePref));
+    sel.addEventListener('change', () => {
+      onSource(sel.value as SourcePref);
+      sel.blur();
+    });
     guardKeys(sel);
     return sel;
   }
