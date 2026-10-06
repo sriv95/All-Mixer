@@ -42,7 +42,7 @@ Use `bun run test`, not `bun test`. `bun test` starts Bun's own test runner; thi
 ## Debug
 
 - Force ML deadline misses (QA): in the extension service-worker console run `chrome.storage.local.set({'debug.mlStallMs': 400})`, then reload the YouTube tab. After `debug.mlStallAfterMs` (default 5000 ms, after warm-up) every ML block is held 400 ms, far past the block deadline, so 3 misses happen within about 2 s. Clear with `chrome.storage.local.remove(['debug.mlStallMs','debug.mlStallAfterMs'])`.
-- ML timing log (QA): either `localStorage['all-mixer-ml-timing']='1'` on the ml.html page (iframe console), or `chrome.storage.local.set({'debug.mlTiming': true})`, then reload the YouTube tab. Also logs the warm-up p50/p95 in the page console.
+- ML timing log (QA): either `localStorage['all-mixer-ml-timing']='1'` on the ml.html page (iframe console), or `chrome.storage.local.set({'debug.mlTiming': true})`, then reload the YouTube tab. Also logs the warm-up p50/p90/p95 (gate on p90) on every start, pass or fail, with `retry` when the second attempt was needed.
 
 ## Release
 
