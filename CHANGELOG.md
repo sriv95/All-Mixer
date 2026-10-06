@@ -10,6 +10,7 @@ CI builds the extension, creates tag `vx.y.z` and a GitHub release with this sec
 
 ### Added
 
+- Separation: the Karaoke / A cappella ML engine now uses MDX-Net 9482 (T = 64, 50 % overlap, WebGPU) for the vocal, so A cappella is a cleaner voice with no mask buzz. Karaoke keeps the MDX instrumental and removes the leftover voice with the Spleeter vocal mask (H3, power 2, margin 0.8). Added audio delay in Separate mode is now 1.97 s (was 0.30 s); the video is delayed to match, and lyrics follow. Without WebGPU, or if it cannot keep up, the original mix plays as before. New model: `public/ml/mdx.onnx` (fp16, 14.9 MB; `bun run fetch-model`), credited in `ml/THIRD_PARTY_NOTICES.txt`.
 - Lyrics: a "Lyrics source" menu (Auto / LRCLIB / YouTube captions) in the lyrics footer. The pick is kept for the tab. If the picked source has nothing for a video, the automatic order is used and the footer says so.
 - Lyrics: the caption language menu lists every caption track (auto-generated ones are labelled) and an "Auto-translate" group with YouTube's machine translations of the song's captions.
 
