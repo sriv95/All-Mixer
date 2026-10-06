@@ -1,5 +1,6 @@
 import type { TrackInfo } from './types';
 import type { FoundLyrics, LrclibRecord } from './lrclib-types';
+import { stripMarkup } from './markup';
 import { cleanArtist, cleanTitle, pickBest, usablePlain, usableSynced } from './match';
 
 export type { FoundLyrics, LrclibRecord } from './lrclib-types';
@@ -38,7 +39,7 @@ export async function searchRecords(params: Record<string, string>, fetchFn: typ
 
 function toFound(record: LrclibRecord): FoundLyrics | null {
   const synced = usableSynced(record.syncedLyrics);
-  const plain = usablePlain(record.plainLyrics);
+  const plain = usablePlain(record.plainLyrics && stripMarkup(record.plainLyrics));
   if (record.instrumental || (!synced && !plain)) return null;
   return { synced, plain, record };
 }

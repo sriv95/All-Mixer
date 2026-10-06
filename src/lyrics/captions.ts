@@ -4,6 +4,8 @@
  * which we use for word-level timing; manual tracks give one cue per line.
  */
 
+import { stripMarkup } from './markup';
+
 export interface CaptionWord {
   start: number;
   text: string;
@@ -30,7 +32,7 @@ interface Json3Event {
 
 /** Strip music notes / [Music] style annotations. Returns '' for pure annotations. */
 export function cleanCaptionText(s: string): string {
-  return s
+  return stripMarkup(s)
     .replace(/\[[^\]]*\]|\([^)]*\)/g, ' ')
     .replace(/[♪♫♬]/g, ' ')
     .replace(/\s+/g, ' ')
