@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { LyricsState } from './controller';
-import { YTM_MOUNT_ATTR, YtmTabSurface } from './surfaces';
-import { findLyricsControls } from '../youtube-dom';
+import { PanelSurface, YTM_MOUNT_ATTR, YtmTabSurface } from './surfaces';
+import { HIDE_CAPTIONS_STYLE_ID, findLyricsControls } from '../youtube-dom';
 
 const fixture = readFileSync('src/content/__fixtures__/ytmusic-lyrics-tab.html', 'utf8');
 const track = { videoId: 'v', title: 'Song', artist: 'Band', duration: 100 };
@@ -103,5 +103,34 @@ describe('YtmTabSurface (F1)', () => {
 describe('findLyricsControls', () => {
   it('finds the YT Music player bar controls', () => {
     expect(findLyricsControls('ytmusic')?.querySelector('#native-btn')).not.toBeNull();
+  });
+});
+
+describe('PanelSurface hides YouTube captions', () => {
+  const view = { onSeek: () => {}, onCaptionTrack: () => {}, onSource: () => {} };
+  const count = () => document.querySelectorAll(`#${HIDE_CAPTIONS_STYLE_ID}`).length;
+  afterEach(() => {
+    document.getElementById('all-mixer-lyrics-panel')?.remove();
+    document.getElementById(HIDE_CAPTIONS_STYLE_ID)?.remove();
+  });
+
+  it('adds the style once while open, removes on close and destroy', () => {
+    const s = new PanelSurface('youtube', view, () => {});
+    s.panel.show();
+    s.panel.show();
+    expect(count()).toBe(1);
+    s.panel.hide();
+    s.panel.hide();
+    expect(count()).toBe(0);
+    s.panel.show();
+    s.destroy();
+    expect(count()).toBe(0);
+  });
+
+  it('does nothing on music.youtube.com', () => {
+    const s = new PanelSurface('ytmusic', view, () => {});
+    s.panel.show();
+    expect(count()).toBe(0);
+    s.destroy();
   });
 });

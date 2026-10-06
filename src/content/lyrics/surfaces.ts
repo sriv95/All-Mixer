@@ -1,7 +1,7 @@
 import type { LyricsState, LyricsSurface } from './controller';
 import { FloatingPanel } from './floating-panel';
 import { LyricsView, type LyricsViewOptions } from './lyrics-view';
-import { enableTab, findYtmLyricsTab, findYtmTabContent, isTabSelected, type Site } from '../youtube-dom';
+import { enableTab, findYtmLyricsTab, findYtmTabContent, isTabSelected, setYtCaptionsHidden, type Site } from '../youtube-dom';
 
 function show(view: LyricsView, state: LyricsState): void {
   switch (state.kind) {
@@ -30,12 +30,25 @@ export class PanelSurface implements LyricsSurface {
   readonly panel: FloatingPanel;
   private readonly view: LyricsView;
 
-  constructor(site: Site, view: LyricsViewOptions, onOpenChange: (open: boolean) => void) {
+  constructor(
+    private readonly site: Site,
+    view: LyricsViewOptions,
+    onOpenChange: (open: boolean) => void,
+  ) {
     // Per site: on YT Music the Lyrics tab is the main view, so the panel starts closed there.
     this.panel = new FloatingPanel({ id: 'all-mixer-lyrics-panel', title: 'Lyrics', storageKey: `lyricsPanel:${site}` });
     this.view = new LyricsView({ ...view, panel: true });
     this.panel.body.append(this.view.el);
-    this.panel.onOpenChange(onOpenChange);
+    this.panel.onOpenChange((open) => {
+      // YouTube's own captions don't sync with our lyrics: hide them while the panel is open (www only).
+      if (site === 'youtube') setYtCaptionsHidden(open);
+      onOpenChange(open);
+    });
+  }
+
+  destroy(): void {
+    this.panel.destroy();
+    if (this.site === 'youtube') setYtCaptionsHidden(false);
   }
 
   get active(): boolean {

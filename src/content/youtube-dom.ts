@@ -163,3 +163,22 @@ export function onCaptionsButtonOn(cb: () => void, root: Document = document): (
   obs.observe(root.documentElement, { subtree: true, attributes: true, attributeFilter: ['aria-pressed'] });
   return () => obs.disconnect();
 }
+
+export const HIDE_CAPTIONS_STYLE_ID = 'all-mixer-hide-yt-captions';
+
+/**
+ * Pure display toggle for YouTube's own caption overlay (it does not sync with our lyrics).
+ * Leaves the CC button and caption state alone. Idempotent: at most one style element.
+ */
+export function setYtCaptionsHidden(hidden: boolean, doc: Document = document): void {
+  const existing = doc.getElementById(HIDE_CAPTIONS_STYLE_ID);
+  if (!hidden) {
+    existing?.remove();
+    return;
+  }
+  if (existing) return;
+  const style = doc.createElement('style');
+  style.id = HIDE_CAPTIONS_STYLE_ID;
+  style.textContent = '.ytp-caption-window-container, .caption-window { display: none !important; }';
+  (doc.head ?? doc.documentElement).append(style);
+}
