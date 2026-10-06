@@ -1,0 +1,60 @@
+{
+ "plain": {
+  "fs": false,
+  "panelH": 340,
+  "panelW": 340,
+  "bodyH": 305,
+  "scrollH": 280,
+  "footerH": 25,
+  "sum": 305,
+  "scrollTop": 0,
+  "scrollMax": 1177,
+  "synced": false,
+  "overflowY": "auto",
+  "fontPx": "16px",
+  "lines": 0,
+  "footerBottom": 379,
+  "panelBottom": 380,
+  "lockBtn": false,
+  "padTop": "12px",
+  "padBot": "12px",
+  "src": "Lyrics: LRCLIB",
+  "panelCount": 1,
+  "btnCount": 1,
+  "plain": {
+   "textAlign": "center",
+   "firstTopOffset": 12,
+   "h": 1433
+  },
+  "footerKidsClipped": false
+ },
+ "wheel": {
+  "fs": false,
+  "panelH": 340,
+  "panelW": 340,
+  "bodyH": 305,
+  "scrollH": 280,
+  "footerH": 25,
+  "sum": 305,
+  "scrollTop": 1177,
+  "scrollMax": 1177,
+  "synced": false,
+  "overflowY": "auto",
+  "fontPx": "16px",
+  "lines": 0,
+  "footerBottom": 379,
+  "panelBottom": 380,
+  "lockBtn": false,
+  "padTop": "12px",
+  "padBot": "12px",
+  "src": "Lyrics: LRCLIB",
+  "panelCount": 1,
+  "btnCount": 1,
+  "plain": {
+   "textAlign": "center",
+   "firstTopOffset": -1165,
+   "h": 1433
+  },
+  "footerKidsClipped": false
+ }
+}
