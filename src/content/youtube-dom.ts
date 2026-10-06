@@ -198,3 +198,34 @@ export function findControlBar(site: Site, player: ParentNode): HTMLElement | nu
   const selector = PLAYER_SELECTORS.controlBar[site];
   return selector ? player.querySelector<HTMLElement>(selector) : null;
 }
+
+/** www player settings menu (gear): we add our own rows to its main panel and open our own submenu panels. */
+export const SETTINGS_SELECTORS = {
+  button: '.ytp-settings-button',
+  popup: '.ytp-popup.ytp-settings-menu',
+  panel: '.ytp-panel',
+  panelMenu: '.ytp-panel-menu',
+  menuItem: '.ytp-menuitem',
+  menuItemLabel: '.ytp-menuitem-label',
+  menuItemContent: '.ytp-menuitem-content',
+  panelHeader: '.ytp-panel-header',
+  backButton: '.ytp-panel-back-button',
+} as const;
+
+export function findSettingsButton(root: ParentNode = document): HTMLElement | null {
+  return root.querySelector<HTMLElement>(SETTINGS_SELECTORS.button);
+}
+
+export function findSettingsPopup(root: ParentNode = document): HTMLElement | null {
+  return root.querySelector<HTMLElement>(SETTINGS_SELECTORS.popup);
+}
+
+/** The main panel's item list: the first panel without a back-button header and not one of ours (`ownAttr`). */
+export function findSettingsMainMenu(popup: ParentNode, ownAttr: string): HTMLElement | null {
+  for (const panel of popup.querySelectorAll<HTMLElement>(SETTINGS_SELECTORS.panel)) {
+    if (panel.hasAttribute(ownAttr) || panel.querySelector(SETTINGS_SELECTORS.panelHeader)) continue;
+    const menu = panel.querySelector<HTMLElement>(SETTINGS_SELECTORS.panelMenu);
+    if (menu) return menu;
+  }
+  return null;
+}
