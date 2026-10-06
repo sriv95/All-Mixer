@@ -77,16 +77,25 @@ export function captionOptions(
     const name = cleanTrackName(t.name || t.languageCode || `Track ${index + 1}`, t.languageCode);
     return t.kind === 'asr' && !/auto/i.test(name) ? `${name} (auto-generated)` : name;
   });
-  const options: CaptionOption[] = tracks.map((t, index) => {
+  const coded = tracks.map((t, index) => {
     const dup = labels.some((l, i) => i !== index && l === labels[index]);
-    const label = dup ? appendInParens(labels[index], t.languageCode) : labels[index];
-    return { index, label, group: 'track' };
+    return dup ? appendInParens(labels[index], t.languageCode) : labels[index];
+  });
+  // Still identical (same name and code): number the 2nd and later ones.
+  const seen = new Map<string, number>();
+  const options: CaptionOption[] = coded.map((base, index) => {
+    const n = (seen.get(base) ?? 0) + 1;
+    seen.set(base, n);
+    return { index, label: n > 1 ? `${base} #${n}` : base, group: 'track' };
   });
   const index = sourceTrack ? tracks.indexOf(sourceTrack) : -1;
   if (index < 0 || !sourceTrack?.isTranslatable) return options;
   for (const l of translationLanguages) {
     if (l.languageCode === sourceTrack.languageCode) continue;
-    options.push({ index, tlang: l.languageCode, label: `${l.name} (auto-translated)`, group: 'translate' });
+    const base = `${l.name} (auto-translated)`;
+    let label = base;
+    for (let n = 2; options.some((o) => o.label === label); n++) label = `${base} #${n}`;
+    options.push({ index, tlang: l.languageCode, label, group: 'translate' });
   }
   return options;
 }
