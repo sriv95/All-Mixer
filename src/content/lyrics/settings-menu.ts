@@ -119,9 +119,13 @@ const ROW_ATTR = 'data-am-row';
  * www: our rows at the end of YouTube's settings panel, with submenu panels like Playback speed.
  * YouTube re-renders the popup, so `ensure()` re-inserts what vanished (never duplicates).
  */
+const rowKey = (row: MenuRow): string =>
+  JSON.stringify([row.id, row.label, row.selected, row.options.map((o) => [o.value, o.label, !!o.disabled]), row.note]);
+
 export class YtSettingsMenu implements LyricsMenu {
   private rows: MenuRow[] = [];
   private openId: MenuRow['id'] | null = null;
+  private subKey = '';
   private sub: HTMLElement | null = null;
   private hidden: HTMLElement | null = null;
   private saved: { width: string; height: string } | null = null;
@@ -187,7 +191,11 @@ export class YtSettingsMenu implements LyricsMenu {
       for (const el of this.doc.querySelectorAll(`[${ROW_ATTR}]`)) el.remove();
       for (const row of this.rows) menu.append(this.renderRow(row));
     }
-    if (this.openId) this.renderSub(popup);
+    if (this.openId) {
+      const row = this.rows.find((r) => r.id === this.openId);
+      if (!row) this.closeSub();
+      else if (!this.sub || this.sub.parentNode !== popup || rowKey(row) !== this.subKey) this.renderSub(popup);
+    }
   }
 
   private renderRow(row: MenuRow): HTMLElement {
@@ -287,6 +295,7 @@ export class YtSettingsMenu implements LyricsMenu {
       menu.append(note);
     }
     panel.append(header, menu);
+    this.subKey = rowKey(row);
     this.sub?.remove();
     this.sub = panel;
     popup.append(panel);
@@ -301,6 +310,7 @@ export class YtSettingsMenu implements LyricsMenu {
 
   private closeSub(): void {
     this.openId = null;
+    this.subKey = '';
     this.sub?.remove();
     this.sub = null;
     if (this.hidden) {

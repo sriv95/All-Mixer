@@ -172,7 +172,7 @@ export function initLyrics(site: Site, presentedTime: () => number | null, prese
   const syncButton = () => {
     const on = panel.active || karaoke.active;
     button.style.opacity = on ? '1' : '0.7';
-    button.setAttribute('aria-pressed', String(on));
+    button.setAttribute('aria-pressed', String(panel.active));
   };
   // Player controls are re-created now and then; re-insert cheaply.
   const ensureButton = () => {
