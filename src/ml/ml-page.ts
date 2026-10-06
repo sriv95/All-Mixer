@@ -29,7 +29,7 @@ window.addEventListener('message', (e: MessageEvent) => {
     const w = worker;
     // Debug stall hook (off by default): see README, Debug.
     void chrome.storage.local
-      .get(['debug.mlStallMs', 'debug.mlStallAfterMs'])
+      .get(['debug.mlStallMs', 'debug.mlStallAfterMs', 'debug.mlTiming'])
       .catch(() => ({}) as Record<string, unknown>)
       .then((o) => {
         const stallMs = Number(o['debug.mlStallMs']) > 0 ? Number(o['debug.mlStallMs']) : 0;
