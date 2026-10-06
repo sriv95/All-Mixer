@@ -1,0 +1,59 @@
+import { describe, expect, it, vi } from 'vitest';
+import { DEFAULT_LYRICS_PREFS, loadLyricsPrefs, normalizeLyricsPrefs, saveLyricsPrefs, watchLyricsPrefs } from './lyrics-prefs';
+
+function fakeArea(init: Record<string, unknown> = {}): any {
+  const store = { ...init };
+  return {
+    store,
+    get: async (k: string) => (k in store ? { [k]: store[k] } : {}),
+    set: async (o: Record<string, unknown>) => void Object.assign(store, o),
+  };
+}
+
+describe('normalizeLyricsPrefs', () => {
+  it('defaults for missing / garbage', () => {
+    expect(normalizeLyricsPrefs(undefined)).toEqual(DEFAULT_LYRICS_PREFS);
+    expect(normalizeLyricsPrefs('x')).toEqual(DEFAULT_LYRICS_PREFS);
+    expect(normalizeLyricsPrefs({ lyricsDisplayMode: 'nope', karaokeLines: 3, karaokeFontSize: 'big', karaokePosition: 5 })).toEqual(DEFAULT_LYRICS_PREFS);
+    expect(DEFAULT_LYRICS_PREFS.lyricsDisplayMode).toBe('karaoke');
+  });
+  it('keeps window and fills the rest', () => {
+    expect(normalizeLyricsPrefs({ lyricsDisplayMode: 'window' })).toEqual({ ...DEFAULT_LYRICS_PREFS, lyricsDisplayMode: 'window' });
+  });
+  it('clamps and rounds', () => {
+    const p = normalizeLyricsPrefs({ karaokeFontSize: 300.4, karaokePosition: { x: -1, y: 2 } });
+    expect(p.karaokeFontSize).toBe(200);
+    expect(p.karaokePosition).toEqual({ x: 0, y: 1 });
+    expect(normalizeLyricsPrefs({ karaokeFontSize: 10 }).karaokeFontSize).toBe(50);
+    expect(normalizeLyricsPrefs({ karaokeFontSize: 120.6 }).karaokeFontSize).toBe(121);
+    expect(normalizeLyricsPrefs({ karaokeFontSize: NaN }).karaokeFontSize).toBe(100);
+  });
+});
+
+describe('storage', () => {
+  it('old users with no key get defaults', async () => {
+    expect(await loadLyricsPrefs(fakeArea())).toEqual(DEFAULT_LYRICS_PREFS);
+  });
+  it('save merges and normalizes', async () => {
+    const a = fakeArea({ lyricsPrefs: { lyricsDisplayMode: 'window' } });
+    const out = await saveLyricsPrefs(a, { karaokeLines: 1, karaokeFontSize: 999 });
+    expect(out).toEqual({ ...DEFAULT_LYRICS_PREFS, lyricsDisplayMode: 'window', karaokeLines: 1, karaokeFontSize: 200 });
+    expect(a.store.lyricsPrefs).toEqual(out);
+  });
+  it('watch fires for lyricsPrefs in local only, and unsubscribes', () => {
+    let l: (c: Record<string, { newValue?: unknown }>, n: string) => void = () => {};
+    const ev = {
+      addListener: vi.fn((f) => void (l = f)),
+      removeListener: vi.fn(),
+    };
+    const cb = vi.fn();
+    const off = watchLyricsPrefs(ev as never, cb);
+    l({ lyricsPrefs: { newValue: { karaokeLines: 1 } } }, 'local');
+    expect(cb).toHaveBeenCalledWith({ ...DEFAULT_LYRICS_PREFS, karaokeLines: 1 });
+    l({ lyricsPrefs: { newValue: {} } }, 'session');
+    l({ other: { newValue: 1 } }, 'local');
+    expect(cb).toHaveBeenCalledTimes(1);
+    off();
+    expect(ev.removeListener).toHaveBeenCalledWith(l);
+  });
+});
