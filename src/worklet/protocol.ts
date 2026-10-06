@@ -87,4 +87,4 @@ export type FromMlWorker =
   | { type: 'unavailable'; reason: string };
 
 /** Page → worker init (iframe page forwards the ML port from the content script). */
-export type MlWorkerInit = { type: 'init'; port: MessagePort; modelUrl: string; mdxUrl: string; wasmBase: string; stallMs?: number; stallAfterMs?: number };
+export type MlWorkerInit = { type: 'init'; port: MessagePort; modelUrl: string; mdxUrl: string; wasmBase: string; stallMs?: number; stallAfterMs?: number; timing?: boolean };
