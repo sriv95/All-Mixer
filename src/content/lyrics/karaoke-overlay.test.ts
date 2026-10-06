@@ -24,6 +24,7 @@ function make(): KaraokeSurface {
 }
 const root = () => document.getElementById('all-mixer-karaoke');
 const lineEls = () => [...document.querySelectorAll<HTMLElement>('.am-k-line')];
+const textOf = (e: HTMLElement) => e.querySelector('.am-k-text')!.textContent;
 const block = () => document.querySelector<HTMLElement>('.am-k-block')!;
 
 beforeEach(() => {
@@ -46,7 +47,7 @@ describe('KaraokeSurface slots', () => {
     s.render(synced);
     s.update(1.5);
     expect(root()!.parentElement).toBe(player);
-    expect(lineEls().map((e) => [e.textContent, e.classList.contains('upcoming')])).toEqual([['one', false], ['two', true]]);
+    expect(lineEls().map((e) => [textOf(e), e.classList.contains('upcoming')])).toEqual([['one', false], ['two', true]]);
   });
 
   it('shows one line in 1-line mode and nothing in a gap', () => {
@@ -54,7 +55,7 @@ describe('KaraokeSurface slots', () => {
     const s = make();
     s.render(synced);
     s.update(1.5);
-    expect(lineEls().map((e) => e.textContent)).toEqual(['one']);
+    expect(lineEls().map(textOf)).toEqual(['one']);
     s.update(6);
     expect(lineEls()).toHaveLength(0);
     expect(block().style.display).toBe('none');
@@ -64,7 +65,8 @@ describe('KaraokeSurface slots', () => {
     const s = make();
     s.render(synced);
     s.update(6);
-    expect(lineEls().map((e) => [e.textContent, e.classList.contains('upcoming')])).toEqual([['three', true]]);
+    // 'three' is line index 2 (row 0); row 1 stays as an empty placeholder.
+    expect(lineEls().map((e) => [textOf(e), e.classList.contains('upcoming')])).toEqual([['three', true], ['\u200b', false]]);
   });
 
   it('does not rebuild the DOM while the slots are unchanged', () => {
@@ -92,14 +94,38 @@ describe('KaraokeSurface slots', () => {
     expect(document.body.textContent).not.toMatch(/lyrics|loading|found/i);
   });
 
-  it('marks sung words in the current line', () => {
+  it('sweeps blue across the current line by its time', () => {
     const s = make();
     s.render(synced);
+    s.update(1);
+    const fill = () => document.querySelector<HTMLElement>('.am-k-fill')!;
+    expect(fill().style.clipPath).toBe('inset(0 100.0% 0 0)');
+    s.update(2);
+    expect(fill().style.clipPath).toBe('inset(0 50.0% 0 0)');
+    expect(fill().textContent).toBe('one');
+    s.update(2.9);
+    expect(fill().style.clipPath).toBe('inset(0 5.0% 0 0)');
+  });
+
+  it('sweeps by word timing and only on the current line', () => {
+    const s = make();
+    s.render(synced);
+    s.update(4);
+    expect(document.querySelectorAll('.am-k-fill')).toHaveLength(1);
+    expect(document.querySelector<HTMLElement>('.am-k-fill')!.style.clipPath).toBe('inset(0 33.3% 0 0)'); // 'tw' done, 'o' starts
     s.update(4.5);
-    const words = [...document.querySelectorAll('.am-k-word')];
-    expect(words.map((w) => w.classList.contains('sung'))).toEqual([true, true]);
-    s.update(3.2);
-    expect(words.map((w) => w.classList.contains('sung'))).toEqual([true, false]);
+    expect(document.querySelector<HTMLElement>('.am-k-fill')!.style.clipPath).toBe('inset(0 16.7% 0 0)');
+  });
+
+  it('keeps each line in its row: the ended line is replaced in place', () => {
+    const s = make();
+    s.render(synced);
+    s.update(1.5);
+    expect(lineEls().map(textOf)).toEqual(['one', 'two']);
+    s.update(3.5);
+    // 'one' (row 0) ended; 'three' replaces it in row 0, 'two' stays in row 1.
+    expect(lineEls().map(textOf)).toEqual(['three', 'two']);
+    expect(lineEls().map((e) => e.classList.contains('upcoming'))).toEqual([true, false]);
   });
 });
 
@@ -107,6 +133,9 @@ describe('KaraokeSurface active', () => {
   it('is active only in karaoke mode with a player', () => {
     const s = make();
     expect(s.active).toBe(true);
+    prefs = { ...prefs, lyricsVisible: false };
+    expect(s.active).toBe(false);
+    prefs = { ...prefs, lyricsVisible: true };
     prefs = { ...prefs, lyricsDisplayMode: 'window' };
     expect(s.active).toBe(false);
     prefs = { ...prefs, lyricsDisplayMode: 'karaoke' };

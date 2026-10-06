@@ -1,9 +1,9 @@
 import type { FetchLyrics } from '../../shared/messages';
 import type { FoundLyrics } from '../../lyrics/lrclib-types';
-import { findLyricsControls, findPlayer, getVideoId, onCaptionsButtonOn, onNavigate, setYtCaptionsHidden, type Site } from '../youtube-dom';
+import { CC_BUTTON_SELECTOR, findLyricsControls, findPlayer, getVideoId, onCaptionsButtonOn, onNavigate, setYtCaptionsHidden, type Site } from '../youtube-dom';
 import { getPlayerInfo, getTimedText, onCaptionsAvailable } from './bridge-client';
 import { LyricsController, type LyricsState } from './controller';
-import { YtSettingsMenu, YtmSettingsPopover, buildMenuRows, type LyricsMenu } from './settings-menu';
+import { YtSettingsMenu, YtmSettingsPopover, buildMenuButtons, buildMenuRows, type LyricsMenu } from './settings-menu';
 import { PanelSurface, YtmTabSurface } from './surfaces';
 import { KaraokeSurface } from './karaoke-overlay';
 import { DEFAULT_LYRICS_PREFS, loadLyricsPrefs, saveLyricsPrefs, watchLyricsPrefs, type LyricsPrefs } from '../../shared/lyrics-prefs';
@@ -36,19 +36,21 @@ export function initLyrics(site: Site, presentedTime: () => number | null, prese
   let prefs: LyricsPrefs = DEFAULT_LYRICS_PREFS;
   const storage = typeof chrome !== 'undefined' ? chrome.storage?.local : undefined;
 
+  const wantWindow = () => prefs.lyricsVisible && prefs.lyricsDisplayMode === 'window';
+
   const panel = new PanelSurface(
     site,
     view,
     (open) => {
-      // Panel open <=> mode `window`: the window's own close (X) goes back to karaoke text.
-      if (!open && prefs.lyricsDisplayMode === 'window') setPrefs({ lyricsDisplayMode: 'karaoke' });
-      // A saved "open" state from an earlier session must not show the window in karaoke mode.
-      if (open && prefs.lyricsDisplayMode === 'karaoke') panel.panel.hide();
+      // The window is open <=> lyrics visible in `window` mode: its own close (X) hides the lyrics.
+      if (!open && wantWindow()) setPrefs({ lyricsVisible: false });
+      // A saved "open" state from an earlier session must not show the window when it is not wanted.
+      if (open && !wantWindow()) panel.panel.hide();
       syncButton();
       syncCaptions();
       controller.refresh();
     },
-    () => prefs.lyricsDisplayMode === 'window',
+    wantWindow,
   );
   controller.addSurface(panel);
 
@@ -62,15 +64,21 @@ export function initLyrics(site: Site, presentedTime: () => number | null, prese
   });
   controller.addSurface(karaoke);
 
-  // YouTube's own captions don't sync with our lyrics: hide them while karaoke text or the window shows (www only).
+  // YouTube's own captions don't sync with our lyrics: hide them while karaoke text or the window shows (www only),
+  // from the start of each video. The user can show them again by pressing the CC button (`captionsForced`).
+  let captionsForced = false;
   const syncCaptions = () => {
-    if (site === 'youtube') setYtCaptionsHidden(karaoke.active || panel.active);
+    if (site === 'youtube') setYtCaptionsHidden((karaoke.active || panel.active) && !captionsForced);
+  };
+  const forceCaptions = () => {
+    if (captionsForced) return;
+    captionsForced = true;
+    syncCaptions();
   };
   const applyPrefs = (next: LyricsPrefs) => {
-    const leftWindow = prefs.lyricsDisplayMode === 'window' && next.lyricsDisplayMode === 'karaoke';
     prefs = next;
-    if (leftWindow && panel.panel.isOpen) panel.panel.hide();
-    if (next.lyricsDisplayMode === 'window' && !panel.panel.isOpen) panel.panel.show();
+    if (wantWindow() && !panel.panel.isOpen) panel.panel.show();
+    if (!wantWindow() && panel.panel.isOpen) panel.panel.hide();
     karaoke.refreshPrefs();
     syncButton();
     syncCaptions();
@@ -86,8 +94,8 @@ export function initLyrics(site: Site, presentedTime: () => number | null, prese
     applyPrefs({ ...prefs, ...patch });
     if (storage) void saveLyricsPrefs(storage, patch);
   };
-  /** ♪: karaoke text <-> floating window. */
-  const toggleMode = () => setPrefs({ lyricsDisplayMode: prefs.lyricsDisplayMode === 'karaoke' ? 'window' : 'karaoke' });
+  /** ♪: show / hide the lyrics (the display mode stays as chosen in the settings). */
+  const toggleVisible = () => setPrefs({ lyricsVisible: !prefs.lyricsVisible });
 
   // Lyrics settings: one model, drawn in YouTube's gear menu (www) or our own popover (YT Music).
   let lastState: LyricsState = { kind: 'idle' };
@@ -101,8 +109,10 @@ export function initLyrics(site: Site, presentedTime: () => number | null, prese
   };
   const syncMenu = () => {
     const ready = lastState.kind === 'ready' ? lastState : null;
-    const rows = buildMenuRows({ sources: ready?.sources, captions: ready?.captions, prefs }, actions);
-    for (const m of menus) m.setRows(rows);
+    const input = { sources: ready?.sources, captions: ready?.captions, prefs };
+    const rows = buildMenuRows(input, actions);
+    const buttons = buildMenuButtons(input, actions);
+    for (const m of menus) m.setRows(rows, buttons);
   };
   controller.addSurface({
     active: false,
@@ -133,10 +143,20 @@ export function initLyrics(site: Site, presentedTime: () => number | null, prese
   }
 
   // CC turned on: the event from the page bridge can be missed, so re-align a few times on our own.
-  if (site === 'youtube') onCaptionsButtonOn(() => controller.realignWithRetries());
+  if (site === 'youtube') {
+    onCaptionsButtonOn(() => {
+      forceCaptions();
+      controller.realignWithRetries();
+    });
+    // Any press on CC (also turning it off) means the user wants control over YouTube's captions now.
+    document.addEventListener('click', (e) => {
+      if ((e.target as Element | null)?.closest?.(CC_BUTTON_SELECTOR)) forceCaptions();
+    }, true);
+  }
 
   // Which video is this? The URL on watch pages; the player itself elsewhere (miniplayer, YT Music player bar).
   let checkSeq = 0;
+  let lastVideoId: string | null = null;
   const checkVideo = async () => {
     const seq = ++checkSeq;
     let id = getVideoId(location.href);
@@ -144,7 +164,13 @@ export function initLyrics(site: Site, presentedTime: () => number | null, prese
       const info = await getPlayerInfo('', new AbortController().signal, 1500);
       id = info?.videoId ?? null;
     }
-    if (seq === checkSeq) controller.setVideoId(id);
+    if (seq !== checkSeq) return;
+    if (id !== lastVideoId) {
+      lastVideoId = id;
+      captionsForced = false;
+      syncCaptions();
+    }
+    controller.setVideoId(id);
   };
 
   let video: HTMLVideoElement | null = null;
@@ -156,7 +182,7 @@ export function initLyrics(site: Site, presentedTime: () => number | null, prese
   const button = document.createElement('button');
   button.type = 'button';
   button.setAttribute(BUTTON_ATTR, '');
-  button.title = 'Lyrics (All Mixer!)';
+  button.title = 'Show / hide lyrics (All Mixer!)';
   button.setAttribute('aria-label', 'Lyrics');
   button.textContent = '♪';
   if (site === 'youtube') {
@@ -167,12 +193,11 @@ export function initLyrics(site: Site, presentedTime: () => number | null, prese
   }
   button.addEventListener('click', (e) => {
     e.stopPropagation();
-    toggleMode();
+    toggleVisible();
   });
   const syncButton = () => {
-    const on = panel.active || karaoke.active;
-    button.style.opacity = on ? '1' : '0.7';
-    button.setAttribute('aria-pressed', String(panel.active));
+    button.style.opacity = prefs.lyricsVisible ? '1' : '0.5';
+    button.setAttribute('aria-pressed', String(prefs.lyricsVisible));
   };
   // Player controls are re-created now and then; re-insert cheaply.
   const ensureButton = () => {
@@ -197,6 +222,6 @@ export function initLyrics(site: Site, presentedTime: () => number | null, prese
       tab?.sync();
       void checkVideo();
     },
-    togglePanel: toggleMode,
+    togglePanel: toggleVisible,
   };
 }

@@ -1,4 +1,4 @@
-import type { LyricsDisplayMode, LyricsPrefs } from '../../shared/lyrics-prefs';
+import { DEFAULT_LYRICS_PREFS, type LyricsDisplayMode, type LyricsPrefs } from '../../shared/lyrics-prefs';
 import { SETTINGS_SELECTORS, findSettingsMainMenu, findSettingsPopup } from '../youtube-dom';
 import type { CaptionPicker, SourceMenu, SourcePref } from './controller';
 import type { CaptionPick } from './track-info';
@@ -18,6 +18,13 @@ export interface MenuRow {
   /** Extra explanation shown under the choices. */
   note?: string;
   select(value: string): void;
+}
+
+/** A button inside the lyrics settings (not a choice): e.g. reset position. */
+export interface MenuButton {
+  id: 'resetPosition';
+  label: string;
+  run(): void;
 }
 
 export interface MenuActions {
@@ -101,30 +108,43 @@ export function buildMenuRows(input: MenuInput, actions: MenuActions): MenuRow[]
   return rows;
 }
 
+/** Buttons for the lyrics settings: reset position (karaoke text only; the window remembers its own place). */
+export function buildMenuButtons(input: MenuInput, actions: MenuActions): MenuButton[] {
+  if (input.prefs.lyricsDisplayMode !== 'karaoke') return [];
+  return [{ id: 'resetPosition', label: 'Reset position', run: () => actions.setPrefs({ karaokePosition: { ...DEFAULT_LYRICS_PREFS.karaokePosition } }) }];
+}
+
 function nearestSize(size: number): number {
   return KARAOKE_SIZES.reduce((best, n) => (Math.abs(n - size) < Math.abs(best - size) ? n : best));
 }
 
 const selectedLabel = (row: MenuRow): string => row.options.find((o) => o.value === row.selected)?.label ?? '';
 
-/** Both renderers take new rows whenever the state or prefs change. */
+/** Both renderers take the new settings whenever the state or prefs change. */
 export interface LyricsMenu {
-  setRows(rows: MenuRow[]): void;
+  setRows(rows: MenuRow[], buttons?: MenuButton[]): void;
 }
 
 const OWN_ATTR = 'data-am-panel';
 const ROW_ATTR = 'data-am-row';
+const GROUP_ID = 'lyrics';
+const GROUP_LABEL = 'Lyrics';
+/** Same glyph as the ♪ button on the control bar. */
+const GROUP_ICON = '♪';
 
-/**
- * www: our rows at the end of YouTube's settings panel, with submenu panels like Playback speed.
- * YouTube re-renders the popup, so `ensure()` re-inserts what vanished (never duplicates).
- */
 const rowKey = (row: MenuRow): string =>
   JSON.stringify([row.id, row.label, row.selected, row.options.map((o) => [o.value, o.label, !!o.disabled]), row.note]);
 
+/**
+ * www: one "Lyrics" row (with the ♪ icon) at the end of YouTube's settings panel. It opens our own panel with
+ * the lyrics settings (and buttons), and each setting opens its choices, like Playback speed.
+ * YouTube re-renders the popup, so `ensure()` re-inserts what vanished (never duplicates).
+ */
 export class YtSettingsMenu implements LyricsMenu {
   private rows: MenuRow[] = [];
-  private openId: MenuRow['id'] | null = null;
+  private buttons: MenuButton[] = [];
+  /** Open panels: [] closed, [GROUP_ID] the lyrics settings, [GROUP_ID, rowId] the choices of one setting. */
+  private path: string[] = [];
   private subKey = '';
   private sub: HTMLElement | null = null;
   private hidden: HTMLElement | null = null;
@@ -135,9 +155,10 @@ export class YtSettingsMenu implements LyricsMenu {
 
   constructor(private readonly doc: Document = document) {}
 
-  setRows(rows: MenuRow[]): void {
+  setRows(rows: MenuRow[], buttons: MenuButton[] = []): void {
     this.rows = rows;
-    if (this.openId && !rows.some((r) => r.id === this.openId)) this.closeSub();
+    this.buttons = buttons;
+    if (this.path.length > 1 && !rows.some((r) => r.id === this.path[1])) this.path = [GROUP_ID];
     this.ensure();
   }
 
@@ -170,49 +191,65 @@ export class YtSettingsMenu implements LyricsMenu {
     this.raf = win?.requestAnimationFrame ? win.requestAnimationFrame(run) : (setTimeout(run, 16) as unknown as number);
   }
 
-  /** Make the popup show exactly our current rows, once, at the end of the main menu. */
+  /** What the group row shows on its right: the current display mode. */
+  private summary(): string {
+    const display = this.rows.find((r) => r.id === 'display');
+    return display ? selectedLabel(display) : '';
+  }
+
+  private groupKey(): string {
+    return JSON.stringify([this.rows.map(rowKey), this.buttons.map((b) => b.label)]);
+  }
+
+  /** Make the popup show our group row exactly once, at the end of the main menu. */
   ensure(): void {
     const popup = findSettingsPopup(this.doc);
     if (!popup) return;
-    if (this.openId && (this.sub?.parentNode !== popup || popup.style.display === 'none')) this.closeSub();
+    if (this.path.length && (this.sub?.parentNode !== popup || popup.style.display === 'none')) this.closeSub();
     const menu = findSettingsMainMenu(popup, OWN_ATTR);
     if (!menu) return;
     const mine = [...menu.querySelectorAll<HTMLElement>(`[${ROW_ATTR}]`)];
-    const ok =
-      mine.length === this.rows.length &&
-      menu.lastElementChild === mine[mine.length - 1] &&
-      mine.every(
-        (el, i) =>
-          el.getAttribute(ROW_ATTR) === this.rows[i].id &&
-          el.parentNode === menu &&
-          el.querySelector(SETTINGS_SELECTORS.menuItemContent)?.textContent === selectedLabel(this.rows[i]),
-      );
+    const want = this.rows.length > 0;
+    const ok = want
+      ? mine.length === 1 &&
+        menu.lastElementChild === mine[0] &&
+        mine[0].parentNode === menu &&
+        mine[0].querySelector(SETTINGS_SELECTORS.menuItemContent)?.textContent === this.summary()
+      : mine.length === 0;
     if (!ok) {
       for (const el of this.doc.querySelectorAll(`[${ROW_ATTR}]`)) el.remove();
-      for (const row of this.rows) menu.append(this.renderRow(row));
+      if (want) menu.append(this.renderGroupRow());
     }
-    if (this.openId) {
-      const row = this.rows.find((r) => r.id === this.openId);
-      if (!row) this.closeSub();
-      else if (!this.sub || this.sub.parentNode !== popup || rowKey(row) !== this.subKey) this.renderSub(popup);
+    if (this.path.length) {
+      if (!want) this.closeSub();
+      else if (!this.sub || this.sub.parentNode !== popup || this.panelKey() !== this.subKey) this.renderSub(popup);
     }
   }
 
-  private renderRow(row: MenuRow): HTMLElement {
+  private panelKey(): string {
+    const row = this.path[1] ? this.rows.find((r) => r.id === this.path[1]) : undefined;
+    return JSON.stringify([this.path, row ? rowKey(row) : this.groupKey()]);
+  }
+
+  private renderGroupRow(): HTMLElement {
     const item = this.doc.createElement('div');
     item.className = SETTINGS_SELECTORS.menuItem.slice(1);
     item.setAttribute('role', 'menuitem');
     item.setAttribute('aria-haspopup', 'true');
     item.tabIndex = 0;
-    item.setAttribute(ROW_ATTR, row.id);
+    item.setAttribute(ROW_ATTR, GROUP_ID);
+    const icon = this.doc.createElement('div');
+    icon.className = 'ytp-menuitem-icon';
+    icon.textContent = GROUP_ICON;
+    icon.style.cssText = 'font-size:20px;line-height:24px;text-align:center;';
     const label = this.doc.createElement('div');
     label.className = SETTINGS_SELECTORS.menuItemLabel.slice(1);
-    label.textContent = row.label;
+    label.textContent = GROUP_LABEL;
     const content = this.doc.createElement('div');
     content.className = SETTINGS_SELECTORS.menuItemContent.slice(1);
-    content.textContent = selectedLabel(row);
-    item.append(label, content);
-    this.activate(item, () => this.openSub(row.id));
+    content.textContent = this.summary();
+    item.append(icon, label, content);
+    this.activate(item, () => this.open([GROUP_ID]));
     return item;
   }
 
@@ -229,16 +266,32 @@ export class YtSettingsMenu implements LyricsMenu {
     });
   }
 
-  private openSub(id: MenuRow['id']): void {
+  private open(path: string[]): void {
     const popup = findSettingsPopup(this.doc);
     if (!popup) return;
-    this.openId = id;
+    this.path = path;
     this.renderSub(popup);
   }
 
+  private back(): void {
+    if (this.path.length > 1) this.open([GROUP_ID]);
+    else this.closeSub();
+  }
+
+  private item(role: string, labelText: string): { item: HTMLElement; label: HTMLElement } {
+    const item = this.doc.createElement('div');
+    item.className = SETTINGS_SELECTORS.menuItem.slice(1);
+    item.setAttribute('role', role);
+    const label = this.doc.createElement('div');
+    label.className = SETTINGS_SELECTORS.menuItemLabel.slice(1);
+    label.textContent = labelText;
+    item.append(label);
+    return { item, label };
+  }
+
   private renderSub(popup: HTMLElement): void {
-    const row = this.rows.find((r) => r.id === this.openId);
-    if (!row) {
+    const row = this.path[1] ? this.rows.find((r) => r.id === this.path[1]) : undefined;
+    if (!this.path.length || (this.path[1] && !row)) {
       this.closeSub();
       return;
     }
@@ -260,42 +313,18 @@ export class YtSettingsMenu implements LyricsMenu {
     back.textContent = '‹';
     back.addEventListener('click', (e) => {
       e.stopPropagation();
-      this.closeSub();
+      this.back();
     });
     const title = this.doc.createElement('span');
     title.className = 'ytp-panel-title';
-    title.textContent = row.label;
+    title.textContent = row ? row.label : GROUP_LABEL;
     header.append(back, title);
     const menu = this.doc.createElement('div');
     menu.className = SETTINGS_SELECTORS.panelMenu.slice(1);
-    for (const o of row.options) {
-      const item = this.doc.createElement('div');
-      item.className = SETTINGS_SELECTORS.menuItem.slice(1);
-      item.setAttribute('role', 'menuitemradio');
-      item.setAttribute('aria-checked', String(o.value === row.selected));
-      if (o.disabled) item.setAttribute('aria-disabled', 'true');
-      item.tabIndex = o.disabled ? -1 : 0;
-      const label = this.doc.createElement('div');
-      label.className = SETTINGS_SELECTORS.menuItemLabel.slice(1);
-      label.textContent = o.label;
-      if (o.disabled) label.style.opacity = '0.5';
-      item.append(label);
-      this.activate(item, () => {
-        if (o.disabled) return;
-        this.closeSub();
-        row.select(o.value);
-      });
-      menu.append(item);
-    }
-    if (row.note) {
-      const note = this.doc.createElement('div');
-      note.className = 'ytp-menuitem-label';
-      note.style.cssText = 'padding:8px 15px;opacity:0.7;font-size:90%;white-space:normal;';
-      note.textContent = row.note;
-      menu.append(note);
-    }
+    if (row) this.fillChoices(menu, row);
+    else this.fillGroup(menu);
     panel.append(header, menu);
-    this.subKey = rowKey(row);
+    this.subKey = this.panelKey();
     this.sub?.remove();
     this.sub = panel;
     popup.append(panel);
@@ -308,8 +337,57 @@ export class YtSettingsMenu implements LyricsMenu {
     }
   }
 
+  /** The lyrics settings: one row per setting (opens its choices), then the buttons. */
+  private fillGroup(menu: HTMLElement): void {
+    for (const row of this.rows) {
+      const { item, label } = this.item('menuitem', row.label);
+      item.setAttribute('aria-haspopup', 'true');
+      item.setAttribute(ROW_ATTR + '-setting', row.id);
+      item.tabIndex = 0;
+      const content = this.doc.createElement('div');
+      content.className = SETTINGS_SELECTORS.menuItemContent.slice(1);
+      content.textContent = selectedLabel(row);
+      label.after(content);
+      this.activate(item, () => this.open([GROUP_ID, row.id]));
+      menu.append(item);
+    }
+    for (const b of this.buttons) {
+      const { item } = this.item('menuitem', b.label);
+      item.setAttribute(ROW_ATTR + '-button', b.id);
+      item.tabIndex = 0;
+      this.activate(item, () => b.run());
+      menu.append(item);
+    }
+  }
+
+  private fillChoices(menu: HTMLElement, row: MenuRow): void {
+    for (const o of row.options) {
+      const { item, label } = this.item('menuitemradio', o.label);
+      item.setAttribute('aria-checked', String(o.value === row.selected));
+      if (o.disabled) {
+        item.setAttribute('aria-disabled', 'true');
+        label.style.opacity = '0.5';
+      }
+      item.tabIndex = o.disabled ? -1 : 0;
+      this.activate(item, () => {
+        if (o.disabled) return;
+        // Back to the lyrics settings, so several can be changed in one visit.
+        this.open([GROUP_ID]);
+        row.select(o.value);
+      });
+      menu.append(item);
+    }
+    if (row.note) {
+      const note = this.doc.createElement('div');
+      note.className = 'ytp-menuitem-label';
+      note.style.cssText = 'padding:8px 15px;opacity:0.7;font-size:90%;white-space:normal;';
+      note.textContent = row.note;
+      menu.append(note);
+    }
+  }
+
   private closeSub(): void {
-    this.openId = null;
+    this.path = [];
     this.subKey = '';
     this.sub?.remove();
     this.sub = null;
@@ -333,6 +411,7 @@ export class YtmSettingsPopover implements LyricsMenu {
   readonly button: HTMLButtonElement;
   private readonly pop: HTMLElement;
   private rows: MenuRow[] = [];
+  private buttons: MenuButton[] = [];
 
   constructor(private readonly doc: Document = document) {
     this.button = doc.createElement('button');
@@ -365,8 +444,9 @@ export class YtmSettingsPopover implements LyricsMenu {
     return this.pop.style.display !== 'none';
   }
 
-  setRows(rows: MenuRow[]): void {
+  setRows(rows: MenuRow[], buttons: MenuButton[] = []): void {
     this.rows = rows;
+    this.buttons = buttons;
     if (this.isOpen) this.render();
   }
 
@@ -440,6 +520,18 @@ export class YtmSettingsPopover implements LyricsMenu {
         note.textContent = row.note;
         frag.append(note);
       }
+    }
+    for (const b of this.buttons) {
+      const btn = this.doc.createElement('button');
+      btn.type = 'button';
+      btn.setAttribute(ROW_ATTR, b.id);
+      btn.textContent = b.label;
+      btn.style.cssText = 'font:inherit;color:#fff;background:#333;border:1px solid rgba(255,255,255,.3);border-radius:4px;padding:4px 10px;margin:6px 0;cursor:pointer;width:100%;';
+      btn.addEventListener('click', () => {
+        b.run();
+        btn.blur();
+      });
+      frag.append(btn);
     }
     this.pop.replaceChildren(frag);
   }
