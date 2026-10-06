@@ -380,7 +380,8 @@ describe('LyricsView panel mode', () => {
     Object.defineProperty(sc, 'clientHeight', { value: 200, configurable: true });
     Object.defineProperty(pv.el.shadowRoot!.querySelector('.line')!, 'offsetTop', { value: 500 });
     resize!();
-    expect(sc.style.paddingBlock).toBe('100px');
+    expect(sc.classList.contains('synced')).toBe(true);
+    expect(sc.style.paddingBlock).toBe('');
     expect(scrollTo).toHaveBeenCalledWith({ top: 400, behavior: 'auto' });
   });
 
