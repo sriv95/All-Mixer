@@ -25,19 +25,21 @@ const v = (fn, arg) => page.evaluate(fn, arg);
 // HIDE_CANVAS=1: experiment, hide the overlay canvas (display:none) so the real <video> is not covered while it resumes.
 // SRI-137: first rVFC after each play(): delay (ms since play()) and mediaTime lag vs currentTime.
 await v((nh) => { window.__rv = []; window.__noHook = nh; }, !!process.env.NOHOOK);
-const play = () => v((hide) => { const e0 = document.querySelector('video'); const t0 = performance.now(); if (!window.__noHook) e0.requestVideoFrameCallback((n, md) => window.__rv.push({ delay: n - t0, lag: (e0.currentTime - md.mediaTime) * 1000 }));  if (hide) document.querySelectorAll('canvas.all-mixer-delayed-video').forEach((c) => (c.style.display = 'none')); return document.querySelector('video').play().catch(() => {}); }, !!process.env.HIDE_CANVAS);
+const play = () => v((hide) => { window.__playAt = performance.now(); const e0 = document.querySelector('video'); const t0 = performance.now(); if (!window.__noHook) e0.requestVideoFrameCallback((n, md) => window.__rv.push({ delay: n - t0, lag: (e0.currentTime - md.mediaTime) * 1000 }));  if (hide) document.querySelectorAll('canvas.all-mixer-delayed-video').forEach((c) => (c.style.display = 'none')); return document.querySelector('video').play().catch(() => {}); }, !!process.env.HIDE_CANVAS);
 const pause = () => v(() => document.querySelector('video').pause());
 const f = (x) => (x === undefined || x === null ? '   -  ' : x.toFixed(1).padStart(6));
 const rows = []; let seen = 0;
-// Collect transitions the probe finished since the last step, tagged with the step label.
-async function step(mode, label) {
-  logs.push(`=== ${mode} / ${label}`);
-  await sleep(2200); const p = await probe();
-  if (process.env.RAW) console.error(JSON.stringify({ mode, label, probeOn: p?.probeOn, audioAttached: p?.audioAttached, ctxState: p?.ctxState }));
-  if (!p) { rows.push({ mode, label, kind: '-', missing: ['avProbe absent (probe off)'] }); return; }
-  const all = p.transitions ?? []; const fresh = all.filter((t) => t.at > seen);
-  if (!fresh.length) rows.push({ mode, label, kind: '-', missing: [`no transition (probeOn=${p.probeOn} audioAttached=${p.audioAttached} ctx=${p.ctxState})`] });
-  for (const t of fresh) { seen = Math.max(seen, t.at); rows.push({ mode, label, kind: t.kind, off: t.kind === 'pause' ? t.pauseOffsetMs : t.playOffsetMs, pipe: t.pipelineMs, missing: t.missing, ctx: p.ctxState }); }
+// Transitions finish late (window up to delay + latency + 1 s), so steps only record the play() time (page performance.now(),
+// same clock as the probe's `at`); after each variant every finished transition is matched back to its step by time.
+const marks = [];
+async function step(mode, label) { logs.push(`=== ${mode} / ${label}`); await sleep(label.startsWith('play') || label.startsWith('seek') ? 4500 : 2200); if (label.startsWith('play') || label.startsWith('seek')) marks.push({ mode, label, at: await v(() => window.__playAt) }); }
+async function collect(mode) {
+  await sleep(5000); const p = await probe(); const all = p?.transitions ?? [];
+  for (const m of marks.filter((x) => x.mode === mode)) {
+    const hit = all.filter((t) => t.kind === 'play' && t.at >= m.at - 50 && t.at <= m.at + 400);
+    if (hit.length !== 1) { rows.push({ mode, label: m.label, kind: 'play', missing: [`${hit.length} play transitions matched`] }); continue; }
+    rows.push({ mode, label: m.label, kind: 'play', off: hit[0].playOffsetMs, pipe: hit[0].pipelineMs, missing: hit[0].missing, at: hit[0].at });
+  }
 }
 // One real gesture (neutral spot, not the player) so the AudioContext may start.
 await page.mouse.click(5, 450); await sleep(500);
@@ -65,6 +67,7 @@ for (const name of want) {
   await pause(); await sleep(1000);
   await v(() => { const e = document.querySelector('video'); e.currentTime = Math.max(0, e.currentTime + 30); }, 0); await sleep(2000);
   await play(); await step(mode, 'seek +30');
+  await collect(mode);
   rvStats.push([mode, await v(() => window.__rv)]);
 }
 await dbg(null);
