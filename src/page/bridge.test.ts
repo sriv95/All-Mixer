@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { BRIDGE_TAG } from '../shared/bridge';
-import { onPlayerTimedText, playerInfo, timedText } from './bridge';
+import { onPlayerTimedText, timedText } from './bridge';
 
 // bridge.ts keeps window.fetch as it was at import time, so install the mock first.
 const fetchMock = vi.hoisted(() => {
@@ -33,7 +33,7 @@ describe('onPlayerTimedText', () => {
     spy.mockRestore();
   });
 
-  it('stays quiet for requests without token or usable body, and for translated tracks', () => {
+  it('stays quiet for requests without token or usable body, and for machine-translated tracks', () => {
     const { spy, count } = events();
     onPlayerTimedText(new URL(`${base}&fmt=json3`), '');
     onPlayerTimedText(new URL(`${base}&fmt=json3&tlang=de`), '{"events":[]}');
@@ -43,59 +43,14 @@ describe('onPlayerTimedText', () => {
   });
 });
 
-describe('auto-translate', () => {
-  const setPlayer = (resp: unknown) => {
-    const el = document.createElement('div');
-    el.id = 'movie_player';
-    (el as unknown as Record<string, unknown>).getPlayerResponse = () => resp;
-    document.body.appendChild(el);
-    return () => el.remove();
-  };
-
-  it('reads translationLanguages and isTranslatable from the player response', () => {
-    const off = setPlayer({
-      videoDetails: { videoId: 'vid1', lengthSeconds: '10' },
-      captions: {
-        playerCaptionsTracklistRenderer: {
-          captionTracks: [{ baseUrl: 'https://www.youtube.com/api/timedtext?v=vid1&lang=en', languageCode: 'en', isTranslatable: true }],
-          translationLanguages: [
-            { languageCode: 'de', languageName: { simpleText: 'German' } },
-            { languageCode: 'fr', languageName: { runs: [{ text: 'Fr' }, { text: 'ench' }] } },
-          ],
-        },
-      },
-    });
-    const info = playerInfo('vid1')!;
-    expect(info.captionTracks[0]!.isTranslatable).toBe(true);
-    expect(info.translationLanguages).toEqual([
-      { languageCode: 'de', name: 'German' },
-      { languageCode: 'fr', name: 'French' },
-    ]);
-    off();
-  });
-
-  it('adds tlang to the fetch URL and caches with and without tlang separately', async () => {
-    const urls: string[] = [];
-    fetchMock.mockImplementation(async (u: unknown) => {
-      urls.push(String(u));
-      return new Response(urls.length === 1 ? 'plain' : 'translated');
-    });
-    const track = { baseUrl: 'https://www.youtube.com/api/timedtext?v=vidT&lang=en', languageCode: 'en' };
-    expect(await timedText('vidT', track)).toBe('plain');
-    expect(await timedText('vidT', track, 'de')).toBe('translated');
-    expect(await timedText('vidT', track)).toBe('plain');
-    expect(await timedText('vidT', track, 'de')).toBe('translated');
-    expect(urls).toHaveLength(2);
-    expect(new URL(urls[0]!).searchParams.has('tlang')).toBe(false);
-    expect(new URL(urls[1]!).searchParams.get('tlang')).toBe('de');
-  });
-
-  it('caches a player tlang response under its own key without a captions event', async () => {
+describe('machine-translated player requests', () => {
+  it('are not cached under the real track key', async () => {
     const { spy, count } = events();
     onPlayerTimedText(new URL(`${base.replace('vid1', 'vidC')}&fmt=json3&tlang=de`), '{"events":[1]}');
     expect(count()).toBe(0);
+    fetchMock.mockImplementation(async () => new Response('real'));
     const track = { baseUrl: 'https://www.youtube.com/api/timedtext?v=vidC&lang=en', languageCode: 'en' };
-    expect(await timedText('vidC', track, 'de')).toBe('{"events":[1]}');
+    expect(await timedText('vidC', track)).toBe('real');
     spy.mockRestore();
   });
 });

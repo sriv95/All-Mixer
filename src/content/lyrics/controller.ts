@@ -43,7 +43,7 @@ export interface LyricsSurface {
 
 export interface LyricsDeps {
   getPlayerInfo(videoId: string, signal: AbortSignal): Promise<PlayerInfo | null>;
-  getTimedText(videoId: string, track: CaptionTrack, tlang?: string): Promise<string | null>;
+  getTimedText(videoId: string, track: CaptionTrack): Promise<string | null>;
   fetchLyrics(track: TrackInfo): Promise<FoundLyrics | null>;
   /** Subscribe to "the player just loaded captions for this video" (user turned CC on). */
   onCaptionsAvailable?(cb: (videoId: string) => void): void;
@@ -55,11 +55,9 @@ export interface LyricsDeps {
 
 /** Fetched caption track. `index` points into `PlayerInfo.captionTracks`. */
 export interface FetchedCaptions extends CaptionTrackData {
-  /** Language of the cues (the auto-translate target for translated tracks). */
+  /** Language of the cues. */
   lang?: string;
   index?: number;
-  /** Auto-translate target language, when this is a machine translation of the track at `index`. */
-  tlang?: string;
 }
 
 export interface CaptionSet {
@@ -89,7 +87,7 @@ export interface SourceChoice {
 
 /** Automatic order: song captions, LRCLIB synced, other captions (ASR first), LRCLIB plain. */
 function autoSource(found: FoundLyrics | null, c: CaptionSet): SourceChoice {
-  // A fetched human track or translation in the picked / preferred language counts as song captions, and wins over the default manual track.
+  // A fetched human track in the picked / preferred language counts as song captions, and wins over the default manual track.
   const song = (c.display && !c.display.asr ? c.display : undefined) ?? c.manual;
   if (song) return { use: 'captions', caption: song };
   if (hasSynced(found)) return { use: 'lrclib-synced' };
@@ -162,7 +160,7 @@ export class LyricsController {
   /** Caption track the user picked for one video. */
   private pick: ({ videoId: string } & CaptionPick) | null = null;
   /** Language of the last picked track; preferred on later videos in this tab. */
-  private preferredLang: { lang: string; translated: boolean } | null = null;
+  private preferredLang: string | null = null;
   /** Lyrics source the user chose; kept for later videos in this tab. */
   private sourcePref: SourcePref = 'auto';
 
@@ -226,13 +224,13 @@ export class LyricsController {
     this.refresh();
   }
 
-  /** The user picked another caption track or an auto-translation (language menu). */
+  /** The user picked another caption track (language menu). */
   selectCaptionTrack(pick: CaptionPick): void {
     const base = this.base;
     const t = base?.info.captionTracks[pick.index];
     if (!base || !t || base.videoId !== this.videoId) return;
-    this.pick = { videoId: base.videoId, index: pick.index, ...(pick.tlang ? { tlang: pick.tlang } : {}) };
-    this.preferredLang = { lang: pick.tlang ?? t.languageCode, translated: !!pick.tlang };
+    this.pick = { videoId: base.videoId, index: pick.index };
+    this.preferredLang = t.languageCode;
     void this.realign(base.videoId, true);
   }
 
@@ -327,22 +325,18 @@ export class LyricsController {
     };
     const shown = choice.use === 'captions' ? choice.caption : undefined;
     if (shown?.index === undefined) return { kind: 'ready', lyrics, track, sources };
-    const { asr, manual } = chooseCaptionTracks(info.captionTracks, info.defaultCaptionLang);
-    const options = captionOptions(info.captionTracks, info.translationLanguages, manual ?? asr);
+    const options = captionOptions(info.captionTracks);
     if (options.length < 2) return { kind: 'ready', lyrics, track, sources };
-    return { kind: 'ready', lyrics, track, sources, captions: { options, selected: { index: shown.index, ...(shown.tlang ? { tlang: shown.tlang } : {}) } } };
+    return { kind: 'ready', lyrics, track, sources, captions: { options, selected: { index: shown.index } } };
   }
 
-  /** Track (and auto-translation) to show instead of the default choice: this video's pick, else the tab's preferred language. */
-  private displayPick(videoId: string, tracks: readonly CaptionTrack[], info: PlayerInfo, sourceIdx: number): CaptionPick | null {
+  /** Track to show instead of the default choice: this video's pick, else the tab's preferred language. */
+  private displayPick(videoId: string, tracks: readonly CaptionTrack[], ): CaptionPick | null {
     if (this.pick?.videoId === videoId) return this.pick;
-    const lang = this.preferredLang?.lang;
+    const lang = this.preferredLang;
     if (!lang) return null;
     const native = nativeIndex(tracks, lang);
-    if (native >= 0) return { index: native };
-    const src = tracks[sourceIdx];
-    if (src?.isTranslatable && info.translationLanguages?.some((l) => l.languageCode === lang)) return { index: sourceIdx, tlang: lang };
-    return null;
+    return native >= 0 ? { index: native } : null;
   }
 
   private async captions(videoId: string, info: PlayerInfo): Promise<CaptionSet> {
@@ -350,21 +344,21 @@ export class LyricsController {
     const choice = chooseCaptionTracks(tracks, info.defaultCaptionLang);
     const asrIdx = choice.asr ? tracks.indexOf(choice.asr) : -1;
     const manualIdx = choice.manual ? tracks.indexOf(choice.manual) : -1;
-    const want = this.displayPick(videoId, tracks, info, manualIdx >= 0 ? manualIdx : asrIdx);
+    const want = this.displayPick(videoId, tracks);
     // Only foreign-language subtitles (no ASR track, no manual track in the spoken language): the default one, else the first.
     const otherIdx = !want && asrIdx < 0 && manualIdx < 0 && tracks.length > 0 ? Math.max(0, nativeIndex(tracks, info.defaultCaptionLang)) : -1;
-    const get = async (i: number, tlang?: string): Promise<FetchedCaptions | undefined> => {
+    const get = async (i: number): Promise<FetchedCaptions | undefined> => {
       const t = tracks[i];
       if (!t) return undefined;
-      const raw = await this.deps.getTimedText(videoId, t, tlang).catch(() => null);
+      const raw = await this.deps.getTimedText(videoId, t).catch(() => null);
       const cues = raw ? parseJson3(raw) : [];
-      return cues.length ? { cues, asr: t.kind === 'asr', lang: tlang ?? t.languageCode, index: i, ...(tlang ? { tlang } : {}) } : undefined;
+      return cues.length ? { cues, asr: t.kind === 'asr', lang: t.languageCode, index: i } : undefined;
     };
-    const plain = !!want && !want.tlang && (want.index === asrIdx || want.index === manualIdx);
+    const plain = !!want && (want.index === asrIdx || want.index === manualIdx);
     const [asr, manual, extra, other] = await Promise.all([
       get(asrIdx),
       get(manualIdx),
-      want && !plain ? get(want.index, want.tlang) : undefined,
+      want && !plain ? get(want.index) : undefined,
       get(otherIdx),
     ]);
     const display = !want ? undefined : plain ? (want.index === asrIdx ? asr : manual) : extra;

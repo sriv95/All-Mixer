@@ -185,38 +185,35 @@ describe('LyricsView', () => {
     expect(q('.footer').textContent).toBe('Lyrics: YouTube captions');
   });
 
-  it('shows a caption language menu with an auto-translate group and reports the pick', () => {
+  it('shows a caption language menu and reports the pick', () => {
     const onCaptionTrack = vi.fn();
     const v = new LyricsView({ onSeek, onCaptionTrack });
     document.body.append(v.el);
     const options = [
-      { index: 0, label: 'English', group: 'track' as const },
-      { index: 1, label: 'Spanish', group: 'track' as const },
-      { index: 1, tlang: 'de', label: 'German (auto-translated)', group: 'translate' as const },
+      { index: 0, label: 'English' },
+      { index: 1, label: 'Spanish (auto-generated)' },
+      { index: 2, label: 'German' },
     ];
     v.setLyrics({ ...synced(), source: 'youtube-captions' }, { options, selected: { index: 1 } });
     const root = v.el.shadowRoot!;
     const sel = root.querySelector<HTMLSelectElement>('select.lang')!;
-    expect(sel.selectedOptions[0].textContent).toBe('Spanish');
-    expect(sel.querySelector('optgroup')?.label).toBe('Auto-translate');
-    expect(sel.querySelectorAll('optgroup option')).toHaveLength(1);
+    expect(sel.selectedOptions[0].textContent).toBe('Spanish (auto-generated)');
+    expect(sel.querySelector('optgroup')).toBeNull();
+    expect(sel.options).toHaveLength(3);
     sel.focus();
     expect(root.activeElement).toBe(sel);
     sel.value = '2';
     sel.dispatchEvent(new Event('change'));
     expect(onCaptionTrack).toHaveBeenCalledTimes(1);
-    expect(onCaptionTrack).toHaveBeenLastCalledWith({ index: 1, tlang: 'de' });
+    expect(onCaptionTrack).toHaveBeenLastCalledWith({ index: 2 });
     expect(root.activeElement).not.toBe(sel);
     sel.value = '0';
     sel.dispatchEvent(new Event('change'));
     expect(onCaptionTrack).toHaveBeenLastCalledWith({ index: 0 });
-    // The translated pick is the selected entry.
-    v.setLyrics({ ...synced(), source: 'youtube-captions' }, { options, selected: { index: 1, tlang: 'de' } });
-    expect(root.querySelector<HTMLSelectElement>('select.lang')!.selectedOptions[0].textContent).toBe('German (auto-translated)');
     // A new video's state replaces the select: its value follows the new selection, never the previous one.
-    const next = [options[0], { index: 0, tlang: 'fr', label: 'French (auto-translated)', group: 'translate' as const }];
-    v.setLyrics({ ...synced(), source: 'youtube-captions' }, { options: next, selected: { index: 0, tlang: 'fr' } });
-    expect(root.querySelector<HTMLSelectElement>('select.lang')!.selectedOptions[0].textContent).toBe('French (auto-translated)');
+    const next = [options[0], { index: 1, label: 'French' }];
+    v.setLyrics({ ...synced(), source: 'youtube-captions' }, { options: next, selected: { index: 1 } });
+    expect(root.querySelector<HTMLSelectElement>('select.lang')!.selectedOptions[0].textContent).toBe('French');
     v.setLyrics({ ...synced(), source: 'youtube-captions' }, { options: next, selected: { index: 0 } });
     expect(root.querySelector<HTMLSelectElement>('select.lang')!.selectedOptions[0].textContent).toBe('English');
     // One option: nothing to pick.

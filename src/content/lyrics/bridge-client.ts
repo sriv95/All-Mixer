@@ -45,8 +45,8 @@ export async function getPlayerInfo(videoId: string, signal: AbortSignal, waitMs
   return null;
 }
 
-export async function getTimedText(videoId: string, track: CaptionTrack, tlang?: string): Promise<string | null> {
-  const data = await ask({ kind: 'timedtext', videoId, track, tlang }, 10000);
+export async function getTimedText(videoId: string, track: CaptionTrack): Promise<string | null> {
+  const data = await ask({ kind: 'timedtext', videoId, track }, 10000);
   return typeof data === 'string' ? data : null;
 }
 
