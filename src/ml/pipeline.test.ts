@@ -117,4 +117,63 @@ describe('MlPipeline', () => {
       expect(order.slice(before).every((s) => s === 'spl')).toBe(true);
     }
   });
+
+  describe('Spleeter miss (SRI-130)', () => {
+    const half = (v: Float32Array): Float32Array => v.map((x) => 0.5 * x);
+    const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+    const outs = () => ({ vk: new Float32Array(N), v: new Float32Array(N) });
+    /** Blocks [from, to) through one pipeline; `catchUp` only when asked. */
+    async function blocks(p: MlPipeline, models: Models, from: number, to: number, o: ReturnType<typeof outs>, catchUp: boolean) {
+      const [a, b, c, d] = [0, 1, 2, 3].map(() => new Float32Array(ML_BLOCK));
+      for (let k = from; k < to; k++) {
+        a.set(L.subarray(k * ML_BLOCK, (k + 1) * ML_BLOCK));
+        b.set(R.subarray(k * ML_BLOCK, (k + 1) * ML_BLOCK));
+        await p.process(a, b, models, a, b, c, d);
+        const start = k * ML_BLOCK - ML_RESULT_OFFSET;
+        for (let i = 0; i < ML_BLOCK; i++) if (start + i >= 0) { o.vk[start + i] = a[i]; o.v[start + i] = c[i]; }
+        if (catchUp) await p.catchUp(models.spleeter);
+      }
+    }
+
+    it('(a) Spleeter that does not answer in time: blocks reply on time, Vk = x − V_mdx exactly as mask 0, vocal unchanged', async () => {
+      const never = () => new Promise<Float32Array>(() => {});
+      const ref = await run(L, R, { mdx: half, spleeter: zero });
+      const p = new MlPipeline(undefined, 5);
+      const o = outs();
+      const t0 = performance.now();
+      await blocks(p, { mdx: half, spleeter: never }, 0, NB, o, false);
+      expect(performance.now() - t0).toBeLessThan(NB * 5 + 400); // one 5 ms wait per block, not forever
+      expect(p.splMisses).toBeGreaterThan(0);
+      for (let n = 0; n < END; n++) { expect(o.vk[n]).toBe(ref.vk[n]); expect(o.v[n]).toBe(ref.v[n]); }
+      expect(maxDiff(o.v, L, 0, END, 0.5)).toBeLessThan(5e-5); // MDX vocal unchanged
+      expect(maxDiff(o.vk, L, 4096, END, 0.5)).toBeLessThan(2e-4); // x − V = 0.5x, ungated
+    });
+
+    it('(b) after the late masks arrive, later frames are gated again', async () => {
+      let hold: (() => void) | null = null;
+      let late = true;
+      const spl: Models['spleeter'] = (v) => (late ? new Promise<Float32Array>((r) => (hold = () => r(v.slice()))) : Promise.resolve(v.slice()));
+      const models: Models = { mdx: zero, spleeter: spl };
+      const p = new MlPipeline(undefined, 5);
+      const o = outs();
+      await blocks(p, models, 0, 3, o, false); // step 0 hangs: masks missing
+      expect(p.splMisses).toBeGreaterThan(0);
+      late = false;
+      hold!(); // the late step finishes, the rest follows (catch-up, in order)
+      await p.catchUp(models.spleeter);
+      await blocks(p, models, 3, NB, o, true);
+      // early samples ungated (Vk = 0 with mdx = 0), late ones gated (Vk = g·x)
+      expect(maxDiff(o.vk, new Float32Array(N), 4096, 2 * ML_BLOCK - ML_RESULT_OFFSET)).toBeLessThan(2e-5);
+      expect(maxDiff(o.vk, L, 5 * ML_BLOCK, END, KARAOKE_G)).toBeLessThan(2e-4);
+    });
+
+    it('(c) normal path (masks in time) is bit-identical to the unbounded wait: no misses', async () => {
+      const a = await run(L, R, { mdx: half, spleeter: identity });
+      const p = new MlPipeline(undefined, 50);
+      const o = outs();
+      await blocks(p, { mdx: half, spleeter: (v) => sleep(0).then(() => v.slice()) }, 0, NB, o, true);
+      expect(p.splMisses).toBe(0);
+      for (let n = 0; n < END; n++) { expect(o.vk[n]).toBe(a.vk[n]); expect(o.v[n]).toBe(a.v[n]); }
+    });
+  });
 });
