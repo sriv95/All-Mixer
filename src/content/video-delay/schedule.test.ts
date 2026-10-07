@@ -362,3 +362,125 @@ describe.each([500, 2000])('PresentedClock at D = %i ms', (D) => {
     expect(stalled).toBeLessThan(2.1);
   });
 });
+
+describe('hold / release (pause)', () => {
+  const mk = () => {
+    const released: number[] = [];
+    return { released, q: new FrameQueue<number>((n) => released.push(n)) };
+  };
+  const f = (due: number, img: number, still = false) => ({ due, mediaTime: img, img, still });
+
+  it('queue: held take returns null and keeps every frame', () => {
+    const { q, released } = mk();
+    q.push(f(100, 1), 0);
+    q.push(f(110, 2), 0);
+    q.hold(50);
+    expect(q.held).toBe(true);
+    expect(q.take(1000, 16)).toBeNull();
+    expect(q.size).toBe(2);
+    expect(released).toEqual([]);
+    expect(q.skipped).toBe(0);
+  });
+
+  it('queue: release shifts all due by the held time and keeps order', () => {
+    const { q } = mk();
+    q.push(f(100, 1), 0);
+    q.push(f(110, 2), 0);
+    q.hold(50);
+    q.hold(60); // idempotent: first heldAt stays
+    expect(q.release(550)).toBe(500);
+    expect(q.held).toBe(false);
+    expect(q.release(600)).toBe(0);
+    expect(q.take(590, 16)).toBeNull();
+    expect(q.take(600, 16)?.img).toBe(1);
+    expect(q.take(610, 16)?.img).toBe(2);
+  });
+
+  it('queue: a still frame is taken while held, frames behind it stay', () => {
+    const { q } = mk();
+    q.hold(0);
+    q.push(f(5, 1, true), 0);
+    q.push(f(9000, 2), 0);
+    expect(q.take(10, 16)?.img).toBe(1);
+    expect(q.take(10, 16)).toBeNull();
+    expect(q.size).toBe(1);
+  });
+
+  it('queue: clear keeps the hold, rebase moves heldAt', () => {
+    const { q } = mk();
+    q.push(f(1, 1), 0);
+    q.hold(10);
+    q.clear();
+    expect(q.held).toBe(true);
+    q.rebase(100);
+    q.push(f(200, 2), 100);
+    expect(q.release(300)).toBe(200);
+    expect(q.take(400, 16)?.img).toBe(2);
+    q.rebase(5); // not held: no-op
+    expect(q.held).toBe(false);
+  });
+
+  it('queue: push while held does not trim as overdue', () => {
+    const { q, released } = mk();
+    q.setCap(4);
+    q.setCap(2); // hard cap stays 4, so only overdue frames may be trimmed
+    q.push(f(0, 1), 0);
+    q.push(f(1, 2), 0);
+    q.hold(1);
+    q.push(f(2, 3), 5000); // `now` far past due, but frozen at 1
+    expect(q.size).toBe(3);
+    expect(released).toEqual([]);
+  });
+
+  it('schedule: a pending step moves by the pause, a step added meanwhile does not', () => {
+    const s = new DelaySchedule(100);
+    s.set(500, 1000);
+    s.hold(200);
+    s.set(300, 1100); // added during the pause: keeps its time
+    s.release(500);
+    expect(s.at(1099)).toBe(100);
+    expect(s.at(1100)).toBe(300);
+    expect(s.at(1500)).toBe(500);
+
+    const t = new DelaySchedule(100);
+    t.set(500, 1000);
+    t.hold(200);
+    t.set(50, 1200); // keeps its time, ends up before the shifted step
+    t.release(500);
+    expect(t.at(1200)).toBe(50);
+    expect(t.at(1499)).toBe(50);
+    expect(t.at(1500)).toBe(500); // the shifted change is not lost
+    expect(t.target).toBe(500);
+  });
+
+  it('schedule: steps already in effect are not shifted', () => {
+    const s = new DelaySchedule(100);
+    s.set(500, 100);
+    s.hold(200);
+    s.release(500);
+    expect(s.at(150)).toBe(500);
+  });
+
+  it('clock: frozen while held, continues from the held value after release', () => {
+    const c = new PresentedClock();
+    c.show(10, 0, 1);
+    c.pending(null);
+    expect(c.at(30)).toBeCloseTo(10.03);
+    c.hold(40);
+    expect(c.at(40)).toBeCloseTo(10.04);
+    expect(c.at(5000)).toBeCloseTo(10.04);
+    c.release(1000);
+    expect(c.at(1040)).toBeCloseTo(10.04);
+    expect(c.at(1060)).toBeCloseTo(10.05); // capped by MAX_EXTRAPOLATE_S, no jump
+  });
+
+  it('clock: a frame shown while held starts counting at release', () => {
+    const c = new PresentedClock();
+    c.hold(100);
+    c.show(20, 150, 1);
+    expect(c.at(200)).toBe(20);
+    c.release(300);
+    expect(c.at(400)).toBe(20);
+    expect(c.at(420)).toBeCloseTo(20.02);
+  });
+});

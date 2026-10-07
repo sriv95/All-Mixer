@@ -31,6 +31,7 @@ export function overlayDelayMs(mode: Mode, totalLatencyMs: number): number {
  */
 export class DelaySchedule {
   private steps: { at: number; delay: number }[];
+  private held: { at: number; delay: number }[] = [];
 
   constructor(initialMs = 0) {
     this.steps = [{ at: -Infinity, delay: initialMs }];
@@ -41,6 +42,21 @@ export class DelaySchedule {
     this.steps = this.steps.filter((s) => s.at < atMs);
     if (this.steps.length === 0) this.steps.push({ at: -Infinity, delay: delayMs });
     else this.steps.push({ at: atMs, delay: delayMs });
+  }
+
+  /** Pause: remember the changes still pending at `now`; `release` moves them by the pause length. */
+  hold(now: number): void {
+    this.held = this.steps.filter((s) => s.at > now);
+  }
+
+  /** Resume after a pause of `shiftMs`: pending changes were timed on the frozen audio clock, so they move too. */
+  release(shiftMs: number): void {
+    const held = this.held;
+    this.held = [];
+    if (!shiftMs || !held.length) return;
+    for (const s of this.steps) if (held.includes(s)) s.at += shiftMs;
+    // Array.prototype.sort is stable.
+    this.steps.sort((a, b) => a.at - b.at);
   }
 
   /** Delay that applies to a frame the <video> would show at time `t`. */
@@ -85,9 +101,23 @@ const DISCONTINUITY_S = 1;
 export class PresentedClock {
   private frame: { mediaTime: number; shownAt: number; rate: number } | null = null;
   private next: number | null = null;
+  private heldAt: number | null = null;
 
   show(mediaTime: number, shownAt: number, rate: number): void {
-    this.frame = { mediaTime, shownAt, rate };
+    // Shown while frozen (a still after a seek): time starts at release.
+    this.frame = { mediaTime, shownAt: this.heldAt ?? shownAt, rate };
+  }
+
+  /** Freeze: `at` does not advance past `now`. */
+  hold(now: number): void {
+    if (this.heldAt === null) this.heldAt = now;
+  }
+
+  /** Resume after `shiftMs` frozen; continues from the held value. */
+  release(shiftMs: number): void {
+    if (this.heldAt === null) return;
+    this.heldAt = null;
+    if (this.frame) this.frame.shownAt += shiftMs;
   }
 
   /** Media time of the oldest queued frame, or null when the queue is empty. */
@@ -98,6 +128,7 @@ export class PresentedClock {
   at(now: number): number | null {
     const f = this.frame;
     if (!f) return null;
+    if (this.heldAt !== null) now = Math.min(now, this.heldAt);
     const t = f.mediaTime + (Math.max(0, now - f.shownAt) / 1000) * f.rate;
     const n = this.next;
     // A queued frame behind or far ahead of the shown one is a seek: treat the queue as empty until it is drawn.
@@ -108,6 +139,7 @@ export class PresentedClock {
   reset(): void {
     this.frame = null;
     this.next = null;
+    this.heldAt = null;
   }
 }
 
@@ -168,11 +200,13 @@ export interface QueuedFrame<T> {
   mediaTime: number;
   /** Schedule delay that applied when the frame was captured (for stats). */
   delay?: number;
+  /** First picture after a seek: shown at the next rAF, also while held. */
+  still?: boolean;
   img: T;
 }
 
 /**
- * Captured frames waiting for their due time, oldest first. `release` frees a
+ * Captured frames waiting for their due time, oldest first. the `dispose` callback frees a
  * frame's GPU memory (ImageBitmap.close) once it is dropped or replaced.
  */
 /** A queued frame this far past due means rAF is not running (hidden tab). */
@@ -181,9 +215,10 @@ const OVERDUE_MS = 100;
 export class FrameQueue<T> {
   private frames: QueuedFrame<T>[] = [];
   skipped = 0;
+  private heldAt: number | null = null;
 
   constructor(
-    private readonly release: (img: T) => void,
+    private readonly dispose: (img: T) => void,
     /** Safety cap (set at runtime from `captureSize`). More means rAF stopped (hidden tab). */
     private cap = 120,
   ) {
@@ -217,14 +252,38 @@ export class FrameQueue<T> {
     return this.frames.length ? this.frames[0].mediaTime : null;
   }
 
+  get held(): boolean {
+    return this.heldAt !== null;
+  }
+
+  /** Freeze (pause): `take` hands out nothing but a `still` frame until `release`. */
+  hold(now: number): void {
+    if (this.heldAt === null) this.heldAt = now;
+  }
+
+  /** Resume: every queued frame moves later by the time spent held. Returns that shift. */
+  release(now: number): number {
+    if (this.heldAt === null) return 0;
+    const shift = now - this.heldAt;
+    this.heldAt = null;
+    for (const f of this.frames) f.due += shift;
+    return shift;
+  }
+
+  /** Seek while held: the pause length counts from `now` on. */
+  rebase(now: number): void {
+    if (this.heldAt !== null) this.heldAt = now;
+  }
+
   push(frame: QueuedFrame<T>, now: number): void {
+    if (this.heldAt !== null) now = this.heldAt;
     // Captures resolve in order in practice; insert sorted to be safe.
     let i = this.frames.length;
     while (i > 0 && this.frames[i - 1].due > frame.due) i--;
     this.frames.splice(i, 0, frame);
     // Over the cap: trim only overdue frames (rAF stopped), or anything past the hard cap.
     while (this.frames.length > this.cap && (this.frames[0].due < now - OVERDUE_MS || this.frames.length > this.hardCap)) {
-      this.release(this.frames.shift()!.img);
+      this.dispose(this.frames.shift()!.img);
     }
     if (this.frames.length <= this.cap) this.hardCap = this.cap;
   }
@@ -235,11 +294,15 @@ export class FrameQueue<T> {
    * Returns null when nothing is due yet (keep showing the last picture).
    */
   take(now: number, vsyncMs: number): QueuedFrame<T> | null {
+    if (this.heldAt !== null) {
+      if (!this.frames[0]?.still) return null;
+      return this.frames.shift()!;
+    }
     const limit = now + vsyncMs / 2;
     let pick = -1;
     while (pick + 1 < this.frames.length && this.frames[pick + 1].due <= limit) pick++;
     if (pick < 0) return null;
-    for (let i = 0; i < pick; i++) this.release(this.frames[i].img);
+    for (let i = 0; i < pick; i++) this.dispose(this.frames[i].img);
     this.skipped += pick;
     const frame = this.frames[pick];
     this.frames = this.frames.slice(pick + 1);
@@ -247,7 +310,7 @@ export class FrameQueue<T> {
   }
 
   clear(): void {
-    for (const f of this.frames) this.release(f.img);
+    for (const f of this.frames) this.dispose(f.img);
     this.frames = [];
   }
 }
