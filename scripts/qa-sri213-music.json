@@ -1,0 +1,116 @@
+{
+ "results": [
+  {
+   "scen": "layout",
+   "label": "music-video-mode pause #1",
+   "kind": "pause",
+   "outBefore": 0.0717,
+   "outOff": 37,
+   "outOn": 9,
+   "elOff": 13,
+   "elOn": null,
+   "silStart": 37,
+   "silEnd": null,
+   "paused": true,
+   "canvas": "block",
+   "t": 252.5,
+   "rate": 1,
+   "quietBefore": false,
+   "reason": "auto",
+   "choice": {
+    "state": "on"
+   },
+   "traces": [
+    {
+     "kind": "hold",
+     "at": 8,
+     "n": 3,
+     "on": true,
+     "ctxTime": 393.0093424036281,
+     "workletOn": true
+    },
+    {
+     "kind": "hold",
+     "at": 9,
+     "n": 1,
+     "queue": 53,
+     "delay": 2000.1451247165533,
+     "shown": 1,
+     "currentTime": 252.500464
+    }
+   ],
+   "ovOn": null,
+   "ovOff": -14,
+   "vidOn": null,
+   "vidOff": -14,
+   "lyric": {
+    "before": null,
+    "at600": null,
+    "at1500": null,
+    "at2600": null,
+    "after": null
+   },
+   "ad": true,
+   "ytError": false,
+   "ov": "on",
+   "delayMs": 2000.1451247165533,
+   "sep": "on",
+   "eng": "ml",
+   "vdelay": 2000.1451247165533,
+   "audio": "active",
+   "AO": null
+  },
+  {
+   "scen": "layout",
+   "label": "music-video-mode play #1",
+   "kind": "play",
+   "outBefore": 0,
+   "outOff": null,
+   "outOn": 17,
+   "elOff": -14,
+   "elOn": 58,
+   "silStart": null,
+   "silEnd": null,
+   "paused": false,
+   "canvas": "block",
+   "t": 256.1,
+   "rate": 1,
+   "quietBefore": true,
+   "elQuiet": false,
+   "reason": "auto",
+   "choice": {
+    "state": "on"
+   },
+   "traces": [
+    {
+     "kind": "hold",
+     "at": 9,
+     "n": 1,
+     "on": false,
+     "ctxTime": 581.6366439909297,
+     "workletOn": true
+    }
+   ],
+   "ovOn": 52,
+   "ovOff": 1986,
+   "vidOn": 102,
+   "vidOff": null,
+   "lyric": {
+    "before": null,
+    "at600": null,
+    "at1500": null,
+    "at2600": null,
+    "after": null
+   },
+   "ad": true,
+   "ytError": false,
+   "ov": "on",
+   "delayMs": 2000.1451247165533,
+   "sep": "on",
+   "eng": "ml",
+   "vdelay": 2000.1451247165533,
+   "audio": "active",
+   "AO": -35
+  }
+ ]
+}
