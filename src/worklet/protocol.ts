@@ -43,6 +43,10 @@ export type ToWorklet =
   | { type: 'active'; on: boolean; engine?: MlEngine; reason?: MlReason }
   /** Drop buffered audio, e.g. after a seek. */
   | { type: 'flush' }
+  /** Pause: fade to silence and freeze the delay line (nothing read, nothing written, no input to the ML stream). */
+  | { type: 'hold' }
+  /** Play: fade back in and resume from the frozen position. */
+  | { type: 'release' }
   /** Direct channel to the ML worker (blocks out, vocal blocks back). */
   | { type: 'ml-port'; port: MessagePort }
   /** Switch engine while running. The worklet answers with an `engine` message. */

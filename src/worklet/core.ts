@@ -20,6 +20,12 @@
 // `onEngine` reports the context time of the first input sample heard with the new delay;
 // the video overlay steps there too.
 //
+// Hold (pause): the delay line freezes. The first held quantum fades the output out reading the ring
+// at `pos`; `pos` then stays put, input is neither written nor fed to the ML stream, and the output is
+// silent. Release resumes at the same `pos`, so the pending audio comes out unchanged. In the
+// delay-0 case (bypass, or the original-mix part of `to-ml`) nothing is pending: the fade quantum plays
+// live input and `pos` advances as usual.
+//
 // process() allocates nothing (engine-switch messages aside, which are rare). onBlock (port
 // message handler) creates two typed-array views per returned block; that runs between quanta,
 // not inside process(), and the transferred ArrayBuffer is a new object anyway.
@@ -93,6 +99,8 @@ export class SeparatorCore {
   private switchPos = 0;
   /** Output envelope at the end of the last quantum (0 = silent). */
   private env = 1;
+  /** Paused: delay line frozen (see header). */
+  private held = false;
   private wantMl: MlReason | null = null;
   private wantBypass: MlReason | null = null;
 
@@ -146,6 +154,14 @@ export class SeparatorCore {
     else this.stopStream();
   }
 
+  setHeld(on: boolean): void {
+    this.held = on;
+  }
+
+  get isHeld(): boolean {
+    return this.held;
+  }
+
   /** Drop everything buffered (seek). The ML stream restarts from here. */
   flush(): void {
     this.reset();
@@ -197,26 +213,44 @@ export class SeparatorCore {
     if (this.wantMl !== null) this.toMl(this.wantMl);
     if (this.wantBypass !== null) this.toBypass(this.wantBypass);
 
+    const held = this.held;
+    if (held && this.env === 0) {
+      // Frozen and silent: no read, no write, no feed, `pos` stays.
+      vocL.fill(0);
+      vocR.fill(0);
+      insL.fill(0);
+      insR.fill(0);
+      byp.fill(0);
+      return;
+    }
+    // Fade-out quantum with audio pending in the ring: read it, consume nothing.
+    const freeze = held && this.delay > 0;
+
     // 1. Ring: dry input.
-    for (let i = 0; i < QUANTUM; i++) {
-      const j = (pos + i) & MASK;
-      this.dryL[j] = inL[i];
-      this.dryR[j] = inR[i];
+    if (!freeze) {
+      for (let i = 0; i < QUANTUM; i++) {
+        const j = (pos + i) & MASK;
+        this.dryL[j] = inL[i];
+        this.dryR[j] = inR[i];
+      }
     }
 
     // 2. ML stream: fill the current block, send it when full.
-    if (this.streaming) this.feed(inL, inR);
+    if (this.streaming && !freeze) this.feed(inL, inR);
 
     // 3. Envelope target and ML weight for this quantum.
-    let target = 1;
-    if (this.phase === 'to-ml') {
+    let target = held ? 0 : 1;
+    if (held) {
+      // target stays 0
+    } else if (this.phase === 'to-ml') {
       // The original mix fades out on input P − QUANTUM … P − 1, then silence until ML reaches P.
       if (pos >= this.switchPos - QUANTUM) target = 0;
     } else if (this.phase === 'to-bypass') {
       target = 0;
     }
     this.w0 = this.w1 = 0;
-    if (this.engine === 'ml') this.chooseSource(pos - ML_LATENCY_SAMPLES);
+    if (freeze) this.w0 = this.w1 = this.useMl ? 1 : 0;
+    else if (this.engine === 'ml') this.chooseSource(pos - ML_LATENCY_SAMPLES);
 
     // 4. Output: v = w·vocal, i = dry − w·soft vocal, b = 1 − w.
     const r0 = pos - this.delay;
@@ -236,6 +270,8 @@ export class SeparatorCore {
       byp[i] = 1 - w;
     }
     this.env = target;
+
+    if (freeze) return;
 
     // 5. Engine changes take effect from the next quantum.
     if (this.phase === 'to-ml' && pos + QUANTUM === this.switchPos + ML_LATENCY_SAMPLES) {
@@ -411,7 +447,7 @@ export class SeparatorCore {
     this.mlR.fill(0);
     this.mlSL.fill(0);
     this.mlSR.fill(0);
-    this.env = 1;
+    this.env = this.held ? 0 : 1;
   }
 }
 
