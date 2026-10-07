@@ -1,0 +1,2 @@
+// SRI-235 V1: overlay canvas never covers the video (capture + draw still run).
+;(() => { const add = () => { const s = document.createElement('style'); s.textContent = 'canvas.all-mixer-delayed-video{visibility:hidden !important}'; (document.head || document.documentElement).appendChild(s); }; if (document.head) add(); else new MutationObserver((_, o) => { if (document.head) { o.disconnect(); add(); } }).observe(document.documentElement, { childList: true }); })();
