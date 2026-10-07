@@ -1,0 +1,17 @@
+2026-10-07T07:11:22.631Z start
+2026-10-07T07:11:28.149Z pause3 #1
+2026-10-07T07:11:29.674Z play-after-3s #1
+2026-10-07T07:11:38.689Z pause3 #2
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+worker.evaluate: Target page, context or browser has been closed
+    at tabId (/Users/sriv/.paperclip/instances/default/projects/ff016047-201c-4ddd-afe4-919b8f7ce38c/770ffeee-21cf-4963-b438-a115c8cbb6ea/_default/scripts/qa-sri202.mjs:20:24)
+    at status (/Users/sriv/.paperclip/instances/default/projects/ff016047-201c-4ddd-afe4-919b8f7ce38c/770ffeee-21cf-4963-b438-a115c8cbb6ea/_default/scripts/qa-sri202.mjs:21:47)
+    at snap (/Users/sriv/.paperclip/instances/default/projects/ff016047-201c-4ddd-afe4-919b8f7ce38c/770ffeee-21cf-4963-b438-a115c8cbb6ea/_default/scripts/qa-sri202.mjs:34:40)
+    at async file:///Users/sriv/.paperclip/instances/default/projects/ff016047-201c-4ddd-afe4-919b8f7ce38c/770ffeee-21cf-4963-b438-a115c8cbb6ea/_default/scripts/qa-sri202.mjs:44:69 {
+  log: []
+}
+
+Node.js v24.21.0

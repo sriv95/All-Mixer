@@ -1,0 +1,6 @@
+none 1 {"t":4.5,"paused":true,"err":false,"ad":false} {"t":10.6,"paused":false,"err":false,"ad":false}
+none 2 {"t":10.6,"paused":true,"err":false,"ad":false} {"t":16.6,"paused":false,"err":false,"ad":false}
+none 3 {"t":16.6,"paused":true,"err":false,"ad":false} {"t":22.6,"paused":false,"err":false,"ad":false}
+none 4 {"t":22.6,"paused":true,"err":false,"ad":false} {"t":28.6,"paused":false,"err":false,"ad":false}
+none 5 {"t":28.6,"paused":true,"err":false,"ad":false} {"t":0,"paused":true,"err":true,"ad":false}
+ml 1 {"t":35.3,"paused":true,"err":false,"ad":false} {"t":0,"paused":true,"err":true,"ad":false}
