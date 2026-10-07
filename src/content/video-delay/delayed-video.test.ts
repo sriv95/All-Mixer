@@ -238,5 +238,47 @@ describe('DelayedVideo', () => {
       dv.destroy();
       for (const e of ['pause', 'ended', 'playing']) expect(removeSpy).toHaveBeenCalledWith(e, expect.any(Function));
     });
+
+    describe('delay change while paused (SRI-224)', () => {
+      it('raised delay applies from the first frame after play and a still covers the video', async () => {
+        const dv = mk();
+        paused = true;
+        video.dispatchEvent(new Event('pause'));
+        dv.setDelay(2000, now + 2000); // graph emits the new latency ~D later
+        await flush();
+        rafCb!(1016); // still drawn while held
+        expect(dv.stats.drawn).toBe(1);
+        expect(canvas()!.style.display).toBe('');
+        now = 5000;
+        paused = false;
+        video.dispatchEvent(new Event('playing'));
+        frame(5100); // first frame after play: step must not be shifted past it
+        await flush();
+        expect(trace).toHaveBeenCalledWith('rvfc', expect.objectContaining({ delay: 2000, due: 7100 }));
+      });
+
+      it('engaging while paused shows a still of the paused frame', async () => {
+        paused = true;
+        const dv = new DelayedVideo(video);
+        dv.setDelay(2000, performance.now() + 2000);
+        await flush();
+        rafCb!(performance.now() + 16);
+        expect(createBitmap).toHaveBeenCalled();
+        expect(dv.state).toBe('on');
+      });
+
+      it('lowered delay while paused applies from the first frame after play', async () => {
+        const dv = mk();
+        paused = true;
+        video.dispatchEvent(new Event('pause'));
+        dv.setDelay(100, now + 500);
+        now = 3000;
+        paused = false;
+        video.dispatchEvent(new Event('playing'));
+        frame(3100);
+        await flush();
+        expect(trace).toHaveBeenCalledWith('rvfc', expect.objectContaining({ delay: 100 }));
+      });
+    });
   });
 });
