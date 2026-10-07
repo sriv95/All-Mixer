@@ -423,13 +423,17 @@ describe('hold / release (pause)', () => {
   it('queue: push while held does not trim as overdue', () => {
     const { q, released } = mk();
     q.setCap(4);
-    q.setCap(2); // hard cap stays 4, so only overdue frames may be trimmed
     q.push(f(0, 1), 0);
     q.push(f(1, 2), 0);
+    q.push(f(2, 3), 0);
+    q.setCap(2); // hard cap stays 4, so only overdue frames may be trimmed
     q.hold(1);
-    q.push(f(2, 3), 5000); // `now` far past due, but frozen at 1
-    expect(q.size).toBe(3);
+    q.push(f(3, 4), 5000); // `now` far past due, but frozen at 1
+    expect(q.size).toBe(4);
     expect(released).toEqual([]);
+    q.release(5000);
+    q.push(f(9000, 5), 5000); // not held: the overdue frames go
+    expect(released.length).toBeGreaterThan(0);
   });
 
   it('schedule: a pending step moves by the pause, a step added meanwhile does not', () => {
