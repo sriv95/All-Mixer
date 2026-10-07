@@ -1,0 +1,239 @@
+{
+ "MODE": "none",
+ "RUN": "2",
+ "errAt": "theater pause #3",
+ "rows": [
+  {
+   "label": "theater pause #1",
+   "snaps": [
+    {
+     "t": 18.83,
+     "paused": true,
+     "rs": 4,
+     "err": null,
+     "errCls": null,
+     "mediaErr": null,
+     "ad": false
+    },
+    {
+     "t": 18.83,
+     "paused": true,
+     "rs": 4,
+     "err": null,
+     "errCls": null,
+     "mediaErr": null,
+     "ad": false
+    },
+    {
+     "t": 18.83,
+     "paused": true,
+     "rs": 4,
+     "err": null,
+     "errCls": null,
+     "mediaErr": null,
+     "ad": false
+    },
+    {
+     "t": 18.83,
+     "paused": true,
+     "rs": 4,
+     "err": null,
+     "errCls": null,
+     "mediaErr": null,
+     "ad": false
+    }
+   ],
+   "error": false,
+   "errText": null
+  },
+  {
+   "label": "theater play #1",
+   "snaps": [
+    {
+     "t": 19.15,
+     "paused": false,
+     "rs": 4,
+     "err": null,
+     "errCls": null,
+     "mediaErr": null,
+     "ad": false
+    },
+    {
+     "t": 19.85,
+     "paused": false,
+     "rs": 4,
+     "err": null,
+     "errCls": null,
+     "mediaErr": null,
+     "ad": false
+    },
+    {
+     "t": 20.86,
+     "paused": false,
+     "rs": 4,
+     "err": null,
+     "errCls": null,
+     "mediaErr": null,
+     "ad": false
+    },
+    {
+     "t": 22.36,
+     "paused": false,
+     "rs": 4,
+     "err": null,
+     "errCls": null,
+     "mediaErr": null,
+     "ad": false
+    }
+   ],
+   "error": false,
+   "errText": null
+  },
+  {
+   "label": "theater pause #2",
+   "snaps": [
+    {
+     "t": 28.87,
+     "paused": true,
+     "rs": 4,
+     "err": null,
+     "errCls": null,
+     "mediaErr": null,
+     "ad": false
+    },
+    {
+     "t": 28.87,
+     "paused": true,
+     "rs": 4,
+     "err": null,
+     "errCls": null,
+     "mediaErr": null,
+     "ad": false
+    },
+    {
+     "t": 28.87,
+     "paused": true,
+     "rs": 4,
+     "err": null,
+     "errCls": null,
+     "mediaErr": null,
+     "ad": false
+    },
+    {
+     "t": 28.87,
+     "paused": true,
+     "rs": 4,
+     "err": null,
+     "errCls": null,
+     "mediaErr": null,
+     "ad": false
+    }
+   ],
+   "error": false,
+   "errText": null
+  },
+  {
+   "label": "theater play #2",
+   "snaps": [
+    {
+     "t": 29.17,
+     "paused": false,
+     "rs": 4,
+     "err": null,
+     "errCls": null,
+     "mediaErr": null,
+     "ad": false
+    },
+    {
+     "t": 29.87,
+     "paused": false,
+     "rs": 4,
+     "err": null,
+     "errCls": null,
+     "mediaErr": null,
+     "ad": false
+    },
+    {
+     "t": 30.87,
+     "paused": false,
+     "rs": 4,
+     "err": null,
+     "errCls": null,
+     "mediaErr": null,
+     "ad": false
+    },
+    {
+     "t": 32.38,
+     "paused": false,
+     "rs": 4,
+     "err": null,
+     "errCls": null,
+     "mediaErr": null,
+     "ad": false
+    }
+   ],
+   "error": false,
+   "errText": null
+  },
+  {
+   "label": "theater pause #3",
+   "snaps": [
+    {
+     "t": 0,
+     "paused": true,
+     "rs": 0,
+     "err": "Something went wrong. Refresh or try again later. Learn more",
+     "errCls": null,
+     "mediaErr": null,
+     "ad": false
+    },
+    {
+     "t": 0,
+     "paused": true,
+     "rs": 0,
+     "err": "Something went wrong. Refresh or try again later. Learn more",
+     "errCls": null,
+     "mediaErr": null,
+     "ad": false
+    },
+    {
+     "t": 0,
+     "paused": true,
+     "rs": 0,
+     "err": "Something went wrong. Refresh or try again later. Learn more",
+     "errCls": null,
+     "mediaErr": null,
+     "ad": false
+    },
+    {
+     "t": 0,
+     "paused": true,
+     "rs": 0,
+     "err": "Something went wrong. Refresh or try again later. Learn more",
+     "errCls": null,
+     "mediaErr": null,
+     "ad": false
+    }
+   ],
+   "error": true,
+   "errText": "Something went wrong. Refresh or try again later. Learn more"
+  }
+ ],
+ "log": [
+  "[1.8s] console.error: Failed to load resource: the server responded with a status of 401 ()",
+  "[2.1s] console.error: Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+  "[2.1s] console.error: Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+  "[2.1s] console.error: Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+  "[2.1s] console.error: Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+  "[2.1s] console.error: Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+  "[2.1s] console.error: Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+  "[2.5s] console.error: Failed to load resource: net::ERR_FAILED",
+  "[19.2s] theater on",
+  "[24.2s] theater pause #1: [[18.83,true,null],[18.83,true,null],[18.83,true,null],[18.83,true,null]]",
+  "[32.2s] theater play #1: [[19.15,false,null],[19.85,false,null],[20.86,false,null],[22.36,false,null]]",
+  "[42.2s] theater pause #2: [[28.87,true,null],[28.87,true,null],[28.87,true,null],[28.87,true,null]]",
+  "[50.3s] theater play #2: [[29.17,false,null],[29.87,false,null],[30.87,false,null],[32.38,false,null]]",
+  "[60.3s] theater pause #3: [[0,true,\"Something went wrong. Refresh or try again later. Learn more\"],[0,true,\"Something went wrong. Refresh or try again later. Learn more\"],[0,true,\"Something went wrong. Refresh or try again later. Learn more\"],[0,true,\"Something went wrong. Refresh or try again later. Learn more\"]]",
+  "[60.3s] ERROR at theater pause #3: {\"t\":0,\"paused\":true,\"rs\":0,\"err\":\"Something went wrong. Refresh or try again later. Learn more\",\"errCls\":null,\"mediaErr\":null,\"ad\":false}"
+ ]
+}
