@@ -83,7 +83,9 @@ if (has('layout')) {
     // SRI-228: start the cycle well inside a track, never in the quiet first seconds or near the end.
     const pos = () => v(() => { const e = document.querySelector('video'); return { t: +e.currentTime.toFixed(1), duration: +e.duration.toFixed(1) }; });
     const SEEKTO = Number(process.env.SEEKTO || 60);
-    let p0 = await pos(); await act('seek', SEEKTO - p0.t); await sleep(8000);
+    let p0 = await pos(); await act('seek', SEEKTO - p0.t); await sleep(2000);
+    for (let k = 0; k < 8; k++) { const a1 = await pos(); await v(() => document.querySelector('video').play().catch(() => {})); await sleep(2500); const a2 = await pos(); if (a2.t > a1.t + 1) break; await act('seek', SEEKTO - a2.t); await sleep(1500); }
+    await sleep(6000);
     console.log('music-video-mode cycle start', JSON.stringify(p0 = await pos()));
     if (p0.t > p0.duration - 30) { await act('seek', SEEKTO - p0.t); await sleep(8000); console.log('too close to end, re-seeked', JSON.stringify(await pos())); }
     await cycle('layout', 'music-video-mode', 3000, 2);
