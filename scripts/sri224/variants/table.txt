@@ -1,0 +1,50 @@
+
+V0: first-rVFC median 28 max 41 n=8/8
+  basic/short3s play #1: rVFC 28 ms, mt-ct 8 ms, vidOn 28, outOn 377, AO 316
+  basic/short3s play #2: rVFC 23 ms, mt-ct 9 ms, vidOn 23, outOn 18, AO -5
+  basic/short3s play #3: rVFC 41 ms, mt-ct -13 ms, vidOn 41, outOn 19, AO 11
+  basic/short3s play #4: rVFC 39 ms, mt-ct -19 ms, vidOn 39, outOn 24, AO -32
+  pseek/paused: play after seek #1: rVFC 24 ms, mt-ct -0 ms, vidOn 23, outOn 1991, AO -34
+  pseek/paused: play after seek #2: rVFC 23 ms, mt-ct -19 ms, vidOn 39, outOn 1983, AO -56
+  pseek/paused: play after seek #3: rVFC 17 ms, mt-ct 17 ms, vidOn 9, outOn 1989, AO -27
+  pseek/paused: play after seek #4: rVFC 29 ms, mt-ct 4 ms, vidOn 30, outOn 1995, AO -52
+
+V1: first-rVFC median 29 max 41 n=8/8
+  basic/short3s play #1: rVFC 41 ms, mt-ct -15 ms, vidOn 40, outOn 19, AO 12
+  basic/short3s play #2: rVFC 36 ms, mt-ct 0 ms, vidOn 36, outOn 18, AO -33
+  basic/short3s play #3: rVFC 29 ms, mt-ct -11 ms, vidOn 30, outOn 31, AO 18
+  basic/short3s play #4: rVFC 20 ms, mt-ct 0 ms, vidOn 20, outOn 15, AO -5
+  pseek/paused: play after seek #1: rVFC 21 ms, mt-ct -0 ms, vidOn 21, outOn 1988, AO -33
+  pseek/paused: play after seek #2: rVFC 24 ms, mt-ct 11 ms, vidOn 22, outOn 1992, AO -32
+  pseek/paused: play after seek #3: rVFC 29 ms, mt-ct 7 ms, vidOn 29, outOn 1986, AO -43
+  pseek/paused: play after seek #4: rVFC 13 ms, mt-ct -6 ms, vidOn 29, outOn 1985, AO -44
+
+V2: first-rVFC median 30 max 34 n=8/8
+  basic/short3s play #1: rVFC 34 ms, mt-ct -8 ms, vidOn 34, outOn 21, AO 3
+  basic/short3s play #2: rVFC 26 ms, mt-ct -18 ms, vidOn 26, outOn 13, AO -30
+  basic/short3s play #3: rVFC 30 ms, mt-ct -13 ms, vidOn 28, outOn 36, AO 6
+  basic/short3s play #4: rVFC 33 ms, mt-ct -8 ms, vidOn 34, outOn 22, AO -29
+  pseek/paused: play after seek #1: rVFC 34 ms, mt-ct 13 ms, vidOn 33, outOn 2002, AO -32
+  pseek/paused: play after seek #2: rVFC 30 ms, mt-ct 12 ms, vidOn 30, outOn 1978, AO -52
+  pseek/paused: play after seek #3: rVFC 22 ms, mt-ct 12 ms, vidOn 21, outOn 1989, AO -49
+  pseek/paused: play after seek #4: rVFC 24 ms, mt-ct -16 ms, vidOn 41, outOn 1991, AO -49
+
+V3: first-rVFC median 28 max 54 n=8/8
+  basic/short3s play #1: rVFC 46 ms, mt-ct -7 ms, vidOn 46, outOn 478, AO 416
+  basic/short3s play #2: rVFC 29 ms, mt-ct -3 ms, vidOn 28, outOn 25, AO -4
+  basic/short3s play #3: rVFC 8 ms, mt-ct -8 ms, vidOn 25, outOn 21, AO -4
+  basic/short3s play #4: rVFC 54 ms, mt-ct -8 ms, vidOn 54, outOn 21, AO 17
+  pseek/paused: play after seek #1: rVFC 1 ms, mt-ct -6 ms, vidOn 18, outOn 2003, AO -15
+  pseek/paused: play after seek #2: rVFC 27 ms, mt-ct 7 ms, vidOn 29, outOn 1995, AO -34
+  pseek/paused: play after seek #3: rVFC 25 ms, mt-ct 7 ms, vidOn 26, outOn 1987, AO -55
+  pseek/paused: play after seek #4: rVFC 28 ms, mt-ct -1 ms, vidOn 28, outOn 1984, AO -44
+
+V4: first-rVFC median 40 max 49 n=8/8
+  basic/short3s play #1: rVFC 40 ms, mt-ct -12 ms, vidOn 40, outOn 13, AO null
+  basic/short3s play #2: rVFC 31 ms, mt-ct -3 ms, vidOn 31, outOn 16, AO null
+  basic/short3s play #3: rVFC 42 ms, mt-ct -16 ms, vidOn 42, outOn 19, AO null
+  basic/short3s play #4: rVFC 11 ms, mt-ct -31 ms, vidOn 27, outOn 43, AO null
+  pseek/paused: play after seek #1: rVFC 49 ms, mt-ct -23 ms, vidOn 66, outOn 18, AO null
+  pseek/paused: play after seek #2: rVFC 40 ms, mt-ct -3 ms, vidOn 40, outOn 19, AO null
+  pseek/paused: play after seek #3: rVFC 34 ms, mt-ct -15 ms, vidOn 51, outOn 18, AO null
+  pseek/paused: play after seek #4: rVFC 47 ms, mt-ct -14 ms, vidOn 63, outOn 114, AO null
