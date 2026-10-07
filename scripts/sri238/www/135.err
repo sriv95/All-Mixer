@@ -1,0 +1,31 @@
+sep on
+lines 56
+dbg {"r":true,"n":56,"cur":0,"cls":["line","line","line"],"ct":0,"url":"https://www.youtube.com/watch?v=fJ9rUzIMcZQ"}
+refraw 1308 [{"w":11392,"i":-1,"ct":2.69,"p":false,"r":1,"ad":0,"e":0,"u":"?v=fJ9rUzIMcZQ"},{"w":21384,"i":-1,"ct":12.68,"p":false,"r":1,"ad":0,"e":0,"u":"?v=fJ9rUzIMcZQ"},{"w":31386,"i":-1,"ct":22.68,"p":false,"r":1,"ad":0,"e":0,"u":"?v=fJ9rUzIMcZQ"},{"w":41387,"i":-1,"ct":32.68,"p":false,"r":1,"ad":0,"e":0,"u":"?v=fJ9rUzIMcZQ"},{"w":51390,"i":-1,"ct":42.68,"p":false,"r":1,"ad":0,"e":0,"u":"?v=fJ9rUzIMcZQ"},{"w":64864,"i":-1,"ct":0,"p":true,"r":1,"ad":0,"e":0,"u":"?v=fJ9rUzIMcZQ"},{"w":79339,"i":-1,"ct":0,"p":true,"r":1,"ad":0,"e":0,"u":"?v=fJ9rUzIMcZQ"}] {"site":"youtube","videoFound":true,"audio":"active","gain":1,"videoDelay":{"state":"off","delayMs":0,"stats":{"captureW":967,"captureH":544,"fps":24.99999999999998,"queued":0,"queueBytes":0,"maxFrames":30,"skipped":0,"drawn":48,"errMs":{"mean":-1.6285572316486043,"p95":12.448526077097995},"avOffsetMs":{"mean":8.381567743764167,"p95":27.94952607709731}}},"separation":{"state":"on","latency":{"engine":"ml","reason":"auto","sampleRate":44100,"processingSamples":86912,"processingMs":1970.7936507936508,"deviceMs":29.351473922902493,"videoDelayMs":2000.1451247165533},"choice":{"state":"on"}}}
+ref 0
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+page.evaluate: Target page, context or browser has been closed
+Browser logs:
+
+<launching> /Users/sriv/Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-edgeupdater --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,BlockOriginHeaderModificationOnRedirect,Translate,AutoDeElevate,OptimizationHints,msForceBrowserSignIn,msEdgeUpdateLaunchServicesPreferredVersion --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --disable-updater-scheduler --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --no-sandbox --disable-extensions-except=/Users/sriv/.paperclip/instances/default/projects/ff016047-201c-4ddd-afe4-919b8f7ce38c/770ffeee-21cf-4963-b438-a115c8cbb6ea/_default/dist --load-extension=/Users/sriv/.paperclip/instances/default/projects/ff016047-201c-4ddd-afe4-919b8f7ce38c/770ffeee-21cf-4963-b438-a115c8cbb6ea/_default/dist --autoplay-policy=no-user-gesture-required --mute-audio --no-first-run --user-data-dir=/var/folders/qk/3r5zj0ns7zb9m3g7gxss8fk80000gn/T/paperclip-run-sri-238-01e549df-607-qyqLMN/am-qa-135-sw7BXz --remote-debugging-pipe about:blank
+<launched> pid=48416
+[pid=48416][err] [48437:13166287:1007/211430.338946:ERROR:sandbox/mac/system_services.cc:31] SetApplicationIsDaemon: Error Domain=NSOSStatusErrorDomain Code=-50 "paramErr: error in user parameter list" (-50)
+[pid=48416][err] [48416:13166036:1007/211431.336077:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT
+[pid=48416][err] [48416:13166036:1007/211457.508303:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT
+[pid=48416][err] [48416:13166036:1007/211550.342090:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT
+[pid=48416][err] [48416:13166036:1007/211733.958400:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT
+[pid=48416][err] [48416:13166036:1007/212016.199108:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT
+[pid=48416] <gracefully close start>
+[pid=48416][err] [48416:13166036:1007/212435.662671:ERROR:google_apis/gcm/engine/connection_factory_impl.cc:484] ConnectionHandler failed with net error: -2
+[pid=48416] <forcefully close>
+[pid=48416] <kill>
+[pid=48416] <will force kill>
+    at play (/Users/sriv/.paperclip/instances/default/projects/ff016047-201c-4ddd-afe4-919b8f7ce38c/770ffeee-21cf-4963-b438-a115c8cbb6ea/_default/scripts/qa-sri135.mjs:35:25)
+    at /Users/sriv/.paperclip/instances/default/projects/ff016047-201c-4ddd-afe4-919b8f7ce38c/770ffeee-21cf-4963-b438-a115c8cbb6ea/_default/scripts/qa-sri135.mjs:57:43 {
+  log: []
+}
+
+Node.js v24.21.0

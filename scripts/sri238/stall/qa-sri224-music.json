@@ -1,0 +1,180 @@
+{
+ "results": [
+  {
+   "scen": "stall",
+   "label": "stalled +3s",
+   "d": {
+    "rs": 1,
+    "paused": false,
+    "t": 103.31,
+    "canvas": "block",
+    "outMax2s": 0.0011,
+    "frameChanged": false
+   },
+   "ov": "on",
+   "audio": "active"
+  },
+  {
+   "scen": "stall",
+   "label": "stalled +6s",
+   "d": {
+    "rs": 1,
+    "paused": false,
+    "t": 103.31,
+    "canvas": "block",
+    "outMax2s": 0.0012,
+    "frameChanged": false
+   },
+   "ov": "on",
+   "audio": "active"
+  },
+  {
+   "scen": "stall",
+   "label": "release (mark)",
+   "kind": "mark",
+   "vfc": null,
+   "cvAt": [
+    "block/visible",
+    "block/visible",
+    "block/visible"
+   ],
+   "tIdx": 127,
+   "outBefore": 0.0007,
+   "outOff": null,
+   "outOn": 2965,
+   "elOff": -18,
+   "elOn": 983,
+   "silStart": null,
+   "silEnd": null,
+   "paused": false,
+   "canvas": "block",
+   "t": 108.5,
+   "rate": 1,
+   "ovOn": 2974,
+   "ovOff": null,
+   "vidOn": 977,
+   "vidOff": null,
+   "lyric": {
+    "before": null,
+    "at600": null,
+    "at1500": null,
+    "at2600": null,
+    "after": null
+   },
+   "ad": false,
+   "ytError": false,
+   "ov": "on",
+   "delayMs": 2000.1451247165533,
+   "sep": "on",
+   "eng": "ml",
+   "vdelay": 2000.1451247165533,
+   "audio": "active",
+   "AO": null
+  },
+  {
+   "scen": "stall",
+   "label": "after release +8s",
+   "d": {
+    "rs": 4,
+    "paused": false,
+    "t": 110.29,
+    "canvas": "block",
+    "outMax2s": 0.0305,
+    "frameChanged": true
+   },
+   "ov": "on",
+   "audio": "active"
+  },
+  {
+   "scen": "stall",
+   "label": "after stall: pause",
+   "kind": "pause",
+   "vfc": null,
+   "cvAt": [
+    "block/visible",
+    "block/visible",
+    "block/visible"
+   ],
+   "tIdx": 131,
+   "outBefore": 0.0113,
+   "outOff": 38,
+   "outOn": 6,
+   "elOff": 11,
+   "elOn": 6,
+   "silStart": 38,
+   "silEnd": null,
+   "paused": true,
+   "canvas": "block",
+   "t": 111.8,
+   "rate": 1,
+   "ovOn": null,
+   "ovOff": -12,
+   "vidOn": null,
+   "vidOff": -12,
+   "lyric": {
+    "before": null,
+    "at600": null,
+    "at1500": null,
+    "at2600": null,
+    "after": null
+   },
+   "ad": false,
+   "ytError": false,
+   "ov": "on",
+   "delayMs": 2000.1451247165533,
+   "sep": "on",
+   "eng": "ml",
+   "vdelay": 2000.1451247165533,
+   "audio": "active",
+   "AO": null
+  },
+  {
+   "scen": "stall",
+   "label": "after stall: play",
+   "kind": "play",
+   "vfc": {
+    "at": 27.200000011922384,
+    "mediaTime": 111.84,
+    "ct": 111.839176,
+    "lag": -0.0008240000000085956
+   },
+   "cvAt": [
+    "block/visible",
+    "block/visible",
+    "block/visible"
+   ],
+   "tIdx": 187,
+   "outBefore": 0,
+   "outOff": null,
+   "outOn": 24,
+   "elOff": null,
+   "elOn": 11,
+   "silStart": null,
+   "silEnd": null,
+   "paused": false,
+   "canvas": "block",
+   "t": 118,
+   "rate": 1,
+   "ovOn": 11,
+   "ovOff": null,
+   "vidOn": 28,
+   "vidOff": null,
+   "lyric": {
+    "before": null,
+    "at600": null,
+    "at1500": null,
+    "at2600": null,
+    "after": null
+   },
+   "ad": false,
+   "ytError": false,
+   "ov": "on",
+   "delayMs": 2000.1451247165533,
+   "sep": "on",
+   "eng": "ml",
+   "vdelay": 2000.1451247165533,
+   "audio": "active",
+   "AO": 13
+  }
+ ]
+}
