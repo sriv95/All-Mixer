@@ -1,0 +1,28 @@
+{
+ "label": "r2new",
+ "site": "music",
+ "vid": "V1Pl8CzNzCw",
+ "startS": 62,
+ "modes": {
+  "karaoke": {
+   "sr": 44100,
+   "n": 3657728,
+   "adDuring": false,
+   "videoSec": [
+    82.996615,
+    169.041809
+   ],
+   "sep": {
+    "state": "on",
+    "choice": "on",
+    "engine": "ml",
+    "procMs": 1970.7936507936508
+   }
+  }
+ },
+ "load": [
+  1.21337890625,
+  1.52978515625,
+  1.60205078125
+ ]
+}

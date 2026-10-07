@@ -1,0 +1,28 @@
+{
+ "label": "r2new",
+ "site": "music",
+ "vid": "V1Pl8CzNzCw",
+ "startS": 62,
+ "modes": {
+  "acappella": {
+   "sr": 44100,
+   "n": 3657728,
+   "adDuring": false,
+   "videoSec": [
+    83.082667,
+    169.098667
+   ],
+   "sep": {
+    "state": "on",
+    "choice": "on",
+    "engine": "ml",
+    "procMs": 1970.7936507936508
+   }
+  }
+ },
+ "load": [
+  1.4228515625,
+  1.48193359375,
+  1.56884765625
+ ]
+}
