@@ -5,8 +5,8 @@ import sys, json, numpy as np
 from scipy.signal import butter, sosfilt, correlate
 S, R, OUT = sys.argv[1:4]; SR = 44100; F = SR // 4
 db = lambda e: 10 * np.log10(e + 1e-12)
-ld = lambda b, m: np.fromfile(f'{S}/qa203-{b}-{m}-{m}.f32', dtype=np.float32).astype(np.float64)
-meta = lambda b, m: json.load(open(f'{R}/qa-sri237-{b}-{m}-{m}-wl.json'))
+ld = lambda b, m: np.fromfile(f'{S}/qa203-{b}-{m}.f32', dtype=np.float32).astype(np.float64)
+meta = lambda b, m: json.load(open(f'{R}/qa-sri237-{b}-{m}-wl.json'))
 sos = lambda lo, hi: butter(4, [lo, hi], 'bandpass', fs=SR, output='sos')
 S150, S20 = sos(150, 1000), sos(20, 120)
 def frames(s, off=0, filt=None):
@@ -46,8 +46,10 @@ out['acappella_dips_old'] = dips_at(fo, tf0, 0); out['acappella_dips_new'] = dip
 out['acappella_worst_old'] = float(max(out['acappella_dips_old'].values())); out['acappella_worst_new'] = float(max(out['acappella_dips_new'].values()))
 # new vs old vocal level per frame (artifacts: large positive = added energy, e.g. fill in pauses)
 dlt = fn - fo; out['acappella_new_minus_old_db'] = dict(mean=float(dlt.mean()), p5=float(np.percentile(dlt, 5)), p95=float(np.percentile(dlt, 95)), max=float(dlt.max()), min=float(dlt.min()))
+out['outliers_abs_gt6db'] = [dict(t=round(tf0 + i * 0.25, 2), V_old=round(float(fo[i]), 1), V_new=round(float(fn[i]), 1)) for i in range(n) if abs(dlt[i]) > 6]
 pm = fo < -55
 out['pause_frames'] = int(pm.sum()); out['pause_vocal_new_minus_old_db'] = dict(mean=float(dlt[pm].mean()), max=float(dlt[pm].max())) if pm.any() else None
+out['quiet_outliers_gt3db'] = [dict(t=round(tf0 + i * 0.25, 2), V_old=round(float(fo[i]), 1), V_new=round(float(fn[i]), 1)) for i in range(n) if fo[i] < -45 and dlt[i] > 3]
 quiet = fo < -45; out['quiet_frames_lt-45'] = int(quiet.sum()); out['quiet_new_minus_old_max'] = float(dlt[quiet].max()) if quiet.any() else None
 out['frames_table'] = [dict(t=round(tf0 + i * 0.25, 2), V_old=round(float(fo[i]), 1), V_new=round(float(fn[i]), 1)) for i in range(n) if 124 <= tf0 + i * 0.25 <= 129]
 # sample-level peak (hard clipping check)
