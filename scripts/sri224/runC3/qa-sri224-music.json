@@ -1,0 +1,131 @@
+{
+ "results": [
+  {
+   "scen": "pending",
+   "label": "pause then switch Default",
+   "kind": "pause",
+   "vfc": null,
+   "cvAt": [
+    "block/visible",
+    "block/visible",
+    "block/visible"
+   ],
+   "tIdx": 188,
+   "outBefore": 0.0014,
+   "outOff": 26,
+   "outOn": null,
+   "elOff": 11,
+   "elOn": 6,
+   "silStart": 26,
+   "silEnd": null,
+   "paused": true,
+   "canvas": "block",
+   "t": 13.7,
+   "rate": 1,
+   "ovOn": null,
+   "ovOff": -6,
+   "vidOn": null,
+   "vidOff": -6,
+   "lyric": {
+    "before": null,
+    "at600": null,
+    "at1500": null,
+    "at2600": null,
+    "after": null
+   },
+   "ad": false,
+   "ytError": false,
+   "ov": "on",
+   "delayMs": 2000.1451247165533,
+   "sep": "on",
+   "eng": "ml",
+   "vdelay": 2000.1451247165533,
+   "audio": "active",
+   "AO": null
+  },
+  {
+   "scen": "pending",
+   "label": "while paused after Default",
+   "ov": {
+    "state": "off",
+    "delayMs": 0,
+    "stats": {
+     "captureW": 615,
+     "captureH": 346,
+     "fps": 24.99999999999998,
+     "queued": 0,
+     "queueBytes": 0,
+     "maxFrames": 130,
+     "skipped": 23,
+     "drawn": 711,
+     "errMs": {
+      "mean": 2.8813590441448347,
+      "p95": 17.8548752953684
+     },
+     "avOffsetMs": {
+      "mean": 1.2501856991686349,
+      "p95": 18.149875283446818
+     }
+    }
+   },
+   "lat": {
+    "engine": "bypass",
+    "reason": "auto",
+    "sampleRate": 44100,
+    "processingSamples": 0,
+    "processingMs": 0,
+    "deviceMs": 29.351473922902493,
+    "videoDelayMs": 29.351473922902493
+   },
+   "sep": "off"
+  },
+  {
+   "scen": "pending",
+   "label": "play after pending Default",
+   "kind": "play",
+   "vfc": {
+    "at": 28.49999998808198,
+    "mediaTime": 13.72,
+    "ct": 13.714667,
+    "lag": -0.005333000000000254
+   },
+   "cvAt": [
+    "absent",
+    "absent",
+    "absent"
+   ],
+   "tIdx": 204,
+   "outBefore": 0,
+   "outOff": null,
+   "outOn": 17,
+   "elOff": null,
+   "elOn": 9,
+   "silStart": null,
+   "silEnd": null,
+   "paused": false,
+   "canvas": "absent",
+   "t": 18.8,
+   "rate": 1,
+   "ovOn": null,
+   "ovOff": null,
+   "vidOn": 28,
+   "vidOff": null,
+   "lyric": {
+    "before": null,
+    "at600": null,
+    "at1500": null,
+    "at2600": null,
+    "after": null
+   },
+   "ad": false,
+   "ytError": false,
+   "ov": "off",
+   "delayMs": 0,
+   "sep": "off",
+   "eng": "bypass",
+   "vdelay": 29.351473922902493,
+   "audio": "active",
+   "AO": null
+  }
+ ]
+}
