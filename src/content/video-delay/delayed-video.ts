@@ -12,9 +12,11 @@ import { DelaySchedule, FrameQueue, PresentedClock, VIDEO_DELAY_BUDGET_BYTES, ca
  * YouTube's controls, captions, ads UI and progress bar stay on top and work.
  *
  * - Seek: queued frames are stale, so they are dropped; the last picture stays
- *   until the first new frame is due (YouTube shows its spinner meanwhile).
- * - Pause: rVFC stops; the queue drains, matching the audio tail the graph
- *   plays out on pause.
+ *   until the first new frame is captured, which is drawn at the next rAF
+ *   (no delay, also while paused). Later frames get the delay again.
+ * - Pause / ended: the queue and the delay schedule freeze (the audio delay
+ *   line freezes too); nothing is drawn. On `playing` every queued frame moves
+ *   later by the pause length, so picture and sound resume together.
  * - Delay change: jumps at the time the graph says it takes effect.
  * - Delay 0: the canvas is hidden and capture stops (no CPU cost).
  */
@@ -27,6 +29,8 @@ const FPS_MIN_SAMPLES = 10;
 
 /** Like a seek: frames from the old position / source must not be shown. */
 const RESET_EVENTS = ['seeking', 'emptied', 'loadstart'] as const;
+/** Freeze the delayed picture, like the audio delay line does. */
+const HOLD_EVENTS = ['pause', 'ended'] as const;
 /** Budgets at or above this mean "unbounded" (JSON turns Infinity into null, so QA sends a big number). */
 const LEGACY_BUDGET = 1e12;
 
@@ -82,6 +86,7 @@ export class DelayedVideo {
   private drawn = 0;
   private errs: number[] = [];
   private offsets: number[] = [];
+  private awaitStill = false;
   private stopTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(
@@ -99,6 +104,8 @@ export class DelayedVideo {
     // changes; a ResizeObserver alone misses position-only changes.
     this.styleObserver = new MutationObserver(() => this.layout());
     for (const e of RESET_EVENTS) video.addEventListener(e, this.onSeeking);
+    for (const e of HOLD_EVENTS) video.addEventListener(e, this.onHold);
+    video.addEventListener('playing', this.onRelease);
     probe?.setOverlayInfo(() => ({ queue: this.queue.size, delay: this.schedule.target, shown: this.shown ? 1 : 0 }));
   }
 
@@ -117,7 +124,7 @@ export class DelayedVideo {
 
   /** True while frames are queued for the overlay (it is still playing out or about to show a new position). */
   presentedBusy(): boolean {
-    return this.state === 'on' && this.queue.size > 0;
+    return this.state === 'on' && !this.queue.held && this.queue.size > 0;
   }
 
   get delayMs(): number {
@@ -211,12 +218,15 @@ export class DelayedVideo {
     this.stop();
     this.destroyed = true;
     for (const e of RESET_EVENTS) this.video.removeEventListener(e, this.onSeeking);
+    for (const e of HOLD_EVENTS) this.video.removeEventListener(e, this.onHold);
+    this.video.removeEventListener('playing', this.onRelease);
   }
 
   private start(): void {
     if (this.running || this.failed) return;
     this.running = true;
     this.captureErrors = 0;
+    this.awaitStill = false;
     this.lastMediaTime = -1;
     this.deltas = [];
     this.video.insertAdjacentElement('afterend', this.canvas);
@@ -226,6 +236,8 @@ export class DelayedVideo {
     this.vfc = this.video.requestVideoFrameCallback(this.onFrame);
     this.lastRaf = 0;
     this.raf = requestAnimationFrame(this.onRaf);
+    // Already paused when the overlay engages: start frozen, like the audio chain.
+    if (this.video.paused || this.video.ended) this.hold();
     this.onStateChange(this.state);
   }
 
@@ -238,6 +250,9 @@ export class DelayedVideo {
     this.resizeObserver.disconnect();
     this.styleObserver.disconnect();
     this.queue.clear();
+    this.queue.release(performance.now());
+    this.schedule.release(0);
+    this.awaitStill = false;
     this.shown?.close();
     this.shown = null;
     this.canvas.style.display = 'none';
@@ -277,6 +292,44 @@ export class DelayedVideo {
   private readonly onSeeking = (): void => {
     this.epoch++;
     this.queue.clear();
+    this.awaitStill = true;
+    if (this.queue.held) {
+      // Seek while paused: stay frozen, count the pause from now on.
+      const now = performance.now();
+      this.queue.rebase(now);
+      this.schedule.release(0);
+      this.schedule.hold(now);
+      this.clock.release(0);
+      this.clock.hold(now);
+    }
+  };
+
+  private hold(): void {
+    if (this.queue.held) return;
+    const now = performance.now();
+    this.queue.hold(now);
+    this.schedule.hold(now);
+    this.clock.hold(now);
+    this.probe?.trace('hold', {
+      now,
+      queue: this.queue.size,
+      delay: this.schedule.target,
+      shown: this.shown ? 1 : 0,
+      currentTime: this.video.currentTime,
+    });
+  }
+
+  private readonly onHold = (): void => {
+    if (this.running) this.hold();
+  };
+
+  private readonly onRelease = (): void => {
+    if (!this.running || !this.queue.held) return;
+    const now = performance.now();
+    const shift = this.queue.release(now);
+    this.schedule.release(shift);
+    this.clock.release(shift);
+    this.probe?.trace('release', { now, shiftMs: shift, queue: this.queue.size, delay: this.schedule.target });
   };
 
   private readonly onFrame = (_now: number, md: VideoFrameCallbackMetadata): void => {
@@ -301,7 +354,12 @@ export class DelayedVideo {
         this.captureErrors = 0;
         if (epoch !== this.epoch || !this.running) return bmp.close();
         this.probe?.trace('bitmap', { mediaTime: md.mediaTime, due, captureMs: performance.now() - rvfcAt });
-        this.queue.push({ due, mediaTime: md.mediaTime, delay, img: bmp }, performance.now());
+        const at = performance.now();
+        if (this.awaitStill) {
+          // First picture after a seek: show it at the next rAF, not `delay` later.
+          this.awaitStill = false;
+          this.queue.push({ due: at, mediaTime: md.mediaTime, delay: 0, still: true, img: bmp }, at);
+        } else this.queue.push({ due, mediaTime: md.mediaTime, delay, img: bmp }, at);
       },
       () => {
         if (epoch === this.epoch && this.running && ++this.captureErrors >= MAX_CAPTURE_ERRORS) this.fail();

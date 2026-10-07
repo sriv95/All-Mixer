@@ -8,6 +8,7 @@ let vfcCb: Vfc | null;
 let rafCb: ((t: number) => void) | null;
 let createBitmap: ReturnType<typeof vi.fn>;
 let closed: number;
+let paused: boolean;
 let removeSpy: ReturnType<typeof vi.spyOn>;
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
@@ -26,6 +27,8 @@ beforeEach(() => {
   (video as unknown as Record<string, unknown>).cancelVideoFrameCallback = () => {
     vfcCb = null;
   };
+  paused = false;
+  Object.defineProperty(video, 'paused', { get: () => paused });
   Object.defineProperty(video, 'clientWidth', { value: 640 });
   Object.defineProperty(video, 'clientHeight', { value: 360 });
   createBitmap = vi.fn(() => Promise.resolve({ close: () => closed++ }));
@@ -42,7 +45,10 @@ beforeEach(() => {
   removeSpy = vi.spyOn(video, 'removeEventListener');
 });
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 const canvas = () => document.querySelector<HTMLCanvasElement>('canvas.all-mixer-delayed-video');
 const frame = (display: number) => vfcCb!(0, { expectedDisplayTime: display, mediaTime: 0 });
@@ -141,5 +147,96 @@ describe('DelayedVideo', () => {
     expect(removeSpy).toHaveBeenCalledWith('loadstart', expect.any(Function));
     dv.setDelay(100); // no-op after destroy
     expect(canvas()).toBeNull();
+  });
+
+  describe('pause / seek (SRI-208)', () => {
+    let now: number;
+    const trace = vi.fn();
+    const mk = () => {
+      now = 1000;
+      vi.spyOn(performance, 'now').mockImplementation(() => now);
+      trace.mockClear();
+      const dv = new DelayedVideo(video, () => {}, { trace, setOverlayInfo: () => {}, overlayReset: () => {}, overlayFrame: () => {} } as never);
+      dv.setDelay(500, 0);
+      return dv;
+    };
+
+    it('pause freezes the queue; playing shifts due by the pause length', async () => {
+      const dv = mk();
+      frame(1400); // due 1900
+      await flush();
+      video.dispatchEvent(new Event('pause'));
+      expect(trace).toHaveBeenCalledWith('hold', expect.objectContaining({ queue: 1, delay: 500 }));
+      now = 2500;
+      rafCb!(2500); // long past due
+      expect(dv.stats.queued).toBe(1);
+      expect(dv.stats.drawn).toBe(0);
+      expect(dv.presentedBusy()).toBe(false);
+      now = 3000;
+      video.dispatchEvent(new Event('playing'));
+      expect(trace).toHaveBeenCalledWith('release', expect.objectContaining({ shiftMs: 2000, queue: 1 }));
+      rafCb!(3800); // due is now 3900
+      expect(dv.stats.drawn).toBe(0);
+      rafCb!(3900);
+      expect(dv.stats.drawn).toBe(1);
+    });
+
+    it('first frame after a seek is drawn at the next rAF regardless of its due', async () => {
+      const dv = mk();
+      video.dispatchEvent(new Event('seeking'));
+      frame(1e9);
+      await flush();
+      rafCb!(1016);
+      expect(dv.stats.drawn).toBe(1);
+      frame(1e9 + 50); // later frames keep the delay
+      await flush();
+      rafCb!(1032);
+      expect(dv.stats.drawn).toBe(1);
+      expect(dv.stats.queued).toBe(1);
+    });
+
+    it('seek while paused draws the still and stays held', async () => {
+      const dv = mk();
+      video.dispatchEvent(new Event('pause'));
+      video.dispatchEvent(new Event('seeking'));
+      frame(1e9);
+      await flush();
+      rafCb!(1016);
+      expect(dv.stats.drawn).toBe(1);
+      frame(1e9 + 10); // a normal frame stays frozen
+      await flush();
+      now = 1e10;
+      rafCb!(1e10);
+      expect(dv.stats.drawn).toBe(1);
+      expect(dv.stats.queued).toBe(1);
+    });
+
+    it('starts held when the video is already paused', async () => {
+      paused = true;
+      const dv = mk();
+      expect(dv.state).toBe('waiting');
+      video.dispatchEvent(new Event('playing'));
+      expect(trace).toHaveBeenCalledWith('release', expect.anything());
+    });
+
+    it('delay 0 during a pause still stops at its effective time', () => {
+      vi.useFakeTimers();
+      try {
+        const dv = mk();
+        video.dispatchEvent(new Event('pause'));
+        dv.setDelay(0, now + 40);
+        expect(dv.state).not.toBe('off');
+        vi.advanceTimersByTime(41);
+        expect(dv.state).toBe('off');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('destroy removes the pause, ended and playing listeners', () => {
+      const dv = mk();
+      dv.destroy();
+      for (const e of ['pause', 'ended', 'playing']) expect(removeSpy).toHaveBeenCalledWith(e, expect.any(Function));
+    });
   });
 });
