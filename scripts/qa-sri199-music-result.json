@@ -1,0 +1,572 @@
+{
+ "av_after_song_click": {
+  "audioSel": "true",
+  "vidSel": "false",
+  "pm": "ATV_PREFERRED",
+  "vm": true,
+  "pr": [
+   615,
+   346
+  ]
+ },
+ "audio_mode_before": {
+  "kar": {
+   "fx": 0.5,
+   "fy": 0.82,
+   "inPlayer": true,
+   "root": {
+    "parent": "YTMUSIC-PLAYER#player",
+    "z": "1000",
+    "dl": 0,
+    "dt": 0,
+    "dw": 0,
+    "dh": 0
+   }
+  },
+  "b": {
+   "w": 165,
+   "h": 36,
+   "disp": "block"
+  },
+  "probe": {
+   "isBlock": true,
+   "tag": "SPAN",
+   "id": "",
+   "cls": "am-k-line upcoming"
+  }
+ },
+ "drag_audio": {
+  "a": {
+   "before": [
+    0.5,
+    0.82
+   ],
+   "after": {
+    "fx": 0.3,
+    "fy": 0.3,
+    "inPlayer": true,
+    "root": {
+     "parent": "YTMUSIC-PLAYER#player",
+     "z": "1000",
+     "dl": 0,
+     "dt": 0,
+     "dw": 0,
+     "dh": 0
+    }
+   },
+   "b": {
+    "w": 165,
+    "h": 36,
+    "disp": "block"
+   }
+  },
+  "b": {
+   "before": [
+    0.3,
+    0.3
+   ],
+   "after": {
+    "fx": 0.7,
+    "fy": 0.6,
+    "inPlayer": true,
+    "root": {
+     "parent": "YTMUSIC-PLAYER#player",
+     "z": "1000",
+     "dl": 0,
+     "dt": 0,
+     "dw": 0,
+     "dh": 0
+    }
+   },
+   "b": {
+    "w": 165,
+    "h": 36,
+    "disp": "block"
+   }
+  },
+  "br": {
+   "before": [
+    0.7,
+    0.6
+   ],
+   "after": {
+    "fx": 0.866,
+    "fy": 0.948,
+    "inPlayer": true,
+    "root": {
+     "parent": "YTMUSIC-PLAYER#player",
+     "z": "1000",
+     "dl": 0,
+     "dt": 0,
+     "dw": 0,
+     "dh": 0
+    }
+   },
+   "b": {
+    "w": 165,
+    "h": 36,
+    "disp": "block"
+   }
+  }
+ },
+ "start": {
+  "g": {
+   "fx": 0.866,
+   "fy": 0.948,
+   "inPlayer": true,
+   "root": {
+    "parent": "YTMUSIC-PLAYER#player",
+    "z": "1000",
+    "dl": 0,
+    "dt": 0,
+    "dw": 0,
+    "dh": 0
+   }
+  },
+  "b": {
+   "w": 165,
+   "h": 36,
+   "disp": "block"
+  },
+  "probe": {
+   "isBlock": true,
+   "tag": "SPAN",
+   "id": "",
+   "cls": "am-k-line upcoming"
+  },
+  "playerRect": [
+   296,
+   273,
+   615,
+   346
+  ],
+  "songMedia": {
+   "z": "1",
+   "pos": "absolute"
+  }
+ },
+ "drag_normal": {
+  "a": {
+   "before": [
+    0.866,
+    0.948
+   ],
+   "after": {
+    "fx": 0.3,
+    "fy": 0.3,
+    "inPlayer": true,
+    "root": {
+     "parent": "YTMUSIC-PLAYER#player",
+     "z": "1000",
+     "dl": 0,
+     "dt": 0,
+     "dw": 0,
+     "dh": 0
+    }
+   },
+   "b": {
+    "w": 165,
+    "h": 36,
+    "disp": "block"
+   }
+  },
+  "b": {
+   "before": [
+    0.3,
+    0.3
+   ],
+   "after": {
+    "fx": 0.7,
+    "fy": 0.6,
+    "inPlayer": true,
+    "root": {
+     "parent": "YTMUSIC-PLAYER#player",
+     "z": "1000",
+     "dl": 0,
+     "dt": 0,
+     "dw": 0,
+     "dh": 0
+    }
+   },
+   "b": {
+    "w": 146,
+    "h": 36,
+    "disp": "block"
+   }
+  },
+  "br": {
+   "before": [
+    0.7,
+    0.6
+   ],
+   "after": {
+    "fx": 0.881,
+    "fy": 0.948,
+    "inPlayer": true,
+    "root": {
+     "parent": "YTMUSIC-PLAYER#player",
+     "z": "1000",
+     "dl": 0,
+     "dt": 0,
+     "dw": 0,
+     "dh": 0
+    }
+   },
+   "b": {
+    "w": 146,
+    "h": 36,
+    "disp": "block"
+   }
+  }
+ },
+ "set_pos": {
+  "fx": 0.4,
+  "fy": 0.35,
+  "inPlayer": true,
+  "root": {
+   "parent": "YTMUSIC-PLAYER#player",
+   "z": "1000",
+   "dl": 0,
+   "dt": 0,
+   "dw": 0,
+   "dh": 0
+  }
+ },
+ "resize_1000": {
+  "fx": 0.4,
+  "fy": 0.35,
+  "inPlayer": true,
+  "root": {
+   "parent": "YTMUSIC-PLAYER#player",
+   "z": "1000",
+   "dl": 0,
+   "dt": 0,
+   "dw": 0,
+   "dh": 0
+  }
+ },
+ "resize_drag": {
+  "fx": 0.6,
+  "fy": 0.5,
+  "inPlayer": true,
+  "root": {
+   "parent": "YTMUSIC-PLAYER#player",
+   "z": "1000",
+   "dl": 0,
+   "dt": 0,
+   "dw": 0,
+   "dh": 0
+  }
+ },
+ "resize_back": {
+  "fx": 0.6,
+  "fy": 0.5,
+  "inPlayer": true,
+  "root": {
+   "parent": "YTMUSIC-PLAYER#player",
+   "z": "1000",
+   "dl": 0,
+   "dt": 0,
+   "dw": 0,
+   "dh": 0
+  }
+ },
+ "fsbtn": [
+  874.734375,
+  309.109375
+ ],
+ "fs_state": {
+  "fs": true,
+  "el": "HTML",
+  "inner": [
+   1400,
+   900
+  ]
+ },
+ "fs_enter": {
+  "fx": 0.6,
+  "fy": 0.5,
+  "inPlayer": true,
+  "root": {
+   "parent": "YTMUSIC-PLAYER#player",
+   "z": "1000",
+   "dl": 0,
+   "dt": 0,
+   "dw": 0,
+   "dh": 0
+  }
+ },
+ "drag_fs": {
+  "a": {
+   "before": [
+    0.6,
+    0.5
+   ],
+   "after": {
+    "fx": 0.3,
+    "fy": 0.3,
+    "inPlayer": true,
+    "root": {
+     "parent": "YTMUSIC-PLAYER#player",
+     "z": "1000",
+     "dl": 0,
+     "dt": 0,
+     "dw": 0,
+     "dh": 0
+    }
+   },
+   "b": {
+    "w": 425,
+    "h": 94,
+    "disp": "block"
+   }
+  },
+  "b": {
+   "before": [
+    0.3,
+    0.3
+   ],
+   "after": {
+    "fx": 0.7,
+    "fy": 0.6,
+    "inPlayer": true,
+    "root": {
+     "parent": "YTMUSIC-PLAYER#player",
+     "z": "1000",
+     "dl": 0,
+     "dt": 0,
+     "dw": 0,
+     "dh": 0
+    }
+   },
+   "b": {
+    "w": 425,
+    "h": 94,
+    "disp": "block"
+   }
+  },
+  "br": {
+   "before": [
+    0.7,
+    0.6
+   ],
+   "after": {
+    "fx": 0.848,
+    "fy": 0.948,
+    "inPlayer": true,
+    "root": {
+     "parent": "YTMUSIC-PLAYER#player",
+     "z": "1000",
+     "dl": 0,
+     "dt": 0,
+     "dw": 0,
+     "dh": 0
+    }
+   },
+   "b": {
+    "w": 425,
+    "h": 94,
+    "disp": "block"
+   }
+  }
+ },
+ "fs_probe": {
+  "isBlock": false,
+  "tag": "YT-ICON-BUTTON",
+  "id": "",
+  "cls": "repeat style-scope ytmusic-player-bar"
+ },
+ "fs_exit": {
+  "fx": 0.839,
+  "fy": 0.948,
+  "inPlayer": true,
+  "root": {
+   "parent": "YTMUSIC-PLAYER#player",
+   "z": "1000",
+   "dl": 0,
+   "dt": 0,
+   "dw": 0,
+   "dh": 0
+  }
+ },
+ "ui_hit": {
+  ".ytp-play-button": "missing",
+  ".ytp-progress-bar": "missing",
+  ".ytp-mute-button": "missing",
+  ".ytp-settings-button": "missing",
+  "ytmusic-player-bar #play-pause-button": "ok",
+  "ytmusic-player-bar #progress-bar": "ok",
+  "ytmusic-player-bar #volume-slider": "ok",
+  "ytmusic-player-bar .menu": "ok",
+  "ytmusic-av-toggle .song-button": "hidden",
+  "ytmusic-av-toggle .video-button": "hidden",
+  "[data-allmixer-lyrics-btn]": "ok"
+ },
+ "settings_click_err": "TimeoutError: locator.click: Timeout 3000ms exceeded.\nCall log:\n  - waiting for locator('.ytp-settings-button')\n",
+ "settings": "no ytp-settings-menu",
+ "click_toggle": {
+  "before": false,
+  "afterClick1": true,
+  "afterClick2": false
+ },
+ "menu_btn": [
+  917.15625,
+  864
+ ],
+ "threedot": {
+  "rect": [
+   899,
+   276,
+   242,
+   562
+  ],
+  "topIsMenu": true,
+  "top": "A"
+ },
+ "lyrics_popover": {
+  "open": true,
+  "covered": false,
+  "top": "LABEL#"
+ },
+ "seek_bar": {
+  "t0": 75.600071,
+  "t1": 177.355795,
+  "dur": 359.461
+ },
+ "toggle_song": {
+  "g": {
+   "fx": 0.727,
+   "fy": 0.948,
+   "inPlayer": true,
+   "root": {
+    "parent": "YTMUSIC-PLAYER#player",
+    "z": "1000",
+    "dl": 0,
+    "dt": 0,
+    "dw": 0,
+    "dh": 0
+   }
+  },
+  "b": {
+   "w": 336,
+   "h": 36,
+   "disp": "block"
+  },
+  "probe": {
+   "isBlock": true,
+   "tag": "SPAN",
+   "id": "",
+   "cls": "am-k-line upcoming"
+  }
+ },
+ "toggle_video": {
+  "g": {
+   "fx": 0.727,
+   "fy": 0.948,
+   "inPlayer": true,
+   "root": {
+    "parent": "YTMUSIC-PLAYER#player",
+    "z": "1000",
+    "dl": 0,
+    "dt": 0,
+    "dw": 0,
+    "dh": 0
+   }
+  },
+  "b": {
+   "w": 336,
+   "h": 36,
+   "disp": "block"
+  }
+ },
+ "pre_track_change": {
+  "fx": 0.35,
+  "fy": 0.4,
+  "inPlayer": true,
+  "root": {
+   "parent": "YTMUSIC-PLAYER#player",
+   "z": "1000",
+   "dl": 0,
+   "dt": 0,
+   "dw": 0,
+   "dh": 0
+  }
+ },
+ "post_track_change": {
+  "url0": "https://music.youtube.com/watch?v=04854XqcfCY&list=RDAMVMfJ9rUzIMcZQ",
+  "url1": "https://music.youtube.com/watch?v=04854XqcfCY&list=RDAMVMfJ9rUzIMcZQ",
+  "g": {
+   "fx": 0.35,
+   "fy": 0.4,
+   "inPlayer": true,
+   "root": {
+    "parent": "YTMUSIC-PLAYER#player",
+    "z": "1000",
+    "dl": 0,
+    "dt": 0,
+    "dw": 0,
+    "dh": 0
+   }
+  },
+  "b": {
+   "w": 288,
+   "h": 36,
+   "disp": "block"
+  }
+ },
+ "D1_right": {
+  "b": {
+   "w": 288,
+   "h": 36,
+   "disp": "block"
+  },
+  "g": {
+   "fx": 0.766,
+   "fy": 0.5,
+   "inPlayer": true,
+   "root": {
+    "parent": "YTMUSIC-PLAYER#player",
+    "z": "1000",
+    "dl": 0,
+    "dt": 0,
+    "dw": 0,
+    "dh": 0
+   }
+  }
+ },
+ "D1_bottom": {
+  "b": {
+   "w": 288,
+   "h": 36,
+   "disp": "block"
+  },
+  "g": {
+   "fx": 0.5,
+   "fy": 0.948,
+   "inPlayer": true,
+   "root": {
+    "parent": "YTMUSIC-PLAYER#player",
+    "z": "1000",
+    "dl": 0,
+    "dt": 0,
+    "dw": 0,
+    "dh": 0
+   }
+  }
+ },
+ "D3_before": {
+  "w": 288,
+  "h": 36,
+  "disp": "block"
+ },
+ "D3_ad": {
+  "w": 0,
+  "h": 0,
+  "disp": "none"
+ },
+ "D3_after": {
+  "w": 288,
+  "h": 36,
+  "disp": "block"
+ }
+}
