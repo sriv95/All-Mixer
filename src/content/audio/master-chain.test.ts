@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ML_LATENCY_SAMPLES } from '../../worklet/protocol';
+import type { AvProbe } from '../av-probe';
 import { MasterChain } from './master-chain';
 
 // Minimal Web Audio fakes: enough to observe graph wiring and context state.
@@ -230,9 +231,9 @@ describe('MasterChain separation', () => {
   const on = { on: true, vocal: 0, instrumental: 1.5 };
   const off = { ...on, on: false };
 
-  async function separating() {
+  async function separating(probe: AvProbe | null = null) {
     running();
-    const chain = new MasterChain(undefined, () => 'chrome-extension://x/worklet.js');
+    const chain = new MasterChain(undefined, () => 'chrome-extension://x/worklet.js', probe);
     const v = video();
     chain.setVideo(v);
     const changes: [number, number, string][] = [];
@@ -366,6 +367,26 @@ describe('MasterChain separation', () => {
     expect(sep.messages.at(-1)).toEqual({ type: 'hold' });
     v.dispatchEvent(new Event('seeking'));
     expect(sep.messages.at(-1)).toEqual({ type: 'flush' });
+  });
+
+  it('traces flush, engine and video events to the probe', async () => {
+    const traces: [string, Record<string, unknown>][] = [];
+    const probe = { trace: (k: string, d: Record<string, unknown>) => (traces.push([k, d]), true), attachAudio: () => {} } as unknown as AvProbe;
+    const { chain, v, ctx } = await separating(probe);
+    expect(traces.find(([k]) => k === 'video')![1]).toEqual({ changed: true, paused: false, workletOn: false });
+    traces.length = 0;
+    v.dispatchEvent(new Event('seeking'));
+    v.dispatchEvent(new Event('emptied'));
+    v.dispatchEvent(new Event('loadstart'));
+    const flushes = traces.filter(([k]) => k === 'flush').map(([, d]) => d);
+    expect(flushes.map((d) => d.event)).toEqual(['seeking', 'emptied', 'loadstart']);
+    expect(flushes[0]).toEqual({ event: 'seeking', currentTime: 0, paused: false, ctxTime: ctx.currentTime, workletOn: true });
+    const port = worklets[0].port as { onmessage?: (e: { data: unknown }) => void };
+    port.onmessage!({ data: { type: 'engine', engine: 'bypass', reason: 'deadline-miss', at: 12 } });
+    expect(traces.at(-1)).toEqual(['engine', { engine: 'bypass', reason: 'deadline-miss', at: 12 }]);
+    chain.setVideo(video());
+    expect(traces.at(-1)![0]).toBe('video');
+    expect(traces.at(-1)![1]).toMatchObject({ changed: true, workletOn: true });
   });
 
   it('re-syncs hold / release when the media element is swapped', async () => {

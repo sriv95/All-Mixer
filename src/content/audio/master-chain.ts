@@ -88,7 +88,16 @@ export class MasterChain {
   private engaged = false;
   private lastError: string | undefined;
   private removeGestureListeners: (() => void) | null = null;
-  private readonly onSeeking = () => this.flush();
+  private readonly onSeeking = (e: Event) => {
+    this.probe?.trace('flush', {
+      event: e.type,
+      currentTime: this.video?.currentTime,
+      paused: this.video?.paused,
+      ctxTime: this.ctx?.currentTime,
+      workletOn: this.workletOn,
+    });
+    this.flush();
+  };
   private readonly onHold = () => this.setHold(true);
   private readonly onRelease = () => this.setHold(false);
 
@@ -200,6 +209,7 @@ export class MasterChain {
     }
     const changed = this.video !== video;
     this.video = video;
+    if (changed) this.probe?.trace('video', { changed: true, paused: video.paused, workletOn: this.workletOn });
     // A swapped-in element fires no pause/playing event of its own: re-sync the freeze state.
     if (changed && this.workletOn) this.post({ type: video.paused ? 'hold' : 'release' });
     if (this.engaged) this.connectIfReady();
@@ -353,6 +363,7 @@ export class MasterChain {
 
   private onWorkletMessage(msg: FromWorklet): void {
     if (msg.type !== 'engine') return;
+    this.probe?.trace('engine', { engine: msg.engine, reason: msg.reason, at: msg.at });
     this.engine = msg.engine;
     this.engineReason = msg.reason;
     // `at` is the input sample's context time; it is heard one processing delay later.
