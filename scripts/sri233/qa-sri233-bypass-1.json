@@ -1,0 +1,314 @@
+{
+ "MODE": "bypass",
+ "RUN": "1",
+ "errAt": "theater pause #3",
+ "rows": [
+  {
+   "label": "theater pause #1",
+   "snaps": [
+    {
+     "t": 18.82,
+     "paused": true,
+     "rs": 4,
+     "err": null,
+     "errCls": null,
+     "mediaErr": null,
+     "ad": false
+    },
+    {
+     "t": 18.82,
+     "paused": true,
+     "rs": 4,
+     "err": null,
+     "errCls": null,
+     "mediaErr": null,
+     "ad": false
+    },
+    {
+     "t": 18.82,
+     "paused": true,
+     "rs": 4,
+     "err": null,
+     "errCls": null,
+     "mediaErr": null,
+     "ad": false
+    },
+    {
+     "t": 18.82,
+     "paused": true,
+     "rs": 4,
+     "err": null,
+     "errCls": null,
+     "mediaErr": null,
+     "ad": false
+    }
+   ],
+   "error": false,
+   "errText": null
+  },
+  {
+   "label": "theater play #1",
+   "snaps": [
+    {
+     "t": 19.12,
+     "paused": false,
+     "rs": 4,
+     "err": null,
+     "errCls": null,
+     "mediaErr": null,
+     "ad": false
+    },
+    {
+     "t": 19.82,
+     "paused": false,
+     "rs": 4,
+     "err": null,
+     "errCls": null,
+     "mediaErr": null,
+     "ad": false
+    },
+    {
+     "t": 20.83,
+     "paused": false,
+     "rs": 4,
+     "err": null,
+     "errCls": null,
+     "mediaErr": null,
+     "ad": false
+    },
+    {
+     "t": 22.34,
+     "paused": false,
+     "rs": 4,
+     "err": null,
+     "errCls": null,
+     "mediaErr": null,
+     "ad": false
+    }
+   ],
+   "error": false,
+   "errText": null
+  },
+  {
+   "label": "theater pause #2",
+   "snaps": [
+    {
+     "t": 28.85,
+     "paused": true,
+     "rs": 4,
+     "err": null,
+     "errCls": null,
+     "mediaErr": null,
+     "ad": false
+    },
+    {
+     "t": 28.85,
+     "paused": true,
+     "rs": 4,
+     "err": null,
+     "errCls": null,
+     "mediaErr": null,
+     "ad": false
+    },
+    {
+     "t": 28.85,
+     "paused": true,
+     "rs": 4,
+     "err": null,
+     "errCls": null,
+     "mediaErr": null,
+     "ad": false
+    },
+    {
+     "t": 28.85,
+     "paused": true,
+     "rs": 4,
+     "err": null,
+     "errCls": null,
+     "mediaErr": null,
+     "ad": false
+    }
+   ],
+   "error": false,
+   "errText": null
+  },
+  {
+   "label": "theater play #2",
+   "snaps": [
+    {
+     "t": 29.15,
+     "paused": false,
+     "rs": 4,
+     "err": null,
+     "errCls": null,
+     "mediaErr": null,
+     "ad": false
+    },
+    {
+     "t": 29.86,
+     "paused": false,
+     "rs": 4,
+     "err": null,
+     "errCls": null,
+     "mediaErr": null,
+     "ad": false
+    },
+    {
+     "t": 30.86,
+     "paused": false,
+     "rs": 4,
+     "err": null,
+     "errCls": null,
+     "mediaErr": null,
+     "ad": false
+    },
+    {
+     "t": 32.37,
+     "paused": false,
+     "rs": 4,
+     "err": null,
+     "errCls": null,
+     "mediaErr": null,
+     "ad": false
+    }
+   ],
+   "error": false,
+   "errText": null
+  },
+  {
+   "label": "theater pause #3",
+   "snaps": [
+    {
+     "t": 0,
+     "paused": true,
+     "rs": 0,
+     "err": "Something went wrong. Refresh or try again later. Learn more",
+     "errCls": null,
+     "mediaErr": null,
+     "ad": false
+    },
+    {
+     "t": 0,
+     "paused": true,
+     "rs": 0,
+     "err": "Something went wrong. Refresh or try again later. Learn more",
+     "errCls": null,
+     "mediaErr": null,
+     "ad": false
+    },
+    {
+     "t": 0,
+     "paused": true,
+     "rs": 0,
+     "err": "Something went wrong. Refresh or try again later. Learn more",
+     "errCls": null,
+     "mediaErr": null,
+     "ad": false
+    },
+    {
+     "t": 0,
+     "paused": true,
+     "rs": 0,
+     "err": "Something went wrong. Refresh or try again later. Learn more",
+     "errCls": null,
+     "mediaErr": null,
+     "ad": false
+    }
+   ],
+   "error": true,
+   "errText": "Something went wrong. Refresh or try again later. Learn more"
+  }
+ ],
+ "log": [
+  "[3.9s] console.error: Failed to load resource: the server responded with a status of 401 ()",
+  "[4.5s] console.error: Failed to load resource: net::ERR_FAILED",
+  "[4.6s] console.log: [All Mixer! avProbe] trace {\"kind\":\"video\",\"now\":4511.199999988079,\"n\":1,\"changed\":true,\"paused\":false,\"workletOn\":false}",
+  "[4.6s] console.log: [All Mixer! avProbe] trace {\"kind\":\"probeVideoFrame\",\"now\":4546.099999964237,\"n\":1,\"mediaTime\":0.72,\"expectedDisplayTime\":4547.7,\"edge\":[\"on@4547.7\"]}",
+  "[4.6s] console.log: [All Mixer! avProbe] videoOn {\"at\":4547.7}",
+  "[4.7s] console.log: [All Mixer! avProbe] trace {\"kind\":\"probeVideoFrame\",\"now\":4606.199999988079,\"n\":2,\"mediaTime\":0.76,\"expectedDisplayTime\":4582.7,\"edge\":[]}",
+  "[4.7s] console.log: [All Mixer! avProbe] trace {\"kind\":\"probeVideoFrame\",\"now\":4624.599999964237,\"n\":3,\"mediaTime\":0.8,\"expectedDisplayTime\":4631.1,\"edge\":[]}",
+  "[4.7s] console.log: [All Mixer! avProbe] trace {\"kind\":\"probeVideoFrame\",\"now\":4650.099999964237,\"n\":4,\"mediaTime\":0.84,\"expectedDisplayTime\":4666.3,\"edge\":[]}",
+  "[4.7s] http 403 https://rr2---sn-aigl6nze.googlevideo.com/videoplayback?expire=3740230892&ei=zvRMza497AvTKCruZDK1xNx&ip=44.4.98.82&id=o-AFQqPainby4X479ilcGS",
+  "[4.7s] console.error: Failed to load resource: the server responded with a status of 403 ()",
+  "[4.7s] http 403 https://rr2---sn-aigl6nze.googlevideo.com/videoplayback?expire=3740230892&ei=zvRMza497AvTKCruZDK1xNx&ip=44.4.98.82&id=o-AFQqPainby4X479ilcGS",
+  "[4.7s] console.error: Failed to load resource: the server responded with a status of 403 ()",
+  "[4.8s] console.log: [All Mixer! avProbe] trace {\"kind\":\"probeVideoFrame\",\"now\":4685.199999988079,\"n\":5,\"mediaTime\":0.88,\"expectedDisplayTime\":4698.9,\"edge\":[]}",
+  "[4.8s] console.log: [All Mixer! avProbe] trace {\"kind\":\"probeVideoFrame\",\"now\":4732.099999964237,\"n\":6,\"mediaTime\":0.92,\"expectedDisplayTime\":4747.6,\"edge\":[]}",
+  "[4.9s] console.log: [All Mixer! avProbe] trace {\"kind\":\"probeVideoFrame\",\"now\":4772.599999964237,\"n\":7,\"mediaTime\":0.96,\"expectedDisplayTime\":4781.4,\"edge\":[]}",
+  "[4.9s] console.log: [All Mixer! avProbe] trace {\"kind\":\"probeVideoFrame\",\"now\":4817.299999952316,\"n\":8,\"mediaTime\":1,\"expectedDisplayTime\":4832.9,\"edge\":[]}",
+  "[4.9s] console.error: Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+  "[4.9s] console.error: Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+  "[4.9s] console.error: Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+  "[4.9s] console.error: Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+  "[4.9s] console.error: Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+  "[4.9s] console.error: Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+  "[4.9s] console.log: [All Mixer! avProbe] trace {\"kind\":\"probeVideoFrame\",\"now\":4850.099999964237,\"n\":9,\"mediaTime\":1.04,\"expectedDisplayTime\":4866.3,\"edge\":[]}",
+  "[5.0s] console.log: [All Mixer! avProbe] trace {\"kind\":\"probeVideoFrame\",\"now\":4883.5,\"n\":10,\"mediaTime\":1.08,\"expectedDisplayTime\":4899.6,\"edge\":[]}",
+  "[5.0s] http 403 https://rr2---sn-aigl6nze.googlevideo.com/videoplayback?expire=3740230892&ei=zvRMza497AvTKCruZDK1xNx&ip=44.4.98.82&id=o-AFQqPainby4X479ilcGS",
+  "[5.0s] console.error: Failed to load resource: the server responded with a status of 403 ()",
+  "[5.1s] http 403 https://rr2---sn-aigl6nze.googlevideo.com/videoplayback?expire=3740230892&ei=zvRMza497AvTKCruZDK1xNx&ip=44.4.98.82&id=o-AFQqPainby4X479ilcGS",
+  "[5.1s] console.error: Failed to load resource: the server responded with a status of 403 ()",
+  "[5.3s] http 403 https://rr2---sn-aigl6nze.googlevideo.com/videoplayback?expire=3740230892&ei=zvRMza497AvTKCruZDK1xNx&ip=44.4.98.82&id=o-AFQqPainby4X479ilcGS",
+  "[5.3s] console.error: Failed to load resource: the server responded with a status of 403 ()",
+  "[5.4s] http 403 https://rr2---sn-aigl6nze.googlevideo.com/videoplayback?expire=3740230892&ei=zvRMza497AvTKCruZDK1xNx&ip=44.4.98.82&id=o-AFQqPainby4X479ilcGS",
+  "[5.4s] console.error: Failed to load resource: the server responded with a status of 403 ()",
+  "[13.2s] settings: default/master100",
+  "[18.3s] console.log: [All Mixer! avProbe] videoOff {\"at\":18099.7}",
+  "[18.3s] console.log: [All Mixer! avProbe] videoOn {\"at\":18232.9}",
+  "[21.2s] theater on",
+  "[22.7s] console.log: [All Mixer! avProbe] trace {\"kind\":\"hold\",\"now\":22658.5,\"n\":1,\"on\":true,\"workletOn\":false}",
+  "[22.7s] console.log: [All Mixer! avProbe] pause {\"at\":22659}",
+  "[22.7s] console.log: [All Mixer! avProbe] trace {\"kind\":\"pause\",\"now\":22659,\"currentTime\":18.816479,\"queue\":0,\"delay\":0,\"shown\":0}",
+  "[22.8s] console.log: [All Mixer! avProbe] videoOff {\"at\":22633}",
+  "[24.4s] console.log: [All Mixer! avProbe] transition {\"kind\":\"pause\",\"at\":22659,\"missing\":[\"audioOff\"]}",
+  "[26.3s] theater pause #1: [[18.82,true,null],[18.82,true,null],[18.82,true,null],[18.82,true,null]]",
+  "[30.8s] console.log: [All Mixer! avProbe] play {\"at\":30686.299999952316}",
+  "[30.8s] console.log: [All Mixer! avProbe] trace {\"kind\":\"play\",\"now\":30686.299999952316,\"currentTime\":18.88,\"queue\":0,\"delay\":0,\"shown\":0}",
+  "[30.8s] console.log: [All Mixer! avProbe] trace {\"kind\":\"hold\",\"now\":30688.19999998808,\"n\":1,\"on\":false,\"workletOn\":false}",
+  "[30.8s] console.log: [All Mixer! avProbe] playing {\"at\":30688.299999952316}",
+  "[30.8s] console.log: [All Mixer! avProbe] trace {\"kind\":\"playing\",\"now\":30688.299999952316,\"currentTime\":18.88,\"queue\":0,\"delay\":0,\"shown\":0}",
+  "[30.8s] console.log: [All Mixer! avProbe] trace {\"kind\":\"probeVideoFrame\",\"now\":30733.299999952316,\"n\":1,\"mediaTime\":18.84,\"expectedDisplayTime\":30733,\"edge\":[\"on@30733\"]}",
+  "[30.8s] console.log: [All Mixer! avProbe] videoOn {\"at\":30733}",
+  "[30.8s] console.log: [All Mixer! avProbe] trace {\"kind\":\"probeVideoFrame\",\"now\":30766.5,\"n\":2,\"mediaTime\":18.88,\"expectedDisplayTime\":30766.3,\"edge\":[]}",
+  "[30.9s] console.log: [All Mixer! avProbe] trace {\"kind\":\"probeVideoFrame\",\"now\":30819,\"n\":3,\"mediaTime\":18.92,\"expectedDisplayTime\":30816.3,\"edge\":[]}",
+  "[30.9s] console.log: [All Mixer! avProbe] trace {\"kind\":\"probeVideoFrame\",\"now\":30849.799999952316,\"n\":4,\"mediaTime\":18.96,\"expectedDisplayTime\":30849.7,\"edge\":[]}",
+  "[31.0s] console.log: [All Mixer! avProbe] trace {\"kind\":\"probeVideoFrame\",\"now\":30899.799999952316,\"n\":5,\"mediaTime\":19,\"expectedDisplayTime\":30899.6,\"edge\":[]}",
+  "[31.0s] console.log: [All Mixer! avProbe] trace {\"kind\":\"probeVideoFrame\",\"now\":30933.19999998808,\"n\":6,\"mediaTime\":19.04,\"expectedDisplayTime\":30933,\"edge\":[]}",
+  "[31.0s] console.log: [All Mixer! avProbe] trace {\"kind\":\"probeVideoFrame\",\"now\":30966.899999976158,\"n\":7,\"mediaTime\":19.08,\"expectedDisplayTime\":30966.3,\"edge\":[]}",
+  "[31.1s] console.log: [All Mixer! avProbe] trace {\"kind\":\"probeVideoFrame\",\"now\":31016.5,\"n\":8,\"mediaTime\":19.12,\"expectedDisplayTime\":31016.3,\"edge\":[]}",
+  "[31.1s] console.log: [All Mixer! avProbe] trace {\"kind\":\"probeVideoFrame\",\"now\":31033.19999998808,\"n\":9,\"mediaTime\":19.16,\"expectedDisplayTime\":31049.6,\"edge\":[]}",
+  "[31.2s] console.log: [All Mixer! avProbe] trace {\"kind\":\"probeVideoFrame\",\"now\":31100.099999964237,\"n\":10,\"mediaTime\":19.2,\"expectedDisplayTime\":31099.6,\"edge\":[]}",
+  "[32.4s] console.log: [All Mixer! avProbe] transition {\"kind\":\"play\",\"at\":30686.299999952316,\"missing\":[\"audioOn\"],\"level\":{\"rms\":0,\"peak\":0}}",
+  "[34.3s] theater play #1: [[19.12,false,null],[19.82,false,null],[20.83,false,null],[22.34,false,null]]",
+  "[40.8s] console.log: [All Mixer! avProbe] trace {\"kind\":\"hold\",\"now\":40729.799999952316,\"n\":2,\"on\":true,\"workletOn\":false}",
+  "[40.8s] console.log: [All Mixer! avProbe] pause {\"at\":40730}",
+  "[40.8s] console.log: [All Mixer! avProbe] trace {\"kind\":\"pause\",\"now\":40730,\"currentTime\":28.849273,\"queue\":0,\"delay\":0,\"shown\":0}",
+  "[40.8s] console.log: [All Mixer! avProbe] trace {\"kind\":\"probeVideoFrame\",\"now\":40738.799999952316,\"n\":1,\"mediaTime\":28.84,\"expectedDisplayTime\":40732.1,\"edge\":[]}",
+  "[40.9s] console.log: [All Mixer! avProbe] videoOff {\"at\":40732.1}",
+  "[42.5s] console.log: [All Mixer! avProbe] transition {\"kind\":\"pause\",\"at\":40730,\"missing\":[\"audioOff\"]}",
+  "[44.3s] theater pause #2: [[28.85,true,null],[28.85,true,null],[28.85,true,null],[28.85,true,null]]",
+  "[48.8s] console.log: [All Mixer! avProbe] play {\"at\":48763.5}",
+  "[48.8s] console.log: [All Mixer! avProbe] trace {\"kind\":\"play\",\"now\":48763.5,\"currentTime\":28.906667,\"queue\":0,\"delay\":0,\"shown\":0}",
+  "[48.8s] console.log: [All Mixer! avProbe] trace {\"kind\":\"hold\",\"now\":48767.299999952316,\"n\":1,\"on\":false,\"workletOn\":false}",
+  "[48.8s] console.log: [All Mixer! avProbe] playing {\"at\":48767.5}",
+  "[48.8s] console.log: [All Mixer! avProbe] trace {\"kind\":\"playing\",\"now\":48767.5,\"currentTime\":28.906667,\"queue\":0,\"delay\":0,\"shown\":0}",
+  "[48.9s] console.log: [All Mixer! avProbe] trace {\"kind\":\"probeVideoFrame\",\"now\":48785.39999997616,\"n\":1,\"mediaTime\":28.88,\"expectedDisplayTime\":48799.6,\"edge\":[\"on@48799.6\"]}",
+  "[48.9s] console.log: [All Mixer! avProbe] videoOn {\"at\":48799.6}",
+  "[48.9s] console.log: [All Mixer! avProbe] trace {\"kind\":\"probeVideoFrame\",\"now\":48850.09999996424,\"n\":2,\"mediaTime\":28.92,\"expectedDisplayTime\":48849.7,\"edge\":[]}",
+  "[49.0s] console.log: [All Mixer! avProbe] trace {\"kind\":\"probeVideoFrame\",\"now\":48883.299999952316,\"n\":3,\"mediaTime\":28.96,\"expectedDisplayTime\":48883,\"edge\":[]}",
+  "[49.0s] console.log: [All Mixer! avProbe] trace {\"kind\":\"probeVideoFrame\",\"now\":48933.19999998808,\"n\":4,\"mediaTime\":29,\"expectedDisplayTime\":48932.9,\"edge\":[]}",
+  "[49.0s] console.log: [All Mixer! avProbe] trace {\"kind\":\"probeVideoFrame\",\"now\":48970,\"n\":5,\"mediaTime\":29.04,\"expectedDisplayTime\":48966.4,\"edge\":[]}",
+  "[49.1s] console.log: [All Mixer! avProbe] trace {\"kind\":\"probeVideoFrame\",\"now\":48999.799999952316,\"n\":6,\"mediaTime\":29.08,\"expectedDisplayTime\":48999.6,\"edge\":[]}",
+  "[49.1s] console.log: [All Mixer! avProbe] trace {\"kind\":\"probeVideoFrame\",\"now\":49050.19999998808,\"n\":7,\"mediaTime\":29.12,\"expectedDisplayTime\":49049.6,\"edge\":[]}",
+  "[49.2s] console.log: [All Mixer! avProbe] trace {\"kind\":\"probeVideoFrame\",\"now\":49083.19999998808,\"n\":8,\"mediaTime\":29.16,\"expectedDisplayTime\":49082.9,\"edge\":[]}",
+  "[49.2s] console.log: [All Mixer! avProbe] trace {\"kind\":\"probeVideoFrame\",\"now\":49133.09999996424,\"n\":9,\"mediaTime\":29.2,\"expectedDisplayTime\":49132.9,\"edge\":[]}",
+  "[49.2s] console.log: [All Mixer! avProbe] trace {\"kind\":\"probeVideoFrame\",\"now\":49166.5,\"n\":10,\"mediaTime\":29.24,\"expectedDisplayTime\":49166.3,\"edge\":[]}",
+  "[50.5s] console.log: [All Mixer! avProbe] transition {\"kind\":\"play\",\"at\":48763.5,\"missing\":[\"audioOn\"],\"level\":{\"rms\":0,\"peak\":0}}",
+  "[52.4s] theater play #2: [[29.15,false,null],[29.86,false,null],[30.86,false,null],[32.37,false,null]]",
+  "[56.8s] console.log: [All Mixer! avProbe] trace {\"kind\":\"flush\",\"now\":56698,\"n\":1,\"event\":\"emptied\",\"currentTime\":0,\"paused\":true,\"workletOn\":false}",
+  "[56.8s] console.log: [All Mixer! avProbe] emptied {\"at\":56698.09999996424}",
+  "[56.8s] console.log: [All Mixer! avProbe] videoOff {\"at\":56649.7}",
+  "[62.4s] theater pause #3: [[0,true,\"Something went wrong. Refresh or try again later. Learn more\"],[0,true,\"Something went wrong. Refresh or try again later. Learn more\"],[0,true,\"Something went wrong. Refresh or try again later. Learn more\"],[0,true,\"Something went wrong. Refresh or try again later. Learn more\"]]",
+  "[62.4s] ERROR at theater pause #3: {\"t\":0,\"paused\":true,\"rs\":0,\"err\":\"Something went wrong. Refresh or try again later. Learn more\",\"errCls\":null,\"mediaErr\":null,\"ad\":false}"
+ ]
+}
