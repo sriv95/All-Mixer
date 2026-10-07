@@ -94,7 +94,12 @@ beforeEach(() => {
   vi.stubGlobal('WaveShaperNode', FakeNode);
 });
 
-const video = () => document.createElement('video');
+// jsdom reports every video as paused; tests that are not about pause start with a playing one.
+const video = () => {
+  const v = document.createElement('video');
+  Object.defineProperty(v, 'paused', { value: false, configurable: true });
+  return v;
+};
 const flushPromises = () => new Promise((r) => setTimeout(r, 0));
 
 describe('MasterChain', () => {
@@ -349,6 +354,29 @@ describe('MasterChain separation', () => {
     const { v, sep } = await separating();
     v.dispatchEvent(new Event('seeking'));
     expect(sep.messages.at(-1)).toEqual({ type: 'flush' });
+  });
+
+  it('holds the delay line on pause / ended, releases on playing, and still flushes on seek', async () => {
+    const { v, sep } = await separating();
+    v.dispatchEvent(new Event('pause'));
+    expect(sep.messages.at(-1)).toEqual({ type: 'hold' });
+    v.dispatchEvent(new Event('playing'));
+    expect(sep.messages.at(-1)).toEqual({ type: 'release' });
+    v.dispatchEvent(new Event('ended'));
+    expect(sep.messages.at(-1)).toEqual({ type: 'hold' });
+    v.dispatchEvent(new Event('seeking'));
+    expect(sep.messages.at(-1)).toEqual({ type: 'flush' });
+  });
+
+  it('starts held when the video is already paused as the separator engages', async () => {
+    running();
+    const chain = new MasterChain(undefined, () => 'chrome-extension://x/worklet.js');
+    const v = video();
+    Object.defineProperty(v, 'paused', { value: true, configurable: true });
+    chain.setVideo(v);
+    chain.setSeparation(on);
+    await flushPromises();
+    expect(worklets[0].messages.slice(0, 2)).toEqual([{ type: 'active', on: true }, { type: 'hold' }]);
   });
 
   it('reports an error state and bypass latency when the worklet load fails', async () => {

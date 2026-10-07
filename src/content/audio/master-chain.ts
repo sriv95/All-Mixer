@@ -46,6 +46,9 @@ export type SeparationState = 'off' | 'loading' | 'on' | 'error';
 
 /** Media events after which the separator holds stale audio (seek, ad break, source change). */
 const FLUSH_EVENTS = ['seeking', 'emptied', 'loadstart'] as const;
+/** Media events that pause / resume the separator's delay line instead of draining it. */
+const HOLD_EVENTS = ['pause', 'ended'] as const;
+const RELEASE_EVENT = 'playing';
 /** Crossfade time constant (s); settles in ≈ 30 ms. */
 const FADE_TAU = 0.006;
 /** Margin between scheduling and the start of a ramp (s). */
@@ -86,6 +89,8 @@ export class MasterChain {
   private lastError: string | undefined;
   private removeGestureListeners: (() => void) | null = null;
   private readonly onSeeking = () => this.flush();
+  private readonly onHold = () => this.setHold(true);
+  private readonly onRelease = () => this.setHold(false);
 
   constructor(
     private readonly onStateChange: () => void = () => {},
@@ -154,6 +159,12 @@ export class MasterChain {
     if (this.workletOn) this.post({ type: 'flush' });
   }
 
+  /** Freeze (pause) or resume the separator's delay line; sent to the worklet once it runs. */
+  private setHold(on: boolean): void {
+    this.probe?.trace('hold', { on, ctxTime: this.ctx?.currentTime, workletOn: this.workletOn });
+    if (this.workletOn) this.post({ type: on ? 'hold' : 'release' });
+  }
+
   /** Hand the worklet its channel to the ML worker (the port is transferred). */
   setMlPort(port: MessagePort): void {
     if (!this.sep) {
@@ -182,6 +193,10 @@ export class MasterChain {
     if (this.video !== video) {
       for (const e of FLUSH_EVENTS) this.video?.removeEventListener(e, this.onSeeking);
       for (const e of FLUSH_EVENTS) video.addEventListener(e, this.onSeeking);
+      for (const e of HOLD_EVENTS) this.video?.removeEventListener(e, this.onHold);
+      this.video?.removeEventListener(RELEASE_EVENT, this.onRelease);
+      for (const e of HOLD_EVENTS) video.addEventListener(e, this.onHold);
+      video.addEventListener(RELEASE_EVENT, this.onRelease);
     }
     this.video = video;
     if (this.engaged) this.connectIfReady();
@@ -259,6 +274,7 @@ export class MasterChain {
         this.engineReason = 'auto';
         this.post({ type: 'active', on: true });
         this.workletOn = true;
+        if (this.video?.paused) this.post({ type: 'hold' });
         if (this.pendingEngine) this.post({ type: 'engine', ...this.pendingEngine });
         this.pendingEngine = null;
       }

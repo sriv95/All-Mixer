@@ -441,3 +441,94 @@ describe('SeparatorCore, ML engine and bypass', () => {
     expect(r.msgs).toEqual([]);
   });
 });
+
+describe('SeparatorCore, hold / release (pause)', () => {
+  const Q0 = blocks(8); // hold here, ML steady
+  const HELD = 600; // ≈ 1.7 s of paused quanta
+
+  it('hold fades to silence within one quantum and the ring is frozen; release replays the same samples (no loss, no repeat)', () => {
+    const r = rig(25);
+    r.core.setActive(true, 'ml');
+    r.run(Q0);
+    r.core.setHeld(true);
+    r.run(HELD);
+    r.core.setHeld(false);
+    r.run(blocks(1));
+    const h0 = Q0 * QUANTUM;
+    // Fade-out quantum: ends at 0, then exact silence.
+    expect(Math.abs(mixL(r, h0 + QUANTUM - 1))).toBeLessThan(1e-6);
+    for (let n = h0 + QUANTUM; n < h0 + HELD * QUANTUM; n++) expect(mixL(r, n)).toBe(0);
+    // After release (skipping the fade-in quantum): input delayed by L from where it was frozen.
+    const rel = h0 + HELD * QUANTUM;
+    let err = 0;
+    for (let j = QUANTUM; j < blocks(1) * QUANTUM; j++) err = Math.max(err, Math.abs(mixL(r, rel + j) - sigAt(r.sigL, h0 - L + j)));
+    expect(err).toBeLessThan(1e-6);
+    // Fade-in quantum is the same samples under a ramp.
+    for (let j = 0; j < QUANTUM; j++) expect(Math.abs(mixL(r, rel + j))).toBeLessThanOrEqual(Math.abs(sigAt(r.sigL, h0 - L + j)) + 1e-6);
+  });
+
+  it('input while held is not consumed: nothing is posted to the ML stream', () => {
+    const r = rig(25);
+    r.core.setActive(true, 'ml');
+    r.run(Q0);
+    r.core.setHeld(true);
+    r.run(2);
+    const posted = r.port.posted;
+    r.run(blocks(3));
+    expect(r.port.posted).toBe(posted);
+    r.core.setHeld(false);
+    r.run(blocks(2));
+    expect(r.port.posted).toBeGreaterThan(posted);
+  });
+
+  it('flush while held clears the ring and keeps the hold until release', () => {
+    const r = rig(25);
+    r.core.setActive(true, 'ml');
+    r.run(Q0);
+    r.core.setHeld(true);
+    r.run(4);
+    r.core.flush();
+    expect(r.core.isHeld).toBe(true);
+    r.run(20);
+    const n0 = r.vL.length - 20 * QUANTUM;
+    for (let n = n0; n < r.vL.length; n++) expect(mixL(r, n)).toBe(0);
+    r.core.setHeld(false);
+    r.run(blocks(1));
+    // Ring was cleared: the refill is silence (the 2 s ML delay again), not old audio.
+    for (let n = r.vL.length - blocks(1) * QUANTUM; n < r.vL.length; n++) expect(mixL(r, n)).toBe(0);
+  });
+
+  it('hold during to-ml does not break the phase switch', () => {
+    const r = rig(25);
+    r.core.setActive(true, 'bypass');
+    r.run(blocks(2));
+    r.core.requestEngine('ml', 'auto');
+    r.run(3);
+    r.core.setHeld(true);
+    r.run(200);
+    r.core.setHeld(false);
+    r.run(blocks(12));
+    expect(r.msgs.filter((m) => m.type === 'engine')).toHaveLength(1);
+    expect(r.core.engine).toBe('ml');
+    expect(r.core.latencySamples).toBe(L);
+    // Steady state later (everything in the ring was written after release): input delayed by L.
+    const end = r.vL.length;
+    expect(maxErr(r, L, end - 50 * QUANTUM, end)).toBeLessThan(1e-6);
+  });
+
+  it('hold in bypass: silent, frozen, resumes the live input', () => {
+    const r = rig(5);
+    r.core.setActive(true, 'bypass');
+    r.run(100);
+    r.core.setHeld(true);
+    r.run(50);
+    r.core.setHeld(false);
+    r.run(50);
+    const h0 = 100 * QUANTUM;
+    expect(Math.abs(mixL(r, h0 + QUANTUM - 1))).toBeLessThan(1e-6);
+    for (let n = h0 + QUANTUM; n < h0 + 50 * QUANTUM; n++) expect(mixL(r, n)).toBe(0);
+    // After release the live input plays at once (fade-in quantum, then exact).
+    const rel = h0 + 50 * QUANTUM;
+    for (let j = QUANTUM; j < 50 * QUANTUM; j++) expect(mixL(r, rel + j)).toBeCloseTo(r.sigL[rel + j], 6);
+  });
+});
