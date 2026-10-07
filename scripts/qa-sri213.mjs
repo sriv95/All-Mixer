@@ -1,12 +1,12 @@
 // SRI-213: real ML engine, real output-tap (qa-sri217-tap.js) + probe overlay edges + lyrics line, per scenario.
-// Usage: SITE=music|www SCEN=basic,seek,rate,pending,default,layout,nav,stall OUT=dir REPS=3 node scripts/qa-sri213.mjs  (needs `npm run build`)
+// Usage: SITE=music|www SCEN=basic,seek,rate,pending,default,layout,nav,stall OUT=dir REPS=3 LAYOUT_REPS=5 node scripts/qa-sri213.mjs  (needs `npm run build`)
 import path from 'node:path'; import os from 'node:os'; import fs from 'node:fs'; import { createRequire } from 'node:module';
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const { chromium } = createRequire(path.join(root, 'spike/package.json'))('playwright');
 const ext = fs.mkdtempSync(path.join(os.tmpdir(), 'am-ext-'));
 for (const f of fs.readdirSync(path.join(root, 'dist'))) { if (f !== 'content.js') fs.symlinkSync(path.join(root, 'dist', f), path.join(ext, f)); }
 fs.writeFileSync(path.join(ext, 'content.js'), fs.readFileSync(path.join(root, 'scripts/qa-sri217-tap.js'), 'utf8') + fs.readFileSync(path.join(root, 'dist/content.js'), 'utf8'));
-const OUT = process.env.OUT || os.tmpdir(); const SITE = process.env.SITE || 'music'; const REPS = Number(process.env.REPS || 3);
+const OUT = process.env.OUT || os.tmpdir(); const SITE = process.env.SITE || 'music'; const REPS = Number(process.env.REPS || 3); const LAYOUT_REPS = Number(process.env.LAYOUT_REPS || 5);
 const SCEN = (process.env.SCEN || 'basic,seek,rate,pending,default,layout,nav,stall').split(',');
 const URL_ = process.env.URL || (SITE === 'music' ? 'https://music.youtube.com/watch?v=fJ9rUzIMcZQ' : 'https://www.youtube.com/watch?v=fJ9rUzIMcZQ');
 const ctx = await chromium.launchPersistentContext(fs.mkdtempSync(path.join(os.tmpdir(), 'am-qa-')), {
@@ -74,8 +74,8 @@ if (has('layout')) {
   if (SITE === 'www') {
     await page.keyboard.press('t');
     for (const [ms, lab] of [[500, '0.5s'], [2500, '3s'], [3000, '6s']]) { await sleep(ms); const s = await status().catch(() => ({})); const e = { scen: 'layout', label: `theater engine @${lab}`, eng: s.separation?.latency?.engine, reason: s.separation?.latency?.reason, choice: s.separation?.choice }; results.push(e); console.log(JSON.stringify(e)); }
-    await cycle('layout', 'theater', 3000, 2); await page.keyboard.press('t'); await sleep(2000);
-    await v(() => document.querySelector('#movie_player').requestFullscreen?.().catch(() => {})); await page.keyboard.press('f').catch(() => {}); await sleep(3000); console.log('fs', await v(() => !!document.fullscreenElement)); await cycle('layout', 'fullscreen', 3000, 2);
+    await cycle('layout', 'theater', 3000, LAYOUT_REPS); await page.keyboard.press('t'); await sleep(2000);
+    await v(() => document.querySelector('#movie_player').requestFullscreen?.().catch(() => {})); await page.keyboard.press('f').catch(() => {}); await sleep(3000); console.log('fs', await v(() => !!document.fullscreenElement)); await cycle('layout', 'fullscreen', 3000, LAYOUT_REPS);
     await v(() => document.exitFullscreen?.().catch(() => {})); await sleep(1500);
   } else {
     const clicked = await v(() => { const t = document.querySelector('ytmusic-av-toggle'); const b = t && [...t.querySelectorAll('[role=button], button, .video-button, .song-button, tp-yt-paper-button')].find((x) => /video/i.test(x.textContent + x.className + (x.getAttribute('aria-label') || ''))); if (b) b.click(); return !!b; });
@@ -88,8 +88,8 @@ if (has('layout')) {
     await sleep(6000);
     console.log('music-video-mode cycle start', JSON.stringify(p0 = await pos()));
     if (p0.t > p0.duration - 30) { await act('seek', SEEKTO - p0.t); await sleep(8000); console.log('too close to end, re-seeked', JSON.stringify(await pos())); }
-    await cycle('layout', 'music-video-mode', 3000, 2);
-    await v(() => document.querySelector('#movie_player')?.requestFullscreen?.().catch(() => {})); await sleep(2500); console.log('fs', await v(() => !!document.fullscreenElement)); { const q = await v(() => { const e = document.querySelector('video'); return { t: +e.currentTime.toFixed(1), duration: +e.duration.toFixed(1) }; }); console.log('music-fullscreen cycle start', JSON.stringify(q)); if (q.t > q.duration - 30) { await act('seek', SEEKTO - q.t); await sleep(8000); } } await cycle('layout', 'music-fullscreen', 3000, 2); await v(() => document.exitFullscreen?.().catch(() => {})); await sleep(1500);
+    await cycle('layout', 'music-video-mode', 3000, LAYOUT_REPS);
+    await v(() => document.querySelector('#movie_player')?.requestFullscreen?.().catch(() => {})); await sleep(2500); console.log('fs', await v(() => !!document.fullscreenElement)); { const q = await v(() => { const e = document.querySelector('video'); return { t: +e.currentTime.toFixed(1), duration: +e.duration.toFixed(1) }; }); console.log('music-fullscreen cycle start', JSON.stringify(q)); if (q.t > q.duration - 30) { await act('seek', SEEKTO - q.t); await sleep(8000); } } await cycle('layout', 'music-fullscreen', 3000, LAYOUT_REPS); await v(() => document.exitFullscreen?.().catch(() => {})); await sleep(1500);
   }
 }
 if (has('stall')) {
