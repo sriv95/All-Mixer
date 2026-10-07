@@ -1,0 +1,47 @@
+{
+ "site": "www",
+ "vid": "dQw4w9WgXcQ",
+ "plain": true,
+ "steps": {
+  "initial_340x720": {
+   "panelH": 720,
+   "scrollH": 661.609375,
+   "scrollHeight": 2711,
+   "scrollMax": 2049,
+   "overflowY": "auto",
+   "synced": false,
+   "hasPlain": true,
+   "padTop": "12px",
+   "padBottom": "12px",
+   "padLeft": "12px",
+   "inlinePad": "12px",
+   "lockBtn": false,
+   "footerTop": 735.609375,
+   "footerBottom": 759,
+   "panelBottom": 760,
+   "footerVisible": true,
+   "plainText": "Plain line 1: never gonna give you up, never gonna let you d",
+   "scrolledTo": 2049
+  },
+  "after_340x340": {
+   "panelH": 340,
+   "scrollH": 281.609375,
+   "scrollHeight": 2711,
+   "scrollMax": 2429,
+   "overflowY": "auto",
+   "synced": false,
+   "hasPlain": true,
+   "padTop": "12px",
+   "padBottom": "12px",
+   "padLeft": "12px",
+   "inlinePad": "12px",
+   "lockBtn": false,
+   "footerTop": 355.609375,
+   "footerBottom": 379,
+   "panelBottom": 380,
+   "footerVisible": true,
+   "plainText": "Plain line 1: never gonna give you up, never gonna let you d",
+   "scrolledTo": 2429
+  }
+ }
+}
