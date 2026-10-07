@@ -57,8 +57,8 @@ export class MlPipeline {
   /** Bumped by reset: a step still in flight from the old stream is dropped. */
   private gen = 0;
 
-  constructor(g?: number, private readonly splWaitMs: number = SPL_WAIT_MS) {
-    this.kara = new KaraokeCombiner(g);
+  constructor(g?: number, private readonly splWaitMs: number = SPL_WAIT_MS, fill = true) {
+    this.kara = new KaraokeCombiner(g, fill);
   }
 
   reset(): void {

@@ -23,8 +23,8 @@ const identity = (v: Float32Array): Float32Array => v.slice();
 const zero = (v: Float32Array): Float32Array => new Float32Array(v.length);
 
 /** Stream all blocks (reply, then catch-up, as the worker does); stems on the input time axis. */
-async function run(l: Float32Array, r: Float32Array, models: Models, g?: number) {
-  const p = new MlPipeline(g);
+async function run(l: Float32Array, r: Float32Array, models: Models, g?: number, fill = false) {
+  const p = new MlPipeline(g, undefined, fill);
   const o = { vk: new Float32Array(N), v: new Float32Array(N), vkR: new Float32Array(N) };
   const a = new Float32Array(ML_BLOCK), b = new Float32Array(ML_BLOCK), c = new Float32Array(ML_BLOCK), d = new Float32Array(ML_BLOCK);
   for (let k = 0; k < NB; k++) {
@@ -154,7 +154,7 @@ describe('MlPipeline', () => {
       let late = true;
       const spl: Models['spleeter'] = (v) => (late ? new Promise<Float32Array>((r) => (hold = () => r(v.slice()))) : Promise.resolve(v.slice()));
       const models: Models = { mdx: zero, spleeter: spl };
-      const p = new MlPipeline(undefined, 5);
+      const p = new MlPipeline(undefined, 5, false);
       const o = outs();
       await blocks(p, models, 0, 3, o, false); // step 0 hangs: masks missing
       expect(p.splMisses).toBeGreaterThan(0);
@@ -168,7 +168,7 @@ describe('MlPipeline', () => {
     });
 
     it('(c) normal path (masks in time) is bit-identical to the unbounded wait: no misses', async () => {
-      const a = await run(L, R, { mdx: half, spleeter: identity });
+      const a = await run(L, R, { mdx: half, spleeter: identity }, undefined, true);
       const p = new MlPipeline(undefined, 50);
       const o = outs();
       await blocks(p, { mdx: half, spleeter: (v) => sleep(0).then(() => v.slice()) }, 0, NB, o, true);
