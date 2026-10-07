@@ -14,8 +14,8 @@ const ctx = await chromium.launchPersistentContext(fs.mkdtempSync(path.join(os.t
   args: [`--disable-extensions-except=${ext}`, `--load-extension=${ext}`, '--autoplay-policy=no-user-gesture-required', '--mute-audio'] });
 const sw = ctx.serviceWorkers()[0] ?? await ctx.waitForEvent('serviceworker');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const page = await ctx.newPage(); const probe = [];
-page.on('console', (m) => { const t = m.text(); const k = t.match(/avProbe\] (overlayOn|overlayOff|videoOn|videoOff) (\{.*\})/); if (k) probe.push({ kind: k[1], ...JSON.parse(k[2]) }); });
+const page = await ctx.newPage(); const probe = []; const traceLog = [];
+page.on('console', (m) => { const t = m.text(); const k = t.match(/avProbe\] (overlayOn|overlayOff|videoOn|videoOff) (\{.*\})/); if (k) probe.push({ kind: k[1], ...JSON.parse(k[2]) }); const tr = t.match(/avProbe\] trace (\{.*\})/); if (tr) { const j = JSON.parse(tr[1]); if (['hold', 'flush', 'engine', 'video'].includes(j.kind)) traceLog.push(j); } });
 page.on('dialog', (d) => d.accept());
 await page.addInitScript(() => { localStorage.setItem('allMixer.avProbe', '1'); window.addEventListener('beforeunload', (e) => e.stopImmediatePropagation(), true); });
 await page.goto(URL_, { waitUntil: 'domcontentloaded' }); await sleep(3000);
@@ -43,7 +43,7 @@ async function measure(scen, label, kind, d = 0, settle = 3500) {
     const w = D.out.filter((p) => p[0] >= a - 20 && p[0] <= a + 4000); let sOff = null, sOn = null; for (let i = 0; i < w.length - 6; i++) if (w.slice(i, i + 6).every((p) => p[1] < 2e-4)) { sOff = w[i][0] - a; for (let j = i; j < w.length; j++) if (w[j][1] > 2e-3) { sOn = w[j][0] - a; break; } break; }
     return { outBefore: +(before.reduce((x, y) => x + y, 0) / (before.length || 1)).toFixed(4), outOff: edge(D.out, 'off'), outOn: edge(D.out, 'on'), elOff: edge(D.el, 'off'), elOn: edge(D.el, 'on'), silStart: sOff && +sOff.toFixed(0), silEnd: sOn && +sOn.toFixed(0), paused: e.paused, canvas: cv ? getComputedStyle(cv).display : 'absent', t: +e.currentTime.toFixed(1), rate: e.playbackRate }; });
   const pe = (k) => { const x = probe.filter((p) => p.kind === k && p.at >= a - 50 && p.at <= a + 3600).sort((p, q) => p.at - q.at)[0]; return x ? +(x.at - a).toFixed(0) : null; };
-  const st = await status().catch(() => ({})); const rec = { scen, label, kind, ...r, ovOn: pe('overlayOn'), ovOff: pe('overlayOff'), vidOn: pe('videoOn'), vidOff: pe('videoOff'), lyric: { before: lyBefore, at600: lyAt[0], at1500: lyAt[1], at2600: lyAt[2], after: await lyr() }, ad: await ad(), ytError: await v(() => !!document.querySelector('.ytp-error')), ov: st.videoDelay?.state, delayMs: st.videoDelay?.delayMs, sep: st.separation?.state, eng: st.separation?.latency?.engine, vdelay: st.separation?.latency?.videoDelayMs, audio: st.audio };
+  const st = await status().catch(() => ({})); const traces = traceLog.filter((x) => x.now >= a - 300 && x.now <= a + 3600).map((x) => { const { kind: tk, now, ...rest } = x; return { kind: tk, at: +(now - a).toFixed(0), ...rest }; }); const rec = { scen, label, kind, ...r, quietBefore: r.outBefore < 0.01, ...(kind === 'play' ? { elQuiet: r.elOn == null || r.elOn > 300 } : {}), reason: st.separation?.latency?.reason, choice: st.separation?.choice, traces, ovOn: pe('overlayOn'), ovOff: pe('overlayOff'), vidOn: pe('videoOn'), vidOff: pe('videoOff'), lyric: { before: lyBefore, at600: lyAt[0], at1500: lyAt[1], at2600: lyAt[2], after: await lyr() }, ad: await ad(), ytError: await v(() => !!document.querySelector('.ytp-error')), ov: st.videoDelay?.state, delayMs: st.videoDelay?.delayMs, sep: st.separation?.state, eng: st.separation?.latency?.engine, vdelay: st.separation?.latency?.videoDelayMs, audio: st.audio };
   rec.AO = rec.kind === 'play' && rec.outOn != null && rec.ovOn != null ? rec.outOn - rec.ovOn : null; results.push(rec); console.log(JSON.stringify(rec)); save(); return rec;
 }
 const mlReady = async () => { for (let i = 0; i < 60; i++) { const s = await status(); if (s.separation?.latency?.engine === 'ml') return true; await sleep(2000); } return false; };
@@ -72,13 +72,22 @@ if (has('pending')) {
 if (has('default')) { await setS({ mode: 'default', masterPct: 100 }); await sleep(3500); await cycle('default', 'default', 3000, REPS); const s = await status(); results.push({ scen: 'default', label: 'status', ov: s.videoDelay, lat: s.separation?.latency }); await setS(SEP); await sleep(4000); await mlReady(); await sleep(6000); }
 if (has('layout')) {
   if (SITE === 'www') {
-    await page.keyboard.press('t'); await sleep(2500); await cycle('layout', 'theater', 3000, 2); await page.keyboard.press('t'); await sleep(2000);
+    await page.keyboard.press('t');
+    for (const [ms, lab] of [[500, '0.5s'], [2500, '3s'], [3000, '6s']]) { await sleep(ms); const s = await status().catch(() => ({})); const e = { scen: 'layout', label: `theater engine @${lab}`, eng: s.separation?.latency?.engine, reason: s.separation?.latency?.reason, choice: s.separation?.choice }; results.push(e); console.log(JSON.stringify(e)); }
+    await cycle('layout', 'theater', 3000, 2); await page.keyboard.press('t'); await sleep(2000);
     await v(() => document.querySelector('#movie_player').requestFullscreen?.().catch(() => {})); await page.keyboard.press('f').catch(() => {}); await sleep(3000); console.log('fs', await v(() => !!document.fullscreenElement)); await cycle('layout', 'fullscreen', 3000, 2);
     await v(() => document.exitFullscreen?.().catch(() => {})); await sleep(1500);
   } else {
     const clicked = await v(() => { const t = document.querySelector('ytmusic-av-toggle'); const b = t && [...t.querySelectorAll('[role=button], button, .video-button, .song-button, tp-yt-paper-button')].find((x) => /video/i.test(x.textContent + x.className + (x.getAttribute('aria-label') || ''))); if (b) b.click(); return !!b; });
-    console.log('video mode click', clicked); await sleep(4000); await cycle('layout', 'music-video-mode', 3000, 2);
-    await v(() => document.querySelector('#movie_player')?.requestFullscreen?.().catch(() => {})); await sleep(2500); console.log('fs', await v(() => !!document.fullscreenElement)); await cycle('layout', 'music-fullscreen', 3000, 2); await v(() => document.exitFullscreen?.().catch(() => {})); await sleep(1500);
+    console.log('video mode click', clicked); await sleep(4000);
+    // SRI-228: start the cycle well inside a track, never in the quiet first seconds or near the end.
+    const pos = () => v(() => { const e = document.querySelector('video'); return { t: +e.currentTime.toFixed(1), duration: +e.duration.toFixed(1) }; });
+    const SEEKTO = Number(process.env.SEEKTO || 60);
+    let p0 = await pos(); await act('seek', SEEKTO - p0.t); await sleep(8000);
+    console.log('music-video-mode cycle start', JSON.stringify(p0 = await pos()));
+    if (p0.t > p0.duration - 30) { await act('seek', SEEKTO - p0.t); await sleep(8000); console.log('too close to end, re-seeked', JSON.stringify(await pos())); }
+    await cycle('layout', 'music-video-mode', 3000, 2);
+    await v(() => document.querySelector('#movie_player')?.requestFullscreen?.().catch(() => {})); await sleep(2500); console.log('fs', await v(() => !!document.fullscreenElement)); { const q = await v(() => { const e = document.querySelector('video'); return { t: +e.currentTime.toFixed(1), duration: +e.duration.toFixed(1) }; }); console.log('music-fullscreen cycle start', JSON.stringify(q)); if (q.t > q.duration - 30) { await act('seek', SEEKTO - q.t); await sleep(8000); } } await cycle('layout', 'music-fullscreen', 3000, 2); await v(() => document.exitFullscreen?.().catch(() => {})); await sleep(1500);
   }
 }
 if (has('stall')) {
