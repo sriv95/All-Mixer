@@ -137,10 +137,21 @@ export class DelayedVideo {
    */
   setDelay(delayMs: number, effectiveAtMs = performance.now()): void {
     if (this.destroyed) return;
+    const paused = this.video.paused || this.video.ended;
+    const raised = delayMs > this.schedule.target;
+    // Paused: nothing is emitted until play, so the new delay applies from the
+    // first frame after play (a step in the future would be shifted by the pause).
+    if (paused && delayMs > 0) effectiveAtMs = Math.min(effectiveAtMs, performance.now());
     this.schedule.set(Math.max(0, delayMs), effectiveAtMs);
     this.updateCapture();
     clearTimeout(this.stopTimer);
-    if (this.schedule.target > 0) return this.start();
+    if (this.schedule.target > 0) {
+      const wasRunning = this.running;
+      this.start();
+      // Engaged or raised while paused: after play, a still of the paused frame covers the live <video> for D, like a seek.
+      if (paused && this.running && (raised || !wasRunning)) this.captureStill();
+      return;
+    }
     // Keep showing delayed frames until the audio drops its delay too, so
     // picture and sound jump forward together.
     const wait = effectiveAtMs - performance.now();
@@ -239,6 +250,26 @@ export class DelayedVideo {
     // Already paused when the overlay engages: start frozen, like the audio chain.
     if (this.video.paused || this.video.ended) this.hold();
     this.onStateChange(this.state);
+  }
+
+  /** Capture the current (paused) frame now; rVFC does not fire while paused. */
+  private captureStill(): void {
+    this.epoch++;
+    this.queue.clear();
+    this.awaitStill = false;
+    const epoch = this.epoch;
+    const mediaTime = this.video.currentTime;
+    createImageBitmap(this.video, { resizeWidth: this.capW, resizeHeight: this.capH, resizeQuality: 'low' }).then(
+      (bmp) => {
+        if (epoch !== this.epoch || !this.running) return bmp.close();
+        const at = performance.now();
+        this.queue.push({ due: at, mediaTime, delay: 0, still: true, img: bmp }, at);
+      },
+      () => {
+        // Fall back to the first rVFC frame after play.
+        if (epoch === this.epoch && this.running) this.awaitStill = true;
+      },
+    );
   }
 
   private stop(): void {
