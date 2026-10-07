@@ -198,7 +198,10 @@ export class MasterChain {
       for (const e of HOLD_EVENTS) video.addEventListener(e, this.onHold);
       video.addEventListener(RELEASE_EVENT, this.onRelease);
     }
+    const changed = this.video !== video;
     this.video = video;
+    // A swapped-in element fires no pause/playing event of its own: re-sync the freeze state.
+    if (changed && this.workletOn) this.post({ type: video.paused ? 'hold' : 'release' });
     if (this.engaged) this.connectIfReady();
   }
 
