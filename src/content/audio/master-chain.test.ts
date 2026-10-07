@@ -368,6 +368,18 @@ describe('MasterChain separation', () => {
     expect(sep.messages.at(-1)).toEqual({ type: 'flush' });
   });
 
+  it('re-syncs hold / release when the media element is swapped', async () => {
+    const { chain, v, sep } = await separating();
+    v.dispatchEvent(new Event('pause'));
+    expect(sep.messages.at(-1)).toEqual({ type: 'hold' });
+    chain.setVideo(video()); // already playing: no `playing` event will fire
+    expect(sep.messages.at(-1)).toEqual({ type: 'release' });
+    const paused = video();
+    Object.defineProperty(paused, 'paused', { value: true, configurable: true });
+    chain.setVideo(paused);
+    expect(sep.messages.at(-1)).toEqual({ type: 'hold' });
+  });
+
   it('starts held when the video is already paused as the separator engages', async () => {
     running();
     const chain = new MasterChain(undefined, () => 'chrome-extension://x/worklet.js');
