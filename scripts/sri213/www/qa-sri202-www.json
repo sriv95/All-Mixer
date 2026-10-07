@@ -1,0 +1,236 @@
+{
+ "events": [
+  {
+   "label": "start",
+   "nowAt": 20059.900000035763,
+   "wall": 1791357083643,
+   "ad": false,
+   "dom": {
+    "canvas": "block",
+    "paused": false,
+    "t": 18.37,
+    "rs": 4
+   },
+   "overlay": {
+    "state": "on",
+    "delayMs": 2000.1451247165533,
+    "stats": {
+     "captureW": 967,
+     "captureH": 544,
+     "fps": 24.99999999999998,
+     "queued": 50,
+     "queueBytes": 105209600,
+     "maxFrames": 130,
+     "skipped": 10,
+     "drawn": 295,
+     "errMs": {
+      "mean": 2.8166132558866965,
+      "p95": 17.654875295367674
+     },
+     "avOffsetMs": {
+      "mean": 16.378552227218574,
+      "p95": 31.98152607709781
+     }
+    }
+   },
+   "latency": {
+    "engine": "ml",
+    "reason": "auto",
+    "sampleRate": 44100,
+    "processingSamples": 86912,
+    "processingMs": 1970.7936507936508,
+    "deviceMs": 29.351473922902493,
+    "videoDelayMs": 2000.1451247165533
+   },
+   "sepState": "on",
+   "choice": {
+    "state": "on"
+   },
+   "audio": "active",
+   "probe": {
+    "audioOn": {
+     "inputAt": 10819.374603162683,
+     "audibleAt": 12815.811598675218
+    },
+    "audioOff": {
+     "inputAt": 10607.319047607127,
+     "audibleAt": 12607.458716589052
+    },
+    "videoOn": 3967.5,
+    "videoOff": 3852.2,
+    "overlayOn": 12852.2,
+    "overlayOff": 10852.3,
+    "playOffsetMs": -36.388401324782535,
+    "pauseOffsetMs": 1755.1587165890523,
+    "pipelineMs": 6851.874603162683,
+    "last": []
+   }
+  },
+  {
+   "label": "pause3 #1",
+   "actAt": 21566,
+   "nowAt": 24579.400000035763,
+   "wall": 1791357088162,
+   "ad": false,
+   "dom": {
+    "canvas": "block",
+    "paused": true,
+    "t": 19.88,
+    "rs": 4
+   },
+   "overlay": {
+    "state": "on",
+    "delayMs": 2000.1451247165533,
+    "stats": {
+     "captureW": 967,
+     "captureH": 544,
+     "fps": 24.99999999999998,
+     "queued": 51,
+     "queueBytes": 107313792,
+     "maxFrames": 130,
+     "skipped": 10,
+     "drawn": 332,
+     "errMs": {
+      "mean": 3.0452615380387065,
+      "p95": 17.854875283446745
+     },
+     "avOffsetMs": {
+      "mean": 16.81104819349961,
+      "p95": 32.10687528344647
+     }
+    }
+   },
+   "latency": {
+    "engine": "ml",
+    "reason": "auto",
+    "sampleRate": 44100,
+    "processingSamples": 86912,
+    "processingMs": 1970.7936507936508,
+    "deviceMs": 29.351473922902493,
+    "videoDelayMs": 2000.1451247165533
+   },
+   "sepState": "on",
+   "choice": {
+    "state": "on"
+   },
+   "audio": "active",
+   "probe": {
+    "audioOn": {
+     "inputAt": 10819.374603162683,
+     "audibleAt": 12815.811598675218
+    },
+    "audioOff": {
+     "inputAt": 21563.75374153236,
+     "audibleAt": 23562.78338098814
+    },
+    "videoOn": 3967.5,
+    "videoOff": 21568.2,
+    "overlayOn": 12852.2,
+    "overlayOff": 21535.6,
+    "playOffsetMs": -36.388401324782535,
+    "pauseOffsetMs": 2027.1833809881427,
+    "pipelineMs": 6851.874603162683,
+    "last": []
+   }
+  },
+  {
+   "label": "play-after-3s #1",
+   "actAt": 26086.69999998808,
+   "nowAt": 30600.69999998808,
+   "wall": 1791357094184,
+   "ad": false,
+   "dom": {
+    "canvas": "block",
+    "paused": false,
+    "t": 24.39,
+    "rs": 4
+   },
+   "overlay": {
+    "state": "on",
+    "delayMs": 2000.1451247165533,
+    "stats": {
+     "captureW": 967,
+     "captureH": 544,
+     "fps": 24.99999999999998,
+     "queued": 47,
+     "queueBytes": 98897024,
+     "maxFrames": 130,
+     "skipped": 10,
+     "drawn": 445,
+     "errMs": {
+      "mean": 2.4788753005733635,
+      "p95": 17.3548752953684
+     },
+     "avOffsetMs": {
+      "mean": 12.35296195011339,
+      "p95": 28.117875283447574
+     }
+    }
+   },
+   "latency": {
+    "engine": "ml",
+    "reason": "auto",
+    "sampleRate": 44100,
+    "processingSamples": 86912,
+    "processingMs": 1970.7936507936508,
+    "deviceMs": 29.351473922902493,
+    "videoDelayMs": 2000.1451247165533
+   },
+   "sepState": "on",
+   "choice": {
+    "state": "on"
+   },
+   "audio": "active",
+   "probe": {
+    "audioOn": {
+     "inputAt": 26087.376417233558,
+     "audibleAt": 28086.33300683848
+    },
+    "audioOff": {
+     "inputAt": 21563.75374153236,
+     "audibleAt": 23562.78338098814
+    },
+    "videoOn": 26135.6,
+    "videoOff": 21568.2,
+    "overlayOn": 26102.3,
+    "overlayOff": 21535.6,
+    "playOffsetMs": 1984.0330068384792,
+    "pauseOffsetMs": 2027.1833809881427,
+    "pipelineMs": -48.22358276644081,
+    "last": [
+     {
+      "kind": "pause",
+      "at": 21571.100000023842,
+      "pauseOffsetMs": 2027.1833809881427,
+      "missing": []
+     }
+    ]
+   }
+  }
+ ],
+ "logs": [
+  "1791357066094 videoOn {\"at\":2501.6}",
+  "1791357067545 videoOff {\"at\":3852.2}",
+  "1791357067545 videoOn {\"at\":3967.5}",
+  "1791357069122 overlayOn {\"at\":5535.6}",
+  "1791357069180 audioOn {\"inputAt\":5561.002721076515,\"audibleAt\":5583.322675748883,\"engine\":\"bypass\"}",
+  "1791357070853 audioOff {\"inputAt\":7160.759410466602,\"audibleAt\":7191.247863933657,\"engine\":\"bypass\"}",
+  "1791357070970 audioOn {\"inputAt\":7373.20158733735,\"audibleAt\":7399.061852595789,\"engine\":\"bypass\"}",
+  "1791357073803 audioOff {\"inputAt\":10114.814285738128,\"audibleAt\":12115.499498866213,\"engine\":\"ml\"}",
+  "1791357073976 audioOn {\"inputAt\":10390.431292505085,\"audibleAt\":12388.793505680855,\"engine\":\"ml\"}",
+  "1791357074303 audioOff {\"inputAt\":10607.319047607127,\"audibleAt\":12607.458716589052,\"engine\":\"ml\"}",
+  "1791357074420 audioOn {\"inputAt\":10819.374603162683,\"audibleAt\":12815.811598675218,\"engine\":\"ml\"}",
+  "1791357074537 overlayOff {\"at\":10852.3}",
+  "1791357076437 overlayOn {\"at\":12852.2}",
+  "1791357085155 pause {\"at\":21571.100000023842}",
+  "1791357085219 overlayOff {\"at\":21535.6}",
+  "1791357085252 videoOff {\"at\":21568.2}",
+  "1791357085253 audioOff {\"inputAt\":21563.75374153236,\"audibleAt\":23562.78338098814,\"engine\":\"ml\"}",
+  "1791357089672 play {\"at\":26087.400000035763}",
+  "1791357089674 playing {\"at\":26090.30000001192}",
+  "1791357089686 audioOn {\"inputAt\":26087.376417233558,\"audibleAt\":28086.33300683848,\"engine\":\"ml\"}",
+  "1791357089687 overlayOn {\"at\":26102.3}",
+  "1791357089720 videoOn {\"at\":26135.6}",
+  "1791357090320 transition {\"kind\":\"pause\",\"at\":21571.100000023842,\"pauseOffsetMs\":2027.1833809881427,\"missing\":[]}"
+ ]
+}
