@@ -45,8 +45,9 @@ def mdx_presence(c, tlo, thi, k=3):
             cache.append((bm, 10 * np.log10(e + 1e-12) + off))
         c._pres = cache
     T = c.Vm.shape[2]; out = np.ones((1, c.Vm.shape[1], T))
-    for bm, d in cache:
-        gg = np.convolve(np.clip((d - tlo) / (thi - tlo), 0, 1), np.ones(k) / k, 'same'); out[0, bm, :] = gg[None]
+    for i, (bm, d) in enumerate(cache):
+        lo, hi = (tlo[i], thi[i]) if np.ndim(tlo) else (tlo, thi)
+        gg = np.convolve(np.clip((d - lo) / (hi - lo), 0, 1), np.ones(k) / k, 'same'); out[0, bm, :] = gg[None]
     return out
 
 def combine(c, g, p):
@@ -123,6 +124,9 @@ def evaluate(c, g, sung, pause, acc=None, voc=None, base=None, vlist=None, keep=
             r['leak_gt_db'] = (10 * np.log10((np.abs(gain * (Voc - Vz)) ** 2 * c.gate150).sum((0, 1)) + 1e-9)).tolist()
             hm = (c.ms > 0.5) & c.gate150  # bins the mask calls vocal: level of the instrumental there vs the true accompaniment, per STFT frame
             r['err_hm_db'] = (10 * np.log10((np.abs(O) ** 2 * hm).sum((0, 1)) + 1e-9) - 10 * np.log10((np.abs(Acc) ** 2 * hm).sum((0, 1)) + 1e-9)).tolist(); r['hm_frac'] = float(hm.mean())
+            fq = np.fft.rfftfreq(hy.N_FFT, 1 / SR); L = np.abs(gain * (Voc - Vz)) ** 2 * c.gate150
+            r['leak_gt_band'] = {b: float(np.mean(10 * np.log10(L[:, (fq >= BEDGE[i]) & (fq < BEDGE[i + 1])].sum((0, 1)) + 1e-9))) for i, b in enumerate(BANDS)}
+            r['ret_vs_acc_db'] = {'bass20-150': float(db(np.mean(sosfilt(S20, inst.mean(1)) ** 2)) - db(np.mean(sosfilt(S20, acc.mean(1)) ** 2))), **{b: float(db(np.mean(sosfilt(f, inst.mean(1)) ** 2)) - db(np.mean(sosfilt(f, acc.mean(1)) ** 2))) for b, f in BANDS.items()}}
             r['fSnr'] = float(10 * np.log10((acc ** 2).sum() / (((inst - acc) ** 2).sum() + 1e-12)))
         res[name] = r
     return res
@@ -166,8 +170,8 @@ def musdb(a):
     import mdx_stream as mx, spleeter_stream as ss
     voc_s, acc_s = ss.session('vocals'), ss.session('accompaniment')
     out = pathlib.Path(a.out); out.mkdir(parents=True, exist_ok=True); cache = pathlib.Path('/tmp/s244'); cache.mkdir(exist_ok=True)
-    per = {}; V = variants()
-    for cdir in sorted(pathlib.Path(a.dir).glob('[0-9][0-9]'))[:a.n]:
+    per = {}; V = sweep_variants(a.thresholds) if a.thresholds is not None else variants()
+    for cdir in [d for d in sorted(pathlib.Path(a.dir).glob('[0-9][0-9]')) if not a.clips or d.name in a.clips.split(',')][:a.n]:
         x, _ = sf.read(cdir / 'mix.wav'); acc, _ = sf.read(cdir / 'accompaniment.wav'); tv, _ = sf.read(cdir / 'vocals.wav')
         v = sf.read(cdir / 's94_m64/vocal.wav')[0]
         st = lambda z: z[:, :2] if z.ndim > 1 else np.stack([z, z], 1)
@@ -181,6 +185,13 @@ def musdb(a):
         per[cdir.name] = evaluate(c, g, sung, pause, acc=acc, voc=tv, vlist=V)
         print(cdir.name, 'sung', len(sung), 'pause', len(pause), flush=True)
     s = summarize(per); json.dump(s, open(out / 'musdb_summary.json', 'w'), indent=1)
+    print('leak_gt_db (mean over STFT frames, >150 Hz, per band): variant - base, dB; ret = inst band energy vs true accompaniment, whole clip, dB; err_gt = inst - acc on sung frames, dB')
+    for k in per:
+        for n, r in per[k].items():
+            b0 = per[k]['base']
+            print(f'{k} {n:16s} leak_all {np.mean(r["leak_gt_db"]) - np.mean(b0["leak_gt_db"]):+.2f} ' + ' '.join(f'leak{b} {r["leak_gt_band"][b] - b0["leak_gt_band"][b]:+.2f}' for b in BANDS) + ' | ret ' + ' '.join(f'{b} {v:+.2f}' for b, v in r['ret_vs_acc_db'].items()) + ' | err_gt ' + ' '.join(f'{b} {np.mean(r["err_gt"][b]):+.2f}' for b in BANDS))
+    for n in V:
+        print(f'MEAN {n:16s} leak_all {np.mean([np.mean(per[k][n]["leak_gt_db"]) - np.mean(per[k]["base"]["leak_gt_db"]) for k in per]):+.2f} ' + ' '.join(f'leak{b} {np.mean([per[k][n]["leak_gt_band"][b] - per[k]["base"]["leak_gt_band"][b] for k in per]):+.2f}' for b in BANDS) + ' | ret ' + ' '.join(f'{b} {np.mean([per[k][n]["ret_vs_acc_db"][b] for k in per]):+.2f}' for b in ['bass20-150', *BANDS]) + ' | err_gt ' + ' '.join(f'{b} {np.mean([np.mean(per[k][n]["err_gt"][b]) for k in per]):+.2f}' for b in BANDS))
 
 def lovely(a):
     out = pathlib.Path(a.out); out.mkdir(parents=True, exist_ok=True)
@@ -217,13 +228,22 @@ def gate_variants():
     for d in (-5, 5): v[f'C_{-50 + d}/{-35 + d}'] = dict(kind='gate', gaingate=1, fillgate=1, tlo=-50 + d, thi=-35 + d)
     return v
 
+def sweep_variants(extra=''):
+    """SRI-251: base + C at -50/-35, -52.5/-37.5, -55/-40, plus --thresholds 'name=lo0/hi0,lo1/hi1,lo2/hi2' (per band 150-1k, 1-4k, >4k; ';'-separated list)."""
+    v = {'base': dict(kind='base')}
+    for d in (0, -2.5, -5): v[f'C_{-50 + d:g}/{-35 + d:g}'] = dict(kind='gate', gaingate=1, fillgate=1, tlo=-50 + d, thi=-35 + d)
+    for e in filter(None, extra.split(';')):
+        n, t = e.split('='); lh = [tuple(map(float, q.split('/'))) for q in t.split(',')]
+        v[n] = dict(kind='gate', gaingate=1, fillgate=1, tlo=[l for l, h in lh], thi=[h for l, h in lh])
+    return v
+
 def gate(a):
     """SRI-250: Vmdx-gated mask gain / dip fill. Table 1: lovely 125.8-127.0 s mean dB per band, X and out, loss = out - X.
     Table 2 (guard): windows [t0,t1] (abs s): per band out - base dB (instrumental; rises = vocal leak up) and |out| - |X| ."""
     x = np.fromfile(a.ref, dtype=np.float32).astype(np.float64).reshape(2, -1).T.copy(); z = np.load(a.cache); c = Clip(x, z['v'], z['m'])
     g = c.gates(PARAMS)['G2_mask_evidence']; at = lambda t: int(round((t - a.t0) / 0.25))
     fx = band_frames(c.x); fv = band_frames(z['v']); outs = {}
-    for n, p in gate_variants().items(): outs[n] = band_frames(combine(c, g, p)[0])
+    for n, p in (sweep_variants(a.thresholds) if a.thresholds is not None else gate_variants()).items(): outs[n] = band_frames(combine(c, g, p)[0])
     wins = [(125.8, 127.0, 'dip')] + [tuple(map(float, w.split(':'))) + ('guard',) for w in a.guard.split(',')]
     for t0, t1, kind in wins:
         i0, i1 = at(t0), at(t1); print(f'--- window {t0}-{t1} s ({kind}); MDX vocal dB per band: ' + ' '.join(f'{b}={np.mean(fv[b][i0:i1]):.1f}' for b in BANDS))
@@ -254,8 +274,8 @@ if __name__ == '__main__':
     if sys.argv[1] == 'diag':
         ap = argparse.ArgumentParser(); ap.add_argument('mode'); ap.add_argument('ref'); ap.add_argument('t0', type=float); ap.add_argument('cache'); diag(ap.parse_args()); sys.exit()
     if sys.argv[1] == 'gate':
-        ap = argparse.ArgumentParser(); ap.add_argument('mode'); ap.add_argument('ref'); ap.add_argument('t0', type=float); ap.add_argument('cache'); ap.add_argument('--guard', default='50:70,100:120'); gate(ap.parse_args()); sys.exit()
+        ap = argparse.ArgumentParser(); ap.add_argument('mode'); ap.add_argument('ref'); ap.add_argument('t0', type=float); ap.add_argument('cache'); ap.add_argument('--guard', default='50:70,100:120'); ap.add_argument('--thresholds', default=None); gate(ap.parse_args()); sys.exit()
     ap = argparse.ArgumentParser(); ap.add_argument('mode')
-    if sys.argv[1] == 'musdb': ap.add_argument('dir'); ap.add_argument('out'); ap.add_argument('--n', type=int, default=50)
+    if sys.argv[1] == 'musdb': ap.add_argument('dir'); ap.add_argument('out'); ap.add_argument('--n', type=int, default=50); ap.add_argument('--clips', default=''); ap.add_argument('--thresholds', default=None)
     else: ap.add_argument('ref'); ap.add_argument('t0', type=float); ap.add_argument('cache'); ap.add_argument('out'); ap.add_argument('--keep', default='Rs3_c0.7')
     A = ap.parse_args(); (musdb if A.mode == 'musdb' else lovely)(A)
