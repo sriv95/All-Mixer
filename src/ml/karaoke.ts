@@ -283,7 +283,7 @@ export class KaraokeCombiner {
         const nk = N_FFT - k;
         const lr = 0.5 * (re[k] + re[nk]), li = 0.5 * (im[k] - im[nk]);
         const rr = 0.5 * (im[k] + im[nk]), ri = -0.5 * (re[k] - re[nk]);
-        const al = Math.hypot(lr, li), ar = Math.hypot(rr, ri);
+        const al = Math.sqrt(lr * lr + li * li), ar = Math.sqrt(rr * rr + ri * ri);
         const ml = masks[m + k], mr = masks[m + BINS + k];
         sx += al + ar;
         sm += ml * al + mr * ar;
