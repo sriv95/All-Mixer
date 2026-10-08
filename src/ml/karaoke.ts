@@ -1,5 +1,5 @@
 // Karaoke combine (SRI-116 pick H3 p = 2, g = 0.8, spike/ml/hybrid_stream.py rows_for):
-//   instrumental = (x − V_mdx) · (1 − g · m²)   per STFT bin, bins ≥ 150 Hz and < 1024, m = Spleeter vocal mask
+//   instrumental = (x − V_mdx) · max(1 − g · m², KARAOKE_FLOOR)   per STFT bin (floor 0.5, SRI-244/245), bins ≥ 150 Hz and < 1024, m = Spleeter vocal mask
 // in the n_fft 4096 / hop 1024 STFT of x − V_mdx, then iSTFT / Σw² (steady state 1.5; the first 2048 samples
 // use the real envelope, as scipy does). The MDX vocal stays the A cappella stem; this only changes the
 // instrumental, which the worklet forms as x − Vk, so `emit` returns Vk = x − instrumental.
@@ -25,6 +25,8 @@ import { BINS, HOP, N_FFT } from './stream';
 
 /** Margin g (runtime constant, tune after listening). */
 export const KARAOKE_G = 0.8;
+/** Instrumental gain floor (SRI-244/245): the gain 1 − g · m² never goes below this, so a sung part keeps its backing. */
+export const KARAOKE_FLOOR = 0.5;
 export const KARAOKE_GATE_HZ = 150;
 const SAMPLE_RATE = 44100;
 /** First bin with frequency ≥ KARAOKE_GATE_HZ. */
@@ -308,7 +310,7 @@ export class KaraokeCombiner {
           im[nk] = rr - li;
           continue;
         }
-        const gl = 1 - g * ml * ml, gr = 1 - g * mr * mr;
+        const gl = Math.max(1 - g * ml * ml, KARAOKE_FLOOR), gr = Math.max(1 - g * mr * mr, KARAOKE_FLOOR);
         const alr = lr * gl, ali = li * gl, arr = rr * gr, ari = ri * gr;
         re[k] = alr - ari;
         im[k] = ali + arr;

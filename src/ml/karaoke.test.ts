@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FILL_FLOOR_DB, FILL_HI, FILL_LO, FILL_PEAK_MIN_DB, KaraokeCombiner } from './karaoke';
+import { FILL_FLOOR_DB, FILL_HI, FILL_LO, FILL_PEAK_MIN_DB, KARAOKE_FLOOR, KaraokeCombiner } from './karaoke';
 import { BINS, HOP, N_FFT } from './stream';
 
 const FR = 40; // frames
@@ -98,5 +98,30 @@ describe('KaraokeCombiner dip fill (SRI-237)', () => {
     }
     expect(c.floorDb).toBeCloseTo(FILL_PEAK_MIN_DB - FILL_FLOOR_DB, 6);
     expect(c.floorDb).toBeLessThanOrEqual(floorLoud);
+  });
+});
+
+describe('KaraokeCombiner gain floor (SRI-247)', () => {
+  const t = bin(300, NS), zero = new Float32Array(NS);
+  const settled = (a: Float32Array, b: Float32Array, end: number) => {
+    let d = 0;
+    for (let n = 10 * HOP; n < end - 5 * HOP; n++) d = Math.max(d, Math.abs(a[n] - b[n]));
+    return d;
+  };
+
+  it('m = 1: instrumental gain is the floor 0.5, not 1 − g = 0.2 (Vk = 0.5 x)', () => {
+    expect(KARAOKE_FLOOR).toBe(0.5);
+    const r = run(t, zero, 1, false);
+    expect(settled(r.vk, t.map((s) => (1 - KARAOKE_FLOOR) * s), r.end)).toBeLessThan(1e-4);
+  });
+
+  it('m = 0: instrumental gain 1 (Vk = 0)', () => {
+    const r = run(t, zero, 0, false);
+    expect(settled(r.vk, zero, r.end)).toBeLessThan(1e-4);
+  });
+
+  it('a cappella output does not depend on the floor path: Vz = MDX vocal bit for bit at m = 1 (no fill)', () => {
+    const half = t.map((s) => 0.5 * s), r = run(t, half, 1, false);
+    for (let n = 0; n < r.end; n++) expect(r.vz[n]).toBe(half[n]);
   });
 });
