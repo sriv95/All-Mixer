@@ -207,7 +207,7 @@ def diag(a):
             m = c.ms[:, c.gate150[0, :, 0], h0].mean() if h0 < c.ms.shape[2] else float('nan')
             print(f'{t:20.2f} ' + ' '.join(f'{fb[k][b][i]:7.1f}' for k in sigs) + f'   {m:6.3f}  {g[min(h0, len(g)-1)]:.2f}')
     for b in BANDS:
-        w = lambda t0, t1: {k: round(float(np.mean(fb[k][b][at(t0):at(t1)])), 1) for k in ('X', 'Vz', 'D', 'out', 'Xg')}
+        w = lambda t0, t1: {k: round(float(np.mean(fb[k][b][at(t0):at(t1)])), 1) for k in ('X', 'Vmdx', 'fill', 'Vz', 'D', 'out', 'Xg')}
         print(b, 'mean dB 125.8-127.0', w(125.8, 127.0), '| X 125.5 / 126.0 / 128.0:', [round(float(fb['X'][b][at(t)]), 1) for t in (125.5, 126.0, 128.0)])
 
 if __name__ == '__main__':
