@@ -208,8 +208,8 @@ describe('KaraokeCombiner MDX-presence gate (SRI-253 Q6 / SRI-254)', () => {
     expect(d).toBeLessThan(0.8 * 0.3 + 1e-3);
   });
 
-  it('frame path allocates nothing: heap growth during 4 × 60 frames of advance() stays under 100 kB (fill off: the G2 fill path allocates, pre-existing)', () => {
-    const c2 = new KaraokeCombiner(0.8, false), tmp = new Float32Array(60 * HOP);
+  it.each([true, false])('frame path allocates nothing: heap growth during 2 × 60 frames of advance() stays under 100 kB (fill = %s)', (fill) => {
+    const c2 = new KaraokeCombiner(0.8, fill), tmp = new Float32Array(60 * HOP);
     const step = 60 * HOP;
     const round = (r: number): number => {
       const pos = r * step;
@@ -224,8 +224,9 @@ describe('KaraokeCombiner MDX-presence gate (SRI-253 Q6 / SRI-254)', () => {
       c2.release(from, c2.completeTo - from);
       return grown;
     };
-    for (let r = 0; r < 4; r++) round(r); // warm up (JIT)
-    const grown = [4, 5, 6, 7].map(round).reduce((a, b) => a + b, 0);
+    // Rounds 0-1 warm up (JIT code and feedback live on the heap); 3-4 are the last ones with signal (FRAMES = 330).
+    for (let r = 0; r < 3; r++) round(r);
+    const grown = [3, 4].map(round).reduce((a, b) => a + b, 0);
     expect(grown).toBeLessThan(100_000);
   });
 });
