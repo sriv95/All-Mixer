@@ -14,3 +14,4 @@ __pycache__/
 # local QA harness scratch (Shadow)
 .qa-out/
 scripts/qa-*.mjs*
+.DS_Store
