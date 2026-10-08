@@ -31,7 +31,7 @@ def variants():
     for c in (0.7, 1.0): v[f'matchs3_c{c}'] = dict(kind='match', tu=3, td=3, c=c)
     return v
 
-def mdx_presence(c, tlo, thi, k=3):
+def mdx_presence(c, tlo, thi, k=3, act=None, W=4.0):
     """SRI-250: per band, per STFT frame MDX-presence g = clip((|Vmdx|_band_dB - tlo)/(thi - tlo), 0, 1), k-frame box smoothing, expanded to bins [1,B,T] (1 below 150 Hz).
     Band dB = mono-mean |Vm|^2 summed in band, offset-calibrated so its 0.25 s block mean power equals frames(v, band) on the whole clip."""
     cache = getattr(c, '_pres', None)
@@ -47,16 +47,21 @@ def mdx_presence(c, tlo, thi, k=3):
     T = c.Vm.shape[2]; out = np.ones((1, c.Vm.shape[1], T))
     for i, (bm, d) in enumerate(cache):
         lo, hi = (tlo[i], thi[i]) if np.ndim(tlo) else (tlo, thi)
-        gg = np.convolve(np.clip((d - lo) / (hi - lo), 0, 1), np.ones(k) / k, 'same'); out[0, bm, :] = gg[None]
+        gg = np.convolve(np.clip((d - lo) / (hi - lo), 0, 1), np.ones(k) / k, 'same')
+        if act is not None:  # SRI-252: the gate may open only where MDX was active within +-W frames: rolling max of band dB over +-W seconds >= act[i] (ramp 6 dB)
+            from scipy.ndimage import maximum_filter1d
+            gg = 1 - (1 - gg) * np.clip((maximum_filter1d(d, 2 * int(W * SR / hy.HOP) + 1) - (act[i] - 6)) / 6, 0, 1)
+        out[0, bm, :] = gg[None]
     return out
 
 def combine(c, g, p):
     """Instrumental of variant p (time domain) and the per-bin gain [2,B,T] applied to D = X - Vz."""
-    pres = mdx_presence(c, p['tlo'], p['thi']) if p['kind'] == 'gate' else 1.0
+    pres = mdx_presence(c, p['tlo'], p['thi'], p.get('k', 3), p.get('act'), p.get('W', 4.0)) if p['kind'] == 'gate' else 1.0
     fg = pres if p.get('fillgate') else 1.0
     Vz = c.Vm + g[None, None, :] * fg * (c.fill() - c.Vm)
     D = c.X - Vz
-    cur = 1 - G * (c.ms * (pres if p.get('gaingate') else 1.0)) ** 2 * c.gate150
+    gpres = np.maximum(pres, p['pmin']) if p.get('pmin') is not None and p['kind'] == 'gate' else pres  # SRI-252: floor on the mask-gain gate
+    cur = 1 - G * (c.ms * (gpres if p.get('gaingate') else 1.0)) ** 2 * c.gate150
     gain = cur
     if p['kind'] == 'floor':
         gain = np.where(c.gate150, np.maximum(cur, p['f']), 1.0) * np.ones_like(cur)
@@ -126,6 +131,10 @@ def evaluate(c, g, sung, pause, acc=None, voc=None, base=None, vlist=None, keep=
             r['err_hm_db'] = (10 * np.log10((np.abs(O) ** 2 * hm).sum((0, 1)) + 1e-9) - 10 * np.log10((np.abs(Acc) ** 2 * hm).sum((0, 1)) + 1e-9)).tolist(); r['hm_frac'] = float(hm.mean())
             fq = np.fft.rfftfreq(hy.N_FFT, 1 / SR); L = np.abs(gain * (Voc - Vz)) ** 2 * c.gate150
             r['leak_gt_band'] = {b: float(np.mean(10 * np.log10(L[:, (fq >= BEDGE[i]) & (fq < BEDGE[i + 1])].sum((0, 1)) + 1e-9))) for i, b in enumerate(BANDS)}
+            bi = lambda i: (fq >= BEDGE[i]) & (fq < BEDGE[i + 1])
+            Lr = lambda A_: {b: np.mean(10 * np.log10((A_[:, bi(i)].sum((0, 1))) + 1e-9)) for i, b in enumerate(BANDS)}
+            # SRI-252: absolute leak per band: mean over frames of leak dB, true vocal dB, instrumental output dB (>150 Hz bins, energy summed per STFT frame)
+            r['abs_db'] = {'leak': Lr(L), 'voc': Lr(np.abs(Voc) ** 2 * c.gate150), 'inst': Lr(np.abs(O) ** 2 * c.gate150)}
             r['ret_vs_acc_db'] = {'bass20-150': float(db(np.mean(sosfilt(S20, inst.mean(1)) ** 2)) - db(np.mean(sosfilt(S20, acc.mean(1)) ** 2))), **{b: float(db(np.mean(sosfilt(f, inst.mean(1)) ** 2)) - db(np.mean(sosfilt(f, acc.mean(1)) ** 2))) for b, f in BANDS.items()}}
             r['fSnr'] = float(10 * np.log10((acc ** 2).sum() / (((inst - acc) ** 2).sum() + 1e-12)))
         res[name] = r
@@ -186,6 +195,10 @@ def musdb(a):
         print(cdir.name, 'sung', len(sung), 'pause', len(pause), flush=True)
     s = summarize(per); json.dump(s, open(out / 'musdb_summary.json', 'w'), indent=1)
     print('leak_gt_db (mean over STFT frames, >150 Hz, per band): variant - base, dB; ret = inst band energy vs true accompaniment, whole clip, dB; err_gt = inst - acc on sung frames, dB')
+    print('ABS (mean over STFT frames, dB): leak energy, true vocal energy, instrumental output energy; per band')
+    for k in per:
+        for n, r in per[k].items():
+            print(f'{k} {n:10s} ' + ' '.join(f'{b}: leak {r["abs_db"]["leak"][b]:6.1f} voc {r["abs_db"]["voc"][b]:6.1f} inst {r["abs_db"]["inst"][b]:6.1f} leak-voc {r["abs_db"]["leak"][b] - r["abs_db"]["voc"][b]:6.1f} leak-inst {r["abs_db"]["leak"][b] - r["abs_db"]["inst"][b]:6.1f} |' for b in BANDS))
     for k in per:
         for n, r in per[k].items():
             b0 = per[k]['base']
@@ -229,12 +242,12 @@ def gate_variants():
     return v
 
 def sweep_variants(extra=''):
-    """SRI-251: base + C at -50/-35, -52.5/-37.5, -55/-40, plus --thresholds 'name=lo0/hi0,lo1/hi1,lo2/hi2' (per band 150-1k, 1-4k, >4k; ';'-separated list)."""
+    """SRI-251: base + C at -50/-35, -52.5/-37.5, -55/-40, plus --thresholds 'name=lo0/hi0,lo1/hi1,lo2/hi2[@k:7][@pmin:0.5][@k:7][@act:a0/a1/a2][@W:4]' (SRI-252 options; per band 150-1k, 1-4k, >4k; ';'-separated list)."""
     v = {'base': dict(kind='base')}
     for d in (0, -2.5, -5): v[f'C_{-50 + d:g}/{-35 + d:g}'] = dict(kind='gate', gaingate=1, fillgate=1, tlo=-50 + d, thi=-35 + d)
     for e in filter(None, extra.split(';')):
-        n, t = e.split('='); lh = [tuple(map(float, q.split('/'))) for q in t.split(',')]
-        v[n] = dict(kind='gate', gaingate=1, fillgate=1, tlo=[l for l, h in lh], thi=[h for l, h in lh])
+        n, t = e.split('='); t, *opt = t.split('@'); lh = [tuple(map(float, q.split('/'))) for q in t.split(',')]
+        v[n] = dict(kind='gate', gaingate=1, fillgate=1, tlo=[l for l, h in lh], thi=[h for l, h in lh], **{q.split(':')[0]: (tuple(map(float, q.split(':')[1].split('/'))) if q.startswith('act') else float(q.split(':')[1])) for q in opt})
     return v
 
 def gate(a):
@@ -270,7 +283,45 @@ def diag(a):
         w = lambda t0, t1: {k: round(float(np.mean(fb[k][b][at(t0):at(t1)])), 1) for k in ('X', 'Vmdx', 'fill', 'Vz', 'D', 'out', 'Xg')}
         print(b, 'mean dB 125.8-127.0', w(125.8, 127.0), '| X 125.5 / 126.0 / 128.0:', [round(float(fb['X'][b][at(t)]), 1) for t in (125.5, 126.0, 128.0)])
 
+def cause(a):
+    """SRI-252: MUSDB clip a.clip, variant a.var (from --thresholds) vs base: where does the extra leak (gain*(Voc-Vz), >150 Hz) come from.
+    Per band: excess leak energy share by vocal class (true vocal band dB above/below the clip median of sung frames), by time quarter, and the top frames table."""
+    import spleeter_stream as ss
+    cdir = pathlib.Path(a.dir) / a.clip
+    x = sf.read(cdir / 'mix.wav')[0]; tv = sf.read(cdir / 'vocals.wav')[0]; v = sf.read(cdir / 's94_m64/vocal.wav')[0]
+    st = lambda z: z[:, :2] if z.ndim > 1 else np.stack([z, z], 1)
+    x, tv, v = map(st, (x, tv, v)); n = len(x); tv, v = tv[:n], v[:n]
+    m = np.load(f'/tmp/s244/m{a.clip}.npy'); c = Clip(x, v, m); g = c.gates(PARAMS)['G2_mask_evidence']
+    V = sweep_variants(a.thresholds); name = [k for k in V if k not in ('base',)][-1] if not a.var else a.var
+    fq = np.fft.rfftfreq(hy.N_FFT, 1 / SR); Voc = hy.stft_(tv)[..., :c.X.shape[2]]; T = c.X.shape[2]
+    res = {}
+    for nm in ('base', name):
+        inst, gain, D, Vz = combine(c, g, V[nm]); res[nm] = (gain, Vz)
+    pres = mdx_presence(c, V[name]['tlo'], V[name]['thi'], V[name].get('k', 3))
+    for i, b in enumerate(BANDS):
+        bm = (fq >= BEDGE[i]) & (fq < BEDGE[i + 1]) & c.gate150[0, :, 0]
+        E = lambda Z: (np.abs(Z[:, bm]) ** 2).sum((0, 1))
+        Lb = E(res['base'][0] * (Voc - res['base'][1])); Le = E(res[name][0] * (Voc - res[name][1]))
+        fill = res[name][1] - c.Vm
+        sig = {'X': E(c.X), 'Vtrue': E(Voc), 'Vmdx': E(c.Vm), 'fill': E(fill)}
+        dbv = lambda e: 10 * np.log10(e + 1e-9); ex = np.maximum(Le - Lb, 0)
+        loud = dbv(sig['Vtrue']) > np.median(dbv(sig['Vtrue'])[dbv(sig['Vtrue']) > -60])
+        miss = dbv(sig['Vmdx']) < dbv(sig['Vtrue']) - 6  # MDX misses the vocal by > 6 dB
+        print(f'=== clip {a.clip} band {b} variant {name}: total leak base {dbv(Lb.sum()):.1f} dB, {name} {dbv(Le.sum()):.1f} dB (energy sum over frames, dB); excess energy share:')
+        tot = ex.sum() + 1e-30
+        print(f'  by true vocal class: loud {ex[loud].sum() / tot:.2f} quiet {ex[~loud].sum() / tot:.2f} | MDX misses vocal (Vmdx < Vtrue - 6 dB): {ex[miss].sum() / tot:.2f} (frames {miss.mean():.2f})')
+        q = np.array_split(np.arange(T), 4); print('  by time quarter (hop frames): ' + ' '.join(f'{ex[ix].sum() / tot:.2f}' for ix in q))
+        gb = pres[0, np.argmax(bm), :]
+        print(f'  frames with excess: {(ex > 0).mean():.2f}; gate open (pres<1): {(gb < 0.99).mean():.2f}; top 8 frames by excess:')
+        print('  t(s)   X   Vtrue Vmdx fill  pres  leakB leakE   (dB, band energy per STFT frame)')
+        for j in np.argsort(-ex)[:8]:
+            print(f'  {j * hy.HOP / SR:6.2f} ' + ' '.join(f'{dbv(sig[k][j]):5.1f}' for k in sig) + f' {gb[j]:5.2f} {dbv(Lb[j]):6.1f} {dbv(Le[j]):6.1f}')
+        # abs level: leak vs true vocal, vs inst, over frames weighted by energy
+        print(f'  clip-level energy ratio: leak_base/Vtrue {dbv(Lb.sum()) - dbv(sig["Vtrue"].sum()):.1f} dB, leak_{name}/Vtrue {dbv(Le.sum()) - dbv(sig["Vtrue"].sum()):.1f} dB')
+
 if __name__ == '__main__':
+    if sys.argv[1] == 'cause':
+        ap = argparse.ArgumentParser(); ap.add_argument('mode'); ap.add_argument('dir'); ap.add_argument('clip'); ap.add_argument('--thresholds', required=True); ap.add_argument('--var', default=''); cause(ap.parse_args()); sys.exit()
     if sys.argv[1] == 'diag':
         ap = argparse.ArgumentParser(); ap.add_argument('mode'); ap.add_argument('ref'); ap.add_argument('t0', type=float); ap.add_argument('cache'); diag(ap.parse_args()); sys.exit()
     if sys.argv[1] == 'gate':
