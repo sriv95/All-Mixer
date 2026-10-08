@@ -31,11 +31,31 @@ def variants():
     for c in (0.7, 1.0): v[f'matchs3_c{c}'] = dict(kind='match', tu=3, td=3, c=c)
     return v
 
+def mdx_presence(c, tlo, thi, k=3):
+    """SRI-250: per band, per STFT frame MDX-presence g = clip((|Vmdx|_band_dB - tlo)/(thi - tlo), 0, 1), k-frame box smoothing, expanded to bins [1,B,T] (1 below 150 Hz).
+    Band dB = mono-mean |Vm|^2 summed in band, offset-calibrated so its 0.25 s block mean power equals frames(v, band) on the whole clip."""
+    cache = getattr(c, '_pres', None)
+    if cache is None:
+        freq = np.fft.rfftfreq(hy.N_FFT, 1 / SR); Vmono = c.Vm.mean(0); T = Vmono.shape[1]; cache = []
+        for i in range(3):
+            bm = (freq >= BEDGE[i]) & (freq < BEDGE[i + 1]); e = (np.abs(Vmono[bm]) ** 2).sum(0)
+            blk = int(0.25 * SR / hy.HOP); nb = T // blk
+            ref = np.mean(frames(c.v, list(BANDS.values())[i]))
+            off = ref - np.mean(10 * np.log10(e[:nb * blk].reshape(nb, blk).mean(1) + 1e-12))
+            cache.append((bm, 10 * np.log10(e + 1e-12) + off))
+        c._pres = cache
+    T = c.Vm.shape[2]; out = np.ones((1, c.Vm.shape[1], T))
+    for bm, d in cache:
+        gg = np.convolve(np.clip((d - tlo) / (thi - tlo), 0, 1), np.ones(k) / k, 'same'); out[0, bm, :] = gg[None]
+    return out
+
 def combine(c, g, p):
     """Instrumental of variant p (time domain) and the per-bin gain [2,B,T] applied to D = X - Vz."""
-    Vz = c.Vm + g[None, None, :] * (c.fill() - c.Vm)
+    pres = mdx_presence(c, p['tlo'], p['thi']) if p['kind'] == 'gate' else 1.0
+    fg = pres if p.get('fillgate') else 1.0
+    Vz = c.Vm + g[None, None, :] * fg * (c.fill() - c.Vm)
     D = c.X - Vz
-    cur = 1 - G * c.ms ** 2 * c.gate150
+    cur = 1 - G * (c.ms * (pres if p.get('gaingate') else 1.0)) ** 2 * c.gate150
     gain = cur
     if p['kind'] == 'floor':
         gain = np.where(c.gate150, np.maximum(cur, p['f']), 1.0) * np.ones_like(cur)
@@ -191,6 +211,26 @@ def report(a, insts, vmdx, c):
     for i in range(at(120), min(at(132), len(fV))):
         print(f'{a.t0 + i * 0.25:6.2f} {fm[i]:9.1f}  ' + '  '.join(f'{fi_[n][i]:10.1f}' for n in names) + f'  {fV[i]:8.1f}')
 
+def gate_variants():
+    v = {'base': dict(kind='base')}
+    for n, (ga, fi) in {'A': (1, 0), 'B': (0, 1), 'C': (1, 1)}.items(): v[f'{n}_-50/-35'] = dict(kind='gate', gaingate=ga, fillgate=fi, tlo=-50, thi=-35)
+    for d in (-5, 5): v[f'C_{-50 + d}/{-35 + d}'] = dict(kind='gate', gaingate=1, fillgate=1, tlo=-50 + d, thi=-35 + d)
+    return v
+
+def gate(a):
+    """SRI-250: Vmdx-gated mask gain / dip fill. Table 1: lovely 125.8-127.0 s mean dB per band, X and out, loss = out - X.
+    Table 2 (guard): windows [t0,t1] (abs s): per band out - base dB (instrumental; rises = vocal leak up) and |out| - |X| ."""
+    x = np.fromfile(a.ref, dtype=np.float32).astype(np.float64).reshape(2, -1).T.copy(); z = np.load(a.cache); c = Clip(x, z['v'], z['m'])
+    g = c.gates(PARAMS)['G2_mask_evidence']; at = lambda t: int(round((t - a.t0) / 0.25))
+    fx = band_frames(c.x); fv = band_frames(z['v']); outs = {}
+    for n, p in gate_variants().items(): outs[n] = band_frames(combine(c, g, p)[0])
+    wins = [(125.8, 127.0, 'dip')] + [tuple(map(float, w.split(':'))) + ('guard',) for w in a.guard.split(',')]
+    for t0, t1, kind in wins:
+        i0, i1 = at(t0), at(t1); print(f'--- window {t0}-{t1} s ({kind}); MDX vocal dB per band: ' + ' '.join(f'{b}={np.mean(fv[b][i0:i1]):.1f}' for b in BANDS))
+        print(f'{"variant":14s} ' + ' '.join(f'{b:>8s} out  loss  vs_base' for b in BANDS) if False else f'{"variant":14s}' + ''.join(f' | {b}: X  out  out-X  out-base' for b in BANDS))
+        for n, fo in outs.items():
+            print(f'{n:14s}' + ''.join(f' | {np.mean(fx[b][i0:i1]):6.1f} {np.mean(fo[b][i0:i1]):6.1f} {np.mean(fo[b][i0:i1] - fx[b][i0:i1]):5.2f} {np.mean(fo[b][i0:i1] - outs["base"][b][i0:i1]):5.2f}' for b in BANDS))
+
 def diag(a):
     """SRI-249: per 0.25 s frame 124.5-128 s, per band dB: |X| mix, |Vmdx|, |fill| = Vz - Vmdx (dip-fill part), |Vz| subtracted, |D| = X - Vz, |out| = base instrumental, |Xg| = X * base gain (what Vz = 0 would give)."""
     x = np.fromfile(a.ref, dtype=np.float32).astype(np.float64).reshape(2, -1).T.copy(); z = np.load(a.cache); c = Clip(x, z['v'], z['m'])
@@ -213,6 +253,8 @@ def diag(a):
 if __name__ == '__main__':
     if sys.argv[1] == 'diag':
         ap = argparse.ArgumentParser(); ap.add_argument('mode'); ap.add_argument('ref'); ap.add_argument('t0', type=float); ap.add_argument('cache'); diag(ap.parse_args()); sys.exit()
+    if sys.argv[1] == 'gate':
+        ap = argparse.ArgumentParser(); ap.add_argument('mode'); ap.add_argument('ref'); ap.add_argument('t0', type=float); ap.add_argument('cache'); ap.add_argument('--guard', default='50:70,100:120'); gate(ap.parse_args()); sys.exit()
     ap = argparse.ArgumentParser(); ap.add_argument('mode')
     if sys.argv[1] == 'musdb': ap.add_argument('dir'); ap.add_argument('out'); ap.add_argument('--n', type=int, default=50)
     else: ap.add_argument('ref'); ap.add_argument('t0', type=float); ap.add_argument('cache'); ap.add_argument('out'); ap.add_argument('--keep', default='Rs3_c0.7')
