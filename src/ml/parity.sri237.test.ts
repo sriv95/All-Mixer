@@ -1,6 +1,6 @@
 // Offline parity run for SRI-237 (skipped unless SRI237_DIR is set): streams a dumped clip through the
 // KaraokeCombiner and writes vk.f32 / vz.f32 ([L][R]) next to the inputs. spike/ml/sri237_dump.py makes the inputs,
-// spike/ml/sri237_compare.py scores the outputs against sri220_gate.py G2.
+// spike/ml/sri237_compare.py scores the outputs against sri220_gate.py G2 (SRI-254: sri254_compare.py against the Q6 gate).
 import { readFileSync, writeFileSync } from 'node:fs';
 import { describe, it } from 'vitest';
 import { KaraokeCombiner } from './karaoke';
@@ -9,7 +9,7 @@ import { BINS, HOP } from './stream';
 const dir = process.env.SRI237_DIR;
 const f32 = (p: string) => { const b = readFileSync(p); return new Float32Array(b.buffer, b.byteOffset, b.byteLength / 4); };
 
-describe.skipIf(!dir)('SRI-237 offline parity', () => {
+describe.skipIf(!dir)('SRI-237 / SRI-254 offline parity', () => {
   it('streams the dumped clip', () => {
     const x = f32(`${dir}/x.f32`), v = f32(`${dir}/v.f32`), m = f32(`${dir}/m.f32`);
     const n = x.length / 2, frames = m.length / (2 * BINS);
@@ -32,6 +32,7 @@ describe.skipIf(!dir)('SRI-237 offline parity', () => {
         c.emitVocal(emitted, k, p, q);
         vk.set(a, emitted); vk.set(b, n + emitted); vz.set(p, emitted); vz.set(q, n + emitted);
         c.release(emitted, k);
+        if (emitted === 0) c.release(-2048, 2048); // frame −1 wrote below 0 (ring end); the pipeline releases it too
         emitted = to;
       }
     }
