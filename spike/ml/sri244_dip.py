@@ -188,7 +188,7 @@ def report(a, insts, vmdx, c):
         fi = band_frames(inst); print(n, 'lovely 124-128 s delta dB vs before:', {b: round(float(np.mean(fi[b][i0:i1] - fb[b][i0:i1])), 2) for b in BANDS})
     S1k4 = sos(150, 4000); fV = frames(vmdx); fm = frames(c.x, S1k4); fi_ = {n: frames(v, S1k4) for n, v in insts.items()}
     names = list(insts); print('t(s)  mix150-4k  ' + '  '.join(f'{n:>10}' for n in names) + '  MDXvocal')
-    for i in range(at(120), at(132)):
+    for i in range(at(120), min(at(132), len(fV))):
         print(f'{a.t0 + i * 0.25:6.2f} {fm[i]:9.1f}  ' + '  '.join(f'{fi_[n][i]:10.1f}' for n in names) + f'  {fV[i]:8.1f}')
 
 if __name__ == '__main__':
