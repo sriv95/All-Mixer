@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { KARAOKE_G, KARAOKE_GATE_BIN } from './karaoke';
 import { MlPipeline, type Models } from './pipeline';
 import { ML_ALGO_SAMPLES, ML_BLOCK, ML_LATENCY_SAMPLES, ML_RESULT_OFFSET } from '../worklet/protocol';
@@ -140,9 +140,23 @@ describe('MlPipeline', () => {
       const ref = await run(L, R, { mdx: half, spleeter: zero });
       const p = new MlPipeline(undefined, 5);
       const o = outs();
+      // Measure the work, not the wall clock (SRI-257: that flaked under full-suite load): the waits the pipeline
+      // asked for must be one 5 ms timer per block; a generous wall-clock bound only catches a hang.
+      const asked: number[] = [];
+      const real = globalThis.setTimeout;
+      const spy = vi.spyOn(globalThis, 'setTimeout').mockImplementation(((fn: () => void, ms?: number, ...rest: unknown[]) => {
+        if (ms === 5) asked.push(ms);
+        return real(fn, ms, ...rest);
+      }) as typeof setTimeout);
       const t0 = performance.now();
-      await blocks(p, { mdx: half, spleeter: never }, 0, NB, o, false);
-      expect(performance.now() - t0).toBeLessThan(NB * 5 + 400); // one 5 ms wait per block, not forever
+      try {
+        await blocks(p, { mdx: half, spleeter: never }, 0, NB, o, false);
+      } finally {
+        spy.mockRestore();
+      }
+      expect(asked.length).toBeLessThanOrEqual(NB); // at most one 5 ms wait per block, not forever
+      expect(asked.length).toBeGreaterThan(0);
+      expect(performance.now() - t0).toBeLessThan(10_000);
       expect(p.splMisses).toBeGreaterThan(0);
       for (let n = 0; n < END; n++) { expect(o.vk[n]).toBe(ref.vk[n]); expect(o.v[n]).toBe(ref.v[n]); }
       expect(maxDiff(o.v, L, 0, END, 0.5)).toBeLessThan(5e-5); // MDX vocal unchanged
