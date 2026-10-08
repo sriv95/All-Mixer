@@ -9,7 +9,7 @@ Variants only change the instrumental gain per bin (Vz / A cappella stays bit-id
 Usage: python sri244_dip.py musdb <clips/wav> <outdir> [--n 50]
        python sri244_dip.py lovely <capture.st.f32> <t0> <cache.npz> <outdir>
 Needs the venv with onnxruntime/soundfile (/tmp/bv/bin/python)."""
-import sys, json, pathlib, argparse
+import sys, os, json, pathlib, argparse
 import numpy as np, soundfile as sf
 ROOT = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
@@ -31,7 +31,7 @@ def variants():
     for c in (0.7, 1.0): v[f'matchs3_c{c}'] = dict(kind='match', tu=3, td=3, c=c)
     return v
 
-def mdx_presence(c, tlo, thi, k=3, act=None, W=4.0, Wp=None, Wf=None, rL=None):
+def mdx_presence(c, tlo, thi, k=3, act=None, W=4.0, Wp=None, Wf=None, rL=None, kc=None):
     """SRI-250: per band, per STFT frame MDX-presence g = clip((|Vmdx|_band_dB - tlo)/(thi - tlo), 0, 1), k-frame box smoothing, expanded to bins [1,B,T] (1 below 150 Hz).
     Band dB = mono-mean |Vm|^2 summed in band, offset-calibrated so its 0.25 s block mean power equals frames(v, band) on the whole clip."""
     cache = getattr(c, '_pres', None)
@@ -42,13 +42,15 @@ def mdx_presence(c, tlo, thi, k=3, act=None, W=4.0, Wp=None, Wf=None, rL=None):
             blk = int(0.25 * SR / hy.HOP); nb = T // blk
             ref = np.mean(frames(c.v, list(BANDS.values())[i]))
             off = ref - np.mean(10 * np.log10(e[:nb * blk].reshape(nb, blk).mean(1) + 1e-12))
+            if os.environ.get('SRI254_OFF'): off = float(os.environ['SRI254_OFF'])  # SRI-254: fixed causal constant = -10 log10(N_FFT/2 * sum(hann^2)) = -64.98 dB
             eX = (np.abs(c.X.mean(0)[bm]) ** 2).sum(0)
             cache.append((bm, 10 * np.log10(e + 1e-12) + off, 10 * np.log10(eX + 1e-12) - 10 * np.log10(e + 1e-12)))
         c._pres = cache
     T = c.Vm.shape[2]; out = np.ones((1, c.Vm.shape[1], T))
     for i, (bm, d, rr) in enumerate(cache):
         lo, hi = (tlo[i], thi[i]) if np.ndim(tlo) else (tlo, thi)
-        gg = np.convolve(np.clip((d - lo) / (hi - lo), 0, 1), np.ones(k) / k, 'same')
+        raw = np.clip((d - lo) / (hi - lo), 0, 1)
+        gg = np.convolve(raw, np.ones(k) / k)[:len(raw)] if kc else np.convolve(raw, np.ones(k) / k, 'same')  # SRI-254 kc: causal box (frames t-k+1..t), no look-ahead
         if act is not None:  # SRI-252: the gate may open only where MDX was active within +-W frames: rolling max of band dB over +-W seconds >= act[i] (ramp 6 dB)
             from scipy.ndimage import maximum_filter1d
             if Wp is None: mx = maximum_filter1d(d, 2 * int(W * SR / hy.HOP) + 1)  # symmetric +-W s (Q4, lookahead W s)
@@ -63,7 +65,7 @@ def mdx_presence(c, tlo, thi, k=3, act=None, W=4.0, Wp=None, Wf=None, rL=None):
 
 def combine(c, g, p):
     """Instrumental of variant p (time domain) and the per-bin gain [2,B,T] applied to D = X - Vz."""
-    pres = mdx_presence(c, p['tlo'], p['thi'], p.get('k', 3), p.get('act'), p.get('W', 4.0), p.get('Wp'), p.get('Wf'), p.get('rL')) if p['kind'] == 'gate' else 1.0
+    pres = mdx_presence(c, p['tlo'], p['thi'], p.get('k', 3), p.get('act'), p.get('W', 4.0), p.get('Wp'), p.get('Wf'), p.get('rL'), p.get('kc')) if p['kind'] == 'gate' else 1.0
     fg = pres if p.get('fillgate') else 1.0
     Vz = c.Vm + g[None, None, :] * fg * (c.fill() - c.Vm)
     D = c.X - Vz
