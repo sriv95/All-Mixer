@@ -50,13 +50,15 @@ describe('KaraokeSurface slots', () => {
     expect(lineEls().map((e) => [textOf(e), e.classList.contains('upcoming')])).toEqual([['one', false], ['two', true]]);
   });
 
-  it('shows one line in 1-line mode and nothing in a gap', () => {
+  it('shows one line in 1-line mode, the next line only 3 s before it starts', () => {
     prefs.karaokeLines = 1;
     const s = make();
     s.render(synced);
     s.update(1.5);
     expect(lineEls().map(textOf)).toEqual(['one']);
-    s.update(6);
+    s.update(5.5);
+    expect(lineEls().map((e) => [textOf(e), e.classList.contains('upcoming')])).toEqual([['three', true]]);
+    s.update(40);
     expect(lineEls()).toHaveLength(0);
     expect(block().style.display).toBe('none');
   });

@@ -17,6 +17,7 @@ CI builds the extension, creates tag `vx.y.z` and a GitHub release with this sec
 
 ### Changed
 
+- Karaoke text (1 and 2 lines): when no line is being sung, the text is hidden. The next line shows only in the last 3 s before it starts, and it is the only line shown then (never two idle lines). A line before a long instrumental break no longer stays on screen for the whole break.
 - Karaoke text, 2 lines: the two rows stay in place. When a line ends, the next line replaces it in the same row; nothing scrolls up.
 - The ♪ button now shows or hides the lyrics. It no longer switches between karaoke text and the lyrics window; choose that in the settings ("Lyrics display"). Closing the lyrics window hides the lyrics.
 - youtube.com: the lyrics settings are grouped in one "Lyrics" row (with the ♪ icon) in the player's settings menu. YouTube's own captions stay hidden while lyrics show, but pressing the CC button shows them again for that video.
