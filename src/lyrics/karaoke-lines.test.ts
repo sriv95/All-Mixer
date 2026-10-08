@@ -13,8 +13,10 @@ const rows = (t: number, n: 1 | 2) => selectKaraokeLines(lines, t, n).slots.map(
 
 describe('selectKaraokeLines', () => {
   it('before the first line', () => {
-    expect(view(2, 1)).toEqual([]);
-    expect(view(2, 2)).toEqual(['0:upcoming']); // only one idle line
+    expect(view(2, 1)).toEqual([]); // more than 3 s before the first line: hidden
+    expect(view(2, 2)).toEqual([]);
+    expect(view(7, 1)).toEqual(['0:upcoming']); // 3 s before: shown
+    expect(view(7, 2)).toEqual(['0:upcoming']); // only one idle line
     expect(selectKaraokeLines(lines, 2, 2).currentIndex).toBe(-1);
   });
   it('mid-song: 1 vs 2 lines', () => {
@@ -26,12 +28,14 @@ describe('selectKaraokeLines', () => {
     expect(view(14, 1)).toEqual(['1:current']);
   });
   it('gap between lines', () => {
-    expect(view(19, 1)).toEqual([]);
+    expect(view(19, 1)).toEqual(['2:upcoming']);
     expect(view(19, 2)).toEqual(['2:upcoming']);
   });
   it('blank line is a gap and is skipped', () => {
     expect(view(25, 1)).toEqual([]);
-    expect(view(25, 2)).toEqual(['4:upcoming']);
+    expect(view(25, 2)).toEqual([]); // 5 s before 'd': still hidden
+    expect(view(27, 1)).toEqual(['4:upcoming']);
+    expect(view(27, 2)).toEqual(['4:upcoming']);
     expect(view(22, 2)).toEqual(['2:current']); // next is blank, omitted
   });
   it('last line has no next, then nothing after its end', () => {
@@ -55,6 +59,30 @@ describe('selectKaraokeLines', () => {
     // gap after b: only c (row 0) shows, never two idle lines.
     expect(rows(19, 2)).toEqual(['0=2:upcoming']);
     expect(rows(31, 2)).toEqual(['1=4:current']);
+  });
+  it('long idle time: hidden, then the next line shows 3 s before it starts', () => {
+    const ls = [L(10, 14, 'a'), L(30, 34, 'b'), L(36, 40, 'c')];
+    const v = (t: number, n: 1 | 2) => selectKaraokeLines(ls, t, n).slots.map((s) => `${s.index}:${s.state}`);
+    expect(v(20, 1)).toEqual([]);
+    expect(v(20, 2)).toEqual([]);
+    expect(v(26.9, 2)).toEqual([]);
+    expect(v(27, 1)).toEqual(['1:upcoming']);
+    expect(v(27, 2)).toEqual(['1:upcoming']); // one idle line only
+    expect(v(30, 2)).toEqual(['2:upcoming', '1:current']); // sorted by row
+  });
+  it('a line whose end is the next start is cut after its estimated sung time if the idle time is long', () => {
+    const ls = [L(10, 40, 'abcd'), L(40, 44, 'next')]; // end == next.start: a 30 s "line" for 4 chars
+    const v = (t: number, n: 1 | 2) => selectKaraokeLines(ls, t, n).slots.map((s) => `${s.index}:${s.state}`);
+    expect(v(11, 2)).toEqual(['0:current', '1:upcoming']);
+    expect(v(20, 2)).toEqual([]); // sung time over, next is 20 s away: nothing, no stale "current" line
+    expect(v(20, 1)).toEqual([]);
+    expect(v(37, 2)).toEqual(['1:upcoming']);
+    expect(v(40, 2)).toEqual(['1:current']);
+  });
+  it('a line is not cut early when less than 3 s of idle time would be left', () => {
+    const ls = [L(10, 14, 'abcd'), L(14, 18, 'next')];
+    const v = (t: number) => selectKaraokeLines(ls, t, 2).slots.map((s) => `${s.index}:${s.state}`);
+    expect(v(13.5)).toEqual(['0:current', '1:upcoming']);
   });
   it('1 line always uses row 0', () => {
     expect(rows(15, 1)).toEqual(['0=1:current']);
