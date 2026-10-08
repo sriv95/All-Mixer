@@ -191,7 +191,28 @@ def report(a, insts, vmdx, c):
     for i in range(at(120), min(at(132), len(fV))):
         print(f'{a.t0 + i * 0.25:6.2f} {fm[i]:9.1f}  ' + '  '.join(f'{fi_[n][i]:10.1f}' for n in names) + f'  {fV[i]:8.1f}')
 
+def diag(a):
+    """SRI-249: per 0.25 s frame 124.5-128 s, per band dB: |X| mix, |Vmdx|, |fill| = Vz - Vmdx (dip-fill part), |Vz| subtracted, |D| = X - Vz, |out| = base instrumental, |Xg| = X * base gain (what Vz = 0 would give)."""
+    x = np.fromfile(a.ref, dtype=np.float32).astype(np.float64).reshape(2, -1).T.copy(); z = np.load(a.cache); c = Clip(x, z['v'], z['m'])
+    g = c.gates(PARAMS)['G2_mask_evidence']
+    inst, gain, D, Vz = combine(c, g, dict(kind='base'))
+    sigs = {'X': c.x, 'Vmdx': z['v'], 'fill': hy.istft_(Vz - c.Vm, c.n), 'Vz': hy.istft_(Vz, c.n), 'D': hy.istft_(D, c.n), 'out': inst, 'Xg': hy.istft_(c.X * gain, c.n)}
+    fb = {k: band_frames(v) for k, v in sigs.items()}
+    msf = frames(c.x)  # frame grid
+    at = lambda t: int(round((t - a.t0) / 0.25))
+    for b in BANDS:
+        print(f'band {b} dB   t(s)   ' + ' '.join(f'{k:>7}' for k in sigs) + '   mask(mean over bins>=150, frame)  gate')
+        for i in range(at(125.0), at(128.0) + 1):
+            t = a.t0 + i * 0.25; hp = int(round(t * SR / hy.HOP)); h0 = int(round((t - a.t0) * SR / hy.HOP))
+            m = c.ms[:, c.gate150[0, :, 0], h0].mean() if h0 < c.ms.shape[2] else float('nan')
+            print(f'{t:20.2f} ' + ' '.join(f'{fb[k][b][i]:7.1f}' for k in sigs) + f'   {m:6.3f}  {g[min(h0, len(g)-1)]:.2f}')
+    for b in BANDS:
+        w = lambda t0, t1: {k: round(float(np.mean(fb[k][b][at(t0):at(t1)])), 1) for k in ('X', 'Vz', 'D', 'out', 'Xg')}
+        print(b, 'mean dB 125.8-127.0', w(125.8, 127.0), '| X 125.5 / 126.0 / 128.0:', [round(float(fb['X'][b][at(t)]), 1) for t in (125.5, 126.0, 128.0)])
+
 if __name__ == '__main__':
+    if sys.argv[1] == 'diag':
+        ap = argparse.ArgumentParser(); ap.add_argument('mode'); ap.add_argument('ref'); ap.add_argument('t0', type=float); ap.add_argument('cache'); diag(ap.parse_args()); sys.exit()
     ap = argparse.ArgumentParser(); ap.add_argument('mode')
     if sys.argv[1] == 'musdb': ap.add_argument('dir'); ap.add_argument('out'); ap.add_argument('--n', type=int, default=50)
     else: ap.add_argument('ref'); ap.add_argument('t0', type=float); ap.add_argument('cache'); ap.add_argument('out'); ap.add_argument('--keep', default='Rs3_c0.7')
