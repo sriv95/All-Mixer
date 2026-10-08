@@ -1,0 +1,34 @@
+variant                 step      kind  offset(ms; sound - picture)  pipeline  missing
+default150             pause 1   pause   45.8     -    
+default150             play 1    play    -8.3   -38.2   level rms=0.3322 peak=1.0051 firstAbove=19
+default150             pause 2   pause   24.7     -    
+default150             play 2    play    -1.4   -29.0   level rms=0.2708 peak=0.9587 firstAbove=15
+default150             pause 3   pause   23.7     -    
+default150             pause 3   play    52.6    22.2   level rms=0.2895 peak=0.9299 firstAbove=95
+default150             pause 3   pause   37.5     -    
+default150             play 3    play     3.2   -24.8   level rms=0.3155 peak=0.9957 firstAbove=11
+default150             seek +30  pause   22.2     -    
+default150             seek +30  play    47.3    19.4   level rms=0.3046 peak=0.9567 firstAbove=27
+sep-D500               pause 1   pause   19.5     -    
+sep-D500               pause 1   play     -       -    audioOn level rms=0.0000 peak=0.0000 firstAbove=-
+sep-D500               pause 1   pause  923.2     -    
+sep-D500               play 1    -        -       -    no transition (probeOn=true audioAttached=true ctx=running)
+sep-D500               pause 2   play  1148.6  -332.2   level rms=0.0730 peak=0.3013 firstAbove=5
+sep-D500               pause 2   pause 1497.9     -    
+sep-D500               play 2    -        -       -    no transition (probeOn=true audioAttached=true ctx=running)
+sep-D500               pause 3   play  1232.1  -275.2   level rms=0.0987 peak=0.3213 firstAbove=9
+sep-D500               pause 3   pause -149.9     -    
+sep-D500               play 3    -        -       -    no transition (probeOn=true audioAttached=true ctx=running)
+sep-D500               seek +30  play  1228.4  -271.6   level rms=0.1274 peak=0.3800 firstAbove=23
+sep-D500               seek +30  pause 1508.8     -    
+sep-D2000              pause 1   play  1134.3  -365.7   level rms=0.1397 peak=0.4923 firstAbove=18
+sep-D2000              play 1    pause   -3.6     -    
+sep-D2000              pause 2   play  -256.0  -252.5   level rms=0.1003 peak=0.2828 firstAbove=8
+sep-D2000              play 2    pause   -6.5     -    
+sep-D2000              pause 3   play  -391.1  -391.3   level rms=0.1768 peak=0.4849 firstAbove=11
+sep-D2000              play 3    pause   -8.2     -    
+sep-D2000              seek +30  play  -399.8  -399.5   level rms=0.1728 peak=0.4670 firstAbove=14
+sep-D2000              seek +30  pause 1048.5     -    
+default150: resume playOffsetMs mean 18.7 range [-8.3, 52.6] n=5; pipelineMs mean -10.1 range [-38.2, 22.2] n=5
+sep-D500: resume playOffsetMs mean 1203.0 range [1148.6, 1232.1] n=3; pipelineMs mean -293.0 range [-332.2, -271.6] n=3
+sep-D2000: resume playOffsetMs mean 21.8 range [-399.8, 1134.3] n=4; pipelineMs mean -352.3 range [-399.5, -252.5] n=4

@@ -1,0 +1,58 @@
+{
+ "label": "lucky",
+ "site": "music",
+ "vid": "5NV6Rdv1a3I",
+ "startS": 130,
+ "modes": {
+  "reference": {
+   "sr": 44100,
+   "n": 1093632,
+   "adDuring": false,
+   "videoSec": [
+    149.037087,
+    174.046717
+   ],
+   "sep": {
+    "state": "off",
+    "choice": "off",
+    "engine": "bypass",
+    "procMs": 0
+   }
+  },
+  "karaoke": {
+   "sr": 44100,
+   "n": 1094144,
+   "adDuring": false,
+   "videoSec": [
+    151.003398,
+    176.008
+   ],
+   "sep": {
+    "state": "on",
+    "choice": "on",
+    "engine": "ml",
+    "procMs": 1970.7936507936508
+   }
+  },
+  "acappella": {
+   "sr": 44100,
+   "n": 1095168,
+   "adDuring": false,
+   "videoSec": [
+    149.008,
+    174.016
+   ],
+   "sep": {
+    "state": "on",
+    "choice": "on",
+    "engine": "ml",
+    "procMs": 1970.7936507936508
+   }
+  }
+ },
+ "load": [
+  2.03369140625,
+  1.63330078125,
+  1.3955078125
+ ]
+}

@@ -1,0 +1,25 @@
+RUN 1 choice {"sep":{"state":"on","latency":{"engine":"bypass","reason":"auto","sampleRate":44100,"processingSamples":0,"processingMs":0,"deviceMs":29.351473922902493,"videoDelayMs":29.351473922902493},"choice":{"state":"unavailable","cause":"too slow on this device (p95 219.4 ms)"}},"vd":29.351473922902493}
+RUN 1 bypassSamples 50 / 50 adSeen 0 video {"t":0,"paused":true}
+14s [all-mixer ml] warm-up p50 137.8 p95 219.4 ms (gate 212.8), create 2623 ms, apple metal-3
+...
+14s [all-mixer ml] warm-up p50 137.8 p95 219.4 ms (gate 212.8), create 2623 ms, apple metal-3
+RUN 2 choice {"sep":{"state":"on","latency":{"engine":"ml","reason":"auto","sampleRate":44100,"processingSamples":86912,"processingMs":1970.7936507936508,"deviceMs":29.351473922902493,"videoDelayMs":2000.1451247165533},"choice":{"state":"on"}},"vd":2000.1451247165533}
+RUN 2 bypassSamples 0 / 50 adSeen 0 video {"t":0,"paused":true}
+37s [all-mixer ml] mdx resp p50/p95/max 139/200/211 ms, spl catchUp p50/p95/max 103/174/183 ms, n 32, spleeter-skipped 0
+62s [all-mixer ml] mdx resp p50/p95/max 143/193/211 ms, spl catchUp p50/p95/max 98/171/221 ms, n 64, spleeter-skipped 0
+87s [all-mixer ml] mdx resp p50/p95/max 143/196/211 ms, spl catchUp p50/p95/max 96/161/221 ms, n 96, spleeter-skipped 0
+112s [all-mixer ml] mdx resp p50/p95/max 144/193/211 ms, spl catchUp p50/p95/max 95/162/221 ms, n 128, spleeter-skipped 0
+...
+112s [all-mixer ml] mdx resp p50/p95/max 144/193/211 ms, spl catchUp p50/p95/max 95/162/221 ms, n 128, spleeter-skipped 0
+137s [all-mixer ml] mdx resp p50/p95/max 145/196/227 ms, spl catchUp p50/p95/max 95/162/221 ms, n 160, spleeter-skipped 0
+162s [all-mixer ml] mdx resp p50/p95/max 145/190/227 ms, spl catchUp p50/p95/max 94/161/221 ms, n 192, spleeter-skipped 0
+RUN 3 choice {"sep":{"state":"on","latency":{"engine":"ml","reason":"auto","sampleRate":44100,"processingSamples":86912,"processingMs":1970.7936507936508,"deviceMs":29.351473922902493,"videoDelayMs":2000.1451247165533},"choice":{"state":"on"}},"vd":2000.1451247165533}
+RUN 3 bypassSamples 0 / 50 adSeen 0 video {"t":0,"paused":true}
+37s [all-mixer ml] mdx resp p50/p95/max 145/188/188 ms, spl catchUp p50/p95/max 97/168/170 ms, n 32, spleeter-skipped 0
+62s [all-mixer ml] mdx resp p50/p95/max 143/188/211 ms, spl catchUp p50/p95/max 95/155/178 ms, n 64, spleeter-skipped 0
+87s [all-mixer ml] mdx resp p50/p95/max 146/188/211 ms, spl catchUp p50/p95/max 94/144/178 ms, n 96, spleeter-skipped 0
+112s [all-mixer ml] mdx resp p50/p95/max 148/193/237 ms, spl catchUp p50/p95/max 93/155/178 ms, n 128, spleeter-skipped 0
+...
+112s [all-mixer ml] mdx resp p50/p95/max 148/193/237 ms, spl catchUp p50/p95/max 93/155/178 ms, n 128, spleeter-skipped 0
+137s [all-mixer ml] mdx resp p50/p95/max 148/193/237 ms, spl catchUp p50/p95/max 93/145/178 ms, n 160, spleeter-skipped 0
+161s [all-mixer ml] mdx resp p50/p95/max 149/192/237 ms, spl catchUp p50/p95/max 93/143/178 ms, n 192, spleeter-skipped 0
