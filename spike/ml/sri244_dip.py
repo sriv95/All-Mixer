@@ -27,7 +27,7 @@ def variants():
         for c in (0.5, 0.7, 1.0):
             if tag in ('s1', 's10') and c != 0.7: continue
             v[f'R{tag}_c{c}'] = dict(kind='R', tu=tu, td=td, c=c)
-    for f in (0.3, 0.4, 0.5): v[f'floor{f}'] = dict(kind='floor', f=f)
+    for f in (0.3, 0.4, 0.5, 0.65): v[f'floor{f}'] = dict(kind='floor', f=f)
     for c in (0.7, 1.0): v[f'matchs3_c{c}'] = dict(kind='match', tu=3, td=3, c=c)
     return v
 
@@ -177,6 +177,19 @@ def lovely(a):
     for n, inst in keep[1].items():
         y = np.clip(inst[s0:s1], -1, 1); sf.write(out / ('before.wav' if n == 'base' else f'after_{n}.wav'), y, SR, subtype='PCM_16')
     print('wavs', list(keep[1]))
+    report(a, keep[1], z['v'], c)
+
+def report(a, insts, vmdx, c):
+    """SRI-246: lovely 124-128 s band delta vs base, and per-frame 120-132 s table (inst 150-4k dB base vs variants next to MDX vocal level)."""
+    at = lambda t: int(round((t - a.t0) / 0.25))
+    i0, i1 = at(124), at(128); base = insts['base']; fb = band_frames(base)
+    for n, inst in insts.items():
+        if n == 'base': continue
+        fi = band_frames(inst); print(n, 'lovely 124-128 s delta dB vs before:', {b: round(float(np.mean(fi[b][i0:i1] - fb[b][i0:i1])), 2) for b in BANDS})
+    S1k4 = sos(150, 4000); fV = frames(vmdx); fm = frames(c.x, S1k4); fi_ = {n: frames(v, S1k4) for n, v in insts.items()}
+    names = list(insts); print('t(s)  mix150-4k  ' + '  '.join(f'{n:>10}' for n in names) + '  MDXvocal')
+    for i in range(at(120), at(132)):
+        print(f'{a.t0 + i * 0.25:6.2f} {fm[i]:9.1f}  ' + '  '.join(f'{fi_[n][i]:10.1f}' for n in names) + f'  {fV[i]:8.1f}')
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(); ap.add_argument('mode')
