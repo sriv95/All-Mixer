@@ -17,6 +17,7 @@ CI builds the extension, creates tag `vx.y.z` and a GitHub release with this sec
 
 ### Changed
 
+- Karaoke keeps more of the instrumental while someone sings. The Spleeter vocal mask is now applied in a frequency band only while the MDX vocal is present in that band (last 4 s), so backing music is no longer thinned out in sung parts where the MDX vocal is silent. On the test song at 125.8-127 s the dip shrinks by 1.61 dB (150 Hz-1 kHz), 1.04 dB (1-4 kHz) and 2.51 dB (above 4 kHz). A cappella and the added delay are unchanged. `KARAOKE_PRES_GATE` in `src/ml/karaoke.ts` switches it off (0).
 - Karaoke text (1 and 2 lines): when no line is being sung, the text is hidden. The next line shows only in the last 3 s before it starts, and it is the only line shown then (never two idle lines). A line before a long instrumental break no longer stays on screen for the whole break.
 - Karaoke text, 2 lines: the two rows stay in place. When a line ends, the next line replaces it in the same row; nothing scrolls up.
 - The ♪ button now shows or hides the lyrics. It no longer switches between karaoke text and the lyrics window; choose that in the settings ("Lyrics display"). Closing the lyrics window hides the lyrics.
