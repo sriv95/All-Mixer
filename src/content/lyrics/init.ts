@@ -14,6 +14,8 @@ const BUTTON_ATTR = 'data-allmixer-lyrics-btn';
 export interface LyricsFeature {
   setVideo(video: HTMLVideoElement): void;
   togglePanel(): void;
+  /** The Default / Separate mode was toggled: run the CC boot again (CC on to load the captions, back off if it was off). */
+  modeChanged(): void;
 }
 
 /**
@@ -93,6 +95,12 @@ export function initLyrics(site: Site, presentedTime: () => number | null, prese
       bootedFor = lastVideoId;
       boot.start(lastVideoId);
     }
+  };
+  /** Mode toggle: same as a new video. CC goes on to re-load the captions and back off if it was off before. */
+  const rebootCaptions = () => {
+    if (boot.restoringOff) return; // a boot is already running: its CC press is ours, do not read it as the user's
+    bootedFor = null;
+    syncCaptions();
   };
   const forceCaptions = () => {
     if (captionsForced) return;
@@ -257,5 +265,6 @@ export function initLyrics(site: Site, presentedTime: () => number | null, prese
       void checkVideo();
     },
     togglePanel: toggleVisible,
+    modeChanged: rebootCaptions,
   };
 }

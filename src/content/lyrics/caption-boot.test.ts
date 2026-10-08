@@ -35,6 +35,21 @@ describe('CaptionBoot', () => {
     expect(t.toggle).toHaveBeenCalledTimes(2);
   });
 
+  it('start again (mode toggle) with CC off: turns CC on once more and back off; restoringOff is true in between', () => {
+    const t = setup('off');
+    t.boot.start('v1');
+    expect(t.boot.restoringOff).toBe(true);
+    t.boot.captionsLoaded('v1');
+    vi.advanceTimersByTime(1600);
+    expect(t.boot.restoringOff).toBe(false);
+    expect(t.toggle).toHaveBeenCalledTimes(2);
+    t.boot.start('v1');
+    expect(t.toggle).toHaveBeenCalledTimes(3);
+    t.boot.captionsLoaded('v1');
+    vi.advanceTimersByTime(1600);
+    expect(t.toggle).toHaveBeenCalledTimes(4);
+  });
+
   it('CC off and no captions event: turns it off after the fallback time', () => {
     const t = setup('off');
     t.boot.start('v1');
