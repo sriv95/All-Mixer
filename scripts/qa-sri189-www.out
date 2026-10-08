@@ -1,0 +1,29 @@
+noteStart {"pressed":"false","win":false}
+karaokeStart {"exists":true,"vis":true,"lines":2,"fs":"21.8px","h":113}
+btns ["<button type=\"button\" data-allmixer-lyrics-btn=\"\" title=\"Lyrics (All Mixer!)\" ar parent=ytp-right-controls"]
+6_note_start {"pressed":"false","win":false}
+6_note_click1 {"note":{"pressed":"true","win":false},"kar":{"exists":false,"vis":false,"fs":null},"footer":{"selects":0,"footer":"Lyrics: LRCLIBCentered"}}
+6_closeX true
+6_after_X {"note":{"pressed":"false","win":false},"kar":{"exists":true,"vis":true,"lines":2,"fs":"21.8px","h":57}}
+6_note_2x {"note":{"pressed":"false","win":false},"kar":{"exists":true,"vis":true,"lines":2,"fs":"21.8px","h":57}}
+1_rows_open1 [{"am":false,"t":"\tAnnotations\t"},{"am":false,"t":"\tSubtitles/CC\tEnglish"},{"am":false,"t":"\tSleep timer\tOff"},{"am":false,"t":"\tPlayback speed\tNormal"},{"am":false,"t":"\tQuality\t | Auto (720p)"},{"am":true,"t":"Lyrics source\tAuto"},{"am":true,"t":"Lyrics display\tKaraoke text"},{"am":true,"t":"Karaoke lines\t2"},{"am":true,"t":"Karaoke size\t100%"}]
+1_rows_reopen [{"am":false,"t":"\tAnnotations\t"},{"am":false,"t":"\tSubtitles/CC\tEnglish"},{"am":false,"t":"\tSleep timer\tOff"},{"am":false,"t":"\tPlayback speed\tNormal"},{"am":false,"t":"\tQuality\t | Auto (720p)"},{"am":true,"t":"Lyrics source\tAuto"},{"am":true,"t":"Lyrics display\tKaraoke text"},{"am":true,"t":"Karaoke lines\t2"},{"am":true,"t":"Karaoke size\t100%"}]
+3_native_speed_sub []
+3_after_back 9
+2_lines_sub ["false:1","true:2"]
+2_clip {"menu":[381,550,721,971],"player":[68,612]}
+3_menu_still_open true
+2_churn 0
+2_lines1_kar {"exists":true,"vis":true,"lines":1,"fs":"21.8px","h":28}
+2_rows_after [{"am":false,"t":"Annotations"},{"am":false,"t":"Subtitles/CCEnglish"},{"am":false,"t":"Sleep timerOff"},{"am":false,"t":"Playback speedNormal"},{"am":false,"t":"QualityAuto (720p)"},{"am":true,"t":"Lyrics sourceAuto"},{"am":true,"t":"Lyrics displayKaraoke text"},{"am":true,"t":"Karaoke lines1"},{"am":true,"t":"Karaoke size100%"}]
+2_size200 {"exists":true,"vis":true,"lines":1,"fs":"43.5px","h":57}
+2_size100 {"exists":true,"vis":true,"lines":1,"fs":"21.8px","h":28}
+2_lines2 {"exists":true,"vis":true,"lines":2,"fs":"21.8px","h":57}
+2_src_lrclib "Lyrics source\tAuto"
+4_window_rows [{"am":false,"t":"\tAnnotations\t"},{"am":false,"t":"\tSubtitles/CC\tEnglish"},{"am":false,"t":"\tSleep timer\tOff"},{"am":false,"t":"\tPlayback speed\tNormal"},{"am":false,"t":"\tQuality\t | Auto (720p)"},{"am":true,"t":"Lyrics source\tAuto"},{"am":true,"t":"Lyrics display\tLyrics window"}]
+4_window_note {"pressed":"true","win":false}
+4_kar {"exists":false,"vis":false,"fs":null}
+2_back_to_karaoke {"note":{"pressed":"false","win":false},"kar":{"exists":true,"vis":true,"lines":2,"fs":"21.8px","h":57}}
+1_rows_theater [{"am":false,"t":"\tAmbient mode\t"},{"am":false,"t":"\tAnnotations\t"},{"am":false,"t":"\tSubtitles/CC\tEnglish"},{"am":false,"t":"\tSleep timer\tOff"},{"am":false,"t":"\tPlayback speed\tNormal"},{"am":false,"t":"\tQuality\t | Auto (720p)"},{"am":true,"t":"Lyrics source\tAuto"},{"am":true,"t":"Lyrics display\tKaraoke text"},{"am":true,"t":"Karaoke lines\t2"},{"am":true,"t":"Karaoke size\t100%"}]
+1_rows_fs [{"am":false,"t":"\tAnnotations\t"},{"am":false,"t":"\tSubtitles/CC\tEnglish"},{"am":false,"t":"\tSleep timer\tOff"},{"am":false,"t":"\tPlayback speed\tNormal"},{"am":false,"t":"\tQuality\t | Auto (720p)"},{"am":true,"t":"Lyrics source\tAuto"},{"am":true,"t":"Lyrics display\tKaraoke text"},{"am":true,"t":"Karaoke lines\t2"},{"am":true,"t":"Karaoke size\t100%"}]
+1_rows_spa [{"am":false,"t":"\tAnnotations\t"},{"am":false,"t":"\tSubtitles/CC\tKorean (auto-generated)"},{"am":false,"t":"\tSleep timer\tOff"},{"am":false,"t":"\tPlayback speed\tNormal"},{"am":false,"t":"\tQuality\t | Auto (720p)"},{"am":true,"t":"Lyrics source\tAuto"},{"am":true,"t":"Lyrics display\tKaraoke text"},{"am":true,"t":"Karaoke lines\t2"},{"am":true,"t":"Karaoke size\t100%"}]

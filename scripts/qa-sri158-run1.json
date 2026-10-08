@@ -1,0 +1,584 @@
+{
+ "run": "1",
+ "choice": {
+  "sep": {
+   "state": "on",
+   "latency": {
+    "engine": "bypass",
+    "reason": "auto",
+    "sampleRate": 44100,
+    "processingSamples": 0,
+    "processingMs": 0,
+    "deviceMs": 29.351473922902493,
+    "videoDelayMs": 29.351473922902493
+   },
+   "choice": {
+    "state": "unavailable",
+    "cause": "too slow on this device (p95 219.4 ms)"
+   }
+  },
+  "vd": 29.351473922902493
+ },
+ "adSeen": 0,
+ "bypassSamples": 50,
+ "samples": 50,
+ "vt": {
+  "t": 0,
+  "paused": true
+ },
+ "logs": [
+  "14s [all-mixer ml] warm-up p50 137.8 p95 219.4 ms (gate 212.8), create 2623 ms, apple metal-3"
+ ],
+ "trace": [
+  {
+   "t": 0,
+   "ph": "karaoke",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 3,
+   "ph": "karaoke",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 6,
+   "ph": "karaoke",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 9,
+   "ph": "karaoke",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 12,
+   "ph": "karaoke",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 15,
+   "ph": "karaoke",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 18,
+   "ph": "karaoke",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 21,
+   "ph": "karaoke",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 24,
+   "ph": "karaoke",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 27,
+   "ph": "karaoke",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 30,
+   "ph": "karaoke",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 33,
+   "ph": "karaoke",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 36,
+   "ph": "karaoke",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 39,
+   "ph": "karaoke",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 42,
+   "ph": "karaoke",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 45,
+   "ph": "karaoke",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 48,
+   "ph": "karaoke",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 51,
+   "ph": "karaoke",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 54,
+   "ph": "karaoke",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 57,
+   "ph": "karaoke",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 60,
+   "ph": "karaoke",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 63,
+   "ph": "karaoke",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 66,
+   "ph": "karaoke",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 69,
+   "ph": "karaoke",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 72,
+   "ph": "karaoke",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 75,
+   "ph": "acap",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 79,
+   "ph": "acap",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 82,
+   "ph": "acap",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 85,
+   "ph": "acap",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 88,
+   "ph": "acap",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 91,
+   "ph": "acap",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 94,
+   "ph": "acap",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 97,
+   "ph": "acap",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 100,
+   "ph": "acap",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 103,
+   "ph": "acap",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 106,
+   "ph": "acap",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 109,
+   "ph": "acap",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 112,
+   "ph": "acap",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 115,
+   "ph": "acap",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 118,
+   "ph": "acap",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 121,
+   "ph": "acap",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 124,
+   "ph": "acap",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 127,
+   "ph": "acap",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 130,
+   "ph": "acap",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 133,
+   "ph": "acap",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 136,
+   "ph": "acap",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 139,
+   "ph": "acap",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 142,
+   "ph": "acap",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 145,
+   "ph": "acap",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  },
+  {
+   "t": 148,
+   "ph": "acap",
+   "ad": false,
+   "state": "on",
+   "choice": "unavailable",
+   "engine": "bypass",
+   "reason": "auto",
+   "procMs": 0,
+   "vd": 29.351473922902493
+  }
+ ]
+}

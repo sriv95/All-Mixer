@@ -1,0 +1,12 @@
+RUN 1 choice {"sep":{"state":"on","latency":{"engine":"ml","reason":"auto","sampleRate":44100,"processingSamples":86912,"processingMs":1970.7936507936508,"deviceMs":29.351473922902493,"videoDelayMs":2000.1451247165533},"choice":{"state":"on"}},"vd":2000.1451247165533}
+RUN 1 bypassSamples 0 / 44 adSeen 0 video {"t":0,"paused":true}
+13s [all-mixer ml] warm-up p50 104.4 p90 141.2 p95 173.1 (gate 212.8), create 1351 ms, apple metal-3, first try
+38s [all-mixer ml] mdx resp p50/p95/max 145/167/176 ms, spl catchUp p50/p95/max 178/202/204 ms, n 32, spleeter-skipped 0
+64s [all-mixer ml] mdx resp p50/p95/max 146/166/176 ms, spl catchUp p50/p95/max 169/201/204 ms, n 64, spleeter-skipped 0
+89s [all-mixer ml] mdx resp p50/p95/max 147/166/176 ms, spl catchUp p50/p95/max 98/199/204 ms, n 96, spleeter-skipped 0
+114s [all-mixer ml] mdx resp p50/p95/max 147/166/176 ms, spl catchUp p50/p95/max 94/185/204 ms, n 128, spleeter-skipped 0
+139s [all-mixer ml] mdx resp p50/p95/max 147/165/176 ms, spl catchUp p50/p95/max 94/185/204 ms, n 160, spleeter-skipped 0
+...
+89s [all-mixer ml] mdx resp p50/p95/max 147/166/176 ms, spl catchUp p50/p95/max 98/199/204 ms, n 96, spleeter-skipped 0
+114s [all-mixer ml] mdx resp p50/p95/max 147/166/176 ms, spl catchUp p50/p95/max 94/185/204 ms, n 128, spleeter-skipped 0
+139s [all-mixer ml] mdx resp p50/p95/max 147/165/176 ms, spl catchUp p50/p95/max 94/185/204 ms, n 160, spleeter-skipped 0

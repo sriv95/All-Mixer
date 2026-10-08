@@ -1,0 +1,32 @@
+9bZkp7q19f0_rows [{"am":false,"t":"\tAnnotations\t"},{"am":false,"t":"\tSubtitles/CC\tKorean (auto-generated)"},{"am":false,"t":"\tSleep timer\tOff"},{"am":false,"t":"\tPlayback speed\tNormal"},{"am":false,"t":"\tQuality\t | Auto (480p)"},{"am":true,"t":"Lyrics source\tAuto"},{"am":true,"t":"Lyrics display\tKaraoke text"},{"am":true,"t":"Karaoke lines\t2"},{"am":true,"t":"Karaoke size\t100%"}]
+9bZkp7q19f0_kar {"k":["그래, 너 (hey), 그래, 바로 너 (hey)","(dim)지금부터 갈 데까지 가볼까"],"g":{"exists":true,"vis":true,"lines":2,"fs":"21.8px","h":57}}
+9bZkp7q19f0_source_items ["true:Auto","false:LRCLIB","false:DIS:YouTube captions (none)"]
+9bZkp7q19f0_cc_on {"pressed":"true","nativeVisible":[],"contDisplay":"none"}
+9bZkp7q19f0_cc_kar ["그래, 너 (hey), 그래, 바로 너 (hey)","(dim)지금부터 갈 데까지 가볼까"]
+9bZkp7q19f0_cc_menu_rows ["Annotations","Subtitles/CCKorean (auto-generated)","Sleep timerOff","Playback speedNormal","QualityAuto (480p)","Lyrics sourceAuto","Lyrics displayKaraoke text","Karaoke lines2","Karaoke size100%"]
+9bZkp7q19f0_src_LRCLIB {"r":true,"k":["오빤 강남스타일 (uh)","(dim)강남스타일"],"items":["true:Auto","false:LRCLIB","false:DIS:YouTube captions (none)"]}
+9bZkp7q19f0_src_YouTube captions {"r":"disabled","k":["(dim)오빤 강남스타일","(dim)강남스타일"],"items":["true:Auto","false:LRCLIB","false:DIS:YouTube captions (none)"]}
+9bZkp7q19f0_src_Auto {"r":true,"k":["(dim)오빤 강남스타일","(dim)강남스타일"],"items":["false:Auto","true:LRCLIB","false:DIS:YouTube captions (none)"]}
+9bZkp7q19f0_window {"kar":{"exists":false,"vis":false,"fs":null},"panel":true,"text":"\n:host { all: initial; }\n.panel {\n  position: fixed; box-sizing: border-box; display: flex; flex-direction: column;\n  pointer-events: auto; background: rgba(20, 20, 20, 0.88); color: #f1f1f1;\n  font: "}
+9bZkp7q19f0_nativespeed {"items":[],"rate":1}
+arj7oStGLkU_rows [{"am":false,"t":"\tStable Volume\t"},{"am":false,"t":"\tVoice boost\t"},{"am":false,"t":"\tSubtitles/CC\tEnglish"},{"am":false,"t":"\tSleep timer\tOff"},{"am":false,"t":"\tPlayback speed\tNormal"},{"am":false,"t":"\tQuality\t | Auto (720p)"},{"am":true,"t":"Lyrics display\tKaraoke text"},{"am":true,"t":"Karaoke lines\t2"},{"am":true,"t":"Karaoke size\t100%"}]
+arj7oStGLkU_kar {"k":[],"g":{"exists":true,"vis":false,"lines":0,"fs":"21.8px","h":0}}
+arj7oStGLkU_source_items "TimeoutError: locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for"
+arj7oStGLkU_cc_on {"pressed":"false","nativeVisible":[],"contDisplay":null}
+arj7oStGLkU_cc_kar []
+arj7oStGLkU_cc_menu_rows ["Stable Volume","Voice boost","Subtitles/CCOff","Sleep timerOff","Playback speedNormal","QualityAuto (720p)","Lyrics displayKaraoke text","Karaoke lines2","Karaoke size100%"]
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+locator.click: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator('[data-am-row="source"]')
+
+    at pickIn (/Users/sriv/.paperclip/instances/default/projects/ff016047-201c-4ddd-afe4-919b8f7ce38c/770ffeee-21cf-4963-b438-a115c8cbb6ea/_default/scripts/qa-sri180b.mjs:28:133)
+    at async file:///Users/sriv/.paperclip/instances/default/projects/ff016047-201c-4ddd-afe4-919b8f7ce38c/770ffeee-21cf-4963-b438-a115c8cbb6ea/_default/scripts/qa-sri180b.mjs:54:71 {
+  log: [ `  - waiting for locator('[data-am-row="source"]')` ],
+  name: 'TimeoutError'
+}
+
+Node.js v24.21.0

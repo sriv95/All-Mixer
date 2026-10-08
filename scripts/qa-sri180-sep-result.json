@@ -1,0 +1,278 @@
+{
+ "map_sample": [
+  [
+   "50",
+   null
+  ],
+  [
+   "60",
+   "Never gonna tell a lie and hurt you"
+  ],
+  [
+   "70",
+   "Inside, we both know what's been going on (going on)"
+  ],
+  [
+   "80",
+   "And if you ask me how I'm feeling"
+  ],
+  [
+   "90",
+   "Never gonna run around and desert you"
+  ],
+  [
+   "100",
+   "Never gonna tell a lie and hurt you"
+  ],
+  [
+   "59.5",
+   "Never gonna tell a lie and hurt you"
+  ],
+  [
+   "69.5",
+   "Inside, we both know what's been going on (going on)"
+  ],
+  [
+   "79.5",
+   "And if you ask me how I'm feeling"
+  ],
+  [
+   "89.5",
+   "Never gonna let you down"
+  ],
+  [
+   "99.5",
+   "Never gonna tell a lie and hurt you"
+  ]
+ ],
+ "10_hide_style_karaoke": true,
+ "10_hide_style_window": true,
+ "9_status": {
+  "vd": {
+   "state": "on",
+   "delayMs": 29.351473922902493,
+   "stats": {
+    "captureW": 967,
+    "captureH": 544,
+    "fps": 25.000000000000533,
+    "queued": 0,
+    "queueBytes": 0,
+    "maxFrames": 30,
+    "skipped": 0,
+    "drawn": 49,
+    "errMs": {
+     "mean": -2.3882086043704476,
+     "p95": 3.548526083057368
+    },
+    "avOffsetMs": {
+     "mean": -4.530269841270432,
+     "p95": 8.34452607709344
+    }
+   }
+  },
+  "sep": {
+   "state": "on",
+   "latency": {
+    "engine": "bypass",
+    "reason": "auto",
+    "sampleRate": 44100,
+    "processingSamples": 0,
+    "processingMs": 0,
+    "deviceMs": 29.351473922902493,
+    "videoDelayMs": 29.351473922902493
+   },
+   "choice": {
+    "state": "warming"
+   }
+  },
+  "audio": "active"
+ },
+ "9_sep_rows": [
+  {
+   "t": 57.86,
+   "delay": 0.029351473922902493,
+   "line": "Never gonna tell a lie and hurt you",
+   "expectDelayed": "Never gonna tell a lie and hurt you",
+   "expectRaw": "Never gonna tell a lie and hurt you",
+   "okDelayed": true,
+   "okRaw": true
+  },
+  {
+   "t": 58.76,
+   "delay": 2.0001451247165534,
+   "line": "Never gonna tell a lie and hurt you",
+   "expectDelayed": "Never gonna tell a lie and hurt you",
+   "expectRaw": "Never gonna tell a lie and hurt you",
+   "okDelayed": true,
+   "okRaw": true
+  },
+  {
+   "t": 59.67,
+   "delay": 2.0001451247165534,
+   "line": "Never gonna tell a lie and hurt you",
+   "expectDelayed": "Never gonna tell a lie and hurt you",
+   "expectRaw": "Never gonna tell a lie and hurt you",
+   "okDelayed": true,
+   "okRaw": true
+  },
+  {
+   "t": 60.58,
+   "delay": 2.0001451247165534,
+   "line": "Never gonna tell a lie and hurt you",
+   "expectDelayed": "Never gonna tell a lie and hurt you",
+   "expectRaw": "Never gonna tell a lie and hurt you",
+   "okDelayed": true,
+   "okRaw": true
+  },
+  {
+   "t": 61.5,
+   "delay": 2.0001451247165534,
+   "line": "Never gonna tell a lie and hurt you",
+   "expectDelayed": "Never gonna tell a lie and hurt you",
+   "expectRaw": "We've known each other for so long",
+   "okDelayed": true,
+   "okRaw": false
+  },
+  {
+   "t": 62.4,
+   "delay": 2.0001451247165534,
+   "line": "Never gonna tell a lie and hurt you",
+   "expectDelayed": "Never gonna tell a lie and hurt you",
+   "expectRaw": "We've known each other for so long",
+   "okDelayed": true,
+   "okRaw": false
+  },
+  {
+   "t": 63.31,
+   "delay": 2.0001451247165534,
+   "line": "We've known each other for so long",
+   "expectDelayed": "We've known each other for so long",
+   "expectRaw": "We've known each other for so long",
+   "okDelayed": true,
+   "okRaw": true
+  },
+  {
+   "t": 64.22,
+   "delay": 2.0001451247165534,
+   "line": "We've known each other for so long",
+   "expectDelayed": "We've known each other for so long",
+   "expectRaw": "We've known each other for so long",
+   "okDelayed": true,
+   "okRaw": true
+  },
+  {
+   "t": 65.13,
+   "delay": 2.0001451247165534,
+   "line": "We've known each other for so long",
+   "expectDelayed": "We've known each other for so long",
+   "expectRaw": "Your heart's been aching, but you're too shy to say it (say it)",
+   "okDelayed": true,
+   "okRaw": false
+  },
+  {
+   "t": 66.04,
+   "delay": 2.0001451247165534,
+   "line": "We've known each other for so long",
+   "expectDelayed": "We've known each other for so long",
+   "expectRaw": "Your heart's been aching, but you're too shy to say it (say it)",
+   "okDelayed": true,
+   "okRaw": false
+  },
+  {
+   "t": 66.94,
+   "delay": 2.0001451247165534,
+   "line": "We've known each other for so long",
+   "expectDelayed": "Your heart's been aching, but you're too shy to say it (say it)",
+   "expectRaw": "Your heart's been aching, but you're too shy to say it (say it)",
+   "okDelayed": false,
+   "okRaw": false
+  },
+  {
+   "t": 67.85,
+   "delay": 2.0001451247165534,
+   "line": "Your heart's been aching, but you're too shy to say it (say it)",
+   "expectDelayed": "Your heart's been aching, but you're too shy to say it (say it)",
+   "expectRaw": "Your heart's been aching, but you're too shy to say it (say it)",
+   "okDelayed": true,
+   "okRaw": true
+  }
+ ],
+ "9_sep_seek": {
+  "rapid": [
+   "Your heart's been aching, but you're too shy to say it (say it)",
+   "(dim)Inside, we both know what's been going on (going on)"
+  ],
+  "after": [
+   "And if you ask me how I'm feeling",
+   "(dim)Don't tell me you're too blind to see"
+  ],
+  "t": 82.79,
+  "delay": {
+   "state": "on",
+   "delayMs": 2000.1451247165533,
+   "stats": {
+    "captureW": 967,
+    "captureH": 544,
+    "fps": 25.000000000000533,
+    "queued": 50,
+    "queueBytes": 105209600,
+    "maxFrames": 130,
+    "skipped": 0,
+    "drawn": 292,
+    "errMs": {
+     "mean": 1.8961397004295701,
+     "p95": 6.248526077099086
+    },
+    "avOffsetMs": {
+     "mean": -0.15543907837112916,
+     "p95": 9.50052607709515
+    }
+   }
+  },
+  "expectedDelayed": "And if you ask me how I'm feeling"
+ },
+ "9_sep_paused": {
+  "k": [
+   "Don't tell me you're too blind to see",
+   "(dim)Never gonna give you up"
+  ],
+  "v": {
+   "t": 82.8,
+   "paused": true,
+   "fs": false
+  }
+ },
+ "9_sep_resumed": {
+  "k": [
+   "Don't tell me you're too blind to see",
+   "(dim)Never gonna give you up"
+  ],
+  "v": {
+   "t": 84.8,
+   "paused": false,
+   "fs": false
+  },
+  "vd": {
+   "state": "on",
+   "delayMs": 2000.1451247165533,
+   "stats": {
+    "captureW": 967,
+    "captureH": 544,
+    "fps": 25.000000000000533,
+    "queued": 49,
+    "queueBytes": 103105408,
+    "maxFrames": 130,
+    "skipped": 0,
+    "drawn": 343,
+    "errMs": {
+     "mean": 2.5726160360101007,
+     "p95": 6.548526077101997
+    },
+    "avOffsetMs": {
+     "mean": -170.05854730914675,
+     "p95": 9.3178752834433
+    }
+   }
+  }
+ }
+}
