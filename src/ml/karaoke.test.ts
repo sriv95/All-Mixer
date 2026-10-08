@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FILL_FLOOR_DB, FILL_HI, FILL_LO, FILL_PEAK_MIN_DB, KARAOKE_G, KaraokeCombiner, PRES_CAL_DB, PRES_WINDOW, SlidingMax } from './karaoke';
+import { FILL_FLOOR_DB, FILL_HI, FILL_LO, FILL_PEAK_MIN_DB, KARAOKE_G, KARAOKE_PRES_GATE, KaraokeCombiner, PRES_CAL_DB, PRES_WINDOW, SlidingMax } from './karaoke';
 import { BINS, HOP, N_FFT } from './stream';
 
 const FR = 40; // frames
@@ -154,14 +154,14 @@ describe('SlidingMax (SRI-254)', () => {
 
 describe('KaraokeCombiner MDX-presence gate (SRI-253 Q6 / SRI-254)', () => {
   const FRAMES = 330, N = HOP * FRAMES, ON = 100; // MDX vocal active in frames < ON
-  const x = new Float32Array(N), v = new Float32Array(N);
+  const x = new Float32Array(N), v = new Float32Array(N), vAct = v;
   for (let j = 0; j < N; j++) {
     x[j] = 0.3 * Math.sin((2 * Math.PI * 300 * j) / N_FFT); // bin 300 = 3.2 kHz, band 1 – 4k
     if (j < HOP * ON) v[j] = 0.2 * Math.sin((2 * Math.PI * 300 * j) / N_FFT);
   }
   const blk = new Float32Array(4 * 2 * BINS).fill(1);
   /** Stream x, v through a combiner in 4-frame steps (the ring is shorter than the clip); returns Vk. */
-  function stream(c: KaraokeCombiner): Float32Array {
+  function stream(c: KaraokeCombiner, v: Float32Array = vAct): Float32Array {
     const out = new Float32Array(N), tmp = new Float32Array(4 * HOP);
     let emitted = 0;
     for (let pos = 0; pos < N; pos += 4 * HOP) {
@@ -206,6 +206,49 @@ describe('KaraokeCombiner MDX-presence gate (SRI-253 Q6 / SRI-254)', () => {
     const d = peak(ON + 185, FRAMES - 6);
     expect(d).toBeGreaterThan(0.8 * 0.3 - 1e-3);
     expect(d).toBeLessThan(0.8 * 0.3 + 1e-3);
+  });
+
+  it('KARAOKE_PRES_GATE = 1 by default', () => {
+    expect(KARAOKE_PRES_GATE).toBe(1);
+    expect(new KaraokeCombiner().presGate).toBe(1);
+  });
+
+  it('(a) switch 0: pres = 1 everywhere, 4 s after the MDX vocal left Vk is still 0.8 x (gate 1 gives 0 there)', () => {
+    const off = stream(new KaraokeCombiner(0.8, false, 0));
+    let d = 0;
+    for (let n = (ON + 10) * HOP; n < (ON + 165) * HOP; n++) d = Math.max(d, Math.abs(off[n]));
+    expect(d).toBeGreaterThan(0.8 * 0.3 - 1e-3);
+    expect(d).toBeLessThan(0.8 * 0.3 + 1e-3);
+  });
+
+  it('(b) MDX silent for > 4 s: switch 1 equals switch 0 bit for bit (pres = 1)', () => {
+    const silent = new Float32Array(N);
+    const on = stream(new KaraokeCombiner(0.8, false, 1), silent), off = stream(new KaraokeCombiner(0.8, false, 0), silent);
+    for (let n = 0; n < N; n++) expect(on[n]).toBe(off[n]);
+  });
+
+  it.each([true, false])('(c) a cappella Vz is bit-identical for switch 0 and 1 (fill = %s)', (fill) => {
+    const grab = (sw: number): Float32Array => {
+      const c = new KaraokeCombiner(0.8, fill, sw), out = new Float32Array(N), tmp = new Float32Array(4 * HOP);
+      let emitted = 0;
+      for (let pos = 0; pos < N; pos += 4 * HOP) {
+        const k = Math.min(4 * HOP, N - pos);
+        c.writeInput(pos, x.subarray(pos, pos + k), x.subarray(pos, pos + k), k);
+        c.writeVocal(pos, v.subarray(pos, pos + k), v.subarray(pos, pos + k), k);
+        c.pushMasks(pos / HOP, blk);
+        c.advance(pos + k);
+        const to = c.completeTo;
+        if (to > emitted) {
+          c.emitVocal(emitted, to - emitted, out.subarray(emitted, to), tmp);
+          c.release(emitted, to - emitted);
+          if (emitted === 0) c.release(-2048, 2048);
+          emitted = to;
+        }
+      }
+      return out;
+    };
+    const a = grab(0), b = grab(1);
+    for (let n = 0; n < N; n++) expect(a[n]).toBe(b[n]);
   });
 
   it.each([true, false])('frame path allocates nothing: heap growth during 2 × 60 frames of advance() stays under 100 kB (fill = %s)', (fill) => {

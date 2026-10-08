@@ -34,6 +34,8 @@ import { BINS, HOP, N_FFT } from './stream';
 
 /** Margin g (runtime constant, tune after listening). */
 export const KARAOKE_G = 0.8;
+/** MDX-presence gate (SRI-254 Q6) on (1) / off (0). Off: pres = 1 for every bin and the V_mdx FFT of presence() is skipped. */
+export const KARAOKE_PRES_GATE = 1;
 export const KARAOKE_GATE_HZ = 150;
 const SAMPLE_RATE = 44100;
 /** First bin with frequency ≥ KARAOKE_GATE_HZ. */
@@ -150,7 +152,7 @@ export class KaraokeCombiner {
     return this.peak - FILL_FLOOR_DB;
   }
 
-  constructor(readonly g: number = KARAOKE_G, readonly fill = true) {
+  constructor(readonly g: number = KARAOKE_G, readonly fill = true, readonly presGate: number = KARAOKE_PRES_GATE) {
     this.pres.fill(1);
     for (let i = 0; i < N_FFT; i++) this.win[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / N_FFT);
   }
@@ -343,13 +345,15 @@ export class KaraokeCombiner {
     }
     fft.transform(re, im);
     const filling = gt > 0;
-    for (let n = 0; n < N_FFT; n++) {
-      const j = (s0 + n) & MASK;
-      re2[n] = vr[j] * win[n];
-      im2[n] = vr[RING + j] * win[n];
+    if (filling || this.presGate) {
+      for (let n = 0; n < N_FFT; n++) {
+        const j = (s0 + n) & MASK;
+        re2[n] = vr[j] * win[n];
+        im2[n] = vr[RING + j] * win[n];
+      }
+      fft.transform(re2, im2);
+      if (this.presGate) this.presence(t);
     }
-    fft.transform(re2, im2);
-    this.presence(t);
     if (filling) {
       re3.fill(0);
       im3.fill(0);
