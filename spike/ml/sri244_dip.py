@@ -31,7 +31,7 @@ def variants():
     for c in (0.7, 1.0): v[f'matchs3_c{c}'] = dict(kind='match', tu=3, td=3, c=c)
     return v
 
-def mdx_presence(c, tlo, thi, k=3, act=None, W=4.0):
+def mdx_presence(c, tlo, thi, k=3, act=None, W=4.0, Wp=None, Wf=None, rL=None):
     """SRI-250: per band, per STFT frame MDX-presence g = clip((|Vmdx|_band_dB - tlo)/(thi - tlo), 0, 1), k-frame box smoothing, expanded to bins [1,B,T] (1 below 150 Hz).
     Band dB = mono-mean |Vm|^2 summed in band, offset-calibrated so its 0.25 s block mean power equals frames(v, band) on the whole clip."""
     cache = getattr(c, '_pres', None)
@@ -42,21 +42,28 @@ def mdx_presence(c, tlo, thi, k=3, act=None, W=4.0):
             blk = int(0.25 * SR / hy.HOP); nb = T // blk
             ref = np.mean(frames(c.v, list(BANDS.values())[i]))
             off = ref - np.mean(10 * np.log10(e[:nb * blk].reshape(nb, blk).mean(1) + 1e-12))
-            cache.append((bm, 10 * np.log10(e + 1e-12) + off))
+            eX = (np.abs(c.X.mean(0)[bm]) ** 2).sum(0)
+            cache.append((bm, 10 * np.log10(e + 1e-12) + off, 10 * np.log10(eX + 1e-12) - 10 * np.log10(e + 1e-12)))
         c._pres = cache
     T = c.Vm.shape[2]; out = np.ones((1, c.Vm.shape[1], T))
-    for i, (bm, d) in enumerate(cache):
+    for i, (bm, d, rr) in enumerate(cache):
         lo, hi = (tlo[i], thi[i]) if np.ndim(tlo) else (tlo, thi)
         gg = np.convolve(np.clip((d - lo) / (hi - lo), 0, 1), np.ones(k) / k, 'same')
         if act is not None:  # SRI-252: the gate may open only where MDX was active within +-W frames: rolling max of band dB over +-W seconds >= act[i] (ramp 6 dB)
             from scipy.ndimage import maximum_filter1d
-            gg = 1 - (1 - gg) * np.clip((maximum_filter1d(d, 2 * int(W * SR / hy.HOP) + 1) - (act[i] - 6)) / 6, 0, 1)
+            if Wp is None: mx = maximum_filter1d(d, 2 * int(W * SR / hy.HOP) + 1)  # symmetric +-W s (Q4, lookahead W s)
+            else:  # SRI-253: window [t - Wp, t + Wf] s (Wf = lookahead): origin (P-F)//2 shifts the centered filter to the past (checked on an impulse)
+                P, F = int(round(Wp * SR / hy.HOP)), int(round((Wf or 0) * SR / hy.HOP))
+                mx = maximum_filter1d(d, P + F + 1, origin=(P - F) // 2, mode='nearest')
+            af = np.clip((mx - (act[i] - 6)) / 6, 0, 1)
+            if rL is not None: af = np.maximum(af, np.clip((rr - rL) / 6, 0, 1) * (mx >= act[i] - 6))  # SRI-253 Q8: also close where the mix is >rL dB above Vmdx (MDX missed it) while MDX was recently active
+            gg = 1 - (1 - gg) * af
         out[0, bm, :] = gg[None]
     return out
 
 def combine(c, g, p):
     """Instrumental of variant p (time domain) and the per-bin gain [2,B,T] applied to D = X - Vz."""
-    pres = mdx_presence(c, p['tlo'], p['thi'], p.get('k', 3), p.get('act'), p.get('W', 4.0)) if p['kind'] == 'gate' else 1.0
+    pres = mdx_presence(c, p['tlo'], p['thi'], p.get('k', 3), p.get('act'), p.get('W', 4.0), p.get('Wp'), p.get('Wf'), p.get('rL')) if p['kind'] == 'gate' else 1.0
     fg = pres if p.get('fillgate') else 1.0
     Vz = c.Vm + g[None, None, :] * fg * (c.fill() - c.Vm)
     D = c.X - Vz
