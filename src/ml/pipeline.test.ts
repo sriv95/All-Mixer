@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { KARAOKE_FLOOR, KARAOKE_GATE_BIN } from './karaoke';
+import { KARAOKE_G, KARAOKE_GATE_BIN } from './karaoke';
 import { MlPipeline, type Models } from './pipeline';
 import { ML_ALGO_SAMPLES, ML_BLOCK, ML_LATENCY_SAMPLES, ML_RESULT_OFFSET } from '../worklet/protocol';
 
@@ -82,12 +82,12 @@ describe('MlPipeline', () => {
     expect(maxDiff(vk, new Float32Array(N), 0, END)).toBeLessThan(2e-5);
   });
 
-  it('Karaoke: zero MDX vocal, mask 1 → Vk = (1 − floor)·x in the band (bins 14 … 1023), from sample 2048 on', async () => {
+  it('Karaoke: zero MDX vocal, mask 1 → Vk = g·x in the band (bins 14 … 1023), from sample 2048 on', async () => {
     expect(KARAOKE_GATE_BIN).toBe(14);
     const { vk, vkR } = await run(L, R, { mdx: zero, spleeter: identity });
     // Frame −1 (samples < 2048 only) has no mask in the stream: those samples keep the full band (Vk = 0 there).
-    expect(maxDiff(vk, L, 2048, END, 1 - KARAOKE_FLOOR)).toBeLessThan(2e-4);
-    expect(maxDiff(vkR, R, 2048, END, 1 - KARAOKE_FLOOR)).toBeLessThan(2e-4);
+    expect(maxDiff(vk, L, 2048, END, 1 - (1 - KARAOKE_G))).toBeLessThan(2e-4);
+    expect(maxDiff(vkR, R, 2048, END, 1 - (1 - KARAOKE_G))).toBeLessThan(2e-4);
   });
 
   it('Karaoke: every sample of every returned block is complete (no gaps between result blocks)', async () => {
@@ -162,9 +162,9 @@ describe('MlPipeline', () => {
       hold!(); // the late step finishes, the rest follows (catch-up, in order)
       await p.catchUp(models.spleeter);
       await blocks(p, models, 3, NB, o, true);
-      // early samples ungated (Vk = 0 with mdx = 0), late ones gated (Vk = (1 − floor)·x)
+      // early samples ungated (Vk = 0 with mdx = 0), late ones gated (Vk = g·x)
       expect(maxDiff(o.vk, new Float32Array(N), 4096, 2 * ML_BLOCK - ML_RESULT_OFFSET)).toBeLessThan(2e-5);
-      expect(maxDiff(o.vk, L, 5 * ML_BLOCK, END, 1 - KARAOKE_FLOOR)).toBeLessThan(2e-4);
+      expect(maxDiff(o.vk, L, 5 * ML_BLOCK, END, 1 - (1 - KARAOKE_G))).toBeLessThan(2e-4);
     });
 
     it('(c) normal path (masks in time) is bit-identical to the unbounded wait: no misses', async () => {

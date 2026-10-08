@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FILL_FLOOR_DB, FILL_HI, FILL_LO, FILL_PEAK_MIN_DB, KARAOKE_FLOOR, KaraokeCombiner } from './karaoke';
+import { FILL_FLOOR_DB, FILL_HI, FILL_LO, FILL_PEAK_MIN_DB, KARAOKE_G, KaraokeCombiner, PRES_CAL_DB, PRES_WINDOW, SlidingMax } from './karaoke';
 import { BINS, HOP, N_FFT } from './stream';
 
 const FR = 40; // frames
@@ -101,7 +101,7 @@ describe('KaraokeCombiner dip fill (SRI-237)', () => {
   });
 });
 
-describe('KaraokeCombiner gain floor (SRI-247)', () => {
+describe('KaraokeCombiner gain without floor (SRI-254)', () => {
   const t = bin(300, NS), zero = new Float32Array(NS);
   const settled = (a: Float32Array, b: Float32Array, end: number) => {
     let d = 0;
@@ -109,10 +109,9 @@ describe('KaraokeCombiner gain floor (SRI-247)', () => {
     return d;
   };
 
-  it('m = 1: instrumental gain is the floor 0.5, not 1 − g = 0.2 (Vk = 0.5 x)', () => {
-    expect(KARAOKE_FLOOR).toBe(0.5);
+  it('m = 1, MDX silent (pause): pres = 1, instrumental gain 1 − g = 0.2 (Vk = 0.8 x), no floor', () => {
     const r = run(t, zero, 1, false);
-    expect(settled(r.vk, t.map((s) => (1 - KARAOKE_FLOOR) * s), r.end)).toBeLessThan(1e-4);
+    expect(settled(r.vk, t.map((s) => (1 - (1 - KARAOKE_G)) * s), r.end)).toBeLessThan(1e-4);
   });
 
   it('m = 0: instrumental gain 1 (Vk = 0)', () => {
@@ -120,8 +119,113 @@ describe('KaraokeCombiner gain floor (SRI-247)', () => {
     expect(settled(r.vk, zero, r.end)).toBeLessThan(1e-4);
   });
 
-  it('a cappella output does not depend on the floor path: Vz = MDX vocal bit for bit at m = 1 (no fill)', () => {
+  it('a cappella output does not depend on the gain path: Vz = MDX vocal bit for bit at m = 1 (no fill)', () => {
     const half = t.map((s) => 0.5 * s), r = run(t, half, 1, false);
     for (let n = 0; n < r.end; n++) expect(r.vz[n]).toBe(half[n]);
+  });
+});
+
+describe('SlidingMax (SRI-254)', () => {
+  it('an impulse is the max for exactly `size` frames, then the next value takes over', () => {
+    const m = new SlidingMax(173);
+    const out: number[] = [];
+    for (let t = 0; t < 400; t++) out.push(m.push(t, t === 10 ? 5 : t === 50 ? 3 : -100));
+    expect(out[9]).toBe(-100);
+    expect(out[10]).toBe(5);
+    expect(out[10 + 172]).toBe(5); // t − 172 … t still holds frame 10
+    expect(out[10 + 173]).toBe(3); // frame 10 left the window, frame 50 (3) is next
+    expect(out[50 + 172]).toBe(3);
+    expect(out[50 + 173]).toBe(-100);
+    expect(PRES_WINDOW).toBe(173);
+  });
+
+  it('matches a brute-force max on pseudo-random data', () => {
+    const m = new SlidingMax(173);
+    let s = 7;
+    const v: number[] = [];
+    for (let t = 0; t < 1500; t++) {
+      v.push(((s = (s * 1664525 + 1013904223) >>> 0) / 2 ** 32) * 100 - 80);
+      let ref = -Infinity;
+      for (let j = Math.max(0, t - 172); j <= t; j++) ref = Math.max(ref, v[j]);
+      expect(m.push(t, v[t])).toBe(ref);
+    }
+  });
+});
+
+describe('KaraokeCombiner MDX-presence gate (SRI-253 Q6 / SRI-254)', () => {
+  const FRAMES = 330, N = HOP * FRAMES, ON = 100; // MDX vocal active in frames < ON
+  const x = new Float32Array(N), v = new Float32Array(N);
+  for (let j = 0; j < N; j++) {
+    x[j] = 0.3 * Math.sin((2 * Math.PI * 300 * j) / N_FFT); // bin 300 = 3.2 kHz, band 1 – 4k
+    if (j < HOP * ON) v[j] = 0.2 * Math.sin((2 * Math.PI * 300 * j) / N_FFT);
+  }
+  const blk = new Float32Array(4 * 2 * BINS).fill(1);
+  /** Stream x, v through a combiner in 4-frame steps (the ring is shorter than the clip); returns Vk. */
+  function stream(c: KaraokeCombiner): Float32Array {
+    const out = new Float32Array(N), tmp = new Float32Array(4 * HOP);
+    let emitted = 0;
+    for (let pos = 0; pos < N; pos += 4 * HOP) {
+      const k = Math.min(4 * HOP, N - pos);
+      c.writeInput(pos, x.subarray(pos, pos + k), x.subarray(pos, pos + k), k);
+      c.writeVocal(pos, v.subarray(pos, pos + k), v.subarray(pos, pos + k), k);
+      c.pushMasks(pos / HOP, blk);
+      c.advance(pos + k);
+      const to = c.completeTo;
+      if (to > emitted) {
+        c.emit(emitted, to - emitted, out.subarray(emitted, to), tmp);
+        c.release(emitted, to - emitted);
+        if (emitted === 0) c.release(-2048, 2048); // frame −1 wrote into the ring below 0; the pipeline releases that region too
+        emitted = to;
+      }
+    }
+    return out;
+  }
+  const vk = stream(new KaraokeCombiner(0.8, false));
+  const peak = (a: number, b: number) => {
+    let d = 0;
+    for (let n = a * HOP; n < b * HOP; n++) d = Math.max(d, Math.abs(vk[n]));
+    return d;
+  };
+  // frame t covers [1024 (t − 1), 1024 (t + 3)); the last MDX-active frame is ON + 2.
+
+  it('constants: band edges 14 / 93 / 372 bins, calibration −64.98 dB', () => {
+    expect(PRES_CAL_DB).toBeCloseTo(-64.98, 2);
+  });
+
+  it('MDX active: g = 1 (loud) → pres = 1, gain 0.2 → Vk = 0.8 x − ... (|Vk| ≈ 0.8·0.1 on the residual x − v)', () => {
+    // D = x − v = 0.1 tone, gain 0.2: Vk = x − 0.2 · 0.1 tone = 0.28 tone
+    expect(peak(20, 90)).toBeGreaterThan(0.27);
+    expect(peak(20, 90)).toBeLessThan(0.29);
+  });
+
+  it('MDX gone but active within 4 s: g = 0, af = 1 → pres = 0, gain 1 → Vk = v-free: x − x = 0', () => {
+    expect(peak(ON + 10, ON + 165)).toBeLessThan(1e-4);
+  });
+
+  it('after 4 s of MDX silence the window has left: pres = 1, gain 0.2 → Vk = 0.8 x', () => {
+    const d = peak(ON + 185, FRAMES - 6);
+    expect(d).toBeGreaterThan(0.8 * 0.3 - 1e-3);
+    expect(d).toBeLessThan(0.8 * 0.3 + 1e-3);
+  });
+
+  it('frame path allocates nothing: heap growth during 4 × 60 frames of advance() stays under 100 kB (fill off: the G2 fill path allocates, pre-existing)', () => {
+    const c2 = new KaraokeCombiner(0.8, false), tmp = new Float32Array(60 * HOP);
+    const step = 60 * HOP;
+    const round = (r: number): number => {
+      const pos = r * step;
+      c2.writeInput(pos, x.subarray(pos, pos + step), x.subarray(pos, pos + step), step);
+      c2.writeVocal(pos, v.subarray(pos, pos + step), v.subarray(pos, pos + step), step);
+      for (let t0 = r * 60; t0 < r * 60 + 64; t0 += 4) c2.pushMasks(t0, blk);
+      const before = process.memoryUsage().heapUsed;
+      c2.advance(pos + step);
+      const grown = process.memoryUsage().heapUsed - before;
+      const from = r * step - step < 0 ? 0 : r * step - step;
+      c2.emit(from, c2.completeTo - from, tmp, tmp);
+      c2.release(from, c2.completeTo - from);
+      return grown;
+    };
+    for (let r = 0; r < 4; r++) round(r); // warm up (JIT)
+    const grown = [4, 5, 6, 7].map(round).reduce((a, b) => a + b, 0);
+    expect(grown).toBeLessThan(100_000);
   });
 });
