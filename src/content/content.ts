@@ -36,8 +36,12 @@ if (site) {
   // the speakers) and when device latency moves, e.g. a Bluetooth switch.
   chain.onLatencyChange((info, at) => syncDelay(false, wantedDelayMs(info.videoDelayMs), at));
 
+  let modeKnown = false; // the first settings load is not a toggle
   const apply = (raw: unknown) => {
+    const prevMode = settings.mode;
     settings = normalizeSettings(raw);
+    if (settings.mode !== prevMode && modeKnown) lyrics.modeChanged();
+    modeKnown = true;
     chain.setGain(masterGainFor(settings));
     const sep = separationFor(settings);
     chain.setSeparation(sep);

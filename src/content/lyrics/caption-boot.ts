@@ -64,6 +64,11 @@ export class CaptionBoot {
     this.restore = setTimeout(() => this.restoreOff(), RESTORE_DELAY_MS);
   }
 
+  /** True while we have CC on and wait to turn it off again. */
+  get restoringOff(): boolean {
+    return this.restoring;
+  }
+
   /** True shortly after our own press: a CC change then is not the user's. */
   isOwnChange(): boolean {
     return this.now() - this.ownAt < OWN_WINDOW_MS;
