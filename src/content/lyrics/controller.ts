@@ -55,7 +55,7 @@ export interface LyricsDeps {
 }
 
 /** Fetched caption track. `index` points into `PlayerInfo.captionTracks`. */
-export interface FetchedCaptions extends CaptionTrackData {
+interface FetchedCaptions extends CaptionTrackData {
   /** Language of the cues. */
   lang?: string;
   index?: number;
@@ -77,7 +77,7 @@ const baseLang = (code: string) => code.split('-')[0];
 const hasSynced = (found: FoundLyrics | null): boolean => !!found?.synced && parseLrc(found.synced).length > 0;
 
 /** The caption track shown when captions win: pick / preferred language, then song-language subtitles, ASR, any other track. */
-export const captionCandidate = (c: CaptionSet): FetchedCaptions | undefined => c.display ?? c.manual ?? c.asr ?? c.other;
+const captionCandidate = (c: CaptionSet): FetchedCaptions | undefined => c.display ?? c.manual ?? c.asr ?? c.other;
 
 export interface SourceChoice {
   use: 'lrclib-synced' | 'lrclib-plain' | 'captions' | null;
@@ -118,7 +118,7 @@ export function chooseSource(found: FoundLyrics | null, c: CaptionSet, pref: Sou
 }
 
 /** Build the lyrics for a choice. Pure, exported for tests. */
-export function buildLyrics(choice: SourceChoice, found: FoundLyrics | null, captions: CaptionSet): Lyrics | null {
+function buildLyrics(choice: SourceChoice, found: FoundLyrics | null, captions: CaptionSet): Lyrics | null {
   if (choice.use === 'lrclib-synced' && found?.synced) {
     const base: SyncedLyrics = { kind: 'synced', lines: parseLrc(found.synced), source: 'lrclib', offset: 0, hasWordTiming: false };
     base.hasWordTiming = base.lines.some((l) => l.words);

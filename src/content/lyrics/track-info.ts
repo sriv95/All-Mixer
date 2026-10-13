@@ -48,7 +48,7 @@ export interface CaptionPick {
 }
 
 /** "English - en" -> "English"; "English - Lyrics" -> "English (Lyrics)"; drops parts repeated from the first part or equal to the language code. */
-export function cleanTrackName(name: string, languageCode?: string): string {
+function cleanTrackName(name: string, languageCode?: string): string {
   const [first, ...rest] = name.split(' - ').map((p) => p.trim()).filter(Boolean);
   if (!first) return name;
   const code = languageCode?.toLowerCase();

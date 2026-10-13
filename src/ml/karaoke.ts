@@ -36,31 +36,31 @@ import { BINS, HOP, N_FFT } from './stream';
 export const KARAOKE_G = 0.8;
 /** MDX-presence gate (SRI-254 Q6) on (1) / off (0). Off: pres = 1 for every bin and the V_mdx FFT of presence() is skipped. */
 export const KARAOKE_PRES_GATE = 1;
-export const KARAOKE_GATE_HZ = 150;
+const KARAOKE_GATE_HZ = 150;
 const SAMPLE_RATE = 44100;
 /** First bin with frequency ≥ KARAOKE_GATE_HZ. */
 export const KARAOKE_GATE_BIN = Math.ceil((KARAOKE_GATE_HZ * N_FFT) / SAMPLE_RATE);
 /** Dip-fill band (Hz), bins [FILL_LO, FILL_HI], and its thresholds. */
 export const FILL_LO = Math.ceil((100 * N_FFT) / SAMPLE_RATE);
 export const FILL_HI = Math.floor((1000 * N_FFT) / SAMPLE_RATE);
-export const FILL_A = 0.5;
-export const FILL_T = 0.3;
-export const FILL_M0 = 0.3;
-export const FILL_M1 = 0.5;
+const FILL_A = 0.5;
+const FILL_T = 0.3;
+const FILL_M0 = 0.3;
+const FILL_M1 = 0.5;
 export const FILL_FLOOR_DB = 40;
-export const FILL_DECAY_DB_S = 1;
+const FILL_DECAY_DB_S = 1;
 export const FILL_PEAK_MIN_DB = 15;
 /** MDX-presence gate (SRI-253 Q6): band edges (Hz) 150 / 1000 / 4000 / Nyquist, per-band ramp, activity level, window. */
-export const PRES_EDGES_HZ = [150, 1000, 4000];
-export const PRES_LO_DB = [-50, -55, -55];
-export const PRES_HI_DB = [-35, -40, -40];
-export const PRES_ACT_DB = [-20, -24, -36];
+const PRES_EDGES_HZ = [150, 1000, 4000];
+const PRES_LO_DB = [-50, -55, -55];
+const PRES_HI_DB = [-35, -40, -40];
+const PRES_ACT_DB = [-20, -24, -36];
 /** Activity ramp width (dB) below the activity level. */
-export const PRES_ACT_RAMP_DB = 6;
+const PRES_ACT_RAMP_DB = 6;
 /** Past window of the activity peak: 4 s of frames, t − 172 … t. */
 export const PRES_WINDOW = Math.round((4 * SAMPLE_RATE) / HOP) + 1;
 /** Box smoothing length (frames t − 2 … t). */
-export const PRES_BOX = 3;
+const PRES_BOX = 3;
 /**
  * Fixed calibration (dB) from the unnormalised hann STFT sum Σ|V|² over a band to the band power the thresholds were set
  * in (python calibrates per clip; the per-clip values are −64.8 … −65.3 mostly): −10 log10(N/2 · Σw²), Σw² = 3N/8.
@@ -69,7 +69,7 @@ export const PRES_CAL_DB = -10 * Math.log10((N_FFT / 2) * ((3 * N_FFT) / 8));
 /** First bin of each band (and one past the last of the third): bins with k · fs/N ≥ edge. */
 const PRES_BIN = [...PRES_EDGES_HZ.map((e) => { let k = 0; while ((k * SAMPLE_RATE) / N_FFT < e) k++; return k; }), N_FFT / 2 + 1];
 /** Mask frames the combine needs beyond the frame it adds (hann5 looks ±2). */
-export const GATE_LOOKAHEAD = 2;
+const GATE_LOOKAHEAD = 2;
 /** hann(7) without its zero ends, sum 1 (np.hanning(7)[1:-1] / sum). */
 const SMOOTH = [0.25 / 3, 0.75 / 3, 1 / 3, 0.75 / 3, 0.25 / 3];
 const RING = 131072; // > 2 · 34304 + 4096, power of two

@@ -8,7 +8,7 @@ export interface WarmUpResult {
   firstMs: number;
 }
 
-export const percentile = (a: readonly number[], p: number): number => {
+const percentile = (a: readonly number[], p: number): number => {
   const s = [...a].sort((x, y) => x - y);
   return s[Math.min(s.length - 1, Math.max(0, Math.ceil(p * s.length) - 1))];
 };
@@ -35,7 +35,7 @@ export async function warmUp(
 
 /** Pure retry decision: a first attempt at or over the gate gets exactly one more try; the result with the
  * lower p90 wins and carries both attempts' skipped time in `firstMs`. */
-export const pickAttempt = (first: WarmUpResult, second: WarmUpResult): WarmUpResult => {
+const pickAttempt = (first: WarmUpResult, second: WarmUpResult): WarmUpResult => {
   const best = second.p90 < first.p90 ? second : first;
   return { p50: best.p50, p90: best.p90, p95: best.p95, firstMs: first.firstMs + second.firstMs };
 };

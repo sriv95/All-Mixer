@@ -36,7 +36,7 @@ export interface SyncedLyrics {
   hasWordTiming: boolean;
 }
 
-export interface PlainLyrics {
+interface PlainLyrics {
   kind: 'plain';
   text: string;
   source: LyricsSource;

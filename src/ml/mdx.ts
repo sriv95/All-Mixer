@@ -12,11 +12,11 @@
 import { FFT } from './fft.js';
 import { MDX_SEGMENT, ML_BLOCK } from '../worklet/protocol';
 
-export const MDX_N_FFT = 4096;
-export const MDX_HOP = 1024;
+const MDX_N_FFT = 4096;
+const MDX_HOP = 1024;
 export const MDX_BINS = 2048;
 export const MDX_T = 64;
-export const MDX_TENSOR_LEN = 4 * MDX_BINS * MDX_T;
+const MDX_TENSOR_LEN = 4 * MDX_BINS * MDX_T;
 const N = MDX_SEGMENT;
 const H = ML_BLOCK;
 

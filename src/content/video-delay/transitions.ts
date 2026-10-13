@@ -4,9 +4,9 @@
  * ignored, so quiet passages in the music cannot pose as a pause or a start.
  */
 
-export type EdgeSource = 'audio' | 'video' | 'overlay';
+type EdgeSource = 'audio' | 'video' | 'overlay';
 
-export interface LoggedEdge {
+interface LoggedEdge {
   source: EdgeSource;
   kind: 'on' | 'off';
   /** When it showed / was heard (audio: audibleAt). */
@@ -24,7 +24,7 @@ export interface Transition {
   missing: string[];
 }
 
-export const PRE_PAUSE_MS = 300;
+const PRE_PAUSE_MS = 300;
 export const WINDOW_MS = 1500;
 
 /** Edge log entry with audio's input time (for pipelineMs). */
@@ -32,12 +32,12 @@ export interface PairEdge extends LoggedEdge {
   inputAt?: number;
 }
 
-export const MARGIN_MS = 1000;
+const MARGIN_MS = 1000;
 /** A play edge may precede the event stamp by a hair (expectedDisplayTime is rounded); never by a whole frame or two. */
-export const PLAY_SLACK_MS = 50;
+const PLAY_SLACK_MS = 50;
 
 /** Window end offset: WINDOW_MS, or more when the overlay delay and separator latency push the edges later. */
-export const windowSpanMs = (delayMs = 0, latencyMs = 0): number =>
+const windowSpanMs = (delayMs = 0, latencyMs = 0): number =>
   delayMs > 0 || latencyMs > 0 ? Math.max(WINDOW_MS, Math.max(0, delayMs) + Math.max(0, latencyMs) + MARGIN_MS) : WINDOW_MS;
 
 export const windowFor = (kind: 'pause' | 'play', at: number, delayMs = 0, latencyMs = 0): [number, number] => [

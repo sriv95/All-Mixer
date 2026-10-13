@@ -6,7 +6,7 @@
 
 export type Site = 'youtube' | 'ytmusic';
 
-export const SELECTORS = {
+const SELECTORS = {
   youtube: {
     /** Main watch / miniplayer / theater / fullscreen player all reuse this element. */
     mainVideo: ['#movie_player video.html5-main-video', 'video.html5-main-video'],
@@ -99,7 +99,7 @@ export function watchMainVideo(
 }
 
 /** Lyrics hooks (F1 / F2). */
-export const LYRICS_SELECTORS = {
+const LYRICS_SELECTORS = {
   /** Player control bars that get the lyrics toggle button. */
   controls: {
     youtube: '#movie_player .ytp-right-controls',
@@ -197,7 +197,7 @@ export function setYtCaptionsHidden(hidden: boolean, doc: Document = document): 
 }
 
 /** Karaoke text hooks: the player element the video lives in, and (www only) the control bar over its bottom edge. */
-export const PLAYER_SELECTORS = {
+const PLAYER_SELECTORS = {
   player: { youtube: '#movie_player', ytmusic: 'ytmusic-player #movie_player, #movie_player' } satisfies Record<Site, string>,
   /** On YT Music the player bar is outside the player, so there is no inset. */
   controlBar: { youtube: '.ytp-chrome-bottom', ytmusic: null } satisfies Record<Site, string | null>,
@@ -225,7 +225,7 @@ export function findPlayer(site: Site, doc: ParentNode = document): HTMLElement 
 }
 
 /** Classes the player carries while it plays an ad. */
-export const AD_PLAYER_SELECTOR = '.ad-showing, .ad-interrupting';
+const AD_PLAYER_SELECTOR = '.ad-showing, .ad-interrupting';
 
 export function isAdShowing(player: Element): boolean {
   return player.matches(AD_PLAYER_SELECTOR);

@@ -39,7 +39,7 @@ function ordinalOf(lines: readonly LyricLine[], index: number): number {
 }
 
 /** An idle line is shown this many seconds before it starts; before that the text is hidden. */
-export const KARAOKE_LEAD_SECONDS = 3;
+const KARAOKE_LEAD_SECONDS = 3;
 
 /**
  * Estimated time a line takes to sing. LRC lines end where the next one starts, so a line before an
