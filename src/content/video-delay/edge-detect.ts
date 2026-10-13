@@ -10,7 +10,7 @@ export interface Edge {
 }
 
 /** Quiet this long (ms) splits activity into separate runs. */
-export const GAP_MS = 100;
+const GAP_MS = 100;
 
 /**
  * Turns a stream of "something happened at t" events into on / off edges.

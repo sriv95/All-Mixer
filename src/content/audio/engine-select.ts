@@ -30,7 +30,7 @@ export interface MlHostLike {
  *   unavailable  ML cannot run (cause says why); the original mix plays
  *   stopped      ML missed its deadline at run time; the original mix plays until Separate is toggled
  */
-export type SeparationChoiceState = 'off' | 'warming' | 'on' | 'unavailable' | 'stopped';
+type SeparationChoiceState = 'off' | 'warming' | 'on' | 'unavailable' | 'stopped';
 
 export interface EngineChoice {
   state: SeparationChoiceState;

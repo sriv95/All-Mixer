@@ -21,7 +21,7 @@ const H = ML_BLOCK;
  * (14080 samples + block); MDX p95 is 160 ms, so 60 ms keeps ~100 ms margin for the post and the worklet read.
  * Still missing → the block is combined with mask 0 (ungated x − V_mdx).
  */
-export const SPL_WAIT_MS = 60;
+const SPL_WAIT_MS = 60;
 const FIFO = 65536; // > H + SPL_BLOCK, power of two
 const FMASK = FIFO - 1;
 

@@ -8,7 +8,7 @@ import type { Mode } from '../../shared/settings';
  */
 
 /** Below this total delay Default mode leaves the real <video> visible. */
-export const DEFAULT_MODE_MIN_DELAY_MS = 45;
+const DEFAULT_MODE_MIN_DELAY_MS = 45;
 
 /**
  * How many ms the picture must lag, given the audio graph's total output delay
@@ -85,7 +85,7 @@ export class DelaySchedule {
 }
 
 /** With an empty queue the clock may run this far past the last shown frame (one frame at 30 fps, plus jitter). */
-export const MAX_EXTRAPOLATE_S = 0.05;
+const MAX_EXTRAPOLATE_S = 0.05;
 
 /** A queued frame further ahead than this is a seek, not the next frame of normal playback. */
 const DISCONTINUITY_S = 1;

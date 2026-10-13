@@ -140,7 +140,7 @@ export function usablePlain(s: string | null | undefined): string | undefined {
 
 const MIN_TITLE = 0.6;
 const MIN_ARTIST = 0.3;
-export const MIN_SCORE = 40;
+const MIN_SCORE = 40;
 
 /** 0 = implausible, higher is better. Max about 110. */
 export function scoreCandidate(track: TrackInfo, c: LrclibRecord): number {
