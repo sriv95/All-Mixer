@@ -4,7 +4,7 @@ import type { CaptionPicker, SourceMenu, SourcePref } from './controller';
 import type { CaptionPick } from './track-info';
 
 /** One lyrics setting: its choices and the current one. Both renderers (www gear menu, YT Music popover) draw these. */
-export interface MenuOption {
+interface MenuOption {
   value: string;
   label: string;
   disabled?: boolean;
@@ -41,7 +41,7 @@ export interface MenuInput {
   site?: Site;
 }
 
-export const KARAOKE_SIZES = [50, 75, 100, 125, 150, 200] as const;
+const KARAOKE_SIZES = [50, 75, 100, 125, 150, 200] as const;
 
 const FALLBACK_NOTES = {
   lrclib: 'LRCLIB has no lyrics for this video, so the automatic order is used.',

@@ -11,8 +11,8 @@ export interface MixerSettings {
   instrumentalPct: number;
 }
 
-export const GAIN_MIN_PCT = 0;
-export const GAIN_MAX_PCT = 600;
+const GAIN_MIN_PCT = 0;
+const GAIN_MAX_PCT = 600;
 
 export const DEFAULT_SETTINGS: Readonly<MixerSettings> = Object.freeze({
   mode: 'default',

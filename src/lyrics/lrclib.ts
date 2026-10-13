@@ -3,7 +3,7 @@ import type { FoundLyrics, LrclibRecord } from './lrclib-types';
 import { stripMarkup } from './markup';
 import { cleanArtist, cleanTitle, pickBest, usablePlain, usableSynced } from './match';
 
-export type { FoundLyrics, LrclibRecord } from './lrclib-types';
+export type { FoundLyrics,  } from './lrclib-types';
 
 const BASE = 'https://lrclib.net/api';
 const TIMEOUT_MS = 8000;
@@ -23,7 +23,7 @@ async function getJson<T>(path: string, params: Record<string, string>, fetchFn:
   }
 }
 
-export function getRecord(track: TrackInfo, fetchFn: typeof fetch = fetch): Promise<LrclibRecord | null> {
+function getRecord(track: TrackInfo, fetchFn: typeof fetch = fetch): Promise<LrclibRecord | null> {
   const params: Record<string, string> = {
     track_name: track.title,
     artist_name: track.artist,
@@ -33,7 +33,7 @@ export function getRecord(track: TrackInfo, fetchFn: typeof fetch = fetch): Prom
   return getJson<LrclibRecord>('get', params, fetchFn);
 }
 
-export async function searchRecords(params: Record<string, string>, fetchFn: typeof fetch = fetch): Promise<LrclibRecord[]> {
+async function searchRecords(params: Record<string, string>, fetchFn: typeof fetch = fetch): Promise<LrclibRecord[]> {
   return (await getJson<LrclibRecord[]>('search', params, fetchFn)) ?? [];
 }
 

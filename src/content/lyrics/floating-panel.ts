@@ -17,7 +17,7 @@ export interface FloatingPanelOptions {
   defaultRect?: Rect;
 }
 
-export const MIN_SIZE: Viewport = { w: 240, h: 160 };
+const MIN_SIZE: Viewport = { w: 240, h: 160 };
 const DEFAULT_RECT: Rect = { x: 24, y: 80, w: 340, h: 420 };
 const SAVE_DEBOUNCE_MS = 300;
 

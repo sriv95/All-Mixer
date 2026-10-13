@@ -24,7 +24,7 @@ export const ML_RESULT_OFFSET = ML_BLOCK + KARAOKE_TAIL;
 /** Algorithmic delay: a cross-fade region needs its whole next segment (2·ML_BLOCK), plus the Karaoke tail. */
 export const ML_ALGO_SAMPLES = MDX_SEGMENT + KARAOKE_TAIL;
 /** Compute slack: 319 ms, ≥ 2× the MDX response p95 (152 ms WebGPU compute, SRI-100/116). */
-export const ML_SLACK_SAMPLES = 14080;
+const ML_SLACK_SAMPLES = 14080;
 /** One render quantum, so the worklet can decide ML vs the original mix for a block one quantum before it starts. */
 const ML_QUANTUM = 128;
 /** ML output delay: 72704 + 14080 + 128 = 86912 samples = 1970.9 ms at 44.1 kHz. */

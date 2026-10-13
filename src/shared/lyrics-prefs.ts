@@ -17,7 +17,7 @@ export interface LyricsPrefs {
   karaokePosition: { x: number; y: number };
 }
 
-export const LYRICS_PREFS_KEY = 'lyricsPrefs';
+const LYRICS_PREFS_KEY = 'lyricsPrefs';
 
 export const DEFAULT_LYRICS_PREFS: LyricsPrefs = {
   lyricsVisible: true,

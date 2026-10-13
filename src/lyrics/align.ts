@@ -12,7 +12,7 @@ import type { LyricLine, LyricWord, SyncedLyrics } from './types';
 import { captionWords, type CaptionCue, type CaptionWord } from './captions';
 import { applyOffset } from './sync';
 
-export const MAX_OFFSET_S = 90;
+const MAX_OFFSET_S = 90;
 const BIN_S = 0.25;
 /** Votes are summed over ±WINDOW_BINS bins (±0.5 s) to tolerate caption jitter. */
 const WINDOW_BINS = 2;
@@ -33,7 +33,7 @@ interface TimedToken {
 }
 
 /** LRC words with times; lines without word timing spread their words evenly over the line. */
-export function lrcTokens(lines: readonly LyricLine[]): TimedToken[] {
+function lrcTokens(lines: readonly LyricLine[]): TimedToken[] {
   const out: TimedToken[] = [];
   for (const l of lines) {
     if (l.words) {

@@ -108,7 +108,7 @@ export type BackgroundRequest = GetMyTabSettings | GetTabSettings | SetTabSettin
  * picture delay, ignoring the graph latency. null clears it. `budgetBytes`
  * overrides the frame memory budget; >= 1e12 reproduces the old behaviour.
  */
-export interface DebugVideoDelay {
+interface DebugVideoDelay {
   type: 'debug-video-delay';
   delayMs: number | null;
   budgetBytes?: number | null;
