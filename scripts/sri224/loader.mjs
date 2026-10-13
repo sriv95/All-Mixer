@@ -6,5 +6,5 @@ const b = await chromium.launch({ headless: false, channel: 'chromium', args: ['
 const p = await b.newPage({ viewport: { width: 1280, height: 720 } });
 await p.goto('https://www.youtube.com/watch?v=aqz-KE-bpKQ'); await p.waitForTimeout(4000);
 await p.evaluate(() => document.querySelector('video')?.play());
-for (let i = 0; i < 3; i++) { const q = await b.newPage(); await q.goto('about:blank'); await q.evaluate(() => { const w = new Worker(URL.createObjectURL(new Blob(['for(;;){Math.sqrt(Math.random())}']))); }); }
+for (let i = 0; i < 3; i++) { const q = await b.newPage(); await q.goto('about:blank'); await q.evaluate(() => { new Worker(URL.createObjectURL(new Blob(['for(;;){Math.sqrt(Math.random())}']))); }); }
 console.log('loaded'); await new Promise(r => setTimeout(r, 1800000));
