@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { QUANTUM, RING, SLOTS, SeparatorCore, ringOk } from './core';
 import {
+  GEOMETRY,
   ML_BLOCK,
-  ML_BUFFER_BYTES,
   ML_HEADER_BYTES,
   ML_LATENCY_SAMPLES,
   ML_RESULT_OFFSET,
+  ROF_LATENCY_SAMPLES,
+  bufferBytes,
   type FromWorklet,
+  type MlGeometry,
+  type MlModel,
 } from './protocol';
 
 const SR = 44100;
@@ -50,10 +54,12 @@ class FakePort {
   constructor(
     private readonly sigL: Float32Array,
     private readonly sigR: Float32Array,
+    private readonly g: MlGeometry = GEOMETRY.mdx,
   ) {}
 
   postMessage(buf: ArrayBuffer): void {
-    expect(buf.byteLength).toBe(ML_BUFFER_BYTES);
+    const { block, resultOffset } = this.g;
+    expect(buf.byteLength).toBe(bufferBytes(this.g));
     this.seen.add(buf);
     const k = this.posted++;
     const how = this.policy(k);
@@ -65,15 +71,15 @@ class FakePort {
     if (how === 'drop') {
       head[1] = -1;
     } else {
-      // Vocal for input [start − ML_RESULT_OFFSET, … + ML_BLOCK): the true input, so vocal = dry.
-      const start = head[1] - ML_RESULT_OFFSET;
-      const data = new Float32Array(buf, ML_HEADER_BYTES, 4 * ML_BLOCK);
-      for (let i = 0; i < ML_BLOCK; i++) {
+      // Vocal for input [start − resultOffset, … + block): the true input, so vocal = dry.
+      const start = head[1] - resultOffset;
+      const data = new Float32Array(buf, ML_HEADER_BYTES, 4 * block);
+      for (let i = 0; i < block; i++) {
         const p = start + i;
         data[i] = p >= 0 && p < this.sigL.length ? this.sigL[p] : 0;
-        data[ML_BLOCK + i] = p >= 0 && p < this.sigR.length ? this.sigR[p] : 0;
-        data[2 * ML_BLOCK + i] = data[i];
-        data[3 * ML_BLOCK + i] = data[ML_BLOCK + i];
+        data[block + i] = p >= 0 && p < this.sigR.length ? this.sigR[p] : 0;
+        data[2 * block + i] = data[i];
+        data[3 * block + i] = data[block + i];
       }
       head[1] = start;
     }
@@ -114,13 +120,14 @@ interface Rig {
   run(nq: number): void;
 }
 
-function rig(seconds: number, signal: (n: number, seed: number) => Float32Array = noise): Rig {
+function rig(seconds: number, signal: (n: number, seed: number) => Float32Array = noise, model: MlModel = 'mdx'): Rig {
   const total = Math.ceil((seconds * SR) / QUANTUM) * QUANTUM;
   const sigL = signal(total, 1);
   const sigR = signal(total, 2);
   const msgs: FromWorklet[] = [];
   const core = new SeparatorCore(SR, (m) => msgs.push(m));
-  const port = new FakePort(sigL, sigR);
+  core.setModel(model);
+  const port = new FakePort(sigL, sigR, GEOMETRY[model]);
   core.setPort(port as unknown as MessagePort);
   const vl = new Float32Array(QUANTUM);
   const vr = new Float32Array(QUANTUM);
@@ -530,5 +537,51 @@ describe('SeparatorCore, hold / release (pause)', () => {
     // After release the live input plays at once (fade-in quantum, then exact).
     const rel = h0 + 50 * QUANTUM;
     for (let j = QUANTUM; j < 50 * QUANTUM; j++) expect(mixL(r, rel + j)).toBeCloseTo(r.sigL[rel + j], 6);
+  });
+});
+
+describe('SeparatorCore, RoFormer geometry', () => {
+  const G = GEOMETRY.roformer;
+  const rblocks = (n: number) => (n * G.block) / QUANTUM; // quanta; block 39690 is not a multiple of 128, so round up
+  it('latency stays under 2 s', () => {
+    expect(G.latency).toBe(ROF_LATENCY_SAMPLES);
+    expect(G.latency / SR).toBeLessThan(2);
+  });
+
+  it('with every block back in time, output is the input delayed by the RoFormer latency (stems sum to it)', () => {
+    const r = rig(14, noise, 'roformer');
+    r.core.setActive(true, 'ml');
+    expect(r.core.engine).toBe('ml');
+    expect(r.core.latencySamples).toBe(G.latency);
+    r.run(Math.ceil(rblocks(14)));
+    const n = r.vL.length;
+    expect(maxErr(r, G.latency, 0, n)).toBeLessThanOrEqual(1e-6);
+    // from the first full block on, the vocal stem is the delayed input and the instrumental ~0
+    let vocErr = 0;
+    for (let i = G.latency + G.block; i < n; i++) vocErr = Math.max(vocErr, Math.abs(r.vL[i] - r.sigL[i - G.latency]));
+    expect(vocErr).toBeLessThanOrEqual(1e-6);
+    expect(r.core.stats.misses).toBe(0);
+    expect(r.msgs).toEqual([]);
+  });
+
+  it('block, overlap and latency are whole render quanta (the core needs the 128-sample grid)', () => {
+    for (const g of Object.values(GEOMETRY)) {
+      expect(g.block % QUANTUM).toBe(0);
+      expect(g.resultOffset % QUANTUM).toBe(0);
+      expect(g.latency % QUANTUM).toBe(0);
+    }
+  });
+
+  it('a model change waits for the original mix, then switching back to MDX restores its latency', () => {
+    const r = rig(6, noise, 'roformer');
+    r.core.setActive(true, 'ml');
+    r.core.setModel('mdx'); // engine is ml: waits
+    expect(r.core.latencySamples).toBe(G.latency);
+    r.core.requestEngine('bypass', 'auto');
+    r.run(4);
+    expect(r.core.engine).toBe('bypass');
+    r.core.setActive(false);
+    r.core.setActive(true, 'ml');
+    expect(r.core.latencySamples).toBe(ML_LATENCY_SAMPLES);
   });
 });

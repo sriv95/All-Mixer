@@ -8,7 +8,7 @@
 // instrumental (MDX vocal plus the Spleeter-mask cleanup, src/ml/karaoke.ts); the vocal stem is the MDX vocal V.
 //
 // Bypass engine: delay 0, bypass weight b = 1, vocal 0, instrumental = dry: the original mix.
-// ML engine: delay = ML_LATENCY_SAMPLES. Input goes to the worker in ML_BLOCK blocks. Each
+// ML engine: delay = the model's latency (protocol GEOMETRY). Input goes to the worker in blocks of the model's block size. Each
 //   vocal block is chosen one quantum before it starts: ML if it is back, else the original mix
 //   (b = 1; the rings hold it at the same delay, so there is no delay jump). Source switches
 //   crossfade b over one quantum. 3 misses within 10 s → bypass engine ('deadline-miss').
@@ -31,25 +31,29 @@
 // not inside process(), and the transferred ArrayBuffer is a new object anyway.
 // ML is refused unless the context runs at ML_SAMPLE_RATE.
 import {
+  GEOMETRY,
   ML_BLOCK,
   ML_BUFFER_BYTES,
   ML_HEADER_BYTES,
-  ML_LATENCY_SAMPLES,
-  ML_RESULT_OFFSET,
   ML_SAMPLE_RATE,
+  bufferBytes,
   type FromWorklet,
   type MlEngine,
+  type MlGeometry,
+  type MlModel,
   type MlReason,
 } from './protocol';
 
 export const QUANTUM = 128;
 /** Smallest power of two ≥ n. */
 const pow2Ceil = (n: number): number => 2 ** Math.ceil(Math.log2(n));
-/** A block is ready ML_LATENCY_SAMPLES after its start and spans ML_BLOCK, plus one quantum: 131072 for 86912 + 128 + 34304. */
-export const RING = pow2Ceil(ML_LATENCY_SAMPLES + QUANTUM + ML_BLOCK);
-const MASK = RING - 1;
-/** Block slots, a power of two ≥ RING / ML_BLOCK (3.8 → 4): slot m & (SLOTS − 1) holds block m. */
-export const SLOTS = pow2Ceil(Math.ceil(RING / ML_BLOCK));
+/** A block is ready `latency` after its start and spans `block`, plus one quantum: 131072 for 86912 + 128 + 34304. */
+const ringFor = (g: MlGeometry): number => pow2Ceil(g.latency + QUANTUM + g.block);
+/** Block slots, a power of two ≥ ring / block (3.8 → 4): slot m & (slots − 1) holds block m. */
+const slotsFor = (g: MlGeometry): number => pow2Ceil(Math.ceil(ringFor(g) / g.block));
+/** Ring and slot counts of the default (MDX) geometry. */
+export const RING = ringFor(GEOMETRY.mdx);
+export const SLOTS = slotsFor(GEOMETRY.mdx);
 /** Block buffers: one filling, ≤ 2 at the worker (MDX hop 743 ms vs ≤ 0.4 s response), the rest spare. */
 const POOL = 4;
 
@@ -57,10 +61,13 @@ const POOL = 4;
 export function ringOk(ring: number, latency: number, block: number): boolean {
   return ring > 0 && (ring & (ring - 1)) === 0 && ring >= latency + QUANTUM + block;
 }
-if (!ringOk(RING, ML_LATENCY_SAMPLES, ML_BLOCK)) throw new Error('separator ring too small');
+for (const g of Object.values(GEOMETRY)) if (!ringOk(ringFor(g), g.latency, g.block)) throw new Error('separator ring too small');
 const MISS_WINDOW_S = 10;
-/** ML vocal block m covers input [streamStart + ML_BASE + ML_BLOCK·m, … + ML_BLOCK). */
-const ML_BASE = ML_BLOCK - ML_RESULT_OFFSET;
+/**
+ * ML vocal block m covers input [streamStart + base + block·m, … + block): the first returned block whose
+ * region reaches into the stream. MDX: block 0 ends before the stream starts, so m = 0 is the second block.
+ */
+const baseFor = (g: MlGeometry): number => -g.resultOffset + g.block * Math.floor(g.resultOffset / g.block);
 
 interface PoolEntry {
   buf: ArrayBuffer;
@@ -76,15 +83,20 @@ type Phase =
   | 'to-bypass';
 
 export class SeparatorCore {
-  private readonly dryL = new Float32Array(RING);
-  private readonly dryR = new Float32Array(RING);
-  private readonly mlL = new Float32Array(RING);
-  private readonly mlR = new Float32Array(RING);
+  /** Block geometry of the ML model in use (see setModel). */
+  private g: MlGeometry = GEOMETRY.mdx;
+  private mask = RING - 1;
+  private slots = SLOTS;
+  private base = baseFor(GEOMETRY.mdx);
+  private dryL = new Float32Array(RING);
+  private dryR = new Float32Array(RING);
+  private mlL = new Float32Array(RING);
+  private mlR = new Float32Array(RING);
   /** MDX vocal (A cappella); the instrumental uses mlL/mlR (Vk = x − Karaoke instrumental). */
-  private readonly mlSL = new Float32Array(RING);
-  private readonly mlSR = new Float32Array(RING);
+  private mlSL = new Float32Array(RING);
+  private mlSR = new Float32Array(RING);
   /** Absolute start of the ML block held in each slot (NaN = empty). */
-  private readonly slotStart = new Float64Array(SLOTS).fill(NaN);
+  private slotStart = new Float64Array(SLOTS).fill(NaN);
 
   /** Absolute input index of the current (or next) quantum's first sample. */
   private pos = 0;
@@ -103,13 +115,14 @@ export class SeparatorCore {
   private held = false;
   private wantMl: MlReason | null = null;
   private wantBypass: MlReason | null = null;
+  private pendingModel: MlModel | null = null;
 
   // ML stream
   private port: MessagePort | null = null;
   private streaming = false;
   private streamStart = 0;
   private epoch = 0;
-  private readonly pool: PoolEntry[] = [];
+  private pool: PoolEntry[] = [];
   private cur: PoolEntry | null = null;
   private readonly xfer: Transferable[] = [];
   /** Vocal source of the block being read (true = ML) and of the next one. */
@@ -127,11 +140,43 @@ export class SeparatorCore {
     private readonly sampleRate: number,
     private readonly onEngine: (msg: FromWorklet) => void,
   ) {
-    for (let i = 0; i < POOL; i++) this.pool.push(entry(new ArrayBuffer(ML_BUFFER_BYTES)));
+    for (let i = 0; i < POOL; i++) this.pool.push(entry(new ArrayBuffer(ML_BUFFER_BYTES), ML_BLOCK));
   }
 
   get latencySamples(): number {
-    return this.engine === 'ml' ? ML_LATENCY_SAMPLES : 0;
+    return this.engine === 'ml' ? this.g.latency : 0;
+  }
+
+  /**
+   * Use the block geometry of `model` for the next ML stream. It takes effect on the original mix (bypass, nothing
+   * in flight): at once, or at the end of the switch to bypass. The rings are reallocated then (once per model switch,
+   * on the original mix, so a hiccup of the allocation is not heard).
+   */
+  setModel(model: MlModel): void {
+    this.pendingModel = model;
+    this.applyModel();
+  }
+
+  private applyModel(): void {
+    if (this.pendingModel === null || this.engine !== 'bypass' || this.phase !== 'steady') return;
+    const g = GEOMETRY[this.pendingModel];
+    this.pendingModel = null;
+    if (g === this.g) return;
+    this.stopStream();
+    this.g = g;
+    const ring = ringFor(g);
+    this.mask = ring - 1;
+    this.slots = slotsFor(g);
+    this.base = baseFor(g);
+    this.dryL = new Float32Array(ring);
+    this.dryR = new Float32Array(ring);
+    this.mlL = new Float32Array(ring);
+    this.mlR = new Float32Array(ring);
+    this.mlSL = new Float32Array(ring);
+    this.mlSR = new Float32Array(ring);
+    this.slotStart = new Float64Array(this.slots).fill(NaN);
+    this.pool = [];
+    for (let i = 0; i < POOL; i++) this.pool.push(entry(new ArrayBuffer(bufferBytes(g)), g.block));
   }
 
   setPort(port: MessagePort): void {
@@ -147,6 +192,8 @@ export class SeparatorCore {
     this.reset();
     this.phase = 'steady';
     this.wantMl = this.wantBypass = null;
+    this.engine = 'bypass';
+    this.applyModel();
     this.engine = on && engine === 'ml' && this.mlAllowed() ? 'ml' : 'bypass';
     this.reason = reason;
     this.delay = this.latencySamples;
@@ -169,7 +216,7 @@ export class SeparatorCore {
       // Nothing buffered is left to protect: finish the switch now.
       this.phase = 'steady';
       this.engine = 'ml';
-      this.delay = ML_LATENCY_SAMPLES;
+      this.delay = this.g.latency;
     }
     if (this.streaming) this.startStream();
   }
@@ -229,7 +276,7 @@ export class SeparatorCore {
     // 1. Ring: dry input.
     if (!freeze) {
       for (let i = 0; i < QUANTUM; i++) {
-        const j = (pos + i) & MASK;
+        const j = (pos + i) & this.mask;
         this.dryL[j] = inL[i];
         this.dryR[j] = inR[i];
       }
@@ -250,7 +297,7 @@ export class SeparatorCore {
     }
     this.w0 = this.w1 = 0;
     if (freeze) this.w0 = this.w1 = this.useMl ? 1 : 0;
-    else if (this.engine === 'ml') this.chooseSource(pos - ML_LATENCY_SAMPLES);
+    else if (this.engine === 'ml') this.chooseSource(pos - this.g.latency);
 
     // 4. Output: v = w·vocal, i = dry − w·soft vocal, b = 1 − w.
     const r0 = pos - this.delay;
@@ -258,9 +305,9 @@ export class SeparatorCore {
     const dE = (target - env0) / QUANTUM;
     const w0 = this.w0;
     const dW = (this.w1 - w0) / QUANTUM;
-    const { dryL, dryR, mlL, mlR, mlSL, mlSR } = this;
+    const { dryL, dryR, mlL, mlR, mlSL, mlSR, mask } = this;
     for (let i = 0; i < QUANTUM; i++) {
-      const j = (r0 + i) & MASK;
+      const j = (r0 + i) & mask;
       const e = env0 + dE * (i + 1);
       const w = w0 + dW * (i + 1);
       vocL[i] = e * w * mlSL[j];
@@ -274,10 +321,10 @@ export class SeparatorCore {
     if (freeze) return;
 
     // 5. Engine changes take effect from the next quantum.
-    if (this.phase === 'to-ml' && pos + QUANTUM === this.switchPos + ML_LATENCY_SAMPLES) {
+    if (this.phase === 'to-ml' && pos + QUANTUM === this.switchPos + this.g.latency) {
       this.phase = 'steady';
       this.engine = 'ml';
-      this.delay = ML_LATENCY_SAMPLES;
+      this.delay = this.g.latency;
       this.decideInitial(this.switchPos);
     } else if (this.phase === 'to-bypass') {
       this.phase = 'steady';
@@ -286,6 +333,7 @@ export class SeparatorCore {
       this.stopStream();
     }
     this.pos = pos + QUANTUM;
+    if (this.pendingModel !== null) this.applyModel();
   }
 
   /** ML needs a port and a 44.1 kHz context (the model has no resampler). */
@@ -315,6 +363,7 @@ export class SeparatorCore {
       this.phase = 'steady';
       this.reason = reason;
       this.stopStream();
+      this.applyModel();
       this.onEngine({ type: 'engine', engine: 'bypass', reason, at: this.timeOf(pos) });
       return;
     }
@@ -326,9 +375,10 @@ export class SeparatorCore {
 
   /** Sets w0 / w1 for the quantum that reads input r0 … r0 + QUANTUM − 1. */
   private chooseSource(r0: number): void {
-    const rel = r0 - (this.streamStart + ML_BASE);
+    const { block } = this.g;
+    const rel = r0 - (this.streamStart + this.base);
     if (rel < -QUANTUM) return; // before the stream: ring is silent there
-    const off = rel - Math.floor(rel / ML_BLOCK) * ML_BLOCK;
+    const off = rel - Math.floor(rel / block) * block;
     if (off === 0) {
       const was = this.useMl;
       this.useMl = this.nextMl;
@@ -337,9 +387,9 @@ export class SeparatorCore {
         return;
       }
     }
-    if (off === ML_BLOCK - QUANTUM) {
+    if (off === block - QUANTUM) {
       // Choose the next block now, so ML → bypass can fade over this quantum.
-      this.nextMl = this.ready(Math.floor(rel / ML_BLOCK) + 1);
+      this.nextMl = this.ready(Math.floor(rel / block) + 1);
       if (!this.nextMl) this.miss();
       if (this.useMl && !this.nextMl) {
         this.w0 = 1;
@@ -351,13 +401,13 @@ export class SeparatorCore {
 
   /** Entering the ML output at input p (mid-block): ML for this block only if it is here. */
   private decideInitial(p: number): void {
-    const m = Math.floor((p - (this.streamStart + ML_BASE)) / ML_BLOCK);
+    const m = Math.floor((p - (this.streamStart + this.base)) / this.g.block);
     this.useMl = this.nextMl = this.ready(m);
     if (!this.useMl) this.miss();
   }
 
   private ready(m: number): boolean {
-    return this.slotStart[m & (SLOTS - 1)] === this.streamStart + ML_BASE + ML_BLOCK * m;
+    return this.slotStart[m & (this.slots - 1)] === this.streamStart + this.base + this.g.block * m;
   }
 
   private miss(): void {
@@ -374,7 +424,8 @@ export class SeparatorCore {
   }
 
   private feed(inL: Float32Array, inR: Float32Array): void {
-    const fill = (this.pos - this.streamStart) % ML_BLOCK;
+    const block = this.g.block;
+    const fill = (this.pos - this.streamStart) % block;
     if (fill === 0) {
       this.cur = this.pool.pop() ?? null;
       // Every buffer is with the worker: it is blocks behind, far past any deadline.
@@ -383,10 +434,10 @@ export class SeparatorCore {
     const cur = this.cur;
     if (!cur) return;
     cur.data.set(inL, fill);
-    cur.data.set(inR, ML_BLOCK + fill);
-    if (fill + QUANTUM === ML_BLOCK) {
+    cur.data.set(inR, block + fill);
+    if (fill + QUANTUM === block) {
       cur.head[0] = this.epoch;
-      cur.head[1] = this.pos + QUANTUM - ML_BLOCK;
+      cur.head[1] = this.pos + QUANTUM - block;
       this.xfer[0] = cur.buf;
       this.port!.postMessage(cur.buf, this.xfer);
       this.cur = null;
@@ -397,21 +448,22 @@ export class SeparatorCore {
   /** A buffer back from the worker (port message handler, between render quanta). */
   private onBlock(buf: ArrayBuffer): void {
     // A buggy worker must not grow the pool.
-    if (buf.byteLength !== ML_BUFFER_BYTES || this.pool.length >= POOL) return;
-    const e = entry(buf);
+    const block = this.g.block;
+    if (buf.byteLength !== bufferBytes(this.g) || this.pool.length >= POOL) return;
+    const e = entry(buf, block);
     const start = e.head[1];
-    const rel = start - (this.streamStart + ML_BASE);
-    if (this.streaming && e.head[0] === this.epoch && rel >= 0 && rel % ML_BLOCK === 0) {
-      for (let i = 0; i < ML_BLOCK; i++) {
-        const j = (start + i) & MASK;
+    const rel = start - (this.streamStart + this.base);
+    if (this.streaming && e.head[0] === this.epoch && rel >= 0 && rel % block === 0) {
+      for (let i = 0; i < block; i++) {
+        const j = (start + i) & this.mask;
         // The head of the first block lies before the stream (nothing was sent for it): keep it silent.
         const live = start + i >= this.streamStart;
         this.mlL[j] = live ? e.data[i] : 0;
-        this.mlR[j] = live ? e.data[ML_BLOCK + i] : 0;
-        this.mlSL[j] = live ? e.data[2 * ML_BLOCK + i] : 0;
-        this.mlSR[j] = live ? e.data[3 * ML_BLOCK + i] : 0;
+        this.mlR[j] = live ? e.data[block + i] : 0;
+        this.mlSL[j] = live ? e.data[2 * block + i] : 0;
+        this.mlSR[j] = live ? e.data[3 * block + i] : 0;
       }
-      this.slotStart[(rel / ML_BLOCK) & (SLOTS - 1)] = start;
+      this.slotStart[(rel / block) & (this.slots - 1)] = start;
       this.stats.returned++;
     }
     this.pool.push(e);
@@ -451,6 +503,6 @@ export class SeparatorCore {
   }
 }
 
-function entry(buf: ArrayBuffer): PoolEntry {
-  return { buf, head: new Float64Array(buf, 0, 2), data: new Float32Array(buf, ML_HEADER_BYTES, 4 * ML_BLOCK) };
+function entry(buf: ArrayBuffer, block: number): PoolEntry {
+  return { buf, head: new Float64Array(buf, 0, 2), data: new Float32Array(buf, ML_HEADER_BYTES, 4 * block) };
 }

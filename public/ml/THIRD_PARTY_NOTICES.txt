@@ -302,3 +302,12 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+================================================================
+3. Mel-Band RoFormer vocal model (optional, experimental; NOT shipped in the repository)
+   Weights: Kimberley Jensen, "vocals_mel_band_roformer" (UVR model registry).
+   Code: Mel-Band RoFormer architecture (Lucidrains, ZFTurbo / audio-separator implementations).
+   public/ml/roformer.onnx is built locally by scripts/export-roformer.py (fp16, STFT removed, RMSNorm rewritten
+   for fp16). The licence of the weights was not verified when this was added (a secondary source says MIT):
+   read the LICENSE of the upstream repository before redistributing a build that contains roformer.onnx.
+================================================================

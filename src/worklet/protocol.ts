@@ -50,7 +50,9 @@ export type ToWorklet =
   /** Direct channel to the ML worker (blocks out, vocal blocks back). */
   | { type: 'ml-port'; port: MessagePort }
   /** Switch engine while running. The worklet answers with an `engine` message. */
-  | { type: 'engine'; engine: MlEngine; reason: MlReason };
+  | { type: 'engine'; engine: MlEngine; reason: MlReason }
+  /** Block geometry of the ML model that will use the port. Only valid on the original mix; resets the ML stream. */
+  | { type: 'model'; model: MlModel };
 
 export type FromWorklet =
   /**
@@ -73,8 +75,55 @@ export const ML_BUFFER_BYTES = ML_HEADER_BYTES + 4 * ML_BLOCK * 4;
 /** Control messages between the content script and the ML worker (via the ml.html iframe). */
 export const ML_PAGE_PATH = 'ml/ml.html';
 export const ML_INIT = 'all-mixer-ml-init';
+/** The ML_INIT message also carries `model: MlModel`. */
 /** Warm-up gate: p90 of 20 timed runs (ignores the two slowest) of one MDX block step (analyze + model + synthesize) must leave ≥ 1.5× in the 319 ms compute slack (~213 ms). The runtime deadline-miss fallback is the final guard. */
 export const ML_WARMUP_P90_MS = (ML_SLACK_SAMPLES / ML_SAMPLE_RATE) * 1000 / 1.5;
+
+/**
+ * ML models the engine can run. 'mdx' is the shipped MDX-Net 9482 + Spleeter pipeline. 'roformer' is the
+ * Mel-Band RoFormer (fp16) vocal model: one big model, no Spleeter mask, short chunks so it fits the delay.
+ */
+export type MlModel = 'mdx' | 'roformer';
+export const ML_MODELS: readonly MlModel[] = ['mdx', 'roformer'];
+
+/** Block geometry of one model: what the worklet, the worker and the delay math must agree on. */
+export interface MlGeometry {
+  /** Samples per block sent to the worker. */
+  block: number;
+  /** A returned block covers input [blockStart − resultOffset, + block). */
+  resultOffset: number;
+  /** Output delay of the ML engine, samples. */
+  latency: number;
+  /** Warm-up gate: the p90 of one block step must stay under this (ms). */
+  warmupP90Ms: number;
+}
+
+/**
+ * RoFormer: the model sees a chunk of 111 STFT hops (n_fft 2048, hop 441; 112 frames with centre padding)
+ * = 48951 samples = the newest block plus the 9271 samples before it. It runs once per block (MDX's 50 % overlap
+ * would double the cost; one 112-frame fp16 run is ~620 ms on an M1 with WebGPU). Block b completes input
+ * [bH − R, (b + 1)H − R), R = 8832 (0.2 s): the first R samples cross-fade with the tail of the previous chunk;
+ * the first 439 samples of the chunk are context only (the model is worst at its edges).
+ * Block, overlap and slack are whole render quanta: the worklet core needs them aligned to its 128-sample grid.
+ */
+export const ROF_BLOCK = 39680; // 310 quanta
+export const ROF_OVERLAP = 8832; // 69 quanta
+export const ROF_CHUNK = 48951;
+/** Compute slack 885 ms (the model step has to finish inside it); latency stays under 2 s: 87680 = 1.988 s. */
+const ROF_SLACK_SAMPLES = 39040; // 305 quanta
+export const ROF_LATENCY_SAMPLES = ROF_BLOCK + ROF_OVERLAP + ROF_SLACK_SAMPLES + ML_QUANTUM;
+
+export const GEOMETRY: Readonly<Record<MlModel, MlGeometry>> = {
+  mdx: { block: ML_BLOCK, resultOffset: ML_RESULT_OFFSET, latency: ML_LATENCY_SAMPLES, warmupP90Ms: ML_WARMUP_P90_MS },
+  roformer: {
+    block: ROF_BLOCK,
+    resultOffset: ROF_OVERLAP,
+    latency: ROF_LATENCY_SAMPLES,
+    warmupP90Ms: ((ROF_SLACK_SAMPLES / ML_SAMPLE_RATE) * 1000) / 1.15,
+  },
+};
+
+export const bufferBytes = (g: MlGeometry): number => ML_HEADER_BYTES + 4 * g.block * 4;
 
 export type ToMlWorker = { type: 'dispose' };
 
@@ -92,4 +141,4 @@ export type FromMlWorker =
   | { type: 'unavailable'; reason: string };
 
 /** Page → worker init (iframe page forwards the ML port from the content script). */
-export type MlWorkerInit = { type: 'init'; port: MessagePort; modelUrl: string; mdxUrl: string; wasmBase: string; stallMs?: number; stallAfterMs?: number; timing?: boolean };
+export type MlWorkerInit = { type: 'init'; model: MlModel; port: MessagePort; modelUrl: string; mdxUrl: string; roformerUrl: string; roformerMetaUrl: string; wasmBase: string; stallMs?: number; stallAfterMs?: number; timing?: boolean };

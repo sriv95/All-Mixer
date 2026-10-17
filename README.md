@@ -38,6 +38,7 @@ Use `bun run test`, not `bun test`. `bun test` starts Bun's own test runner; thi
 - If Chrome's autoplay policy keeps the AudioContext suspended, the extension waits for one click / key press on the page before routing audio, so the video is never muted. The popup shows a hint.
 - Settings are per browser tab and survive SPA navigation and reloads; they are cleared when the tab closes.
 - Separate mode uses the ML engine (MDX-Net 9482 vocal model plus a Spleeter mask for Karaoke, on WebGPU; 1.97 s audio delay, the video is delayed to match). Until it is running, or when it cannot run, the original mix plays and the popup says why.
+- Separate tab, Model menu (experimental): "Mel-Band RoFormer" replaces MDX-Net and Spleeter with one fp16 transformer (436 MB, built by `bun run export-roformer`, optional: the build only warns without it). It gives a cleaner voice/instrumental split and needs a fast GPU; 1.99 s delay. Geometry per model is in `src/worklet/protocol.ts` (`GEOMETRY`); the STFT, mask scatter and iSTFT are in `src/ml/roformer.ts`. `spike/bench/rof_bench.mjs <model> <frames> <inputs>` times an exported core on WebGPU.
 
 ## Debug
 
