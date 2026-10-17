@@ -127,10 +127,20 @@ describe('popup', () => {
     expect(el<HTMLOutputElement>('master-value').value).toBe('100%');
   });
 
-  it('has no engine selector', async () => {
+  it('has no separation-quality selector, only the ML model one', async () => {
     await load({ stored: { mode: 'separate', separationQuality: 'light' } });
     expect(document.getElementById('separation-quality')).toBeNull();
-    expect(document.querySelector('select')).toBeNull();
+    expect(document.querySelectorAll('select')).toHaveLength(1);
+  });
+
+  it('the model selector shows the stored model and sends a change', async () => {
+    await load({ stored: { mode: 'separate', mlModel: 'roformer' } });
+    const select = el<HTMLSelectElement>('ml-model');
+    expect(select.value).toBe('roformer');
+    select.value = 'mdx';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    await settle();
+    expect(sent().at(-1).settings.mlModel).toBe('mdx');
   });
   it('shows the waiting-for-gesture hint', async () => {
     await load({ status: { ...okStatus, audio: 'waiting-for-gesture' } });

@@ -30,7 +30,7 @@ describe('MlHost', () => {
     const post = vi.spyOn(win, 'postMessage').mockImplementation(() => {});
     f.dispatchEvent(new Event('load'));
     expect(post).toHaveBeenCalledTimes(1);
-    expect(post.mock.calls[0][0]).toEqual({ type: ML_INIT });
+    expect(post.mock.calls[0][0]).toEqual({ type: ML_INIT, model: 'mdx' });
     expect(post.mock.calls[0][1]).toBe('https://ext.test');
     const ready = { type: 'ready', p50: 1, p90: 2, p95: 2, createMs: 3, adapter: 'x' };
     window.dispatchEvent(new MessageEvent('message', { data: ready, origin: 'https://ext.test', source: win }));

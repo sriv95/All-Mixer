@@ -9,6 +9,7 @@
     "dev": "vite build --watch --config vite.content.config.ts",
     "typecheck": "tsc --noEmit",
     "fetch-model": "node scripts/fetch-model.mjs && node scripts/fetch-mdx-model.mjs",
+    "export-roformer": "${PY:-python3} scripts/export-roformer.py",
     "lint": "eslint .",
     "test": "vitest run"
   },

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ML_WARMUP_P90_MS, type FromMlWorker } from '../../worklet/protocol';
+import { GEOMETRY, ML_WARMUP_P90_MS, type FromMlWorker, type MlModel } from '../../worklet/protocol';
 import { EngineSelector, type MlHostLike } from './engine-select';
 import type { LatencyListener } from './latency';
 
@@ -17,9 +17,11 @@ class FakeHost implements MlHostLike {
 
 function setup(accept = true, canRun = true) {
   const hosts: FakeHost[] = [];
+  const models: MlModel[] = [];
   let listener: LatencyListener = () => {};
   const chain = {
     setMlPort: vi.fn(),
+    setMlModel: vi.fn(),
     setEngine: vi.fn(() => accept),
     canRunMl: vi.fn(() => canRun),
     onLatencyChange: (cb: LatencyListener) => {
@@ -27,16 +29,17 @@ function setup(accept = true, canRun = true) {
       return () => {};
     },
   };
-  const sel = new EngineSelector(chain, () => {
+  const sel = new EngineSelector(chain, (model) => {
     const h = new FakeHost();
     hosts.push(h);
+    models.push(model);
     return h;
   });
   const miss = () => listener({ engine: 'bypass', reason: 'deadline-miss' } as never, 0);
-  return { chain, sel, hosts, miss };
+  return { chain, sel, hosts, models, miss };
 }
 const ready = (p90: number): FromMlWorker => ({ type: 'ready', p50: p90 / 2, p90, p95: p90, createMs: 1, adapter: 'x' });
-const req = (on = true) => ({ on });
+const req = (on = true, model?: MlModel) => ({ on, model });
 
 describe('EngineSelector', () => {
   it('is off until Separate turns on, and never probes while off', () => {
@@ -142,5 +145,56 @@ describe('EngineSelector', () => {
     hosts[0].onStatus!(ready(20));
     expect(chain.setEngine).not.toHaveBeenCalled();
     expect(sel.status).toEqual({ state: 'off' });
+  });
+
+  it('hands the model to the host and the chain before the port', () => {
+    const { sel, chain, models } = setup();
+    sel.update(req(true, 'roformer'));
+    expect(models).toEqual(['roformer']);
+    expect(chain.setMlModel).toHaveBeenCalledWith('roformer');
+    expect(chain.setMlModel.mock.invocationCallOrder[0]).toBeLessThan(chain.setMlPort.mock.invocationCallOrder[0]);
+  });
+
+  it('uses the warm-up gate of the model', () => {
+    const { sel, hosts, chain } = setup();
+    sel.update(req(true, 'roformer'));
+    const gate = GEOMETRY.roformer.warmupP90Ms;
+    expect(gate).toBeGreaterThan(ML_WARMUP_P90_MS); // the RoFormer step is far longer, with a bigger slack
+    hosts[0].onStatus!(ready(gate - 20));
+    expect(chain.setEngine).toHaveBeenCalledWith('ml', 'auto');
+    expect(sel.status).toEqual({ state: 'on' });
+  });
+
+  it('a model change while on goes back to the original mix and probes the new model', () => {
+    const { sel, hosts, chain, models } = setup();
+    sel.update(req(true, 'mdx'));
+    hosts[0].onStatus!(ready(50));
+    expect(sel.status.state).toBe('on');
+    chain.setEngine.mockClear();
+    sel.update(req(true, 'roformer'));
+    expect(chain.setEngine).toHaveBeenCalledWith('bypass', 'auto');
+    expect(hosts[0].disposed).toBe(true);
+    expect(models).toEqual(['mdx', 'roformer']);
+    expect(sel.status).toEqual({ state: 'warming' });
+    hosts[1].onStatus!(ready(GEOMETRY.roformer.warmupP90Ms - 20));
+    expect(sel.status).toEqual({ state: 'on' });
+  });
+
+  it('an unchanged model does not restart the probe', () => {
+    const { sel, hosts } = setup();
+    sel.update(req(true, 'roformer'));
+    sel.update(req(true, 'roformer'));
+    expect(hosts).toHaveLength(1);
+  });
+
+  it('a model change after the runtime stop retries', () => {
+    const { sel, hosts, miss } = setup();
+    sel.update(req(true, 'roformer'));
+    hosts[0].onStatus!(ready(100));
+    miss();
+    expect(sel.status.state).toBe('stopped');
+    sel.update(req(true, 'mdx'));
+    expect(hosts).toHaveLength(2);
+    expect(sel.status).toEqual({ state: 'warming' });
   });
 });
