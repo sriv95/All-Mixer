@@ -18,10 +18,10 @@ from audio_separator.separator.uvr_lib_v5.roformer import mel_band_roformer as m
 from audio_separator.separator.uvr_lib_v5.roformer.mel_band_roformer import MelBandRoformer
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-BASE = 'https://github.com/TRvlvr/model_repo/releases/download/all_public_uvr_models'
+BASE = 'https://github.com/nomadkaraoke/python-audio-separator/releases/download/model-configs'
 CKPT_URL = f'{BASE}/vocals_mel_band_roformer.ckpt'
 CKPT_SHA256 = '87201f4d31afb5bc79993230fc49446918425574db48c01c405e44f365c7559e'
-CONFIG_URL = f'{BASE}/mdx_model_data/mdx_c_configs/vocals_mel_band_roformer.yaml'
+CONFIG_URL = f'{BASE}/vocals_mel_band_roformer.yaml'
 HOP = 441
 CHUNK = 111 * HOP  # 48951 samples (src/worklet/protocol.ts ROF_CHUNK); centre padding gives 112 frames
 FRAMES = CHUNK // HOP + 1
