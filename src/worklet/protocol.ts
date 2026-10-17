@@ -82,9 +82,10 @@ export const ML_WARMUP_P90_MS = (ML_SLACK_SAMPLES / ML_SAMPLE_RATE) * 1000 / 1.5
 /**
  * ML models the engine can run. 'mdx' is the shipped MDX-Net 9482 + Spleeter pipeline. 'roformer' is the
  * Mel-Band RoFormer (fp16) vocal model: one big model, no Spleeter mask, short chunks so it fits the delay.
+ * 'roformer-inst' is the same network trained for the instrumental (better for Karaoke): same geometry and cost.
  */
-export type MlModel = 'mdx' | 'roformer';
-export const ML_MODELS: readonly MlModel[] = ['mdx', 'roformer'];
+export type MlModel = 'mdx' | 'roformer' | 'roformer-inst';
+export const ML_MODELS: readonly MlModel[] = ['mdx', 'roformer', 'roformer-inst'];
 
 /** Block geometry of one model: what the worklet, the worker and the delay math must agree on. */
 export interface MlGeometry {
@@ -113,14 +114,17 @@ export const ROF_CHUNK = 48951;
 const ROF_SLACK_SAMPLES = 39040; // 305 quanta
 export const ROF_LATENCY_SAMPLES = ROF_BLOCK + ROF_OVERLAP + ROF_SLACK_SAMPLES + ML_QUANTUM;
 
+const ROF_GEOMETRY: MlGeometry = {
+  block: ROF_BLOCK,
+  resultOffset: ROF_OVERLAP,
+  latency: ROF_LATENCY_SAMPLES,
+  warmupP90Ms: ((ROF_SLACK_SAMPLES / ML_SAMPLE_RATE) * 1000) / 1.15,
+};
+
 export const GEOMETRY: Readonly<Record<MlModel, MlGeometry>> = {
   mdx: { block: ML_BLOCK, resultOffset: ML_RESULT_OFFSET, latency: ML_LATENCY_SAMPLES, warmupP90Ms: ML_WARMUP_P90_MS },
-  roformer: {
-    block: ROF_BLOCK,
-    resultOffset: ROF_OVERLAP,
-    latency: ROF_LATENCY_SAMPLES,
-    warmupP90Ms: ((ROF_SLACK_SAMPLES / ML_SAMPLE_RATE) * 1000) / 1.15,
-  },
+  roformer: ROF_GEOMETRY,
+  'roformer-inst': ROF_GEOMETRY,
 };
 
 export const bufferBytes = (g: MlGeometry): number => ML_HEADER_BYTES + 4 * g.block * 4;
@@ -141,4 +145,4 @@ export type FromMlWorker =
   | { type: 'unavailable'; reason: string };
 
 /** Page → worker init (iframe page forwards the ML port from the content script). */
-export type MlWorkerInit = { type: 'init'; model: MlModel; port: MessagePort; modelUrl: string; mdxUrl: string; roformerUrl: string; roformerMetaUrl: string; wasmBase: string; stallMs?: number; stallAfterMs?: number; timing?: boolean };
+export type MlWorkerInit = { type: 'init'; model: MlModel; port: MessagePort; modelUrl: string; mdxUrl: string; roformerUrl: string; roformerMetaUrl: string; roformerInstUrl: string; roformerInstMetaUrl: string; wasmBase: string; stallMs?: number; stallAfterMs?: number; timing?: boolean };

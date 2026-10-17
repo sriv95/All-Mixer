@@ -1,13 +1,18 @@
-"""Export the Mel-Band RoFormer vocal model (Kimberley Jensen, `vocals_mel_band_roformer`) for the extension.
+"""Export a Mel-Band RoFormer model for the extension.
 
-Writes public/ml/roformer.onnx (fp16 weights, fp32 input/output, fixed 112-frame chunk) and public/ml/roformer-meta.json.
+  --variant vocals (default)  Kimberley Jensen `vocals_mel_band_roformer`: the model outputs the vocal.
+                              Writes public/ml/roformer.onnx + roformer-meta.json.
+  --variant inst              Unwa `melband_roformer_inst_v1` (same architecture and size): the model outputs the
+                              instrumental, for Karaoke. Writes public/ml/roformer-inst.onnx + roformer-inst-meta.json.
+
+The ONNX file is fp16 weights, fp32 input/output, fixed 112-frame chunk.
 The graph is the transformer core only: band split, 6 x (time + frequency transformer), mask estimator. The STFT, the
 gather of the mel-band bins, the mask scatter and the iSTFT run in JS (src/ml/roformer.ts), because ORT Web's WebGPU
 EP has no STFT op. Two rewrites keep the graph inside WebGPU limits: the 60 per-band slices/concats are done in groups
 of 8 (a kernel may bind at most 10 storage buffers).
 
 Needs python with: torch einops rotary-embedding-torch librosa pyyaml beartype onnx onnxruntime audio-separator
-  python scripts/export-roformer.py [--ckpt path] [--config path]
+  python scripts/export-roformer.py [--variant vocals|inst] [--ckpt path] [--config path]
 Without --ckpt/--config the files are downloaded into .cache/models (SHA-256 checked).
 """
 import argparse, hashlib, json, pathlib, sys, urllib.request
@@ -19,9 +24,11 @@ from audio_separator.separator.uvr_lib_v5.roformer.mel_band_roformer import MelB
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 BASE = 'https://github.com/nomadkaraoke/python-audio-separator/releases/download/model-configs'
-CKPT_URL = f'{BASE}/vocals_mel_band_roformer.ckpt'
-CKPT_SHA256 = '87201f4d31afb5bc79993230fc49446918425574db48c01c405e44f365c7559e'
-CONFIG_URL = f'{BASE}/vocals_mel_band_roformer.yaml'
+# variant -> (checkpoint, SHA-256, config, output name)
+VARIANTS = {
+    'vocals': ('vocals_mel_band_roformer.ckpt', '87201f4d31afb5bc79993230fc49446918425574db48c01c405e44f365c7559e', 'vocals_mel_band_roformer.yaml', 'roformer'),
+    'inst': ('melband_roformer_inst_v1.ckpt', '6f88d96958b2b7dec32286b0ced00bbcbd37e28741cad9038758b1eaf9b5c057', 'config_melbandroformer_inst.yaml', 'roformer-inst'),
+}
 HOP = 441
 CHUNK = 111 * HOP  # 48951 samples (src/worklet/protocol.ts ROF_CHUNK); centre padding gives 112 frames
 FRAMES = CHUNK // HOP + 1
@@ -80,11 +87,13 @@ class Core(torch.nn.Module):
 
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument('--variant', choices=sorted(VARIANTS), default='vocals')
     ap.add_argument('--ckpt'); ap.add_argument('--config')
     a = ap.parse_args()
+    ckpt_name, ckpt_sha, config_name, name = VARIANTS[a.variant]
     cache = ROOT / '.cache/models'
-    ckpt = pathlib.Path(a.ckpt) if a.ckpt else fetch(CKPT_URL, cache / 'vocals_mel_band_roformer.ckpt', CKPT_SHA256)
-    config = pathlib.Path(a.config) if a.config else fetch(CONFIG_URL, cache / 'vocals_mel_band_roformer.yaml')
+    ckpt = pathlib.Path(a.ckpt) if a.ckpt else fetch(f'{BASE}/{ckpt_name}', cache / ckpt_name, ckpt_sha)
+    config = pathlib.Path(a.config) if a.config else fetch(f'{BASE}/{config_name}', cache / config_name)
     cfg = yaml.unsafe_load(open(config))
     m = MelBandRoformer(**cfg['model'])
     sd = torch.load(ckpt, map_location='cpu', weights_only=False)
@@ -95,13 +104,13 @@ def main():
     x = torch.randn(1, FRAMES, fin) * 0.5
     out = ROOT / 'public/ml'
     out.mkdir(parents=True, exist_ok=True)
-    tmp = ROOT / '.cache/models/roformer_fp32.onnx'
+    tmp = ROOT / f'.cache/models/{name}_fp32.onnx'
     tmp.parent.mkdir(parents=True, exist_ok=True)
     with torch.no_grad():
         ref = core(x).numpy()
         torch.onnx.export(core, (x,), str(tmp), input_names=['x'], output_names=['masks'], opset_version=17, dynamo=False)
-    onnx.save(convert_float_to_float16(onnx.load(tmp), keep_io_types=True), out / 'roformer.onnx')
-    got = ort.InferenceSession(str(out / 'roformer.onnx'), providers=['CPUExecutionProvider']).run(None, {'x': x.numpy()})[0]
+    onnx.save(convert_float_to_float16(onnx.load(tmp), keep_io_types=True), out / f'{name}.onnx')
+    got = ort.InferenceSession(str(out / f'{name}.onnx'), providers=['CPUExecutionProvider']).run(None, {'x': x.numpy()})[0]
     print('fp16 vs torch fp32: max abs diff', float(np.abs(got - ref).max()), 'mean |ref|', float(np.abs(ref).mean()))
     meta = {
         'frames': FRAMES,
@@ -114,8 +123,8 @@ def main():
         'bands': m.num_bands_per_freq.tolist(),
     }
     assert meta['hop'] == HOP and meta['nFft'] == 2048
-    (out / 'roformer-meta.json').write_text(json.dumps(meta, separators=(',', ':')))
-    print('wrote', out / 'roformer.onnx', (out / 'roformer.onnx').stat().st_size // 2**20, 'MiB')
+    (out / f'{name}-meta.json').write_text(json.dumps(meta, separators=(',', ':')))
+    print('wrote', out / f'{name}.onnx', (out / f'{name}.onnx').stat().st_size // 2**20, 'MiB')
 
 
 if __name__ == '__main__':

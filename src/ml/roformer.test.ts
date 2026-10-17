@@ -99,6 +99,18 @@ describe('RoformerStream', () => {
     expect(outL[5000]).toBeCloseTo(0.5 * sineL(H - R + 5000), 4);
   });
 
+  it("target 'instrumental': the output is the input minus the model's estimate", async () => {
+    // an instrumental model that returns the whole input (mask 1) leaves no vocal; a mask of 0 leaves it all
+    const s = new RoformerStream(meta, 'instrumental');
+    const outL = new Float32Array(H), outR = new Float32Array(H);
+    const zero = (x: Float32Array) => new Float32Array(x.length);
+    for (let b = 0; b < 3; b++) await s.process(block(sineL, b), block(sineR, b), identity, outL, outR);
+    expect(Math.max(...outL.subarray(0, 4000).map(Math.abs))).toBeLessThan(2e-4);
+    const z = new RoformerStream(meta, 'instrumental');
+    for (let b = 0; b < 3; b++) await z.process(block(sineL, b), block(sineR, b), zero, outL, outR);
+    expect(outL[5000]).toBeCloseTo(sineL(2 * H - R + 5000), 4); // vocal = everything that is not the instrumental
+  });
+
   it('reset clears the history and the tail', async () => {
     const s = new RoformerStream(meta);
     const a = new Float32Array(H), b = new Float32Array(H);
