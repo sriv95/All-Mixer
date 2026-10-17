@@ -1,13 +1,15 @@
 // ML worker (runs inside the ml.html iframe, which gets a real WebGPU adapter): receives block
 // buffers from the separator worklet on a MessagePort, runs MDX-Net 9482 (vocal) and the Spleeter vocals
 // model (Karaoke mask) with onnxruntime-web (webgpu EP only, one run in flight at a time) and sends the
-// same buffers back with the Vk and vocal blocks (src/ml/pipeline.ts).
+// same buffers back with the Vk and vocal blocks (src/ml/pipeline.ts). With model 'roformer' it runs the
+// Mel-Band RoFormer core instead (src/ml/roformer.ts): the vocal block is both Vk and the A cappella.
 import {
+  GEOMETRY,
   ML_BLOCK,
-  ML_BUFFER_BYTES,
   ML_HEADER_BYTES,
   ML_WARMUP_P90_MS,
   ML_RESULT_OFFSET,
+  bufferBytes,
   type FromMlWorker,
   type MlWorkerInit,
 } from '../worklet/protocol';
@@ -17,6 +19,7 @@ import { MlPipeline, type Models } from './pipeline';
 import { warmUp, warmUpGated, type WarmUpResult } from './warmup';
 import { makeStall, type StallOpts } from './stall';
 import { MlTiming } from './timing';
+import { RoformerStream, ROF_FRAMES, type RoformerMeta } from './roformer';
 
 type Ort = typeof import('onnxruntime-web/webgpu');
 type Session = Awaited<ReturnType<Ort['InferenceSession']['create']>>;
@@ -39,6 +42,7 @@ async function start(init: MlWorkerInit): Promise<void> {
   if (adapter.isFallbackAdapter) return unavailable('only a fallback (software) WebGPU adapter');
   const info = adapter.info ?? {};
   const adapterName = [info.vendor, info.architecture, info.description].filter(Boolean).join(' ') || 'unknown';
+  if (init.model === 'roformer') return startRoformer(init, adapterName);
 
   // 2. ORT + models.
   let ort: Ort, session: Session, mdxSession: Session;
@@ -98,11 +102,101 @@ async function start(init: MlWorkerInit): Promise<void> {
   if (init.timing) console.info(`[all-mixer ml] warm-up p50 ${wu.p50.toFixed(1)} p90 ${wu.p90.toFixed(1)} p95 ${wu.p95.toFixed(1)} (gate ${ML_WARMUP_P90_MS.toFixed(1)}), create ${(createMs + wu.firstMs).toFixed(0)} ms, ${adapterName}, ${wu.attempts > 1 ? 'retry' : 'first try'}`);
   ctx.postMessage({ type: 'ready', p50: wu.p50, p90: wu.p90, p95: wu.p95, createMs: createMs + wu.firstMs, adapter: adapterName });
 
-  serve(init.port, pipeline, models, { stallMs: init.stallMs ?? 0, stallAfterMs: init.stallAfterMs ?? 5000 }, init.timing ? new MlTiming() : null);
+  const engine: BlockEngine = {
+    block: ML_BLOCK,
+    resultOffset: ML_RESULT_OFFSET,
+    reset: () => pipeline.reset(),
+    // Vk in place over the input; the MDX vocal in the second half of the buffer
+    process: (d) => pipeline.process(d.subarray(0, ML_BLOCK), d.subarray(ML_BLOCK, 2 * ML_BLOCK), models, d.subarray(0, ML_BLOCK), d.subarray(ML_BLOCK, 2 * ML_BLOCK), d.subarray(2 * ML_BLOCK, 3 * ML_BLOCK), d.subarray(3 * ML_BLOCK)),
+    afterReply: () => pipeline.catchUp(models.spleeter),
+    misses: () => pipeline.splMisses,
+  };
+  serve(init.port, engine, { stallMs: init.stallMs ?? 0, stallAfterMs: init.stallAfterMs ?? 5000 }, init.timing ? new MlTiming() : null);
+}
+
+/** RoFormer: one fp16 transformer core on WebGPU, STFT / mask / iSTFT in JS. */
+async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<void> {
+  const g = GEOMETRY.roformer;
+  let ort: Ort, session: Session, meta: RoformerMeta;
+  const t0 = performance.now();
+  try {
+    ort = await import('onnxruntime-web/webgpu');
+    ort.env.wasm.wasmPaths = init.wasmBase;
+    ort.env.wasm.numThreads = 1;
+    ort.env.wasm.proxy = false;
+    ort.env.logLevel = 'error';
+    const [buf, m] = await Promise.all([
+      fetch(init.roformerUrl).then((r) => r.arrayBuffer()),
+      fetch(init.roformerMetaUrl).then((r) => r.json() as Promise<RoformerMeta>),
+    ]);
+    meta = m;
+    session = await ort.InferenceSession.create(buf, { executionProviders: ['webgpu'], graphOptimizationLevel: 'all', logSeverityLevel: 3 });
+  } catch (e) {
+    return unavailable(`model: ${String(e)}`);
+  }
+  const createMs = performance.now() - t0;
+  let stream: RoformerStream;
+  try {
+    stream = new RoformerStream(meta);
+  } catch (e) {
+    return unavailable(`model: ${String(e)}`);
+  }
+  const input = new ort.Tensor('float32', stream.x, [1, ROF_FRAMES, stream.x.length / ROF_FRAMES]);
+  const run = async (): Promise<Float32Array> => {
+    const out = await session.run({ [session.inputNames[0]]: input });
+    const t = out[session.outputNames[0]];
+    const data = (await t.getData()) as Float32Array;
+    t.dispose();
+    return data;
+  };
+  // Warm-up on noise: 2 untimed runs (shader compile, first upload), then 10 timed block steps (analyze + model +
+  // synthesize). One run is ~0.6 s, so this is kept short; one retry at most, like the MDX path.
+  const nl = new Float32Array(g.block), nr = new Float32Array(g.block);
+  const ol = new Float32Array(g.block), or = new Float32Array(g.block);
+  let wu: WarmUpResult & { attempts: number };
+  try {
+    for (let i = 0; i < g.block; i++) {
+      nl[i] = (Math.random() * 2 - 1) * 0.3;
+      nr[i] = (Math.random() * 2 - 1) * 0.3;
+    }
+    const step = () => stream.process(nl, nr, run, ol, or);
+    wu = await warmUpGated((retry) => warmUp(step, retry ? { skip: 0, n: 10 } : { skip: 2, n: 10 }), g.warmupP90Ms);
+  } catch (e) {
+    return unavailable(`warm-up: ${String(e)}`);
+  }
+  stream.reset();
+  if (init.timing) console.info(`[all-mixer ml] roformer warm-up p50 ${wu.p50.toFixed(1)} p90 ${wu.p90.toFixed(1)} p95 ${wu.p95.toFixed(1)} (gate ${g.warmupP90Ms.toFixed(1)}), create ${(createMs + wu.firstMs).toFixed(0)} ms, ${adapterName}, ${wu.attempts > 1 ? 'retry' : 'first try'}`);
+  ctx.postMessage({ type: 'ready', p50: wu.p50, p90: wu.p90, p95: wu.p95, createMs: createMs + wu.firstMs, adapter: adapterName });
+
+  const engine: BlockEngine = {
+    block: g.block,
+    resultOffset: g.resultOffset,
+    reset: () => stream.reset(),
+    process: async (d) => {
+      const l = d.subarray(0, g.block), r = d.subarray(g.block, 2 * g.block);
+      await stream.process(l, r, run, l, r);
+      d.copyWithin(2 * g.block, 0, 2 * g.block); // the vocal is both Vk and the A cappella
+    },
+  };
+  serve(init.port, engine, { stallMs: init.stallMs ?? 0, stallAfterMs: init.stallAfterMs ?? 5000 }, init.timing ? new MlTiming() : null);
+}
+
+/** What the block loop needs from a model pipeline. */
+interface BlockEngine {
+  block: number;
+  resultOffset: number;
+  reset(): void;
+  /** Block buffer data ([in L, in R, …] → [Vk L, R, vocal L, R]) in place. */
+  process(data: Float32Array): Promise<void>;
+  /** Work that can wait until the block has been sent back. */
+  afterReply?(): Promise<void>;
+  misses?(): number;
 }
 
 /** Block loop. Blocks are handled one at a time, in order; stale ones are returned unprocessed. */
-function serve(port: MessagePort, pipeline: MlPipeline, models: Models, dbg: StallOpts, timing: MlTiming | null): void {
+function serve(port: MessagePort, engine: BlockEngine, dbg: StallOpts, timing: MlTiming | null): void {
+  const { block } = engine;
+  const bytes = bufferBytes({ ...GEOMETRY.mdx, block });
   const stall = makeStall(dbg); // debug flag; null when off
   let latestEpoch = -1; // newest epoch seen on the port
   let epoch = -1; // epoch the stream state belongs to
@@ -120,33 +214,33 @@ function serve(port: MessagePort, pipeline: MlPipeline, models: Models, dbg: Sta
     busy = true;
     for (let buf = queue.shift(); buf; buf = queue.shift()) {
       const head = new Float64Array(buf, 0, 2);
-      const data = new Float32Array(buf, ML_HEADER_BYTES, 4 * ML_BLOCK);
+      const data = new Float32Array(buf, ML_HEADER_BYTES, 4 * block);
       const e = head[0], start = head[1];
       if (e < latestEpoch) {
         back(buf, head, -1); // stale: not worth an inference
         continue;
       }
       if (e !== epoch || start !== expected) {
-        pipeline.reset(); // new stream (play, seek) or a block was lost
+        engine.reset(); // new stream (play, seek) or a block was lost
         epoch = e;
       }
-      expected = start + ML_BLOCK;
+      expected = start + block;
       const tIn = timing ? performance.now() : 0; // the block is at the worker
       let sent = false;
       try {
-        const l = data.subarray(0, ML_BLOCK), r = data.subarray(ML_BLOCK, 2 * ML_BLOCK);
-        // Vk in place over the input; the MDX vocal in the second half of the buffer
-        await pipeline.process(l, r, models, l, r, data.subarray(2 * ML_BLOCK, 3 * ML_BLOCK), data.subarray(3 * ML_BLOCK));
+        await engine.process(data);
         if (stall) await stall();
-        back(buf, head, start - ML_RESULT_OFFSET);
+        back(buf, head, start - engine.resultOffset);
         sent = true;
         const tBack = timing ? performance.now() : 0;
-        const line = timing?.block(tBack - tIn, pipeline.splMisses);
+        const line = timing?.block(tBack - tIn, engine.misses?.() ?? 0);
         if (line) console.log(line);
-        await pipeline.catchUp(models.spleeter); // after the reply, so MDX results never wait for it
-        timing?.catchUp(performance.now() - tBack);
+        if (engine.afterReply) {
+          await engine.afterReply(); // after the reply, so MDX results never wait for it
+          timing?.catchUp(performance.now() - tBack);
+        }
       } catch {
-        pipeline.reset();
+        engine.reset();
         epoch = -1;
         if (!sent) back(buf, head, -1);
       }
@@ -156,7 +250,7 @@ function serve(port: MessagePort, pipeline: MlPipeline, models: Models, dbg: Sta
 
   port.onmessage = (ev: MessageEvent<ArrayBuffer>) => {
     const buf = ev.data;
-    if (!(buf instanceof ArrayBuffer) || buf.byteLength !== ML_BUFFER_BYTES) return;
+    if (!(buf instanceof ArrayBuffer) || buf.byteLength !== bytes) return;
     latestEpoch = Math.max(latestEpoch, new Float64Array(buf, 0, 1)[0]);
     queue.push(buf);
     void pump();

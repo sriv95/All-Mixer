@@ -1,5 +1,6 @@
 import type { ContentStatus, GetStatus, GetTabSettings, SetTabSettings } from '../shared/messages';
 import { clampPct, normalizeSettings, type MixerSettings, type Mode } from '../shared/settings';
+import type { MlModel } from '../worklet/protocol';
 import { detectSite } from '../content/youtube-dom';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -11,6 +12,7 @@ const vocal = $<HTMLInputElement>('vocal');
 const vocalValue = $<HTMLOutputElement>('vocal-value');
 const instrumental = $<HTMLInputElement>('instrumental');
 const instrumentalValue = $<HTMLOutputElement>('instrumental-value');
+const mlModel = $<HTMLSelectElement>('ml-model');
 const presets = [...document.querySelectorAll<HTMLButtonElement>('.presets button')];
 const status = $<HTMLParagraphElement>('status');
 
@@ -30,6 +32,7 @@ function render(): void {
   vocalValue.value = `${settings.vocalPct}%`;
   instrumental.value = String(settings.instrumentalPct);
   instrumentalValue.value = `${settings.instrumentalPct}%`;
+  mlModel.value = settings.mlModel;
   for (const b of presets) {
     const on = Number(b.dataset.vocal) === settings.vocalPct && Number(b.dataset.instrumental) === settings.instrumentalPct;
     b.setAttribute('aria-pressed', String(on));
@@ -155,6 +158,11 @@ vocal.addEventListener('input', () => {
 
 instrumental.addEventListener('input', () => {
   settings = { ...settings, instrumentalPct: clampPct(instrumental.value) };
+  save();
+});
+
+mlModel.addEventListener('change', () => {
+  settings = { ...settings, mlModel: mlModel.value as MlModel };
   save();
 });
 

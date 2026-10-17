@@ -53,6 +53,8 @@ class SeparatorProcessor extends AudioWorkletProcessor {
         this.core.setPort(msg.port);
       } else if (msg.type === 'engine') {
         this.core.requestEngine(msg.engine, msg.reason);
+      } else if (msg.type === 'model') {
+        this.core.setModel(msg.model);
       }
     };
   }
