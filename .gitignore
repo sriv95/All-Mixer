@@ -20,3 +20,5 @@ public/ml/roformer.onnx
 public/ml/roformer-meta.json
 public/ml/roformer-inst.onnx
 public/ml/roformer-inst-meta.json
+public/ml/roformer-inst2.onnx
+public/ml/roformer-inst2-meta.json
