@@ -12,7 +12,8 @@
     "export-roformer": "uv run python scripts/export-roformer.py",
     "lint": "eslint .",
     "test": "vitest run",
-    "export-roformer-inst": "uv run python scripts/export-roformer.py --variant inst"
+    "export-roformer-inst": "uv run python scripts/export-roformer.py --variant inst",
+    "export-roformer-inst2": "uv run python scripts/export-roformer.py --variant inst2"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -2,6 +2,8 @@
 
   --variant vocals (default)  Kimberley Jensen `vocals_mel_band_roformer`: the model outputs the vocal.
                               Writes public/ml/roformer.onnx + roformer-meta.json.
+  --variant inst2             Unwa `melband_roformer_inst_v2`: 12 layers, 1.57 GB checkpoint, ~2x the compute. Writes
+                              public/ml/roformer-inst2.onnx + roformer-inst2-meta.json.
   --variant inst              Unwa `melband_roformer_inst_v1` (same architecture and size): the model outputs the
                               instrumental, for Karaoke. Writes public/ml/roformer-inst.onnx + roformer-inst-meta.json.
 
@@ -28,6 +30,8 @@ BASE = 'https://github.com/nomadkaraoke/python-audio-separator/releases/download
 VARIANTS = {
     'vocals': ('vocals_mel_band_roformer.ckpt', '87201f4d31afb5bc79993230fc49446918425574db48c01c405e44f365c7559e', 'vocals_mel_band_roformer.yaml', 'roformer'),
     'inst': ('melband_roformer_inst_v1.ckpt', '6f88d96958b2b7dec32286b0ced00bbcbd37e28741cad9038758b1eaf9b5c057', 'config_melbandroformer_inst.yaml', 'roformer-inst'),
+    # 12 layers + a 3-layer mask network: twice the compute of the others
+    'inst2': ('melband_roformer_inst_v2.ckpt', 'bd19766620f7d6f58fdf7aaada7e89907fe41bc64490ce3faa9a6dab15d6e1f2', 'config_melbandroformer_inst_v2.yaml', 'roformer-inst2'),
 }
 HOP = 441
 CHUNK = 111 * HOP  # 48951 samples (src/worklet/protocol.ts ROF_CHUNK); centre padding gives 112 frames
