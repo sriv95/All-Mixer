@@ -42,7 +42,7 @@ async function start(init: MlWorkerInit): Promise<void> {
   if (adapter.isFallbackAdapter) return unavailable('only a fallback (software) WebGPU adapter');
   const info = adapter.info ?? {};
   const adapterName = [info.vendor, info.architecture, info.description].filter(Boolean).join(' ') || 'unknown';
-  if (init.model === 'roformer') return startRoformer(init, adapterName);
+  if (init.model !== 'mdx') return startRoformer(init, adapterName);
 
   // 2. ORT + models.
   let ort: Ort, session: Session, mdxSession: Session;
@@ -114,9 +114,10 @@ async function start(init: MlWorkerInit): Promise<void> {
   serve(init.port, engine, { stallMs: init.stallMs ?? 0, stallAfterMs: init.stallAfterMs ?? 5000 }, init.timing ? new MlTiming() : null);
 }
 
-/** RoFormer: one fp16 transformer core on WebGPU, STFT / mask / iSTFT in JS. */
+/** RoFormer: one fp16 transformer core on WebGPU, STFT / mask / iSTFT in JS. 'roformer-inst' estimates the instrumental. */
 async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<void> {
-  const g = GEOMETRY.roformer;
+  const g = GEOMETRY[init.model];
+  const inst = init.model === 'roformer-inst';
   let ort: Ort, session: Session, meta: RoformerMeta;
   const t0 = performance.now();
   try {
@@ -126,8 +127,8 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
     ort.env.wasm.proxy = false;
     ort.env.logLevel = 'error';
     const [buf, m] = await Promise.all([
-      fetch(init.roformerUrl).then((r) => r.arrayBuffer()),
-      fetch(init.roformerMetaUrl).then((r) => r.json() as Promise<RoformerMeta>),
+      fetch(inst ? init.roformerInstUrl : init.roformerUrl).then((r) => r.arrayBuffer()),
+      fetch(inst ? init.roformerInstMetaUrl : init.roformerMetaUrl).then((r) => r.json() as Promise<RoformerMeta>),
     ]);
     meta = m;
     session = await ort.InferenceSession.create(buf, { executionProviders: ['webgpu'], graphOptimizationLevel: 'all', logSeverityLevel: 3 });
@@ -137,7 +138,7 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
   const createMs = performance.now() - t0;
   let stream: RoformerStream;
   try {
-    stream = new RoformerStream(meta);
+    stream = new RoformerStream(meta, inst ? 'instrumental' : 'vocal');
   } catch (e) {
     return unavailable(`model: ${String(e)}`);
   }
