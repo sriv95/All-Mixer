@@ -6,6 +6,9 @@ Chrome extension (Manifest V3) for youtube.com and music.youtube.com.
 
 ```sh
 bun install
+uv sync            # Python env for the model scripts (.venv, from pyproject.toml)
+bun run fetch-model      # public/ml/vocals.onnx + mdx.onnx (needed to build)
+bun run export-roformer  # public/ml/roformer.onnx, optional (913 MB download, ~1 min)
 bun run build      # typecheck + vite build → dist/
 bun run test       # unit tests (vitest + happy-dom)
 bun run lint
