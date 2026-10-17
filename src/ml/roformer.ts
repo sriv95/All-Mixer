@@ -7,10 +7,6 @@
 // (ROF_CHUNK = 111 hops → 112 frames). The vocal block it completes is input [b·H − R, (b + 1)·H − R), R = ROF_OVERLAP:
 // the first R samples cross-fade with the tail of the previous chunk (its last R samples), and the first
 // K − R = 439 samples of the chunk are context only. Delay before inference: H + R.
-//
-// `target` says what the model estimates. 'vocal': the output is the vocal. 'instrumental' (the Inst variants): the
-// output is the instrumental and the vocal block is the input minus it, so the instrumental that reaches the
-// speakers is exactly the model's own (the worklet plays input − (input − model)).
 import { FFT } from './fft.js';
 import { ROF_BLOCK, ROF_CHUNK, ROF_OVERLAP } from '../worklet/protocol';
 
@@ -37,8 +33,6 @@ export interface RoformerMeta {
   /** Mel bands covering each bin. */
   bands: number[];
 }
-
-export type RoformerTarget = 'vocal' | 'instrumental';
 
 /** Model call: reads `x` ([1, 112, sel.length · 2]), returns the masks, same layout. */
 export type RoformerModelFn = (x: Float32Array) => Promise<Float32Array> | Float32Array;
@@ -71,10 +65,7 @@ export class RoformerStream {
   private readonly ramp = new Float32Array(R);
   private readonly tail = new Float32Array(2 * R);
 
-  constructor(
-    meta: RoformerMeta,
-    private readonly target: RoformerTarget = 'vocal',
-  ) {
+  constructor(meta: RoformerMeta) {
     if (meta.frames !== ROF_FRAMES || meta.chunk !== C || meta.nFft !== N_FFT || meta.hop !== HOP) {
       throw new Error('roformer meta does not match the stream geometry');
     }
@@ -177,17 +168,16 @@ export class RoformerStream {
         ola[padded + s + n] += (im[n] * win[n]) / N_FFT;
       }
     }
-    const inst = this.target === 'instrumental';
-    const chunk = this.chunk;
     for (let i = 0; i < H; i++) {
       const a = PAD + E + i;
-      let l = ola[a] * norm[a], r = ola[padded + a] * norm[a];
+      const l = ola[a] * norm[a], r = ola[padded + a] * norm[a];
       if (i < R) {
-        l = tail[i] * (1 - ramp[i]) + l * ramp[i];
-        r = tail[R + i] * (1 - ramp[i]) + r * ramp[i];
+        outL[i] = tail[i] * (1 - ramp[i]) + l * ramp[i];
+        outR[i] = tail[R + i] * (1 - ramp[i]) + r * ramp[i];
+      } else {
+        outL[i] = l;
+        outR[i] = r;
       }
-      outL[i] = inst ? chunk[E + i] - l : l;
-      outR[i] = inst ? chunk[C + E + i] - r : r;
     }
     for (let i = 0; i < R; i++) {
       const a = PAD + E + H + i;

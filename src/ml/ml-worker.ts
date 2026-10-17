@@ -114,10 +114,9 @@ async function start(init: MlWorkerInit): Promise<void> {
   serve(init.port, engine, { stallMs: init.stallMs ?? 0, stallAfterMs: init.stallAfterMs ?? 5000 }, init.timing ? new MlTiming() : null);
 }
 
-/** RoFormer: one fp16 transformer core on WebGPU, STFT / mask / iSTFT in JS. the roformer-inst* models estimate the instrumental. */
+/** RoFormer: one fp16 transformer core on WebGPU, STFT / mask / iSTFT in JS.  */
 async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<void> {
   const g = GEOMETRY[init.model];
-  const inst = init.model.startsWith('roformer-inst');
   let ort: Ort, session: Session, meta: RoformerMeta;
   const t0 = performance.now();
   try {
@@ -138,7 +137,7 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
   const createMs = performance.now() - t0;
   let stream: RoformerStream;
   try {
-    stream = new RoformerStream(meta, inst ? 'instrumental' : 'vocal');
+    stream = new RoformerStream(meta);
   } catch (e) {
     return unavailable(`model: ${String(e)}`);
   }
