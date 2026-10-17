@@ -4,7 +4,7 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   // spike/ holds research benches (SRI-5, SRI-15); nothing in it ships.
-  { ignores: ['dist/', 'node_modules/', 'spike/', 'scripts/qa-*', 'scripts/*.bak', '.qa-out/'] },
+  { ignores: ['dist/', 'node_modules/', 'spike/', 'scripts/qa-*', 'scripts/*.bak', '.qa-out/', '.venv/', 'out/'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

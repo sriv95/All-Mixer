@@ -18,3 +18,5 @@ scripts/qa-*.mjs*
 out/
 public/ml/roformer.onnx
 public/ml/roformer-meta.json
+public/ml/roformer-inst.onnx
+public/ml/roformer-inst-meta.json

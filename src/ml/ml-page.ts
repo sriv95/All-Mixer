@@ -46,6 +46,8 @@ window.addEventListener('message', (e: MessageEvent) => {
             mdxUrl: chrome.runtime.getURL('ml/mdx.onnx'),
             roformerUrl: chrome.runtime.getURL('ml/roformer.onnx'),
             roformerMetaUrl: chrome.runtime.getURL('ml/roformer-meta.json'),
+            roformerInstUrl: chrome.runtime.getURL('ml/roformer-inst.onnx'),
+            roformerInstMetaUrl: chrome.runtime.getURL('ml/roformer-inst-meta.json'),
             wasmBase: chrome.runtime.getURL('ml/'),
             stallMs,
             stallAfterMs,

@@ -11,7 +11,8 @@
     "fetch-model": "node scripts/fetch-model.mjs && PY=${PY:-.venv/bin/python} node scripts/fetch-mdx-model.mjs",
     "export-roformer": "uv run python scripts/export-roformer.py",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "export-roformer-inst": "uv run python scripts/export-roformer.py --variant inst"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
