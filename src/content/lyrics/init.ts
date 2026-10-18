@@ -5,12 +5,13 @@ import { CC_BUTTON_SELECTOR, clickCaptionsButton, findLyricsControls, getCaption
 import { linesToLrc, lyricsToText } from '../../lyrics/export';
 import { getPlayerInfo, getTimedText, onCaptionsAvailable } from './bridge-client';
 import { LyricsController, type LyricsState } from './controller';
-import { YtSettingsMenu, YtmSettingsPopover, buildMenuButtons, buildMenuRows, type LyricsMenu } from './settings-menu';
+import { YtSettingsMenu, YtmSettingsPopover, buildMenuButtons, buildMenuRows, timingLabel, type LyricsMenu } from './settings-menu';
 import { openFindDialog, openOwnDialog } from './lyrics-dialog';
+import { showToast, timingKeyDelta } from './timing-keys';
 import { PanelSurface, YtmTabSurface } from './surfaces';
 import { CaptionBoot } from './caption-boot';
 import { KaraokeSurface } from './karaoke-overlay';
-import { DEFAULT_LYRICS_PREFS, loadLyricsPrefs, saveLyricsPrefs, watchLyricsPrefs, type LyricsPrefs } from '../../shared/lyrics-prefs';
+import { DEFAULT_LYRICS_PREFS, MAX_LYRICS_OFFSET_MS, loadLyricsPrefs, saveLyricsPrefs, watchLyricsPrefs, type LyricsPrefs } from '../../shared/lyrics-prefs';
 
 const BUTTON_ATTR = 'data-allmixer-lyrics-btn';
 
@@ -232,6 +233,23 @@ export function initLyrics(site: Site, presentedTime: () => number | null, prese
       });
     }).observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ['aria-selected'] });
   }
+
+  // [ and ] nudge the timing of the shown synced lyrics (capture phase, so YouTube's own handler does not also see them).
+  document.addEventListener(
+    'keydown',
+    (e) => {
+      const delta = prefs.lyricsTimingKeys ? timingKeyDelta(e) : 0;
+      const id = lastVideoId;
+      if (!delta || !id || lastState.kind !== 'ready' || lastState.lyrics.kind !== 'synced') return;
+      if (!(karaoke.active || panel.active || tab?.active)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const ms = Math.max(-MAX_LYRICS_OFFSET_MS, Math.min(MAX_LYRICS_OFFSET_MS, (prefs.lyricsOffsets[id] ?? 0) + delta));
+      actions.setOffset(ms);
+      showToast(`Lyrics timing ${timingLabel(ms)}`);
+    },
+    true,
+  );
 
   // CC turned on: the event from the page bridge can be missed, so re-align a few times on our own.
   if (site === 'youtube') {

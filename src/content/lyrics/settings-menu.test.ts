@@ -85,7 +85,7 @@ describe('buildMenuRows', () => {
     const ids = (timing?: { offsetMs: number }, site?: 'ytmusic') => buildMenuRows({ sources, captions, prefs: prefs(), timing, site }, a).map((r) => r.id);
     expect(ids()).not.toContain('timing');
     expect(ids({ offsetMs: 0 }).slice(0, 3)).toEqual(['source', 'captionLanguage', 'timing']);
-    expect(ids({ offsetMs: 0 }, 'ytmusic')).toEqual(['source', 'captionLanguage', 'timing']);
+    expect(ids({ offsetMs: 0 }, 'ytmusic')).toEqual(['source', 'captionLanguage', 'timing', 'timingKeys']);
     const row = buildMenuRows({ sources, prefs: prefs(), timing: { offsetMs: 500 } }, a).find((r) => r.id === 'timing')!;
     expect(row.selected).toBe('500');
     expect(row.options.map((o) => o.label)).toEqual(['-2 s', '-1 s', '-0.5 s', '-0.25 s', '0 s', '+0.25 s', '+0.5 s', '+1 s', '+2 s']);
@@ -133,6 +133,18 @@ describe('buildMenuRows', () => {
     const [copy, save] = buildMenuButtons({ prefs: prefs({ lyricsDisplayMode: 'window' }), lyrics: { synced: true } }, a);
     expect(copy.run()).toBe('Copied');
     expect(save.run()).toBe('Saved');
+  });
+
+  it('timing: an offset between the steps is listed and selected; Timing keys switch routes to the pref', () => {
+    const a = actions();
+    const rows = buildMenuRows({ sources, prefs: prefs(), timing: { offsetMs: 300 } }, a);
+    const timing = rows.find((r) => r.id === 'timing')!;
+    expect(timing.options.map((o) => o.value)).toEqual(['-2000', '-1000', '-500', '-250', '0', '250', '300', '500', '1000', '2000']);
+    expect(timing.selected).toBe('300');
+    const keys = rows.find((r) => r.id === 'timingKeys')!;
+    expect(keys.selected).toBe('on');
+    keys.select('off');
+    expect(a.setPrefs).toHaveBeenLastCalledWith({ lyricsTimingKeys: false });
   });
 
   it('Find other lyrics: offered when lyrics are shown or missing, also on YT Music', () => {

@@ -48,6 +48,12 @@ describe('normalizeLyricsPrefs', () => {
     expect(normalizeLyricsPrefs({ karaokeAnimation: 'spin' }).karaokeAnimation).toBe('none');
   });
 
+  it('lyricsTimingKeys: on by default, only a boolean is taken', () => {
+    expect(DEFAULT_LYRICS_PREFS.lyricsTimingKeys).toBe(true);
+    expect(normalizeLyricsPrefs({ lyricsTimingKeys: false }).lyricsTimingKeys).toBe(false);
+    expect(normalizeLyricsPrefs({ lyricsTimingKeys: 'no' }).lyricsTimingKeys).toBe(true);
+  });
+
   it('defaults to one karaoke line, auto source and no caption language', () => {
     expect(DEFAULT_LYRICS_PREFS).toMatchObject({ karaokeLines: 1, lyricsSource: 'auto', captionLang: null });
   });

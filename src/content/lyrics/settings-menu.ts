@@ -11,7 +11,7 @@ interface MenuOption {
 }
 
 export interface MenuRow {
-  id: 'source' | 'captionLanguage' | 'timing' | 'display' | 'lines' | 'karaokeText' | 'size' | 'preset' | 'color' | 'font' | 'outline' | 'background' | 'animation';
+  id: 'source' | 'captionLanguage' | 'timing' | 'timingKeys' | 'display' | 'lines' | 'karaokeText' | 'size' | 'preset' | 'color' | 'font' | 'outline' | 'background' | 'animation';
   label: string;
   options: MenuOption[];
   selected: string;
@@ -66,7 +66,7 @@ const SHOWN_LABELS = { lrclib: 'LRCLIB', 'youtube-captions': 'YouTube captions',
 
 const TIMING_STEPS_MS = [-2000, -1000, -500, -250, 0, 250, 500, 1000, 2000] as const;
 
-const timingLabel = (ms: number): string => `${ms > 0 ? '+' : ''}${ms / 1000} s`;
+export const timingLabel = (ms: number): string => `${ms > 0 ? '+' : ''}${ms / 1000} s`;
 
 const KARAOKE_SIZES = [50, 75, 100, 125, 150, 200] as const;
 
@@ -129,10 +129,22 @@ export function buildMenuRows(input: MenuInput, actions: MenuActions): MenuRow[]
     rows.push({
       id: 'timing',
       label: 'Lyrics timing',
-      options: TIMING_STEPS_MS.map((ms) => ({ value: String(ms), label: timingLabel(ms) })),
+      // A value from the timing keys can sit between the steps: list it too.
+      options: [...new Set<number>([...TIMING_STEPS_MS, input.timing.offsetMs])].sort((a, b) => a - b).map((ms) => ({ value: String(ms), label: timingLabel(ms) })),
       selected: String(input.timing.offsetMs),
       note: '+ shows the lyrics later, - earlier. Kept for this video.',
       select: (v) => actions.setOffset(Number(v)),
+    });
+    rows.push({
+      id: 'timingKeys',
+      label: 'Timing keys',
+      options: [
+        { value: 'on', label: 'On' },
+        { value: 'off', label: 'Off' },
+      ],
+      selected: prefs.lyricsTimingKeys ? 'on' : 'off',
+      note: 'Press ] to show the lyrics 0.1 s later and [ for earlier.',
+      select: (v) => actions.setPrefs({ lyricsTimingKeys: v === 'on' }),
     });
   }
   if (input.site === 'ytmusic') return rows;

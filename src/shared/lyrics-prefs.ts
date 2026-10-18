@@ -33,6 +33,8 @@ export interface LyricsPrefs {
   karaokeAnimation: KaraokeAnimation;
   /** Lyrics timing per video id, in ms: positive shows the lyrics later. Zero entries are not kept. */
   lyricsOffsets: Record<string, number>;
+  /** `[` and `]` shift the lyrics timing by 0.1 s while synced lyrics are shown. */
+  lyricsTimingKeys: boolean;
   /** Fractions 0..1 of the player width/height: x = horizontal center, y = vertical center of the text block. */
   karaokePosition: { x: number; y: number };
 }
@@ -53,6 +55,7 @@ export const DEFAULT_LYRICS_PREFS: LyricsPrefs = {
   karaokeAnimation: 'none',
   karaokePosition: { x: 0.5, y: 0.82 },
   lyricsOffsets: {},
+  lyricsTimingKeys: true,
 };
 
 export const MAX_LYRICS_OFFSET_MS = 5000;
@@ -90,6 +93,7 @@ export function normalizeLyricsPrefs(raw: unknown): LyricsPrefs {
     karaokeBackground: KARAOKE_BACKGROUNDS.find((b) => b === r.karaokeBackground) ?? d.karaokeBackground,
     karaokeAnimation: KARAOKE_ANIMATIONS.find((a) => a === r.karaokeAnimation) ?? d.karaokeAnimation,
     lyricsOffsets: normalizeOffsets(r.lyricsOffsets),
+    lyricsTimingKeys: typeof r.lyricsTimingKeys === 'boolean' ? r.lyricsTimingKeys : d.lyricsTimingKeys,
     karaokePosition: { x: num(pos.x, d.karaokePosition.x, 0, 1), y: num(pos.y, d.karaokePosition.y, 0, 1) },
   };
 }
