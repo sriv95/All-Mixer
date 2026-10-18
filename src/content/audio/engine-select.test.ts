@@ -46,6 +46,16 @@ const req = (on = true, model?: MlModel, delayMs?: number | null) => ({ on, mode
 const planned: MlGeometry = { block: 132224, resultOffset: 22016, latency: 132224 + 22016 + 132224 + 128, warmupP90Ms: 2600 };
 
 describe('EngineSelector', () => {
+  it('reports every status change through onChange', () => {
+    const { sel, hosts } = setup();
+    const seen: string[] = [];
+    sel.onChange = (c) => seen.push(c.state);
+    sel.update(req(true));
+    hosts[0].onStatus!(ready(1));
+    sel.update(req(false));
+    expect(seen).toEqual(['warming', 'on', 'off']);
+  });
+
   it('reload probes the model in use again (new model files), and does nothing for another model, the default or when off', () => {
     const { sel, hosts } = setup();
     sel.reload('roformer');

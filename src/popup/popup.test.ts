@@ -188,7 +188,7 @@ describe('popup', () => {
       expect(document.getElementById('ml-auto')).toBeNull();
     });
 
-    it('dragging only moves the label; releasing sends the delay limit once', async () => {
+    it('dragging only moves the label; Apply sends the delay limit once', async () => {
       await load({ stored: { mode: 'separate', mlModel: 'roformer', mlDelayS: 4 } });
       const slider = el<HTMLInputElement>('ml-delay');
       const before = sent().length;
@@ -197,9 +197,11 @@ describe('popup', () => {
       await settle();
       expect(el<HTMLOutputElement>('ml-delay-value').value).toBe('9 s');
       expect(sent()).toHaveLength(before);
-      slider.dispatchEvent(new Event('change', { bubbles: true }));
+      expect(el<HTMLButtonElement>('ml-delay-apply').disabled).toBe(false);
+      el('ml-delay-apply').click();
       await settle();
       expect(sent().at(-1).settings.mlDelayS).toBe(9);
+      expect(el<HTMLButtonElement>('ml-delay-apply').disabled).toBe(true);
       expect(sent()).toHaveLength(before + 1);
     });
   });
