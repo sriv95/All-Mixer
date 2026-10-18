@@ -14,7 +14,7 @@ export interface MixerSettings {
   instrumentalPct: number;
   /** Separate mode ML model: 'mdx' (MDX-Net 9482 + Spleeter, the default) or a downloaded Mel-Band RoFormer: 'roformer' (Kim fine-tune, High quality) or 'deux' (Best quality). */
   mlModel: MlModel;
-  /** RoFormer delay limit, seconds (MIN_DELAY_S to MAX_DELAY_S): the audio delay stays below it; a longer limit gives the model a longer chunk. */
+  /** Delay limit, seconds (MIN_DELAY_S to MAX_DELAY_S): the audio delay stays below it; a longer limit gives the model a longer chunk. */
   mlDelayS: number;
 }
 

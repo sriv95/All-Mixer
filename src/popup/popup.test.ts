@@ -175,9 +175,9 @@ describe('popup', () => {
       s.value = m;
       s.dispatchEvent(new Event('change', { bubbles: true }));
     };
-    it('is hidden for the default model and shown for a RoFormer, as a 2 to 15 s slider in 1 s steps starting at 2 s', async () => {
+    it('is shown for every model, as a 2 to 15 s slider in 1 s steps starting at 2 s', async () => {
       await load({ stored: { mode: 'separate', mlModel: 'mdx' } });
-      expect(el('chunk-row').hidden).toBe(true);
+      expect(el('chunk-row').hidden).toBe(false);
       select('roformer');
       await settle();
       expect(el('chunk-row').hidden).toBe(false);

@@ -14,7 +14,6 @@ const vocalValue = $<HTMLOutputElement>('vocal-value');
 const instrumental = $<HTMLInputElement>('instrumental');
 const instrumentalValue = $<HTMLOutputElement>('instrumental-value');
 const mlModel = $<HTMLSelectElement>('ml-model');
-const chunkRow = $<HTMLDivElement>('chunk-row');
 const mlDelay = $<HTMLInputElement>('ml-delay');
 const mlDelayValue = $<HTMLOutputElement>('ml-delay-value');
 const mlDelayApply = $<HTMLButtonElement>('ml-delay-apply');
@@ -42,7 +41,6 @@ function render(): void {
   instrumental.value = String(settings.instrumentalPct);
   instrumentalValue.value = `${settings.instrumentalPct}%`;
   mlModel.value = settings.mlModel;
-  chunkRow.hidden = !isModelId(settings.mlModel); // the default model has a fixed delay
   mlDelay.value = String(settings.mlDelayS);
   mlDelayValue.value = `${settings.mlDelayS} s`;
   mlDelayApply.disabled = true;
