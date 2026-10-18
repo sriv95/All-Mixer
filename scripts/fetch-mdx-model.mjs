@@ -14,6 +14,9 @@ const OUTPUT_BYTES = 14872262; // fp16 file with onnx 1.23 / onnxconverter-commo
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const cacheFile = join(root, '.cache/models/UVR_MDXNET_9482.onnx');
 const outFile = join(root, 'public/ml/mdx.onnx');
+// PY wins; else the uv venv (POSIX bin/ or Windows Scripts/), else whatever python is on PATH.
+const venvPy = ['.venv/bin/python', '.venv/Scripts/python.exe'].map((p) => join(root, p)).find(existsSync);
+const python = process.env.PY ?? venvPy ?? (process.platform === 'win32' ? 'python' : 'python3');
 const sha256 = (b) => createHash('sha256').update(b).digest('hex');
 
 async function getSource() {
@@ -39,7 +42,7 @@ const src = await getSource();
 const got = sha256(readFileSync(src));
 if (got !== SOURCE_SHA256) throw new Error(`${src}: SHA-256 mismatch\n  expected ${SOURCE_SHA256}\n  actual   ${got}`);
 mkdirSync(dirname(outFile), { recursive: true });
-execFileSync(process.env.PY ?? 'python3', ['-W', 'ignore', join(root, 'scripts/mdx-to-fp16.py'), src, outFile], { stdio: 'inherit' });
+execFileSync(python, ['-W', 'ignore', join(root, 'scripts/mdx-to-fp16.py'), src, outFile], { stdio: 'inherit' });
 const out = readFileSync(outFile);
 if (Math.abs(out.length - OUTPUT_BYTES) > 4096) throw new Error(`unexpected fp16 model size ${out.length} (expected ≈ ${OUTPUT_BYTES})`);
 console.log(`wrote ${outFile}\n  sha256 ${sha256(out)}\n  size   ${out.length} bytes`);

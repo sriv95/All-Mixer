@@ -8,7 +8,7 @@
     "build": "tsc --noEmit && vite build && vite build --config vite.content.config.ts && ENTRY=page vite build --config vite.content.config.ts && ENTRY=media vite build --config vite.content.config.ts && vite build --config vite.worklet.config.ts",
     "dev": "vite build --watch --config vite.content.config.ts",
     "typecheck": "tsc --noEmit",
-    "fetch-model": "node scripts/fetch-model.mjs && PY=${PY:-.venv/bin/python} node scripts/fetch-mdx-model.mjs",
+    "fetch-model": "node scripts/fetch-model.mjs && node scripts/fetch-mdx-model.mjs",
     "export-roformer": "uv run python scripts/export-roformer.py",
     "export-scnet": "uv run python scripts/export-scnet.py",
     "model-manifest": "node scripts/model-manifest.mjs",
