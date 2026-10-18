@@ -106,7 +106,7 @@ function separationText(s: ContentStatus): string {
       case 'stopped':
         return 'Separation stopped: this device is too slow (ML missed its deadline). Playing the original mix. Switch to Default and back to retry.';
       default:
-        return `Separation on · ${Math.round(sep.latency.processingMs)} ms delay`;
+        return `Separation on · ${(sep.latency.processingMs / 1000).toFixed(1)} s delay`;
     }
   }
   if (sep.state === 'error') return `Separation unavailable: ${sep.error ?? 'unknown'}. Playing the original mix.`;

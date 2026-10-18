@@ -418,7 +418,7 @@ describe('popup', () => {
       expect(el('status').textContent).toBe('Starting separation…');
       (chrome.tabs.sendMessage as ReturnType<typeof vi.fn>).mockResolvedValue(sep('on', { choice: { state: 'on' } }));
       await new Promise((r) => setTimeout(r, 600));
-      expect(el('status').textContent).toBe('Separation on · 120 ms delay');
+      expect(el('status').textContent).toBe('Separation on · 0.1 s delay');
     });
 
     it('warming up: says the original mix plays, and keeps polling', async () => {
@@ -426,21 +426,21 @@ describe('popup', () => {
       expect(el('status').textContent).toBe('Separation warming up… Playing the original mix.');
       (chrome.tabs.sendMessage as ReturnType<typeof vi.fn>).mockResolvedValue(sep('on', { choice: { state: 'on' } }));
       await new Promise((r) => setTimeout(r, 600));
-      expect(el('status').textContent).toBe('Separation on · 120 ms delay');
+      expect(el('status').textContent).toBe('Separation on · 0.1 s delay');
     });
 
     it('unchecking Separate mode clears the separation status at once', async () => {
       await load({ stored: { mode: 'separate' }, status: sep('on', { choice: { state: 'on' } }, 'ml', 305) });
-      expect(el('status').textContent).toBe('Separation on · 305 ms delay');
+      expect(el('status').textContent).toBe('Separation on · 0.3 s delay');
       toggleMode();
       expect(el('status').textContent).toBe('');
       await settle();
       expect(el('status').textContent).toBe('');
     });
 
-    it('on shows the rounded delay', async () => {
+    it('on shows the delay in seconds with one decimal', async () => {
       await load({ stored: { mode: 'separate' }, status: sep('on', { choice: { state: 'on' } }, 'ml', 303.4) });
-      expect(el('status').textContent).toBe('Separation on · 303 ms delay');
+      expect(el('status').textContent).toBe('Separation on · 0.3 s delay');
     });
 
     it('unavailable shows the cause and that the original plays', async () => {
