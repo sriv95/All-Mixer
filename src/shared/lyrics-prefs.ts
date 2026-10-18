@@ -15,6 +15,8 @@ export interface LyricsPrefs {
   karaokeFontSize: number;
   /** Karaoke text color, #rrggbb lowercase. */
   karaokeColor: string;
+  /** Lyrics timing per video id, in ms: positive shows the lyrics later. Zero entries are not kept. */
+  lyricsOffsets: Record<string, number>;
   /** Fractions 0..1 of the player width/height: x = horizontal center, y = vertical center of the text block. */
   karaokePosition: { x: number; y: number };
 }
@@ -30,10 +32,25 @@ export const DEFAULT_LYRICS_PREFS: LyricsPrefs = {
   karaokeFontSize: 100,
   karaokeColor: '#ffffff',
   karaokePosition: { x: 0.5, y: 0.82 },
+  lyricsOffsets: {},
 };
+
+export const MAX_LYRICS_OFFSET_MS = 5000;
+/** Oldest entries go first; the offsets live in chrome.storage.local next to the other prefs. */
+const MAX_OFFSET_ENTRIES = 200;
 
 const num = (v: unknown, fallback: number, min: number, max: number): number =>
   typeof v === 'number' && Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : fallback;
+
+function normalizeOffsets(raw: unknown): Record<string, number> {
+  if (!raw || typeof raw !== 'object') return {};
+  const out: Record<string, number> = {};
+  for (const [id, v] of Object.entries(raw)) {
+    const ms = typeof v === 'number' && Number.isFinite(v) ? Math.round(Math.min(MAX_LYRICS_OFFSET_MS, Math.max(-MAX_LYRICS_OFFSET_MS, v))) : 0;
+    if (ms !== 0 && /^[A-Za-z0-9_-]{1,40}$/.test(id)) out[id] = ms;
+  }
+  return Object.fromEntries(Object.entries(out).slice(-MAX_OFFSET_ENTRIES));
+}
 
 /** Any bad or missing field falls back to its default. */
 export function normalizeLyricsPrefs(raw: unknown): LyricsPrefs {
@@ -48,6 +65,7 @@ export function normalizeLyricsPrefs(raw: unknown): LyricsPrefs {
     karaokeLines: r.karaokeLines === 1 || r.karaokeLines === 2 ? r.karaokeLines : d.karaokeLines,
     karaokeFontSize: Math.round(num(r.karaokeFontSize, d.karaokeFontSize, 50, 200)),
     karaokeColor: typeof r.karaokeColor === 'string' && /^#[0-9a-f]{6}$/i.test(r.karaokeColor) ? r.karaokeColor.toLowerCase() : d.karaokeColor,
+    lyricsOffsets: normalizeOffsets(r.lyricsOffsets),
     karaokePosition: { x: num(pos.x, d.karaokePosition.x, 0, 1), y: num(pos.y, d.karaokePosition.y, 0, 1) },
   };
 }

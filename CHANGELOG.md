@@ -15,6 +15,7 @@ CI builds the extension, creates tag `vx.y.z` and a GitHub release with this sec
 - Lyrics: a "Lyrics source" menu (Auto / LRCLIB / YouTube captions) in the lyrics footer. The pick is kept for the tab. If the picked source has nothing for a video, the automatic order is used and the footer says so.
 - Lyrics: in the "Lyrics source" setting, the Auto option names the source in use, e.g. "Auto (LRCLIB)" or "Auto (YouTube auto captions)".
 - Karaoke text: a "Custom Karaoke Text" group in the lyrics settings (youtube.com) with a Color (White by default, Yellow, Cyan, Green, Pink, Orange, or any color from the color picker) and the Size, which moved there from the main lyrics settings.
+- Lyrics: a "Lyrics timing" setting (-2 s to +2 s) shifts synced lyrics, karaoke text and the lyrics window for the current video when they run early or late. "+" shows the lyrics later. The shift is remembered per video.
 - Lyrics: the caption language menu lists every caption track, including auto-generated ones, which are labelled (e.g. "English (auto-generated)").
 - Karaoke text: the current line turns blue from left to right while it is sung, over the line's own time (by word timing when known). A "Reset position" button in the lyrics settings puts the text back at its default place.
 

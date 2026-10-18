@@ -233,6 +233,24 @@ describe('LyricsController', () => {
     expect(video.currentTime).toBe(42);
   });
 
+  it('applies the video’s timing offset to the ticked time and to seeks', async () => {
+    let offset = 500;
+    const c = new LyricsController('youtube', { ...deps(), presentedTime: () => 4.75, offsetMs: (id) => (id === 'v' ? offset : 0) });
+    const s = new FakeSurface();
+    const video = document.createElement('video');
+    Object.defineProperty(video, 'currentTime', { value: 5, writable: true });
+    c.addSurface(s);
+    c.setVideo(video);
+    c.setVideoId('v');
+    await flush();
+    expect(s.times.at(-1)).toBeCloseTo(4.25);
+    c.seek(42);
+    expect(video.currentTime).toBeCloseTo(42.5);
+    offset = -250;
+    c.refresh();
+    expect(s.times.at(-1)).toBeCloseTo(5);
+  });
+
   it('falls back to currentTime without a presented time', async () => {
     const c = new LyricsController('youtube', { ...deps(), presentedTime: () => null });
     const s = new FakeSurface();

@@ -11,7 +11,7 @@ interface MenuOption {
 }
 
 export interface MenuRow {
-  id: 'source' | 'captionLanguage' | 'display' | 'lines' | 'karaokeText' | 'size' | 'color';
+  id: 'source' | 'captionLanguage' | 'timing' | 'display' | 'lines' | 'karaokeText' | 'size' | 'color';
   label: string;
   options: MenuOption[];
   selected: string;
@@ -35,17 +35,25 @@ export interface MenuActions {
   selectSource(pref: SourcePref): void;
   selectCaptionTrack(pick: CaptionPick): void;
   setPrefs(patch: Partial<LyricsPrefs>): void;
+  /** Timing offset of the current video's lyrics, in ms. */
+  setOffset(ms: number): void;
 }
 
 export interface MenuInput {
   sources?: SourceMenu;
   captions?: CaptionPicker;
   prefs: LyricsPrefs;
+  /** Set while synced lyrics of a known video are shown: the timing row appears. */
+  timing?: { offsetMs: number };
   /** YT Music has no karaoke text or lyrics window (the Lyrics tab only), so it gets no display rows. Default: www. */
   site?: Site;
 }
 
 const SHOWN_LABELS = { lrclib: 'LRCLIB', 'youtube-captions': 'YouTube captions', 'youtube-auto-captions': 'YouTube auto captions' } as const;
+
+const TIMING_STEPS_MS = [-2000, -1000, -500, -250, 0, 250, 500, 1000, 2000] as const;
+
+const timingLabel = (ms: number): string => `${ms > 0 ? '+' : ''}${ms / 1000} s`;
 
 const KARAOKE_SIZES = [50, 75, 100, 125, 150, 200] as const;
 
@@ -89,6 +97,16 @@ export function buildMenuRows(input: MenuInput, actions: MenuActions): MenuRow[]
       options: captions.options.map((o) => ({ value: String(o.index), label: o.label })),
       selected: String(captions.selected.index),
       select: (v) => actions.selectCaptionTrack({ index: Number(v) }),
+    });
+  }
+  if (input.timing) {
+    rows.push({
+      id: 'timing',
+      label: 'Lyrics timing',
+      options: TIMING_STEPS_MS.map((ms) => ({ value: String(ms), label: timingLabel(ms) })),
+      selected: String(input.timing.offsetMs),
+      note: '+ shows the lyrics later, - earlier. Kept for this video.',
+      select: (v) => actions.setOffset(Number(v)),
     });
   }
   if (input.site === 'ytmusic') return rows;

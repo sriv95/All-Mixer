@@ -54,6 +54,8 @@ export interface LyricsDeps {
   presentedTime?(): number | null;
   /** True while the delayed overlay still has frames queued (the presented time may sit still before the next one is drawn). */
   presentedBusy?(): boolean;
+  /** Timing offset of this video's lyrics in ms (positive: lyrics later). Default 0. */
+  offsetMs?(videoId: string | null): number;
 }
 
 /** Fetched caption track. `index` points into `PlayerInfo.captionTracks`. */
@@ -263,7 +265,7 @@ export class LyricsController {
   seek(time: number): void {
     const v = this.video;
     if (!v) return;
-    v.currentTime = Math.max(0, time);
+    v.currentTime = Math.max(0, time + this.offsetSec());
     this.tick();
   }
 
@@ -409,9 +411,13 @@ export class LyricsController {
   private tick = (): void => {
     const v = this.video;
     if (!v || this.state.kind !== 'ready') return;
-    const t = this.deps.presentedTime?.() ?? v.currentTime;
+    const t = (this.deps.presentedTime?.() ?? v.currentTime) - this.offsetSec();
     for (const s of this.surfaces) if (s.active) s.update(t);
   };
+
+  private offsetSec(): number {
+    return (this.deps.offsetMs?.(this.videoId) ?? 0) / 1000;
+  }
 
   private readonly onVideoEvent = (): void => this.refresh();
 

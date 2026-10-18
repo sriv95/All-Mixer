@@ -44,6 +44,7 @@ export function initLyrics(site: Site, presentedTime: () => number | null, prese
     fetchLyrics: (track) => chrome.runtime.sendMessage({ type: 'fetch-lyrics', track } satisfies FetchLyrics) as Promise<FoundLyrics | null>,
     presentedTime,
     presentedBusy,
+    offsetMs: (id) => (id ? (prefs.lyricsOffsets[id] ?? 0) : 0),
   });
   const view = {
     onSeek: (t: number) => controller.seek(t),
@@ -145,10 +146,19 @@ export function initLyrics(site: Site, presentedTime: () => number | null, prese
       setPrefs({ captionLang: controller.captionLang });
     },
     setPrefs,
+    setOffset: (ms: number) => {
+      if (!lastVideoId) return;
+      // Delete first so a changed entry moves to the end (newest) of the stored map.
+      const offsets = { ...prefs.lyricsOffsets };
+      delete offsets[lastVideoId];
+      if (ms) offsets[lastVideoId] = ms;
+      setPrefs({ lyricsOffsets: offsets });
+    },
   };
   const syncMenu = () => {
     const ready = lastState.kind === 'ready' ? lastState : null;
-    const input = { sources: ready?.sources, captions: ready?.captions, prefs, site };
+    const timing = ready?.lyrics.kind === 'synced' && lastVideoId ? { offsetMs: prefs.lyricsOffsets[lastVideoId] ?? 0 } : undefined;
+    const input = { sources: ready?.sources, captions: ready?.captions, prefs, site, timing };
     const rows = buildMenuRows(input, actions);
     const buttons = buildMenuButtons(input, actions);
     for (const m of menus) m.setRows(rows, buttons);

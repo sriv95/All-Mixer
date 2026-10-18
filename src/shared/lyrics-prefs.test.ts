@@ -27,6 +27,16 @@ describe('normalizeLyricsPrefs', () => {
     for (const bad of ['red', '#fff', '#12345g', 5, null]) expect(normalizeLyricsPrefs({ karaokeColor: bad }).karaokeColor).toBe('#ffffff');
   });
 
+  it('lyricsOffsets: keeps valid non-zero entries, clamps to 5 s, drops junk, keeps the newest 200', () => {
+    expect(DEFAULT_LYRICS_PREFS.lyricsOffsets).toEqual({});
+    expect(normalizeLyricsPrefs({ lyricsOffsets: { abc: 250.4, big: 99999, zero: 0, 'bad id!': 100, str: '5', nan: NaN } }).lyricsOffsets).toEqual({ abc: 250, big: 5000 });
+    expect(normalizeLyricsPrefs({ lyricsOffsets: 'x' }).lyricsOffsets).toEqual({});
+    const many = Object.fromEntries(Array.from({ length: 250 }, (_, i) => [`v${i}`, 100]));
+    const kept = Object.keys(normalizeLyricsPrefs({ lyricsOffsets: many }).lyricsOffsets);
+    expect(kept).toHaveLength(200);
+    expect(kept[0]).toBe('v50');
+  });
+
   it('defaults to one karaoke line, auto source and no caption language', () => {
     expect(DEFAULT_LYRICS_PREFS).toMatchObject({ karaokeLines: 1, lyricsSource: 'auto', captionLang: null });
   });

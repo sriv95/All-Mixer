@@ -13,7 +13,7 @@ const captions: CaptionPicker = {
 };
 
 function actions() {
-  return { selectSource: vi.fn(), selectCaptionTrack: vi.fn(), setPrefs: vi.fn() } satisfies MenuActions;
+  return { selectSource: vi.fn(), selectCaptionTrack: vi.fn(), setPrefs: vi.fn(), setOffset: vi.fn() } satisfies MenuActions;
 }
 const prefs = (p: Partial<LyricsPrefs> = {}): LyricsPrefs => ({ ...DEFAULT_LYRICS_PREFS, ...p });
 
@@ -78,6 +78,19 @@ describe('buildMenuRows', () => {
     buttons[0].run();
     expect(a.setPrefs).toHaveBeenCalledWith({ karaokePosition: DEFAULT_LYRICS_PREFS.karaokePosition });
     expect(buildMenuButtons({ prefs: prefs({ lyricsDisplayMode: 'window' }) }, a)).toEqual([]);
+  });
+
+  it('timing row: only with synced lyrics, after the caption language, in 0.25-2 s steps', () => {
+    const a = actions();
+    const ids = (timing?: { offsetMs: number }, site?: 'ytmusic') => buildMenuRows({ sources, captions, prefs: prefs(), timing, site }, a).map((r) => r.id);
+    expect(ids()).not.toContain('timing');
+    expect(ids({ offsetMs: 0 }).slice(0, 3)).toEqual(['source', 'captionLanguage', 'timing']);
+    expect(ids({ offsetMs: 0 }, 'ytmusic')).toEqual(['source', 'captionLanguage', 'timing']);
+    const row = buildMenuRows({ sources, prefs: prefs(), timing: { offsetMs: 500 } }, a).find((r) => r.id === 'timing')!;
+    expect(row.selected).toBe('500');
+    expect(row.options.map((o) => o.label)).toEqual(['-2 s', '-1 s', '-0.5 s', '-0.25 s', '0 s', '+0.25 s', '+0.5 s', '+1 s', '+2 s']);
+    row.select('-250');
+    expect(a.setOffset).toHaveBeenCalledWith(-250);
   });
 
   it('shows the nearest size step for an off-step stored size', () => {
