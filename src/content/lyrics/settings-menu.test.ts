@@ -47,6 +47,11 @@ describe('buildMenuRows', () => {
     expect(row.note).toContain('automatic order');
   });
 
+  it('names the shown source on the Auto option', () => {
+    const rows = buildMenuRows({ sources: { ...sources, shown: 'youtube-auto-captions' }, prefs: prefs() }, actions());
+    expect(rows[0].options[0].label).toBe('Auto (YouTube auto captions)');
+  });
+
   it('routes selections to the right callback', () => {
     const a = actions();
     const rows = Object.fromEntries(buildMenuRows({ sources, captions, prefs: prefs() }, a).map((r) => [r.id, r]));

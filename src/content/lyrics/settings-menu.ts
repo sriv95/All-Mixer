@@ -41,6 +41,8 @@ export interface MenuInput {
   site?: Site;
 }
 
+const SHOWN_LABELS = { lrclib: 'LRCLIB', 'youtube-captions': 'YouTube captions', 'youtube-auto-captions': 'YouTube auto captions' } as const;
+
 const KARAOKE_SIZES = [50, 75, 100, 125, 150, 200] as const;
 
 const FALLBACK_NOTES = {
@@ -54,7 +56,7 @@ export function buildMenuRows(input: MenuInput, actions: MenuActions): MenuRow[]
   const rows: MenuRow[] = [];
   if (sources) {
     const entries: [SourcePref, string, boolean, string][] = [
-      ['auto', 'Auto', true, ''],
+      ['auto', sources.shown ? `Auto (${SHOWN_LABELS[sources.shown]})` : 'Auto', true, ''],
       ['lrclib', 'LRCLIB', sources.available.lrclib, ' (not found)'],
       ['captions', 'YouTube captions', sources.available.captions, ' (none)'],
     ];

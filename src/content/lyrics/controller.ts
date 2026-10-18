@@ -23,6 +23,8 @@ export interface SourceMenu {
   available: { lrclib: boolean; captions: boolean };
   /** The pick could not be honoured for this video (missing source); the auto order was used instead. */
   fellBack?: 'lrclib' | 'captions';
+  /** Source of the lyrics on screen; the menu shows it next to "Auto". */
+  shown?: Lyrics['source'];
 }
 
 export type LyricsState =
@@ -336,6 +338,7 @@ export class LyricsController {
   private ready(lyrics: Lyrics, choice: SourceChoice, info: PlayerInfo, track: TrackInfo, found: FoundLyrics | null, captions: CaptionSet): LyricsState {
     const sources: SourceMenu = {
       pref: this.sourcePref,
+      shown: lyrics.source,
       available: { lrclib: !!found && (hasSynced(found) || !!found.plain), captions: !!captionCandidate(captions) },
       ...(choice.fellBack ? { fellBack: choice.fellBack } : {}),
     };
