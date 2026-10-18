@@ -45,9 +45,16 @@ chrome.storage.onChanged.addListener((changes, area) => {
   for (const id of MODEL_IDS) if (keyInstalled(id) in changes) selector.reload(id);
 });
 // The player's own spinner covers the silences caused by the delay: the held end of a video, and the gap after a seek.
+// The player hides it again on its own state changes (it sets `display: none`), so keep it up while we wait.
+let spinnerOn = false;
+const spinnerGuard = new MutationObserver(() => showSpinner(spinnerOn));
 const showSpinner = (waiting: boolean) => {
+  spinnerOn = waiting;
   const spinner = findSpinner();
-  if (spinner) spinner.style.display = waiting ? 'block' : 'none';
+  if (!spinner) return;
+  spinnerGuard.disconnect();
+  spinner.style.display = waiting ? 'block' : 'none';
+  if (waiting) spinnerGuard.observe(spinner, { attributes: true, attributeFilter: ['style'] });
 };
 // The end of the video (autoplay / queue) waits for the delayed tail to play out.
 deferEnd(() => video, () => overlay?.delayMs ?? 0, showSpinner);
