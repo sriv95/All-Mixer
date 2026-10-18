@@ -6,15 +6,29 @@ describe('watchDelayGap', () => {
   let waits: boolean[];
   let delay: number;
   let off: () => void;
+  let sound: (() => void) | null;
+  let armed: number;
   const fire = (type: string) => video.dispatchEvent(new Event(type));
 
   beforeEach(() => {
     vi.useFakeTimers();
     video = document.createElement('video');
     document.body.append(video);
+    Object.defineProperty(video, 'paused', { value: false, configurable: true });
     waits = [];
     delay = 2000;
-    off = watchDelayGap(() => video, () => delay, (w) => waits.push(w));
+    sound = null;
+    armed = 0;
+    off = watchDelayGap(
+      () => video,
+      () => delay,
+      (cb) => {
+        armed++;
+        sound = cb;
+        return () => (sound = null);
+      },
+      (w) => waits.push(w),
+    );
   });
   afterEach(() => {
     off();
@@ -22,40 +36,57 @@ describe('watchDelayGap', () => {
     vi.useRealTimers();
   });
 
-  it('waits one delay after playback resumes from a seek', () => {
+  it('shows from the seek, over the loading, until the sound is out', () => {
     fire('seeking');
-    fire('playing');
     expect(waits).toEqual([true]);
-    vi.advanceTimersByTime(2000);
-    expect(waits).toEqual([true, false]);
+    fire('playing');
+    expect(armed).toBe(1);
+    expect(waits).toEqual([true, true]);
+    sound!();
+    expect(waits).toEqual([true, true, false]);
   });
 
-  it('does not wait when resuming from a plain pause', () => {
+  it('waits for play when the seek happened on a paused video', () => {
+    Object.defineProperty(video, 'paused', { value: true, configurable: true });
+    fire('seeking');
+    expect(waits).toEqual([false]);
+    fire('playing');
+    expect(waits).toEqual([false, true]);
+    sound!();
+    expect(waits.at(-1)).toBe(false);
+  });
+
+  it('does nothing for a plain pause and play', () => {
     fire('pause');
     fire('playing');
     expect(waits).toEqual([]);
+    expect(armed).toBe(0);
   });
 
-  it('does not wait without a delay', () => {
+  it('does nothing without a delay', () => {
     delay = 0;
     fire('seeking');
     fire('playing');
-    expect(waits).toEqual([]);
+    expect(waits).toEqual([false]);
+    expect(armed).toBe(0);
   });
 
-  it('stops on pause and shows the rest of the gap on play', () => {
+  it('hides on pause and comes back on play while the sound is missing', () => {
     fire('seeking');
     fire('playing');
-    vi.advanceTimersByTime(500);
     fire('pause');
-    expect(waits).toEqual([true, false]);
-    vi.advanceTimersByTime(5000);
-    expect(waits).toEqual([true, false]);
+    expect(waits.at(-1)).toBe(false);
     fire('playing');
-    expect(waits).toEqual([true, false, true]);
-    vi.advanceTimersByTime(1499);
-    expect(waits).toEqual([true, false, true]);
-    vi.advanceTimersByTime(1);
-    expect(waits).toEqual([true, false, true, false]);
+    expect(waits.at(-1)).toBe(true);
+    expect(armed).toBe(1); // still the same wait
+    sound!();
+    expect(waits.at(-1)).toBe(false);
+  });
+
+  it('gives up when the sound never reports', () => {
+    fire('seeking');
+    fire('playing');
+    vi.advanceTimersByTime(2000 + 5000);
+    expect(waits.at(-1)).toBe(false);
   });
 });

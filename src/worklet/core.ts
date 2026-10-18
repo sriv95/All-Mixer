@@ -120,6 +120,8 @@ export class SeparatorCore {
   private wantMl: MlReason | null = null;
   private wantBypass: MlReason | null = null;
   private pendingGeometry: MlGeometry | null = null;
+  /** Input position whose audio reports `audible` when it is output (-1 = nothing awaited). */
+  private audibleAt = -1;
 
   // ML stream
   private port: MessagePort | null = null;
@@ -201,6 +203,7 @@ export class SeparatorCore {
 
   setActive(on: boolean, engine: MlEngine = 'bypass', reason: MlReason = 'auto'): void {
     this.active = on;
+    this.audibleAt = -1;
     this.reset();
     this.phase = 'steady';
     this.wantMl = this.wantBypass = null;
@@ -221,8 +224,18 @@ export class SeparatorCore {
     return this.held;
   }
 
+  /**
+   * The real audio enters now (playback after a seek or a new source): `audible` is sent once it has gone through
+   * the delay line, at once when there is no delay. Until then the output is silent (the line was emptied).
+   */
+  expectAudio(): void {
+    if (!this.active || this.delay === 0) this.onEngine({ type: 'audible' });
+    else this.audibleAt = this.pos + this.delay;
+  }
+
   /** Drop everything buffered (seek). The ML stream restarts from here. */
   flush(): void {
+    this.audibleAt = -1;
     this.reset();
     if (this.phase === 'to-ml') {
       // Nothing buffered is left to protect: finish the switch now.
@@ -361,6 +374,10 @@ export class SeparatorCore {
       this.stopStream();
     }
     this.pos = pos + QUANTUM;
+    if (this.audibleAt >= 0 && this.pos >= this.audibleAt) {
+      this.audibleAt = -1;
+      this.onEngine({ type: 'audible' });
+    }
     if (this.pendingGeometry !== null) this.applyGeometry();
   }
 
