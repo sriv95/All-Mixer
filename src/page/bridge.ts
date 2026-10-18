@@ -5,7 +5,7 @@
  * captions on), because direct timedtext requests can come back empty when
  * YouTube requires a proof-of-origin token.
  */
-import { BRIDGE_TAG, PAUSE_REQUEST_EVENT, PLAY_REQUEST_EVENT, type BridgeEventMsg, type BridgeRequestMsg, type BridgeResponseMsg, type CaptionTrack, type PlayerInfo } from '../shared/bridge';
+import { BRIDGE_TAG, PAUSE_REQUEST_EVENT, type BridgeEventMsg, type BridgeRequestMsg, type BridgeResponseMsg, type CaptionTrack, type PlayerInfo } from '../shared/bridge';
 
 interface PlayerApi extends HTMLElement {
   getPlayerResponse?: () => PlayerResponse | null | undefined;
@@ -171,14 +171,8 @@ window.addEventListener('message', (e: MessageEvent) => {
 // Two cases where the player thinks it is playing but the element is not (src/content/deferred-end.ts holds the end of
 // a video, src/content/warmup-hold.ts holds a video for the ML warm-up): a pause click calls pause() on an element that
 // is already paused or ended, which fires nothing. Tell the content script.
-// Play on an ended element would restart the video: the content script may cancel it to continue the held tail.
 const origPause = HTMLMediaElement.prototype.pause;
 HTMLMediaElement.prototype.pause = function (this: HTMLMediaElement) {
   if (this.paused || this.ended) this.dispatchEvent(new Event(PAUSE_REQUEST_EVENT));
   return origPause.call(this);
-};
-const origPlay = HTMLMediaElement.prototype.play;
-HTMLMediaElement.prototype.play = function (this: HTMLMediaElement) {
-  if (this.ended && !this.dispatchEvent(new Event(PLAY_REQUEST_EVENT, { cancelable: true }))) return Promise.resolve();
-  return origPlay.call(this);
 };

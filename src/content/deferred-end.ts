@@ -1,4 +1,4 @@
-import { PAUSE_REQUEST_EVENT, PLAY_REQUEST_EVENT } from '../shared/bridge';
+import { PAUSE_REQUEST_EVENT } from '../shared/bridge';
 
 /** Events that cancel a deferred end: the user seeked, or the source changed. */
 const CANCEL_EVENTS = ['seeking', 'emptied', 'loadstart'] as const;
@@ -12,10 +12,9 @@ const CANCEL_EVENTS = ['seeking', 'emptied', 'loadstart'] as const;
  * `ended` before any listener on the element, so stopping them there also holds
  * back our own hold handlers. After the delay both are fired again, in order.
  *
- * The player still thinks it is playing, and the page bridge reports its calls
- * on the ended element: pause() fires `pause` at once (our hold handlers freeze
- * the tail) and keeps the time left; play() is cancelled and fires `play` /
- * `playing` instead, so the tail continues instead of the video restarting.
+ * The player still thinks it is playing, so a pause click calls pause() on the ended element, which fires nothing:
+ * the page bridge reports it, and `pause` is fired at once (our hold handlers freeze the tail, and the player moves on
+ * to its own ended state, as a pause at the end of a video does without us).
  */
 export function deferEnd(
   getVideo: () => HTMLMediaElement | null,
@@ -24,9 +23,6 @@ export function deferEnd(
   onWait: (waiting: boolean) => void = () => {},
 ): () => void {
   let timer: ReturnType<typeof setTimeout> | undefined;
-  let endsAt = 0;
-  /** Set while the user paused the tail: ms of it that are left. */
-  let left: number | null = null;
   let replaying = false;
 
   const fire = (video: HTMLMediaElement, ...types: string[]) => {
@@ -39,7 +35,6 @@ export function deferEnd(
   };
   const wait = (video: HTMLMediaElement, ms: number) => {
     onWait(true);
-    endsAt = performance.now() + ms;
     timer = setTimeout(() => {
       timer = undefined;
       onWait(false);
@@ -50,7 +45,6 @@ export function deferEnd(
     if (timer !== undefined) onWait(false);
     clearTimeout(timer);
     timer = undefined;
-    left = null;
   };
 
   const onEnd = (e: Event) => {
@@ -59,25 +53,13 @@ export function deferEnd(
     const d = delayMs();
     if (d <= 0) return;
     e.stopImmediatePropagation();
-    if (e.type === 'ended' && timer === undefined && left === null) wait(video, d);
+    if (e.type === 'ended' && timer === undefined) wait(video, d);
   };
   const onPauseRequest = (e: Event) => {
     const video = getVideo();
     if (!video || timer === undefined || e.target !== video) return;
-    left = Math.max(0, endsAt - performance.now());
-    clearTimeout(timer);
-    timer = undefined;
-    onWait(false);
+    drop();
     fire(video, 'pause');
-  };
-  const onPlayRequest = (e: Event) => {
-    const video = getVideo();
-    if (!video || left === null || e.target !== video) return;
-    e.preventDefault(); // no restart from 0: the tail goes on
-    const ms = left;
-    left = null;
-    fire(video, 'play', 'playing');
-    wait(video, ms);
   };
   const onCancel = (e: Event) => {
     if (e.target === getVideo()) drop();
@@ -86,14 +68,12 @@ export function deferEnd(
   window.addEventListener('pause', onEnd, true);
   window.addEventListener('ended', onEnd, true);
   window.addEventListener(PAUSE_REQUEST_EVENT, onPauseRequest, true);
-  window.addEventListener(PLAY_REQUEST_EVENT, onPlayRequest, true);
   for (const type of CANCEL_EVENTS) window.addEventListener(type, onCancel, true);
   return () => {
     drop();
     window.removeEventListener('pause', onEnd, true);
     window.removeEventListener('ended', onEnd, true);
     window.removeEventListener(PAUSE_REQUEST_EVENT, onPauseRequest, true);
-    window.removeEventListener(PLAY_REQUEST_EVENT, onPlayRequest, true);
     for (const type of CANCEL_EVENTS) window.removeEventListener(type, onCancel, true);
   };
 }
