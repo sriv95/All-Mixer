@@ -13,6 +13,10 @@ export type KaraokeBackground = (typeof KARAOKE_BACKGROUNDS)[number];
 export const KARAOKE_ANIMATIONS = ['none', 'fade', 'slide'] as const;
 export type KaraokeAnimation = (typeof KARAOKE_ANIMATIONS)[number];
 
+/** The look of the karaoke text: what a style preset sets. */
+export type KaraokeStyle = Pick<LyricsPrefs, 'karaokeColor' | 'karaokeFontSize' | 'karaokeFont' | 'karaokeOutline' | 'karaokeBackground'>;
+const STYLE_KEYS = ['karaokeColor', 'karaokeFontSize', 'karaokeFont', 'karaokeOutline', 'karaokeBackground'] as const;
+
 export interface LyricsPrefs {
   /** The ♪ button: show or hide the lyrics (karaoke text or window, whichever the display mode is). */
   lyricsVisible: boolean;
@@ -31,6 +35,8 @@ export interface LyricsPrefs {
   karaokeBackground: KaraokeBackground;
   /** How a line that just changed comes in. */
   karaokeAnimation: KaraokeAnimation;
+  /** The look the user saved as "My style"; null = none saved. */
+  karaokeMyStyle: KaraokeStyle | null;
   /** Lyrics timing per video id, in ms: positive shows the lyrics later. Zero entries are not kept. */
   lyricsOffsets: Record<string, number>;
   /** `[` and `]` shift the lyrics timing by 0.1 s while synced lyrics are shown. */
@@ -53,6 +59,7 @@ export const DEFAULT_LYRICS_PREFS: LyricsPrefs = {
   karaokeOutline: 'normal',
   karaokeBackground: 0,
   karaokeAnimation: 'none',
+  karaokeMyStyle: null,
   karaokePosition: { x: 0.5, y: 0.82 },
   lyricsOffsets: {},
   lyricsTimingKeys: true,
@@ -75,6 +82,13 @@ function normalizeOffsets(raw: unknown): Record<string, number> {
   return Object.fromEntries(Object.entries(out).slice(-MAX_OFFSET_ENTRIES));
 }
 
+/** The style fields of `raw`, each fixed up like the prefs; null when `raw` has none of them. */
+function normalizeMyStyle(raw: unknown): KaraokeStyle | null {
+  if (!raw || typeof raw !== 'object' || !STYLE_KEYS.some((k) => k in raw)) return null;
+  const p = normalizeLyricsPrefs(raw);
+  return Object.fromEntries(STYLE_KEYS.map((k) => [k, p[k]])) as KaraokeStyle;
+}
+
 /** Any bad or missing field falls back to its default. */
 export function normalizeLyricsPrefs(raw: unknown): LyricsPrefs {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
@@ -92,6 +106,7 @@ export function normalizeLyricsPrefs(raw: unknown): LyricsPrefs {
     karaokeOutline: KARAOKE_OUTLINES.find((o) => o === r.karaokeOutline) ?? d.karaokeOutline,
     karaokeBackground: KARAOKE_BACKGROUNDS.find((b) => b === r.karaokeBackground) ?? d.karaokeBackground,
     karaokeAnimation: KARAOKE_ANIMATIONS.find((a) => a === r.karaokeAnimation) ?? d.karaokeAnimation,
+    karaokeMyStyle: normalizeMyStyle(r.karaokeMyStyle),
     lyricsOffsets: normalizeOffsets(r.lyricsOffsets),
     lyricsTimingKeys: typeof r.lyricsTimingKeys === 'boolean' ? r.lyricsTimingKeys : d.lyricsTimingKeys,
     karaokePosition: { x: num(pos.x, d.karaokePosition.x, 0, 1), y: num(pos.y, d.karaokePosition.y, 0, 1) },

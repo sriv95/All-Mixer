@@ -111,13 +111,13 @@ describe('buildMenuRows', () => {
     const a = actions();
     const preset = (p = prefs()) => buildMenuRows({ prefs: p }, a).find((r) => r.id === 'karaokeText')!.rows!.find((r) => r.id === 'preset')!;
     expect(preset().selected).toBe('default');
-    expect(preset().options.map((o) => o.label)).toEqual(['Default', 'Big yellow', 'Clean box', 'Cyan glow']);
+    expect(preset().options.map((o) => o.label)).toEqual(['Default', 'Big yellow', 'Clean box', 'Cyan glow', 'Save the current look as My style']);
     preset().select('bigYellow');
     expect(a.setPrefs).toHaveBeenLastCalledWith({ karaokeColor: '#ffeb3b', karaokeFontSize: 150, karaokeFont: 'default', karaokeOutline: 'thick', karaokeBackground: 0 });
     expect(preset(prefs({ karaokeColor: '#ffeb3b', karaokeFontSize: 150, karaokeOutline: 'thick' })).selected).toBe('bigYellow');
     const custom = preset(prefs({ karaokeColor: '#123456' }));
     expect(custom.selected).toBe('custom');
-    expect(custom.options.at(-1)).toEqual({ value: 'custom', label: 'Custom', disabled: true });
+    expect(custom.options.at(-2)).toEqual({ value: 'custom', label: 'Custom', disabled: true });
     a.setPrefs.mockClear();
     custom.select('custom');
     expect(a.setPrefs).not.toHaveBeenCalled();
@@ -158,6 +158,27 @@ describe('buildMenuRows', () => {
     own.run();
     expect(a.findLyrics).toHaveBeenCalled();
     expect(a.myLyrics).toHaveBeenCalled();
+  });
+
+  it('My style: save the current look, then pick it; saving is only offered for a look that is not a preset yet', () => {
+    const a = actions();
+    const preset = (p = prefs()) => buildMenuRows({ prefs: p }, a).find((r) => r.id === 'karaokeText')!.rows!.find((r) => r.id === 'preset')!;
+    const save = (r: ReturnType<typeof preset>) => r.options.find((o) => o.value === 'save')!;
+    expect(save(preset()).disabled).toBe(true);
+    const looks = prefs({ karaokeColor: '#123456', karaokeFontSize: 125, karaokeFont: 'mono', karaokeOutline: 'thin', karaokeBackground: 25 });
+    expect(save(preset(looks)).disabled).toBe(false);
+    preset(looks).select('save');
+    expect(a.setPrefs).toHaveBeenLastCalledWith({ karaokeMyStyle: { karaokeColor: '#123456', karaokeFontSize: 125, karaokeFont: 'mono', karaokeOutline: 'thin', karaokeBackground: 25 } });
+    const withMine = prefs({ ...looks, karaokeMyStyle: { karaokeColor: '#123456', karaokeFontSize: 125, karaokeFont: 'mono', karaokeOutline: 'thin', karaokeBackground: 25 } });
+    expect(preset(withMine).selected).toBe('mine');
+    expect(preset(withMine).options.map((o) => o.label)).toContain('My style');
+    expect(save(preset(withMine)).disabled).toBe(true);
+    // Another look: Replace is offered, and picking My style sets all five prefs.
+    const other = prefs({ karaokeMyStyle: withMine.karaokeMyStyle, karaokeColor: '#ff80ab' });
+    expect(save(preset(other)).label).toBe('Replace My style with the current look');
+    expect(save(preset(other)).disabled).toBe(false);
+    preset(other).select('mine');
+    expect(a.setPrefs).toHaveBeenLastCalledWith(withMine.karaokeMyStyle);
   });
 
   it('shows the nearest size step for an off-step stored size', () => {

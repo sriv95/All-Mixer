@@ -54,6 +54,14 @@ describe('normalizeLyricsPrefs', () => {
     expect(normalizeLyricsPrefs({ lyricsTimingKeys: 'no' }).lyricsTimingKeys).toBe(true);
   });
 
+  it('karaokeMyStyle: null by default; a saved style is kept with bad fields fixed; junk is null', () => {
+    expect(DEFAULT_LYRICS_PREFS.karaokeMyStyle).toBeNull();
+    const style = { karaokeColor: '#ABCDEF', karaokeFontSize: 150, karaokeFont: 'serif', karaokeOutline: 'thick', karaokeBackground: 50 };
+    expect(normalizeLyricsPrefs({ karaokeMyStyle: style }).karaokeMyStyle).toEqual({ ...style, karaokeColor: '#abcdef' });
+    expect(normalizeLyricsPrefs({ karaokeMyStyle: { ...style, karaokeFont: 'comic', karaokeColor: 'red' } }).karaokeMyStyle).toMatchObject({ karaokeFont: 'default', karaokeColor: '#ffffff', karaokeFontSize: 150 });
+    for (const bad of [null, 5, 'x', {}, { other: 1 }]) expect(normalizeLyricsPrefs({ karaokeMyStyle: bad }).karaokeMyStyle).toBeNull();
+  });
+
   it('defaults to one karaoke line, auto source and no caption language', () => {
     expect(DEFAULT_LYRICS_PREFS).toMatchObject({ karaokeLines: 1, lyricsSource: 'auto', captionLang: null });
   });

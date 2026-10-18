@@ -1,4 +1,4 @@
-import { DEFAULT_LYRICS_PREFS, KARAOKE_BACKGROUNDS, type KaraokeAnimation, type KaraokeBackground, type KaraokeFont, type KaraokeOutline, type LyricsDisplayMode, type LyricsPrefs } from '../../shared/lyrics-prefs';
+import { DEFAULT_LYRICS_PREFS, KARAOKE_BACKGROUNDS, type KaraokeAnimation, type KaraokeBackground, type KaraokeFont, type KaraokeOutline, type KaraokeStyle, type LyricsDisplayMode, type LyricsPrefs } from '../../shared/lyrics-prefs';
 import { SETTINGS_SELECTORS, findSettingsMainMenu, findSettingsPopup, type Site } from '../youtube-dom';
 import type { CaptionPicker, SourceMenu, SourcePref } from './controller';
 import type { CaptionPick } from './track-info';
@@ -79,15 +79,27 @@ const COLOR_PRESETS: readonly [string, string][] = [
   ['#ffab40', 'Orange'],
 ];
 
-type KaraokeStyle = Pick<LyricsPrefs, 'karaokeColor' | 'karaokeFontSize' | 'karaokeFont' | 'karaokeOutline' | 'karaokeBackground'>;
-
 /** One-tap looks for the karaoke text. The first is the stock look. */
-const STYLE_PRESETS: readonly { id: string; label: string; style: KaraokeStyle }[] = [
+interface StylePreset {
+  id: string;
+  label: string;
+  style: KaraokeStyle;
+}
+
+const STYLE_PRESETS: readonly StylePreset[] = [
   { id: 'default', label: 'Default', style: { karaokeColor: '#ffffff', karaokeFontSize: 100, karaokeFont: 'default', karaokeOutline: 'normal', karaokeBackground: 0 } },
   { id: 'bigYellow', label: 'Big yellow', style: { karaokeColor: '#ffeb3b', karaokeFontSize: 150, karaokeFont: 'default', karaokeOutline: 'thick', karaokeBackground: 0 } },
   { id: 'cleanBox', label: 'Clean box', style: { karaokeColor: '#ffffff', karaokeFontSize: 100, karaokeFont: 'sans', karaokeOutline: 'none', karaokeBackground: 50 } },
   { id: 'cyanGlow', label: 'Cyan glow', style: { karaokeColor: '#4dd0e1', karaokeFontSize: 125, karaokeFont: 'sans', karaokeOutline: 'thick', karaokeBackground: 0 } },
 ];
+
+const pickStyle = (p: KaraokeStyle): KaraokeStyle => ({
+  karaokeColor: p.karaokeColor,
+  karaokeFontSize: p.karaokeFontSize,
+  karaokeFont: p.karaokeFont,
+  karaokeOutline: p.karaokeOutline,
+  karaokeBackground: p.karaokeBackground,
+});
 
 const FONT_LABELS: Record<KaraokeFont, string> = { default: 'YouTube', sans: 'Sans-serif', serif: 'Serif', mono: 'Monospace' };
 const OUTLINE_LABELS: Record<KaraokeOutline, string> = { none: 'None', thin: 'Thin', normal: 'Normal', thick: 'Thick' };
@@ -159,7 +171,8 @@ export function buildMenuRows(input: MenuInput, actions: MenuActions): MenuRow[]
     select: (v) => actions.setPrefs({ lyricsDisplayMode: v as LyricsDisplayMode }),
   });
   if (prefs.lyricsDisplayMode === 'karaoke') {
-    const matched = STYLE_PRESETS.find((p) => (Object.keys(p.style) as (keyof KaraokeStyle)[]).every((k) => p.style[k] === (k === 'karaokeFontSize' ? nearestSize(prefs[k]) : prefs[k])));
+    const presets: StylePreset[] = [...STYLE_PRESETS, ...(prefs.karaokeMyStyle ? [{ id: 'mine', label: 'My style', style: prefs.karaokeMyStyle }] : [])];
+    const matched = presets.find((p) => (Object.keys(p.style) as (keyof KaraokeStyle)[]).every((k) => p.style[k] === (k === 'karaokeFontSize' ? nearestSize(prefs[k]) : prefs[k])));
     const group: MenuRow = {
       id: 'karaokeText',
       label: 'Custom Karaoke Text',
@@ -169,10 +182,18 @@ export function buildMenuRows(input: MenuInput, actions: MenuActions): MenuRow[]
         {
           id: 'preset',
           label: 'Style preset',
-          options: [...STYLE_PRESETS.map((p) => ({ value: p.id, label: p.label })), ...(matched ? [] : [{ value: 'custom', label: 'Custom', disabled: true }])],
+          options: [
+            ...presets.map((p) => ({ value: p.id, label: p.label })),
+            ...(matched ? [] : [{ value: 'custom', label: 'Custom', disabled: true }]),
+            { value: 'save', label: prefs.karaokeMyStyle ? 'Replace My style with the current look' : 'Save the current look as My style', disabled: !!matched },
+          ],
           selected: matched?.id ?? 'custom',
           select: (v) => {
-            const preset = STYLE_PRESETS.find((p) => p.id === v);
+            if (v === 'save') {
+              actions.setPrefs({ karaokeMyStyle: pickStyle(prefs) });
+              return;
+            }
+            const preset = presets.find((p) => p.id === v);
             if (preset) actions.setPrefs(preset.style);
           },
         },
