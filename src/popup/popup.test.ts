@@ -15,8 +15,6 @@ interface Opts {
   tab?: { id?: number; url?: string };
   stored?: unknown;
   status?: ContentStatus | 'reject';
-  /** chrome.storage.local contents (model records) */
-  local?: Record<string, unknown>;
 }
 
 const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -39,7 +37,6 @@ async function load(o: Opts = {}) {
       ),
     },
     runtime: { sendMessage },
-    storage: { local: { get: vi.fn().mockResolvedValue(o.local ?? {}) }, onChanged: { addListener: vi.fn() } },
   });
   await import('./popup');
   await settle();
@@ -140,64 +137,12 @@ describe('popup', () => {
     await load({ stored: { mode: 'separate', mlModel: 'roformer' } });
     const select = el<HTMLSelectElement>('ml-model');
     expect(select.value).toBe('roformer');
+    expect([...select.options].map((o) => o.value)).toEqual(['mdx', 'roformer', 'kim', 'deux']);
     select.value = 'mdx';
     select.dispatchEvent(new Event('change', { bubbles: true }));
     await settle();
     expect(sent().at(-1).settings.mlModel).toBe('mdx');
   });
-  describe('Best quality model download', () => {
-    const files = { 'roformer.onnx': 100 * 2 ** 20, 'roformer-meta.json': 1000 };
-    const remote = (version: number) => ({ format: 1, version, files, checkedAt: 0 });
-    const installedV1 = { version: 1, files };
-    const row = () => el('model-row');
-
-    it('is hidden for the default model and shown for Best quality', async () => {
-      await load({ stored: { mode: 'separate', mlModel: 'mdx' } });
-      expect(row().hidden).toBe(true);
-      const select = el<HTMLSelectElement>('ml-model');
-      select.value = 'roformer';
-      select.dispatchEvent(new Event('change', { bubbles: true }));
-      await settle();
-      expect(row().hidden).toBe(false);
-    });
-
-    it('offers a download when the model is missing and asks the background to install it', async () => {
-      await load({ stored: { mode: 'separate', mlModel: 'roformer' }, local: { modelRemote: remote(1) } });
-      expect(el('model-text').textContent).toMatch(/one-time download \(100 MB\)/);
-      const btn = el<HTMLButtonElement>('model-btn');
-      expect(btn.hidden).toBe(false);
-      btn.click();
-      expect(sendMessage).toHaveBeenCalledWith({ type: 'model-install' });
-    });
-
-    it('asks the background to look for a newer model when the popup opens', async () => {
-      await load({ stored: { mode: 'separate' } });
-      expect(sendMessage).toHaveBeenCalledWith({ type: 'model-check' });
-    });
-
-    it('shows download progress without a button', async () => {
-      await load({
-        stored: { mode: 'separate', mlModel: 'roformer' },
-        local: { modelRemote: remote(1), modelProgress: { phase: 'downloading', version: 1, done: 50 * 2 ** 20, total: 100 * 2 ** 20, at: Date.now() } },
-      });
-      expect(el('model-text').textContent).toMatch(/Downloading… 50% \(50 MB of 100 MB\)/);
-      expect(el<HTMLButtonElement>('model-btn').hidden).toBe(true);
-    });
-
-    it('shows an update button even when Best quality is not selected', async () => {
-      await load({ stored: { mode: 'separate', mlModel: 'mdx' }, local: { modelInstalled: installedV1, modelRemote: remote(2) } });
-      expect(row().hidden).toBe(false);
-      expect(el('model-text').textContent).toMatch(/Update available: model v2/);
-      expect(el('model-btn').textContent).toBe('Update');
-    });
-
-    it('says installed when up to date', async () => {
-      await load({ stored: { mode: 'separate', mlModel: 'roformer' }, local: { modelInstalled: installedV1, modelRemote: remote(1) } });
-      expect(el('model-text').textContent).toBe('Best quality model v1 installed.');
-      expect(el<HTMLButtonElement>('model-btn').hidden).toBe(true);
-    });
-  });
-
   it('shows the waiting-for-gesture hint', async () => {
     await load({ status: { ...okStatus, audio: 'waiting-for-gesture' } });
     expect(el('status').textContent).toMatch(/Click anywhere/);

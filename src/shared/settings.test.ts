@@ -31,7 +31,7 @@ describe('normalizeSettings', () => {
     expect(normalizeSettings({ mode: 'weird' }).mode).toBe('default');
   });
   it('keeps a known ML model and falls back to mdx otherwise', () => {
-    expect(normalizeSettings({ mlModel: 'roformer' }).mlModel).toBe('roformer');
+    for (const m of ['roformer', 'kim', 'deux']) expect(normalizeSettings({ mlModel: m }).mlModel).toBe(m);
     expect(normalizeSettings({ mlModel: 'mdx' }).mlModel).toBe('mdx');
     expect(normalizeSettings({ mlModel: 'nope' }).mlModel).toBe('mdx');
     expect(normalizeSettings({ mlModel: 3 }).mlModel).toBe('mdx');

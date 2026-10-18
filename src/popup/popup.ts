@@ -2,7 +2,6 @@ import type { ContentStatus, GetStatus, GetTabSettings, SetTabSettings } from '.
 import { clampPct, normalizeSettings, type MixerSettings, type Mode } from '../shared/settings';
 import type { MlModel } from '../worklet/protocol';
 import { detectSite } from '../content/youtube-dom';
-import { KEY_INSTALLED, KEY_PROGRESS, KEY_REMOTE, mb, modelState, type InstalledModel, type ModelState, type Progress, type RemoteRecord } from '../shared/model-store';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -14,9 +13,6 @@ const vocalValue = $<HTMLOutputElement>('vocal-value');
 const instrumental = $<HTMLInputElement>('instrumental');
 const instrumentalValue = $<HTMLOutputElement>('instrumental-value');
 const mlModel = $<HTMLSelectElement>('ml-model');
-const modelRow = $<HTMLParagraphElement>('model-row');
-const modelText = $<HTMLSpanElement>('model-text');
-const modelBtn = $<HTMLButtonElement>('model-btn');
 const presets = [...document.querySelectorAll<HTMLButtonElement>('.presets button')];
 const status = $<HTMLParagraphElement>('status');
 
@@ -37,7 +33,6 @@ function render(): void {
   instrumental.value = String(settings.instrumentalPct);
   instrumentalValue.value = `${settings.instrumentalPct}%`;
   mlModel.value = settings.mlModel;
-  renderModel();
   for (const b of presets) {
     const on = Number(b.dataset.vocal) === settings.vocalPct && Number(b.dataset.instrumental) === settings.instrumentalPct;
     b.setAttribute('aria-pressed', String(on));
@@ -119,60 +114,6 @@ async function refreshStatus(): Promise<void> {
   }
 }
 
-// "Best quality" is a separate download (background/model-manager.ts); its state lives in chrome.storage.local.
-let installed: InstalledModel | undefined;
-let remote: RemoteRecord | undefined;
-let progress: Progress | undefined;
-let modelTimer: ReturnType<typeof setTimeout> | undefined;
-
-function modelLine(s: ModelState): { text: string; button?: string } {
-  switch (s.kind) {
-    case 'missing':
-      return { text: `Best quality is a one-time download${s.size ? ` (${mb(s.size)})` : ''}.`, button: 'Download' };
-    case 'downloading':
-      return { text: `Downloading… ${Math.floor((100 * s.done) / s.total)}% (${mb(s.done)} of ${mb(s.total)})` };
-    case 'error':
-      return { text: `Download failed: ${s.message}`, button: 'Try again' };
-    case 'update':
-      return { text: `Update available: model v${s.version} (${mb(s.size)}).`, button: 'Update' };
-    case 'incompatible':
-      return { text: 'The Best quality model needs a newer version of All Mixer!.' };
-    case 'ready':
-      return { text: `Best quality model v${s.version} installed.` };
-  }
-}
-
-function renderModel(): void {
-  clearTimeout(modelTimer);
-  const s = modelState(installed, remote, progress, Date.now());
-  const line = modelLine(s);
-  // Shown for Best quality, and whenever an update is on offer or a download runs.
-  modelRow.hidden = !(settings.mlModel === 'roformer' || s.kind === 'update' || s.kind === 'downloading');
-  modelText.textContent = line.text;
-  modelBtn.hidden = !line.button;
-  modelBtn.textContent = line.button ?? '';
-  // A download whose worker was stopped goes stale after STALL_MS: look again then.
-  if (s.kind === 'downloading') modelTimer = setTimeout(renderModel, 5000);
-}
-
-async function initModel(): Promise<void> {
-  const o = await chrome.storage.local.get([KEY_INSTALLED, KEY_REMOTE, KEY_PROGRESS]);
-  installed = o[KEY_INSTALLED] as InstalledModel | undefined;
-  remote = o[KEY_REMOTE] as RemoteRecord | undefined;
-  progress = o[KEY_PROGRESS] as Progress | undefined;
-  renderModel();
-  chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== 'local') return;
-    if (KEY_INSTALLED in changes) installed = changes[KEY_INSTALLED].newValue as InstalledModel | undefined;
-    if (KEY_REMOTE in changes) remote = changes[KEY_REMOTE].newValue as RemoteRecord | undefined;
-    if (KEY_PROGRESS in changes) progress = changes[KEY_PROGRESS].newValue as Progress | undefined;
-    renderModel();
-  });
-  void chrome.runtime.sendMessage({ type: 'model-check' }); // a newer model shows up through the storage change
-}
-
-modelBtn.addEventListener('click', () => void chrome.runtime.sendMessage({ type: 'model-install' }));
-
 function disableAll(message: string): void {
   for (const el of document.querySelectorAll<HTMLInputElement | HTMLButtonElement | HTMLSelectElement>('input, button, select')) {
     el.disabled = true;
@@ -192,7 +133,6 @@ async function init(): Promise<void> {
   const req: GetTabSettings = { type: 'get-tab-settings', tabId };
   settings = normalizeSettings(await chrome.runtime.sendMessage(req));
   render();
-  void initModel();
   await refreshStatus();
 }
 
