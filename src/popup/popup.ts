@@ -122,8 +122,11 @@ async function refreshStatus(): Promise<void> {
   clearTimeout(pollTimer);
   const req: GetStatus = { type: 'get-status' };
   const s: ContentStatus | undefined = await chrome.tabs.sendMessage(tabId, req).catch(() => undefined);
+  // No content script yet (extension just installed or updated): Separate mode cannot work until the tab is reloaded.
+  separateMode.parentElement!.hidden = !s;
   if (!s) {
-    status.textContent = 'Reload this tab to start All Mixer!.';
+    $('panel-separate').hidden = true;
+    status.textContent = 'Reload this tab to start All Mixer! and show Separate mode.';
   } else if (s.audio === 'error') {
     status.textContent = `${STATUS_TEXT.error}: ${s.error ?? 'unknown'}`;
   } else if (!s.videoFound && settings.masterPct !== 100) {
