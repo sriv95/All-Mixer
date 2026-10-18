@@ -7,7 +7,7 @@ import { MAX_DELAY_S, MIN_DELAY_S } from '../ml/rof-plan';
 import type { MlModel } from '../worklet/protocol';
 import { installModel, useModels, type ModelLine } from './models';
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
-import { Blocked, Btn, Card, Collapse, Disclosure, Rise, Roll, Select, Slider, SliderRow, Switch, fade, slide, useGlide, type Choice } from './ui';
+import { Blocked, Btn, Card, Collapse, Disclosure, Rise, Roll, Select, Skeleton, Slider, SliderRow, Switch, fade, slide, useGlide, type Choice } from './ui';
 
 type Update = (patch: Partial<MixerSettings>) => void;
 
@@ -103,6 +103,8 @@ export function App() {
     update({ mode: 'separate' });
   };
 
+  // Until the tab's settings are read the popup would show the defaults, then jump to the real ones.
+  const loading = !blocked && !ready;
   const noContent = loaded !== null && !loaded.s;
   const separate = settings.mode === 'separate' && !noContent;
   const note = noteText(blocked, settings, loaded);
@@ -115,6 +117,14 @@ export function App() {
           <span className="grid size-8 place-items-center rounded-[10px] bg-brand text-white"><SlidersVertical size={18} aria-hidden /></span>
           All Mixer!
         </header>
+        {loading ? (
+          <div aria-busy="true" className="flex flex-col gap-3.5">
+            <Skeleton className="h-10 rounded-full" />
+            <Skeleton className="h-[148px]" />
+            <Skeleton className="h-[84px]" />
+          </div>
+        ) : (
+          <>
         {!noContent && <Tabs mode={separate ? 'separate' : 'default'} onMode={(mode) => update({ mode })} />}
         <AnimatePresence mode="wait" custom={separate ? 1 : -1}>
         {separate ? (
@@ -143,6 +153,8 @@ export function App() {
           </motion.div>
         )}
         </AnimatePresence>
+          </>
+        )}
         <p id="status" role="status" className="m-0 text-[13px] leading-snug text-muted empty:hidden">{note}</p>
       </main>
     </Blocked.Provider>

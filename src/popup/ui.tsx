@@ -46,6 +46,11 @@ export function Roll({ text, still }: { text: string; still?: boolean }) {
   );
 }
 
+/** A card-shaped placeholder that pulses while the popup reads the tab's settings. */
+export function Skeleton({ className }: { className?: string }) {
+  return <div aria-hidden className={cx('rounded-[20px] bg-card motion-safe:animate-pulse', className)} />;
+}
+
 const cx = (...c: (string | false | undefined)[]) => c.filter(Boolean).join(' ');
 
 interface SliderProps {
