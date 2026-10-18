@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, type ComponentProps, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import { Check, ChevronDown } from 'lucide-react';
-import { animate, motion } from 'motion/react';
+import { AnimatePresence, animate, motion } from 'motion/react';
 
 /** True on a page the extension cannot run on: every control below is disabled. */
 export const Blocked = createContext(false);
@@ -11,6 +11,15 @@ export const fade = { initial: { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0
 /** A block that rises into place `i` beats after the one before it: a panel fills in one block at a time. */
 export function Rise({ i, children }: { i: number; children: ReactNode }) {
   return <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25, delay: 0.05 * i, ease: 'easeOut' }}>{children}</motion.div>;
+}
+
+/** Content that slides open and shut (height and fade) instead of popping in and out. The padding and the equal negative margin keep the shadows of what is inside from being clipped. */
+export function Collapse({ show, children }: { show: boolean; children: ReactNode }) {
+  return (
+    <AnimatePresence initial={false}>
+      {show && <motion.div key="collapse" initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.22, ease: 'easeOut' }} className="pointer-events-none -m-2 overflow-hidden p-2"><div className="pointer-events-auto">{children}</div></motion.div>}
+    </AnimatePresence>
+  );
 }
 
 const cx = (...c: (string | false | undefined)[]) => c.filter(Boolean).join(' ');
