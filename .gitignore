@@ -18,5 +18,3 @@ scripts/qa-*.mjs*
 out/
 public/ml/roformer.onnx
 public/ml/roformer-meta.json
-public/ml/roformer-kim.onnx
-public/ml/roformer-kim-meta.json
