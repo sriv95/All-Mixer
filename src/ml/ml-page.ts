@@ -18,7 +18,7 @@ window.addEventListener('message', (e: MessageEvent) => {
   if (e.source !== window.parent || !ALLOWED.includes(e.origin)) return;
   const origin = parentOrigin();
   if (origin !== null && origin !== e.origin) return;
-  const msg = e.data as { type?: string; model?: unknown } | null;
+  const msg = e.data as { type?: string; model?: unknown; gate?: unknown; on?: unknown } | null;
   if (msg?.type === ML_INIT) {
     const port = e.ports[0];
     if (!port || worker) return;
@@ -50,11 +50,14 @@ window.addEventListener('message', (e: MessageEvent) => {
             stallMs,
             stallAfterMs,
             timing,
+            gate: msg.gate === true,
           } satisfies MlWorkerInit,
           [port],
         );
       });
-  } else if ((msg as ToMlWorker | null)?.type === 'dispose') {
+  } else if (msg?.type === 'gate') {
+    worker?.postMessage({ type: 'gate', on: msg.on === true } satisfies ToMlWorker);
+  } else if (msg?.type === 'dispose') {
     worker?.terminate();
     worker = null;
   }

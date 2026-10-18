@@ -6,6 +6,10 @@ import type { LatencyListener } from './latency';
 class FakeHost implements MlHostLike {
   onStatus: ((m: FromMlWorker) => void) | null = null;
   disposed = false;
+  gate: boolean[] = [];
+  setGate(on: boolean) {
+    this.gate.push(on);
+  }
   start(cb: (m: FromMlWorker) => void) {
     this.onStatus = cb;
     return {} as MessagePort;
@@ -42,6 +46,15 @@ const ready = (p90: number): FromMlWorker => ({ type: 'ready', p50: p90 / 2, p90
 const req = (on = true, model?: MlModel) => ({ on, model });
 
 describe('EngineSelector', () => {
+  it('passes the gate to a new host and live changes to a running one, without a restart', () => {
+    const { sel, hosts } = setup();
+    sel.update({ on: true, model: 'roformer', gate: true });
+    expect(hosts[0].gate).toEqual([true]);
+    sel.update({ on: true, model: 'roformer', gate: false });
+    expect(hosts).toHaveLength(1);
+    expect(hosts[0].gate).toEqual([true, false]);
+  });
+
   it('is off until Separate turns on, and never probes while off', () => {
     const { sel, hosts } = setup();
     sel.update(req(false));

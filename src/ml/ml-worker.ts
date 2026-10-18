@@ -12,6 +12,7 @@ import {
   bufferBytes,
   type FromMlWorker,
   type MlWorkerInit,
+  type ToMlWorker,
 } from '../worklet/protocol';
 import { CTX, BINS } from './stream';
 import { MDX_BINS, MDX_T } from './mdx';
@@ -24,7 +25,9 @@ import { RoformerStream, ROF_FRAMES, type RoformerMeta } from './roformer';
 type Ort = typeof import('onnxruntime-web/webgpu');
 type Session = Awaited<ReturnType<Ort['InferenceSession']['create']>>;
 
-const ctx = self as unknown as { postMessage(m: FromMlWorker): void; onmessage: ((e: MessageEvent<MlWorkerInit>) => void) | null };
+const ctx = self as unknown as { postMessage(m: FromMlWorker): void; onmessage: ((e: MessageEvent<MlWorkerInit | ToMlWorker>) => void) | null };
+/** RoFormer A cappella gate (src/ml/roformer.ts); set by init and by `gate` messages. */
+let gate = false;
 
 const unavailable = (reason: string): void => ctx.postMessage({ type: 'unavailable', reason });
 
@@ -159,7 +162,8 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
       nl[i] = (Math.random() * 2 - 1) * 0.3;
       nr[i] = (Math.random() * 2 - 1) * 0.3;
     }
-    const step = () => stream.process(nl, nr, run, ol, or);
+    const gl = new Float32Array(g.block), gr = new Float32Array(g.block);
+    const step = () => stream.process(nl, nr, run, ol, or, gate ? { l: gl, r: gr } : undefined);
     wu = await warmUpGated((retry) => warmUp(step, retry ? { skip: 0, n: 10 } : { skip: 2, n: 10 }), g.warmupP90Ms);
   } catch (e) {
     return unavailable(`warm-up: ${String(e)}`);
@@ -174,8 +178,13 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
     reset: () => stream.reset(),
     process: async (d) => {
       const l = d.subarray(0, g.block), r = d.subarray(g.block, 2 * g.block);
-      await stream.process(l, r, run, l, r);
-      d.copyWithin(2 * g.block, 0, 2 * g.block); // the vocal is both Vk and the A cappella
+      if (gate) {
+        // Vk (Karaoke) keeps the raw vocal; the A cappella is the gated one
+        await stream.process(l, r, run, l, r, { l: d.subarray(2 * g.block, 3 * g.block), r: d.subarray(3 * g.block, 4 * g.block) });
+      } else {
+        await stream.process(l, r, run, l, r);
+        d.copyWithin(2 * g.block, 0, 2 * g.block); // the vocal is both Vk and the A cappella
+      }
     },
   };
   serve(init.port, engine, { stallMs: init.stallMs ?? 0, stallAfterMs: init.stallAfterMs ?? 5000 }, init.timing ? new MlTiming() : null);
@@ -264,5 +273,11 @@ interface GPUAdapterLike {
 }
 
 ctx.onmessage = (e) => {
-  if (e.data?.type === 'init') void start(e.data);
+  const m = e.data;
+  if (m?.type === 'init') {
+    gate = m.gate === true;
+    void start(m);
+  } else if (m?.type === 'gate') {
+    gate = m.on === true;
+  }
 };

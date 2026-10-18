@@ -9,6 +9,8 @@ import { ML_INIT, ML_PAGE_PATH, type FromMlWorker, type MlModel, type ToMlWorker
 export class MlHost {
   private frame: HTMLIFrameElement | null = null;
   private onMessage: ((e: MessageEvent) => void) | null = null;
+  private loaded = false;
+  private gate = false;
 
   private readonly origin: string;
 
@@ -44,10 +46,18 @@ export class MlHost {
     window.addEventListener('message', this.onMessage);
     frame.addEventListener('load', () => {
       if (this.frame !== frame) return;
-      frame.contentWindow?.postMessage({ type: ML_INIT, model: this.model }, origin, [channel.port2]);
+      this.loaded = true;
+      frame.contentWindow?.postMessage({ type: ML_INIT, model: this.model, gate: this.gate }, origin, [channel.port2]);
     });
     (this.doc.body ?? this.doc.documentElement).appendChild(frame);
     return channel.port1;
+  }
+
+  /** RoFormer A cappella gate on/off; takes effect at the next block. Before the frame loads it goes with ML_INIT. */
+  setGate(on: boolean): void {
+    if (on === this.gate) return;
+    this.gate = on;
+    if (this.loaded) this.frame?.contentWindow?.postMessage({ type: 'gate', on } satisfies ToMlWorker, this.origin);
   }
 
   dispose(): void {
@@ -55,6 +65,7 @@ export class MlHost {
     this.frame.contentWindow?.postMessage({ type: 'dispose' } satisfies ToMlWorker, this.origin);
     this.frame.remove();
     this.frame = null;
+    this.loaded = false;
     if (this.onMessage) window.removeEventListener('message', this.onMessage);
     this.onMessage = null;
   }

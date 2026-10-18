@@ -23,6 +23,8 @@ export interface EngineChain {
 export interface MlHostLike {
   start(onStatus: (m: FromMlWorker) => void): MessagePort | null;
   dispose(): void;
+  /** RoFormer A cappella gate on/off (the host applies it to a running worker too). */
+  setGate?(on: boolean): void;
 }
 
 /**
@@ -45,6 +47,8 @@ export interface SelectorRequest {
   on: boolean;
   /** ML model to run; changing it while on restarts the probe. Default 'mdx'. */
   model?: MlModel;
+  /** Clean the A cappella with the RoFormer gate; applies live. Default false. */
+  gate?: boolean;
 }
 
 const RATE_CAUSE = 'the audio context is not at 44.1 kHz';
@@ -60,6 +64,7 @@ export class EngineSelector {
   private mlActive = false;
   private on = false;
   private model: MlModel = 'mdx';
+  private gate = false;
   private choice: EngineChoice = { state: 'off' };
 
   constructor(
@@ -84,6 +89,8 @@ export class EngineSelector {
     const model = req.model ?? 'mdx';
     const restart = req.on && this.on && model !== this.model;
     this.model = model;
+    this.gate = req.gate === true;
+    this.host?.setGate?.(this.gate);
     this.on = req.on;
     if (!req.on) {
       if (this.mlActive) this.chain.setEngine('bypass', 'auto');
@@ -107,6 +114,7 @@ export class EngineSelector {
     const model = this.model;
     const host = this.createHost(model);
     this.host = host;
+    host.setGate?.(this.gate);
     this.probing = true;
     this.choice = { state: 'warming' };
     const port = host.start((m) => {

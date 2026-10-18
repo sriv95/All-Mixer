@@ -13,6 +13,7 @@ const vocalValue = $<HTMLOutputElement>('vocal-value');
 const instrumental = $<HTMLInputElement>('instrumental');
 const instrumentalValue = $<HTMLOutputElement>('instrumental-value');
 const mlModel = $<HTMLSelectElement>('ml-model');
+const mlGate = $<HTMLInputElement>('ml-gate');
 const presets = [...document.querySelectorAll<HTMLButtonElement>('.presets button')];
 const status = $<HTMLParagraphElement>('status');
 
@@ -33,6 +34,7 @@ function render(): void {
   instrumental.value = String(settings.instrumentalPct);
   instrumentalValue.value = `${settings.instrumentalPct}%`;
   mlModel.value = settings.mlModel;
+  mlGate.checked = settings.mlGate;
   for (const b of presets) {
     const on = Number(b.dataset.vocal) === settings.vocalPct && Number(b.dataset.instrumental) === settings.instrumentalPct;
     b.setAttribute('aria-pressed', String(on));
@@ -163,6 +165,11 @@ instrumental.addEventListener('input', () => {
 
 mlModel.addEventListener('change', () => {
   settings = { ...settings, mlModel: mlModel.value as MlModel };
+  save();
+});
+
+mlGate.addEventListener('change', () => {
+  settings = { ...settings, mlGate: mlGate.checked };
   save();
 });
 
