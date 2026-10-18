@@ -39,24 +39,9 @@ body {
   @apply outline-2 outline-offset-4 outline-brand;
 }
 
-@keyframes mx-pulse {
-  to {
-    box-shadow: 0 0 0 12px rgb(225 29 46 / 0);
-  }
-}
-.mx-pulse {
-  box-shadow: 0 0 0 0 rgb(225 29 46 / 0.5);
-  animation: mx-pulse 1.6s ease-out infinite;
-}
 .mx-range::-webkit-slider-thumb {
   transition: transform 0.15s ease-out;
 }
 .mx-range:not(:disabled):active::-webkit-slider-thumb {
   transform: scale(1.12);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .mx-pulse {
-    animation: none;
-  }
 }
