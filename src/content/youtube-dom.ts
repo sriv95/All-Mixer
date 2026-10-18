@@ -5,6 +5,8 @@
  */
 
 export type Site = 'youtube' | 'ytmusic';
+/** Any other site gets volume boost / Separate mode only: no lyrics. */
+export type PageSite = Site | 'generic';
 
 const SELECTORS = {
   youtube: {
@@ -15,6 +17,21 @@ const SELECTORS = {
     mainVideo: ['ytmusic-player #movie_player video', '#movie_player video', 'video.html5-main-video'],
   },
 } as const satisfies Record<Site, { mainVideo: readonly string[] }>;
+
+/** Generic pages: the biggest <video> on screen (previews and ad slots are smaller), else the first <audio> in the DOM. */
+function findLargestMedia(root: ParentNode): HTMLMediaElement | null {
+  let best: HTMLMediaElement | null = null;
+  let bestArea = -1;
+  for (const v of root.querySelectorAll('video')) {
+    const r = v.getBoundingClientRect();
+    if (r.width * r.height > bestArea) {
+      best = v;
+      bestArea = r.width * r.height;
+    }
+  }
+  // shortcut: an <audio> never added to the DOM (new Audio()) is not found, when it matters hook HTMLMediaElement.prototype.play.
+  return best ?? root.querySelector('audio');
+}
 
 /** Custom events YouTube's SPA router fires on `document` after navigation. */
 export const NAVIGATION_EVENTS = ['yt-navigate-finish', 'yt-page-data-updated'] as const;
@@ -27,7 +44,8 @@ export function detectSite(hostname: string): Site | null {
   return null;
 }
 
-export function findMainVideo(site: Site, root: ParentNode = document): HTMLVideoElement | null {
+export function findMainVideo(site: PageSite, root: ParentNode = document): HTMLMediaElement | null {
+  if (site === 'generic') return findLargestMedia(root);
   for (const selector of SELECTORS[site].mainVideo) {
     const el = root.querySelector(selector);
     if (el instanceof HTMLVideoElement) return el;
@@ -66,11 +84,11 @@ export function onNavigate(cb: () => void, target: Document = document): () => v
  * fullscreen, but we re-check on DOM mutations and navigation to be safe.
  */
 export function watchMainVideo(
-  site: Site,
-  cb: (video: HTMLVideoElement) => void,
+  site: PageSite,
+  cb: (media: HTMLMediaElement) => void,
   doc: Document = document,
 ): () => void {
-  let current: HTMLVideoElement | null = null;
+  let current: HTMLMediaElement | null = null;
   let scheduled = false;
 
   const check = () => {

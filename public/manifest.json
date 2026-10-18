@@ -2,15 +2,15 @@
   "manifest_version": 3,
   "name": "All Mixer!",
   "version": "0.2.0",
-  "description": "Volume boost, vocal/instrumental mixing and synced lyrics for YouTube and YouTube Music.",
+  "description": "Volume boost and vocal/instrumental mixing on any site, plus synced lyrics on YouTube and YouTube Music.",
   "minimum_chrome_version": "120",
   "action": { "default_popup": "popup/popup.html", "default_title": "All Mixer!" },
   "background": { "service_worker": "background.js", "type": "module" },
   "permissions": ["storage"],
-  "host_permissions": ["https://www.youtube.com/*", "https://music.youtube.com/*", "https://lrclib.net/*"],
+  "host_permissions": ["<all_urls>"],
   "content_security_policy": { "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'" },
   "web_accessible_resources": [
-    { "resources": ["worklet/separator-worklet.js", "ml/ml.html"], "matches": ["https://www.youtube.com/*", "https://music.youtube.com/*"] }
+    { "resources": ["worklet/separator-worklet.js", "ml/ml.html"], "matches": ["<all_urls>"] }
   ],
   "content_scripts": [
     {
@@ -21,7 +21,7 @@
       "all_frames": false
     },
     {
-      "matches": ["https://www.youtube.com/*", "https://music.youtube.com/*"],
+      "matches": ["http://*/*", "https://*/*"],
       "js": ["content.js"],
       "run_at": "document_idle",
       "all_frames": false

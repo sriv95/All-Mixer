@@ -3,7 +3,7 @@ import type { ModelId } from './model-store';
 import type { TrackInfo } from '../lyrics/types';
 import type { FoundLyrics } from '../lyrics/lrclib-types';
 import type { OverlayState, VideoDelayStats } from '../content/video-delay/delayed-video';
-import type { Site } from '../content/youtube-dom';
+import type { PageSite } from '../content/youtube-dom';
 import type { SeparationState } from '../content/audio/master-chain';
 import type { EngineChoice } from '../content/audio/engine-select';
 import type { LatencyInfo } from '../content/audio/latency';
@@ -79,7 +79,7 @@ export interface AvTransition {
 }
 
 export interface ContentStatus {
-  site: Site;
+  site: PageSite;
   videoFound: boolean;
   audio: AudioState;
   /** Requested master gain, linear (1 = 100 %). */

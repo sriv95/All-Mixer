@@ -1,6 +1,6 @@
 # All Mixer!
 
-Chrome extension (Manifest V3) for youtube.com and music.youtube.com.
+Chrome extension (Manifest V3): volume boost and Separate mode on any site; synced lyrics on youtube.com and music.youtube.com.
 
 ## Build
 
