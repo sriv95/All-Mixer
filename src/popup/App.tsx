@@ -6,7 +6,7 @@ import { separationView, type SepView } from '../shared/separation-view';
 import { MAX_DELAY_S, MIN_DELAY_S } from '../ml/rof-plan';
 import type { MlModel } from '../worklet/protocol';
 import { installModel, useModels, type ModelLine } from './models';
-import { Blocked, Btn, Card, Slider, SliderRow, Switch } from './ui';
+import { Blocked, Btn, Card, Select, Slider, SliderRow, Switch, type Choice } from './ui';
 
 type Update = (patch: Partial<MixerSettings>) => void;
 
@@ -230,6 +230,12 @@ function Banner({ view, settings, update, retry }: { view: SepView; settings: Mi
   );
 }
 
+const MODEL_CHOICES: readonly Choice<MlModel>[] = [
+  { value: 'mdx', label: 'Default', hint: 'MDX-Net + Spleeter' },
+  { value: 'roformer', label: 'High quality', hint: 'Optional download' },
+  { value: 'deux', label: 'Best quality', hint: 'Needs a good GPU, optional download' },
+];
+
 const PRESETS = [
   { id: 'preset-karaoke', label: 'Karaoke', vocal: 0, instrumental: 100, icon: <MicOff size={15} aria-hidden /> },
   { id: 'preset-half-karaoke', label: 'Half karaoke', vocal: 50, instrumental: 100, icon: <AudioLines size={15} aria-hidden /> },
@@ -281,11 +287,7 @@ function SeparateControls({ settings, update, ready, advancedOpen, setAdvancedOp
         <div className="flex flex-col gap-3.5 px-4 pb-4">
           <div className="flex flex-col gap-1.5">
             <label htmlFor="ml-model" className="text-[13px] font-bold">Model</label>
-            <select id="ml-model" value={settings.mlModel} onChange={(e) => update({ mlModel: e.currentTarget.value as MlModel })} className="h-10 w-full rounded-xl border-0 bg-well px-3 text-[13px] text-ink shadow-pressed">
-              <option value="mdx">Default</option>
-              <option value="roformer">High quality (optional download)</option>
-              <option value="deux">Best quality (needs a good GPU, optional download)</option>
-            </select>
+            <Select id="ml-model" value={settings.mlModel} options={MODEL_CHOICES} onValue={(mlModel) => update({ mlModel })} />
           </div>
           {models.model && <ModelRow idPrefix="model" line={models.model} />}
           <div id="chunk-row" className="flex flex-col gap-3">
