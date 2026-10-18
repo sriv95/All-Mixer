@@ -20,12 +20,13 @@ window.addEventListener('message', (e: MessageEvent) => {
   if (e.source !== window.parent || !ALLOWED.includes(e.origin)) return;
   const origin = parentOrigin();
   if (origin !== null && origin !== e.origin) return;
-  const msg = e.data as { type?: string; model?: unknown; delayMs?: unknown } | null;
+  const msg = e.data as { type?: string; model?: unknown; delayMs?: unknown; drums?: unknown } | null;
   if (msg?.type === ML_INIT) {
     const port = e.ports[0];
     if (!port || worker) return;
     const model: MlModel = ML_MODELS.includes(msg.model as MlModel) ? (msg.model as MlModel) : 'mdx';
     const delayMs = typeof msg.delayMs === 'number' && msg.delayMs > 0 ? msg.delayMs : null;
+    const drums = msg.drums === true;
     target = e.origin;
     worker = new Worker(new URL('./ml-worker.ts', import.meta.url), { type: 'module' });
     worker.onmessage = (ev: MessageEvent<FromMlWorker>) => window.parent.postMessage(ev.data, target!);
@@ -33,7 +34,7 @@ window.addEventListener('message', (e: MessageEvent) => {
     const w = worker;
     // Debug stall hook (off by default): see README, Debug.
     void chrome.storage.local
-      .get(['debug.mlStallMs', 'debug.mlStallAfterMs', 'debug.mlTiming', ...(model === 'mdx' ? [] : [keyInstalled(model)])])
+      .get(['debug.mlStallMs', 'debug.mlStallAfterMs', 'debug.mlTiming', ...(model === 'mdx' ? [] : [keyInstalled(model)]), ...(drums ? [keyInstalled('drums')] : [])])
       .catch(() => ({}) as Record<string, unknown>)
       .then((o) => {
         const stallMs = Number(o['debug.mlStallMs']) > 0 ? Number(o['debug.mlStallMs']) : 0;
@@ -49,6 +50,8 @@ window.addEventListener('message', (e: MessageEvent) => {
             modelUrl: chrome.runtime.getURL('ml/vocals.onnx'),
             mdxUrl: chrome.runtime.getURL('ml/mdx.onnx'),
             installed: model === 'mdx' ? undefined : (o[keyInstalled(model)] as InstalledModel | undefined),
+            drums,
+            drumsInstalled: drums ? (o[keyInstalled('drums')] as InstalledModel | undefined) : undefined,
             wasmBase: chrome.runtime.getURL('ml/'),
             stallMs,
             stallAfterMs,

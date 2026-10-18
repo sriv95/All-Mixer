@@ -39,6 +39,8 @@ class FakeWorklet extends FakeNode {
   parameters = new Map([
     ['vocalGain', new FakeParam(1)],
     ['instrumentalGain', new FakeParam(1)],
+    ['drumsGain', new FakeParam(1)],
+    ['othersGain', new FakeParam(1)],
   ]);
   constructor(
     readonly ctx: FakeContext,
@@ -317,6 +319,17 @@ describe('MasterChain separation', () => {
     expect(sep.parameters.get('instrumentalGain')!.value).toBe(0);
     expect(sepOut.gain.targets).toHaveLength(fades);
     expect(changes).toHaveLength(1);
+  });
+
+  it('passes the drums and others gains of a split instrumental to the worklet (1 when absent)', async () => {
+    const { chain, sep } = await separating();
+    expect(sep.parameters.get('drumsGain')!.value).toBe(1);
+    chain.setSeparation({ ...on, drums: 2, others: 0.25 });
+    expect(sep.parameters.get('drumsGain')!.value).toBe(2);
+    expect(sep.parameters.get('othersGain')!.value).toBe(0.25);
+    chain.setSeparation(on);
+    expect(sep.parameters.get('drumsGain')!.value).toBe(1);
+    expect(sep.parameters.get('othersGain')!.value).toBe(1);
   });
 
   it('follows the worklet engine messages: latency, engine, reason, and the change time', async () => {

@@ -8,6 +8,7 @@ import {
   ML_RESULT_OFFSET,
   ROF_LATENCY_SAMPLES,
   bufferBytes,
+  planesFor,
   type FromWorklet,
   type MlGeometry,
   type MlModel,
@@ -49,6 +50,8 @@ class FakePort {
   policy: (k: number) => Policy = () => 'echo';
   /** Quanta between post and return. */
   latencyQ = 1;
+  /** Drum geometry: the drums plane is this fraction of the true input. */
+  drumShare = 0.25;
   now = 0;
 
   constructor(
@@ -73,13 +76,17 @@ class FakePort {
     } else {
       // Vocal for input [start − resultOffset, … + block): the true input, so vocal = dry.
       const start = head[1] - resultOffset;
-      const data = new Float32Array(buf, ML_HEADER_BYTES, 4 * block);
+      const data = new Float32Array(buf, ML_HEADER_BYTES, planesFor(this.g) * block);
       for (let i = 0; i < block; i++) {
         const p = start + i;
         data[i] = p >= 0 && p < this.sigL.length ? this.sigL[p] : 0;
         data[block + i] = p >= 0 && p < this.sigR.length ? this.sigR[p] : 0;
         data[2 * block + i] = data[i];
         data[3 * block + i] = data[block + i];
+        if (this.g.drums) {
+          data[4 * block + i] = this.drumShare * data[i];
+          data[5 * block + i] = this.drumShare * data[block + i];
+        }
       }
       head[1] = start;
     }
@@ -114,6 +121,9 @@ interface Rig {
   vR: number[];
   iL: number[];
   iR: number[];
+  /** Drums output (the geometry's drum plane). */
+  dL: number[];
+  dR: number[];
   /** Bypass weight per output sample. */
   b: number[];
   q: number;
@@ -135,6 +145,8 @@ function rig(seconds: number, signal: (n: number, seed: number) => Float32Array 
   const il = new Float32Array(QUANTUM);
   const ir = new Float32Array(QUANTUM);
   const bw = new Float32Array(QUANTUM);
+  const dl = new Float32Array(QUANTUM);
+  const dr = new Float32Array(QUANTUM);
   const r: Rig = {
     core,
     port,
@@ -145,17 +157,21 @@ function rig(seconds: number, signal: (n: number, seed: number) => Float32Array 
     vR: [],
     iL: [],
     iR: [],
+    dL: [],
+    dR: [],
     b: [],
     q: 0,
     run(nq) {
       for (let k = 0; k < nq; k++) {
         const p = r.q * QUANTUM;
-        core.process(sigL.subarray(p, p + QUANTUM), sigR.subarray(p, p + QUANTUM), vl, vr, il, ir, bw, p / SR);
+        core.process(sigL.subarray(p, p + QUANTUM), sigR.subarray(p, p + QUANTUM), vl, vr, il, ir, bw, p / SR, dl, dr);
         for (let i = 0; i < QUANTUM; i++) {
           r.vL.push(vl[i]);
           r.vR.push(vr[i]);
           r.iL.push(il[i]);
           r.iR.push(ir[i]);
+          r.dL.push(dl[i]);
+          r.dR.push(dr[i]);
           r.b.push(bw[i]);
         }
         r.q++;
@@ -615,5 +631,48 @@ describe('SeparatorCore, geometry planned at run time', () => {
     const r = rig(1, noise, max);
     r.core.setActive(true, 'ml');
     expect(r.core.latencySamples).toBe(max.latency);
+  });
+});
+
+describe('SeparatorCore, drum stage', () => {
+  // block 40, offset 10, delay 40 + 10 + 30 + 1 quanta: a geometry of the shape the drum planner makes
+  const drumsG: MlGeometry = { block: 40 * QUANTUM, resultOffset: 10 * QUANTUM, latency: 81 * QUANTUM, warmupP90Ms: 1, drums: true };
+
+  it('a drum geometry has 6 planes per block and a ring that holds its latency', () => {
+    expect(planesFor(drumsG)).toBe(6);
+    expect(planesFor({})).toBe(4);
+    expect(bufferBytes(drumsG)).toBe(ML_HEADER_BYTES + 6 * drumsG.block * 4);
+    expect(ringOk(131072, drumsG.latency, drumsG.block)).toBe(true);
+  });
+
+  it('the drums plane comes out with the instrumental delay, a part of the instrumental that stays whole', () => {
+    const r = rig(3, noise, drumsG);
+    r.core.setActive(true, 'ml');
+    expect(r.core.latencySamples).toBe(drumsG.latency);
+    r.run(Math.ceil((3 * SR) / QUANTUM) - 2);
+    const D = drumsG.latency;
+    let dErr = 0, iErr = 0;
+    for (let n = D + 2 * drumsG.block; n < r.dL.length; n++) {
+      // Vk = the input here, so the instrumental is ~0 and the vocal carries the signal; the drums are 25 % of the input
+      dErr = Math.max(dErr, Math.abs(r.dL[n] - 0.25 * r.sigL[n - D]), Math.abs(r.dR[n] - 0.25 * r.sigR[n - D]));
+      iErr = Math.max(iErr, Math.abs(r.iL[n]), Math.abs(r.iR[n]));
+    }
+    expect(dErr).toBeLessThan(1e-6);
+    expect(iErr).toBeLessThan(1e-6);
+    expect(r.dL.slice(0, D).every((v) => v === 0)).toBe(true);
+  });
+
+  it('without the drum stage the drums output stays silent', () => {
+    const r = rig(3, noise, 'mdx');
+    r.core.setActive(true, 'ml');
+    r.run(Math.ceil((3 * SR) / QUANTUM) - 2);
+    expect(r.dL.every((v) => v === 0) && r.dR.every((v) => v === 0)).toBe(true);
+  });
+
+  it('the original mix (bypass) has no drums', () => {
+    const r = rig(1, noise, drumsG);
+    r.core.setActive(true, 'bypass');
+    r.run(200);
+    expect(r.dL.every((v) => v === 0)).toBe(true);
   });
 });

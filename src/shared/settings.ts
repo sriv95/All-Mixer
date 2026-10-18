@@ -14,6 +14,12 @@ export interface MixerSettings {
   instrumentalPct: number;
   /** Separate mode ML model: 'mdx' (MDX-Net 9482 + Spleeter, the default) or a downloaded Mel-Band RoFormer: 'roformer' (Kim fine-tune, High quality) or 'deux' (Best quality). */
   mlModel: MlModel;
+  /** Split instrumental (Advanced): a second model takes the drums out of the instrumental, which then has a Drums and an Others gain. Costs GPU time and delay. */
+  splitInstrumental: boolean;
+  /** Drums gain inside the instrumental, percent (0–600); the instrumental gain applies on top. Used when splitInstrumental is on. */
+  drumsPct: number;
+  /** Gain of the rest of the instrumental (everything but the drums), percent (0–600). */
+  othersPct: number;
   /** Delay limit, seconds (MIN_DELAY_S to MAX_DELAY_S): the audio delay stays below it; a longer limit gives the model a longer chunk. */
   mlDelayS: number;
 }
@@ -21,12 +27,18 @@ export interface MixerSettings {
 const GAIN_MIN_PCT = 0;
 const GAIN_MAX_PCT = 600;
 
+/** Shortest delay limit (s) at which the RoFormer models can also run the drum split on a fast GPU; the popup raises the limit to it. */
+export const DRUMS_MIN_DELAY_S = 8;
+
 export const DEFAULT_SETTINGS: Readonly<MixerSettings> = Object.freeze({
   mode: 'default',
   masterPct: 100,
   vocalPct: 100,
   instrumentalPct: 100,
   mlModel: 'mdx',
+  splitInstrumental: false,
+  drumsPct: 100,
+  othersPct: 100,
   mlDelayS: MIN_DELAY_S,
 });
 
@@ -45,6 +57,9 @@ export function normalizeSettings(raw: unknown): MixerSettings {
     vocalPct: clampPct(r.vocalPct, DEFAULT_SETTINGS.vocalPct),
     instrumentalPct: clampPct(r.instrumentalPct, DEFAULT_SETTINGS.instrumentalPct),
     mlModel: ML_MODELS.includes(r.mlModel as MlModel) ? (r.mlModel as MlModel) : DEFAULT_SETTINGS.mlModel,
+    splitInstrumental: r.splitInstrumental === true,
+    drumsPct: clampPct(r.drumsPct, DEFAULT_SETTINGS.drumsPct),
+    othersPct: clampPct(r.othersPct, DEFAULT_SETTINGS.othersPct),
     mlDelayS: clampDelayS(r.mlDelayS),
   };
 }
@@ -68,10 +83,15 @@ export function separationFor(settings: MixerSettings): {
   on: boolean;
   vocal: number;
   instrumental: number;
+  drums: number;
+  others: number;
 } {
+  const split = settings.splitInstrumental;
   return {
     on: settings.mode === 'separate',
     vocal: settings.vocalPct / 100,
     instrumental: settings.instrumentalPct / 100,
+    drums: split ? settings.drumsPct / 100 : 1,
+    others: split ? settings.othersPct / 100 : 1,
   };
 }

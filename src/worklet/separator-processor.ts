@@ -1,11 +1,11 @@
 // AudioWorklet: vocal / instrumental separation with per-stem gain.
-//   out = (1 − b)·(vocalGain · vocal + instrumentalGain · instrumental) + b·(vocal + instrumental)
-// with b the core's bypass weight (1 = original mix).
+//   out = (1 − b)·(vocalGain · vocal + instrumentalGain · (drumsGain · drums + othersGain · (instrumental − drums))) + b·(vocal + instrumental)
+// with b the core's bypass weight (1 = original mix). Without the drum stage `drums` is 0 and othersGain scales the instrumental.
 // The separation (ML engine, or the bypass path that plays the original mix) lives in SeparatorCore; vocal + instrumental = input delayed
 // by the engine's latency, so 100 % / 100 % is the original.
 // process() allocates nothing; every buffer is created in the constructor.
 import { QUANTUM, SeparatorCore } from './core';
-import { PARAM_INSTRUMENTAL, PARAM_VOCAL, SEPARATOR_PROCESSOR, type FromWorklet, type ToWorklet } from './protocol';
+import { PARAM_DRUMS, PARAM_INSTRUMENTAL, PARAM_OTHERS, PARAM_VOCAL, SEPARATOR_PROCESSOR, type FromWorklet, type ToWorklet } from './protocol';
 
 // AudioWorkletGlobalScope is not in TypeScript's DOM lib.
 declare const sampleRate: number;
@@ -20,6 +20,8 @@ class SeparatorProcessor extends AudioWorkletProcessor {
     return [
       { name: PARAM_VOCAL, defaultValue: 1, minValue: 0, maxValue: 6, automationRate: 'k-rate' },
       { name: PARAM_INSTRUMENTAL, defaultValue: 1, minValue: 0, maxValue: 6, automationRate: 'k-rate' },
+      { name: PARAM_DRUMS, defaultValue: 1, minValue: 0, maxValue: 6, automationRate: 'k-rate' },
+      { name: PARAM_OTHERS, defaultValue: 1, minValue: 0, maxValue: 6, automationRate: 'k-rate' },
     ];
   }
 
@@ -29,11 +31,15 @@ class SeparatorProcessor extends AudioWorkletProcessor {
   private readonly vR = new Float32Array(QUANTUM);
   private readonly iL = new Float32Array(QUANTUM);
   private readonly iR = new Float32Array(QUANTUM);
+  private readonly dL = new Float32Array(QUANTUM);
+  private readonly dR = new Float32Array(QUANTUM);
   private readonly bw = new Float32Array(QUANTUM);
   private active = false;
   // Gains applied at the end of the previous quantum; each quantum ramps linearly from these.
   private vg = 1;
   private ig = 1;
+  private dg = 1;
+  private og = 1;
 
   constructor() {
     super();
@@ -80,33 +86,30 @@ class SeparatorProcessor extends AudioWorkletProcessor {
       oR.fill(0);
       return true;
     }
-    const { vL, vR, iL, iR, bw } = this;
-    this.core.process(inL, inR, vL, vR, iL, iR, bw, currentTime);
+    const { vL, vR, iL, iR, dL, dR, bw } = this;
+    this.core.process(inL, inR, vL, vR, iL, iR, bw, currentTime, dL, dR);
 
+    // Per-sample ramp from last quantum's gains so k-rate steps do not zipper. The drums are a part of the
+    // instrumental: the instrumental gain scales both, the drums / others gains split it.
     const vg1 = parameters[PARAM_VOCAL][0];
     const ig1 = parameters[PARAM_INSTRUMENTAL][0];
-    const vg0 = this.vg;
-    const ig0 = this.ig;
-    if (vg0 === vg1 && ig0 === ig1) {
-      for (let i = 0; i < len; i++) {
-        const b = bw[i];
-        oL[i] = (1 - b) * (vg1 * vL[i] + ig1 * iL[i]) + b * (vL[i] + iL[i]);
-        oR[i] = (1 - b) * (vg1 * vR[i] + ig1 * iR[i]) + b * (vR[i] + iR[i]);
-      }
-    } else {
-      // Per-sample ramp so k-rate steps do not zipper.
-      const dv = (vg1 - vg0) / len;
-      const di = (ig1 - ig0) / len;
-      for (let i = 0; i < len; i++) {
-        const v = vg0 + dv * (i + 1);
-        const g = ig0 + di * (i + 1);
-        const b = bw[i];
-        oL[i] = (1 - b) * (v * vL[i] + g * iL[i]) + b * (vL[i] + iL[i]);
-        oR[i] = (1 - b) * (v * vR[i] + g * iR[i]) + b * (vR[i] + iR[i]);
-      }
-      this.vg = vg1;
-      this.ig = ig1;
+    const dg1 = parameters[PARAM_DRUMS][0];
+    const og1 = parameters[PARAM_OTHERS][0];
+    const { vg: vg0, ig: ig0, dg: dg0, og: og0 } = this;
+    for (let i = 0; i < len; i++) {
+      const k = (i + 1) / len;
+      const v = vg0 + (vg1 - vg0) * k;
+      const g = ig0 + (ig1 - ig0) * k;
+      const d = dg0 + (dg1 - dg0) * k;
+      const o = og0 + (og1 - og0) * k;
+      const b = bw[i];
+      oL[i] = (1 - b) * (v * vL[i] + g * (d * dL[i] + o * (iL[i] - dL[i]))) + b * (vL[i] + iL[i]);
+      oR[i] = (1 - b) * (v * vR[i] + g * (d * dR[i] + o * (iR[i] - dR[i]))) + b * (vR[i] + iR[i]);
     }
+    this.vg = vg1;
+    this.ig = ig1;
+    this.dg = dg1;
+    this.og = og1;
     return true;
   }
 }

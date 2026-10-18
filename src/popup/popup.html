@@ -31,6 +31,18 @@
         <input id="instrumental" type="range" min="0" max="600" step="5" value="100" />
         <output id="instrumental-value" for="instrumental">100%</output>
       </div>
+      <div id="split-mix" hidden>
+        <label for="drums">Drums <span class="sub">in the instrumental</span></label>
+        <div class="row">
+          <input id="drums" type="range" min="0" max="600" step="5" value="100" />
+          <output id="drums-value" for="drums">100%</output>
+        </div>
+        <label for="others">Others <span class="sub">in the instrumental</span></label>
+        <div class="row">
+          <input id="others" type="range" min="0" max="600" step="5" value="100" />
+          <output id="others-value" for="others">100%</output>
+        </div>
+      </div>
       <div class="presets" role="group" aria-label="Presets">
         <button type="button" id="preset-karaoke" data-vocal="0" data-instrumental="100" aria-pressed="false">Karaoke</button>
         <button type="button" id="preset-half-karaoke" data-vocal="50" data-instrumental="100" aria-pressed="false">Half Karaoke</button>
@@ -58,6 +70,15 @@
           </div>
           <p class="note">The audio delay stays under the limit. A longer limit gives the model more of the song at once, which separates better but needs a faster GPU. The Default model stops growing at about 6.5 s.</p>
         </div>
+        <details id="split">
+          <summary>Split instrumental (drums)</summary>
+          <label class="check"><input id="split-on" type="checkbox" /> Split the drums from the rest of the instrumental</label>
+          <p class="note">A second model takes the drums out of the instrumental, so Drums and Others get their own sliders (each one scales the Instrumental slider). It needs a one-time download, more GPU, and adds about 4 s of audio delay. With High or Best quality it also needs a fast GPU, and the delay limit goes up to at least 8 s.</p>
+          <p id="drums-row" class="note" hidden>
+            <span id="drums-text"></span>
+            <button id="drums-btn" type="button" hidden></button>
+          </p>
+        </details>
       </details>
     </section>
 

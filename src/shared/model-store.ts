@@ -1,11 +1,11 @@
-// The Mel-Band RoFormer models ("High quality" = Kim fine-tune, "Best quality" = Deux) are not packed into the
-// extension: the user downloads each from a public Hugging Face repo into the extension's own storage (OPFS). Pure
+// The Mel-Band RoFormer models ("High quality" = Kim fine-tune, "Best quality" = Deux) and the drum split model (SCNet
+// Tran Small) are not packed into the extension: the user downloads each from a public Hugging Face repo into the extension's own storage (OPFS). Pure
 // logic shared by the background worker (download), the popup (state text) and the ML page (which model files to
 // load). No chrome.* or DOM here.
 //
 // Repo layout (scripts/model-manifest.mjs writes it); every model has its own version:
-//   manifest.json   {"format":1,"models":{"roformer":{"version":1,"files":{"roformer.onnx":457696078,"roformer-meta.json":19712}},"deux":{...}}}
-//   v1/roformer.onnx, v1/roformer-meta.json, v1/deux.onnx, v1/deux-meta.json
+//   manifest.json   {"format":2,"models":{"roformer":{"version":1,"files":{"roformer.onnx":457696078,"roformer-meta.json":19712}},"deux":{...},"drums":{"version":1,"files":{"drums.onnx":43105845}}}}
+//   v1/roformer.onnx, v1/roformer-meta.json, v1/deux.onnx, v1/deux-meta.json, v1/drums.onnx
 // A download is split into CHUNK-sized pieces, one OPFS file each (`v1-roformer.onnx.0007`): an interrupted download
 // (the service worker can be stopped at any time) resumes at the first missing piece, and the reader concatenates
 // the pieces as a Blob without copying.
@@ -18,13 +18,16 @@ export const MODEL_FORMAT = 2;
 
 export const CHUNK = 8 * 2 ** 20;
 
-/** The downloadable models; they are also the ids of the Model menu entries (src/worklet/protocol.ts MlModel). */
-export type ModelId = 'roformer' | 'deux';
-export const MODEL_IDS: readonly ModelId[] = ['roformer', 'deux'];
+/**
+ * The downloadable models. 'roformer' and 'deux' are the Model menu entries (src/worklet/protocol.ts MlModel);
+ * 'drums' is SCNet Tran Small, the model of Split instrumental (src/ml/scnet.ts).
+ */
+export type ModelId = 'roformer' | 'deux' | 'drums';
+export const MODEL_IDS: readonly ModelId[] = ['roformer', 'deux', 'drums'];
 /** Menu names. */
-export const MODEL_LABEL: Readonly<Record<ModelId, string>> = { roformer: 'High quality', deux: 'Best quality' };
-/** The two files of a model: weights and STFT metadata. */
-export const modelFileNames = (id: ModelId): [string, string] => [`${id}.onnx`, `${id}-meta.json`];
+export const MODEL_LABEL: Readonly<Record<ModelId, string>> = { roformer: 'High quality', deux: 'Best quality', drums: 'Drum split' };
+/** The files of a model: weights and, for the RoFormers, the STFT metadata. */
+export const modelFileNames = (id: ModelId): string[] => (id === 'drums' ? ['drums.onnx'] : [`${id}.onnx`, `${id}-meta.json`]);
 
 /** Files of one model version, name → size in bytes. */
 export type ModelFileSizes = Record<string, number>;

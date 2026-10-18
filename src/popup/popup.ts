@@ -1,5 +1,5 @@
 import type { ContentStatus, GetStatus, GetTabSettings, SetTabSettings } from '../shared/messages';
-import { clampDelayS, clampPct, normalizeSettings, type MixerSettings, type Mode } from '../shared/settings';
+import { DRUMS_MIN_DELAY_S, clampDelayS, clampPct, normalizeSettings, type MixerSettings, type Mode } from '../shared/settings';
 import type { MlModel } from '../worklet/protocol';
 import { MODEL_IDS, MODEL_LABEL, keyInstalled, keyProgress, keyRemote, mb, modelState, type InstalledModel, type ModelId, type ModelState, type Progress, type RemoteRecord } from '../shared/model-store';
 
@@ -12,6 +12,16 @@ const vocal = $<HTMLInputElement>('vocal');
 const vocalValue = $<HTMLOutputElement>('vocal-value');
 const instrumental = $<HTMLInputElement>('instrumental');
 const instrumentalValue = $<HTMLOutputElement>('instrumental-value');
+const drums = $<HTMLInputElement>('drums');
+const drumsValue = $<HTMLOutputElement>('drums-value');
+const others = $<HTMLInputElement>('others');
+const othersValue = $<HTMLOutputElement>('others-value');
+const splitMix = $<HTMLDivElement>('split-mix');
+const splitOn = $<HTMLInputElement>('split-on');
+const split = $<HTMLDetailsElement>('split');
+const drumsRow = $<HTMLParagraphElement>('drums-row');
+const drumsText = $<HTMLSpanElement>('drums-text');
+const drumsBtn = $<HTMLButtonElement>('drums-btn');
 const mlModel = $<HTMLSelectElement>('ml-model');
 const mlDelay = $<HTMLInputElement>('ml-delay');
 const mlDelayValue = $<HTMLOutputElement>('ml-delay-value');
@@ -39,6 +49,12 @@ function render(): void {
   vocalValue.value = `${settings.vocalPct}%`;
   instrumental.value = String(settings.instrumentalPct);
   instrumentalValue.value = `${settings.instrumentalPct}%`;
+  drums.value = String(settings.drumsPct);
+  drumsValue.value = `${settings.drumsPct}%`;
+  others.value = String(settings.othersPct);
+  othersValue.value = `${settings.othersPct}%`;
+  splitMix.hidden = !settings.splitInstrumental;
+  splitOn.checked = settings.splitInstrumental;
   mlModel.value = settings.mlModel;
   mlDelay.value = String(settings.mlDelayS);
   mlDelayValue.value = `${settings.mlDelayS} s`;
@@ -131,10 +147,12 @@ interface ModelRecords {
   remote?: RemoteRecord;
   progress?: Progress;
 }
-const records: Record<ModelId, ModelRecords> = { roformer: {}, deux: {} };
+const records: Record<ModelId, ModelRecords> = { roformer: {}, deux: {}, drums: {} };
+/** The Model menu entries; the drum split model has its own row in the Split instrumental section. */
+const ROFORMER_IDS = MODEL_IDS.filter((id) => id !== 'drums');
 let modelTimer: ReturnType<typeof setTimeout> | undefined;
 
-const isModelId = (m: string): m is ModelId => (MODEL_IDS as readonly string[]).includes(m);
+const isModelId = (m: string): m is ModelId => (ROFORMER_IDS as readonly string[]).includes(m);
 
 function modelLine(id: ModelId, s: ModelState): { text: string; button?: string } {
   const label = MODEL_LABEL[id];
@@ -159,7 +177,7 @@ function renderModel(): void {
   const now = Date.now();
   const states = Object.fromEntries(MODEL_IDS.map((id) => [id, modelState(records[id].installed, records[id].remote, records[id].progress, now)])) as Record<ModelId, ModelState>;
   // Shown for the selected downloadable model, and for any model with an update on offer or a download running.
-  const id = isModelId(settings.mlModel) ? settings.mlModel : MODEL_IDS.find((m) => states[m].kind === 'update' || states[m].kind === 'downloading');
+  const id = isModelId(settings.mlModel) ? settings.mlModel : ROFORMER_IDS.find((m) => states[m].kind === 'update' || states[m].kind === 'downloading');
   modelRow.hidden = !id;
   if (id) {
     const line = modelLine(id, states[id]);
@@ -167,6 +185,15 @@ function renderModel(): void {
     modelBtn.hidden = !line.button;
     modelBtn.textContent = line.button ?? '';
     modelBtn.dataset.id = id;
+  }
+  // The drum model: shown while the split is on, or when an update is on offer or a download is running.
+  const ds = states.drums;
+  drumsRow.hidden = !(settings.splitInstrumental || ds.kind === 'update' || ds.kind === 'downloading');
+  if (!drumsRow.hidden) {
+    const line = modelLine('drums', ds);
+    drumsText.textContent = line.text;
+    drumsBtn.hidden = !line.button;
+    drumsBtn.textContent = line.button ?? '';
   }
   // A download whose worker was stopped goes stale after STALL_MS: look again then.
   if (MODEL_IDS.some((m) => states[m].kind === 'downloading')) modelTimer = setTimeout(renderModel, 5000);
@@ -191,6 +218,7 @@ async function initModel(): Promise<void> {
 }
 
 modelBtn.addEventListener('click', () => void chrome.runtime.sendMessage({ type: 'model-install', id: modelBtn.dataset.id }));
+drumsBtn.addEventListener('click', () => void chrome.runtime.sendMessage({ type: 'model-install', id: 'drums' }));
 
 function disableAll(message: string): void {
   for (const el of document.querySelectorAll<HTMLInputElement | HTMLButtonElement | HTMLSelectElement>('input, button, select')) {
@@ -225,7 +253,8 @@ async function init(): Promise<void> {
   tabId = tab.id;
   const req: GetTabSettings = { type: 'get-tab-settings', tabId };
   settings = normalizeSettings(await chrome.runtime.sendMessage(req));
-  if (settings.mlModel !== 'mdx') advanced.open = true;
+  if (settings.mlModel !== 'mdx' || settings.splitInstrumental) advanced.open = true;
+  if (settings.splitInstrumental) split.open = true;
   render();
   void initModel();
   await refreshStatus();
@@ -253,6 +282,23 @@ vocal.addEventListener('input', () => {
 
 instrumental.addEventListener('input', () => {
   settings = { ...settings, instrumentalPct: clampPct(instrumental.value) };
+  save();
+});
+
+drums.addEventListener('input', () => {
+  settings = { ...settings, drumsPct: clampPct(drums.value) };
+  save();
+});
+
+others.addEventListener('input', () => {
+  settings = { ...settings, othersPct: clampPct(others.value) };
+  save();
+});
+
+// The drum split runs on a RoFormer only with a longer delay limit than the default 2 s, so the limit goes up with it.
+splitOn.addEventListener('change', () => {
+  const needsDelay = splitOn.checked && settings.mlModel !== 'mdx' && settings.mlDelayS < DRUMS_MIN_DELAY_S;
+  settings = { ...settings, splitInstrumental: splitOn.checked, ...(needsDelay ? { mlDelayS: DRUMS_MIN_DELAY_S } : {}) };
   save();
 });
 

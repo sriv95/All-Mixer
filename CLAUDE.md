@@ -18,7 +18,8 @@ bun run typecheck                     # tsc --noEmit
 uv sync                               # Python env (.venv) for the model scripts
 bun run fetch-model                   # downloads public/ml/vocals.onnx + mdx.onnx (gitignored)
 bun run export-roformer               # optional: builds models-out/{roformer,deux}.onnx (gitignored, not part of the extension; name/--force args)
-bun run model-manifest roformer=1 deux=1  # models-out/hf/ = what to upload to the Hugging Face model repo (see scripts/model-manifest.mjs)
+bun run export-scnet                  # optional: builds models-out/drums.onnx (SCNet Tran Small, the Split instrumental model)
+bun run model-manifest roformer=1 deux=1 drums=1  # models-out/hf/ = what to upload to the Hugging Face model repo (see scripts/model-manifest.mjs)
 bun run build                         # typecheck + 4 vite builds -> dist/
 bun run dev                           # watch build of the content script only
 ```
@@ -46,7 +47,8 @@ Runtime pieces and how they talk (message types in `src/shared/messages.ts`):
 2. `src/worklet/` (`separator-processor.ts` + `core.ts`, protocol in `protocol.ts`): the AudioWorklet delay line/mixer. Runs on the original mix (no delay) until ML is ready, then outputs ML stems with a fixed latency (`ML_LATENCY_SAMPLES`, ≈1.97 s). `protocol.ts` is shared by both sides, so it must not touch DOM/worklet globals; its constants fix the block geometry that the ML code depends on.
 3. ML host chain: `MlHost` (`content/audio/ml-host.ts`) creates a hidden extension iframe `ml/ml.html` (web-accessible) because that origin gets a real WebGPU adapter. `ml-page.ts` starts `ml-worker.ts` and hands over a `MessagePort`; blocks then flow worklet ↔ worker directly, bypassing the page. The worker runs ONNX Runtime Web (webgpu EP only): MDX-Net 9482 for the vocal and the Spleeter vocal model for a mask (`pipeline.ts`, `mdx.ts`, `stream.ts`). `karaoke.ts` builds the Karaoke stem (instrumental = mix − vocal with Spleeter mask, dip-fill gate, MDX-presence gate); it must stay allocation-free in the hot path (tests enforce this).
 4. `EngineSelector` (`engine-select.ts`): decides warming / on / unavailable / stopped. The RoFormer worker plans its own chunk from the GPU speed and the popup's delay budget (`src/ml/rof-plan.ts`, `startRoformer` in `ml-worker.ts`) and sends the geometry in `ready`; the selector passes it to the worklet (`setMlGeometry`) before switching to ML. A warm-up benchmark (p90 gate) and runtime deadline misses fall back to the original mix.
-5. `DelayedVideo` (`content/video-delay/`): because audio is delayed in Separate mode, the picture is delayed by the same amount (rVFC frame queue drawn on a canvas over the `<video>`). Lyrics follow the *presented* time, not `currentTime`.
+5. Split instrumental (off by default; `src/ml/scnet.ts`, `src/ml/drum-engine.ts`): `withDrums` wraps the vocal `BlockEngine` in the ML worker. SCNet Tran Small (downloaded model `drums`, fixed 2.94 s chunk) takes the drums out of the instrumental (input − Vk); the reply buffer gets two more planes (`MlGeometry.drums`, `planesFor`), results are older by `SC_LAG` (a chunk), and the worklet outputs `drums` as a part of the instrumental (`PARAM_DRUMS` / `PARAM_OTHERS`). The worker plans the geometry (`planMdxDrums`, `planRof(…, drumMs)`) and sends it in `ready`. SCNet large was dropped: its LSTM has no WebGPU kernel.
+6. `DelayedVideo` (`content/video-delay/`): because audio is delayed in Separate mode, the picture is delayed by the same amount (rVFC frame queue drawn on a canvas over the `<video>`). Lyrics follow the *presented* time, not `currentTime`.
 
 ### Lyrics (`src/lyrics/` pure logic, `src/content/lyrics/` UI)
 
