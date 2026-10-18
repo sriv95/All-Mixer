@@ -6,11 +6,12 @@ import { MODEL_IDS, keyInstalled } from '../shared/model-store';
 import { AvProbe } from './av-probe';
 import { deferEnd } from './deferred-end';
 import { watchDelayGap } from './delay-gap';
+import { PlayerSpinner } from './spinner';
 import { TimeDisplay } from './time-display';
 import { initLyrics, type LyricsFeature } from './lyrics/init';
 import { DelayedVideo } from './video-delay/delayed-video';
 import { overlayDelayMs } from './video-delay/schedule';
-import { detectSite, findSpinner, watchMainVideo, type PageSite } from './youtube-dom';
+import { detectSite, watchMainVideo, type PageSite } from './youtube-dom';
 
 // Lyrics exist for YouTube / YT Music only; every other site gets the mixer without them.
 // Frames (embeds, ads) run the mixer too, but a YouTube embed gets no lyrics UI.
@@ -26,27 +27,21 @@ let debugDelayMs: number | null = null; // QA override, see debug-video-delay
 const probe = new AvProbe();
 const chain = new MasterChain(() => syncDelay(), undefined, probe);
 const selector = new EngineSelector(chain);
-// The player's own spinner covers what the user waits for: the ML warm-up, the held end of a video, and the silent
-// gap after a seek. Each reason switches it on and off on its own.
-// The player hides it again on its own state changes (it sets `display: none`), so keep it up while we wait.
-const spinnerReasons = new Set<string>();
-const spinnerGuard = new MutationObserver(() => paintSpinner());
-const paintSpinner = () => {
-  const spinner = findSpinner();
-  if (!spinner) return;
-  spinnerGuard.disconnect();
-  const on = spinnerReasons.size > 0;
-  spinner.style.display = on ? 'block' : 'none';
-  if (on) spinnerGuard.observe(spinner, { attributes: true, attributeFilter: ['style'] });
-};
-const spinnerFor = (reason: string) => (waiting: boolean) => {
-  if (waiting) spinnerReasons.add(reason);
-  else spinnerReasons.delete(reason);
-  paintSpinner();
-};
+const spinner = new PlayerSpinner();
+const spinnerFor = (reason: string, text: string) => (waiting: boolean) => spinner.set(reason, waiting ? text : null);
 // The warm-up takes 10 to 40 s: hold the video (sound and picture) behind the player's spinner until it is over, then resume what we paused.
 let pausedForWarmup: HTMLMediaElement | null = null;
-const warmupSpinner = spinnerFor('warmup');
+const WARMUP_LABEL = 'Preparing vocal separation';
+let warmupTimer: ReturnType<typeof setInterval> | undefined;
+/** The warm-up takes 10 to 40 s with no progress to report: count the seconds so it does not look stuck. */
+const warmupSpinner = (on: boolean) => {
+  clearInterval(warmupTimer);
+  if (!on) return spinner.set('warmup', null);
+  const t0 = performance.now();
+  const tick = () => spinner.set('warmup', `${WARMUP_LABEL}… ${Math.round((performance.now() - t0) / 1000)} s`);
+  tick();
+  warmupTimer = setInterval(tick, 1000);
+};
 selector.onChange = ({ state }) => {
   if (state === 'warming') {
     if (video && !video.paused) {
@@ -69,8 +64,8 @@ chrome.storage.onChanged.addListener((changes, area) => {
   for (const id of MODEL_IDS) if (keyInstalled(id) in changes) selector.reload(id);
 });
 // The end of the video (autoplay / queue) waits for the delayed tail to play out.
-deferEnd(() => video, () => overlay?.delayMs ?? 0, spinnerFor('end'));
-watchDelayGap(() => video, () => overlay?.delayMs ?? 0, (cb) => chain.whenAudible(cb), spinnerFor('gap'));
+deferEnd(() => video, () => overlay?.delayMs ?? 0, spinnerFor('end', 'Playing the last seconds'));
+watchDelayGap(() => video, () => overlay?.delayMs ?? 0, (cb) => chain.whenAudible(cb), spinnerFor('gap', 'Syncing the sound'));
 // Lyrics follow what the user sees and hears, which trails currentTime by the picture delay (D1).
 const lyrics: LyricsFeature = lyricsSite
   ? initLyrics(lyricsSite, () => overlay?.presentedTime() ?? null, () => overlay?.presentedBusy() ?? false)
