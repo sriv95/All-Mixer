@@ -7,7 +7,7 @@ import { MAX_DELAY_S, MIN_DELAY_S } from '../ml/rof-plan';
 import type { MlModel } from '../worklet/protocol';
 import { installModel, useModels, type ModelLine } from './models';
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
-import { Blocked, Btn, Card, Collapse, Disclosure, Rise, Roll, Select, Skeleton, Slider, SliderRow, Switch, fade, slide, useGlide, type Choice } from './ui';
+import { Blocked, Btn, Card, Collapse, Disclosure, Rise, Roll, Select, Skeleton, Slider, SliderRow, Switch, Tip, fade, slide, useGlide, type Choice } from './ui';
 
 type Update = (patch: Partial<MixerSettings>) => void;
 
@@ -171,7 +171,8 @@ export function App() {
 
 function Tabs({ mode, onMode }: { mode: Mode; onMode: (m: Mode) => void }) {
   const blocked = useContext(Blocked);
-  const tab = (m: Mode, label: string, icon: ReactNode) => (
+  const tab = (m: Mode, label: string, icon: ReactNode, tip: string) => (
+    <Tip text={tip} side="bottom" align={m === 'default' ? 'start' : 'end'} className="flex-1">
     <button id={`tab-${m}`} type="button" role="tab" aria-selected={mode === m} disabled={blocked} onClick={() => onMode(m)}
       className="relative flex flex-1 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent py-2 text-[13px] font-bold text-muted transition-colors duration-200 aria-selected:text-white disabled:opacity-45">
       {mode === m && <motion.span layoutId="tab-pill" transition={{ type: 'spring', stiffness: 500, damping: 38 }} className="absolute inset-0 rounded-full bg-brand shadow-[0_3px_8px_rgb(225_29_46/0.4)]" />}
@@ -180,11 +181,12 @@ function Tabs({ mode, onMode }: { mode: Mode; onMode: (m: Mode) => void }) {
         {label}
       </span>
     </button>
+    </Tip>
   );
   return (
     <div role="tablist" className="flex rounded-full bg-tab p-1 shadow-tab">
-      {tab('default', 'Default', <Volume2 size={15} aria-hidden />)}
-      {tab('separate', 'Separate', <AudioLines size={15} aria-hidden />)}
+      {tab('default', 'Default', <Volume2 size={15} aria-hidden />, 'Volume boost only')}
+      {tab('separate', 'Separate', <AudioLines size={15} aria-hidden />, 'Split vocals and music live')}
     </div>
   );
 }
@@ -201,7 +203,7 @@ function Master({ settings, update, compact }: { settings: MixerSettings; update
         <label htmlFor="master" className="flex items-center gap-1.5 text-[13px] font-bold"><Volume2 size={15} className="text-brand" aria-hidden />Global volume</label>
         <div className="flex items-center gap-2">
           {compact && <output id="master-value" htmlFor="master" className="text-[15px] font-extrabold tabular-nums">{pct}</output>}
-          <Btn id="master-reset" tone="small" onClick={() => update({ masterPct: 100 })}><RotateCcw size={13} aria-hidden />Reset</Btn>
+          <Tip text="Back to 100%" align="end"><Btn id="master-reset" tone="small" onClick={() => update({ masterPct: 100 })}><RotateCcw size={13} aria-hidden />Reset</Btn></Tip>
         </div>
       </div>
       {!compact && <output id="master-value" htmlFor="master" className="text-[44px] leading-none font-extrabold tracking-tight tabular-nums">{pct}</output>}
@@ -305,10 +307,10 @@ const sameLevels = (a: Levels, b: Levels) => a.vocalPct === b.vocalPct && a.inst
 const UNDO_MS = 5000;
 
 const PRESETS = [
-  { id: 'preset-karaoke', label: 'Karaoke', vocal: 0, instrumental: 100, icon: <MicOff size={15} aria-hidden /> },
-  { id: 'preset-half-karaoke', label: 'Half karaoke', vocal: 50, instrumental: 100, icon: <AudioLines size={15} aria-hidden /> },
-  { id: 'preset-acappella', label: 'A cappella', vocal: 100, instrumental: 0, icon: <Mic size={15} aria-hidden /> },
-  { id: 'preset-reset', label: 'Reset', vocal: 100, instrumental: 100, icon: <RotateCcw size={15} aria-hidden /> },
+  { id: 'preset-karaoke', label: 'Karaoke', tip: 'Vocal 0%, instrumental 100%', vocal: 0, instrumental: 100, icon: <MicOff size={15} aria-hidden /> },
+  { id: 'preset-half-karaoke', label: 'Half karaoke', tip: 'Vocal 50%, instrumental 100%', vocal: 50, instrumental: 100, icon: <AudioLines size={15} aria-hidden /> },
+  { id: 'preset-acappella', label: 'A cappella', tip: 'Vocal 100%, instrumental 0%', vocal: 100, instrumental: 0, icon: <Mic size={15} aria-hidden /> },
+  { id: 'preset-reset', label: 'Reset', tip: 'Vocal, instrumental, drums and others back to 100%', vocal: 100, instrumental: 100, icon: <RotateCcw size={15} aria-hidden /> },
 ];
 
 function SeparateControls({ settings, update, ready, live, onHold, advancedOpen, setAdvancedOpen, splitOpen, setSplitOpen }: {
@@ -354,10 +356,11 @@ function SeparateControls({ settings, update, ready, live, onHold, advancedOpen,
       </Rise>
       <Rise i={2}>
       <div className="presets grid grid-cols-2 gap-2.5" role="group" aria-label="Presets">
-        {PRESETS.map((p) => {
+        {PRESETS.map((p, i) => {
           const pressed = p.vocal === settings.vocalPct && p.instrumental === settings.instrumentalPct;
           return (
-            <Btn key={p.id} id={p.id} tone="preset" aria-pressed={pressed}
+            <Tip key={p.id} text={p.tip} align={i % 2 === 0 ? 'start' : 'end'}>
+            <Btn id={p.id} tone="preset" aria-pressed={pressed}
               onClick={() => {
                 setRipple((r) => ({ id: p.id, n: (r?.n ?? 0) + 1 }));
                 const patch = { vocalPct: p.vocal, instrumentalPct: p.instrumental, ...(p.id === 'preset-reset' ? { drumsPct: 100, othersPct: 100 } : {}) };
@@ -371,6 +374,7 @@ function SeparateControls({ settings, update, ready, live, onHold, advancedOpen,
               {p.icon}
               {p.label}
             </Btn>
+            </Tip>
           );
         })}
       </div>
@@ -433,6 +437,7 @@ function HoldToCompare({ enabled, onHold }: { enabled: boolean; onHold: (on: boo
   const press = () => setHeld(true);
   const release = () => setHeld(false);
   return (
+    <Tip text="Plays every stem at 100%, the original mix, while held">
     <Btn id="compare" disabled={!enabled} aria-pressed={held} onPointerDown={press} onPointerUp={release} onPointerLeave={release} onPointerCancel={release} onBlur={release}
       onKeyDown={(e) => {
         if (e.key === ' ' || e.key === 'Enter') {
@@ -445,6 +450,7 @@ function HoldToCompare({ enabled, onHold }: { enabled: boolean; onHold: (on: boo
       <Headphones size={16} aria-hidden />
       {held ? 'Playing the original…' : 'Hold to hear the original'}
     </Btn>
+    </Tip>
   );
 }
 
