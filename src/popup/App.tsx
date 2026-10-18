@@ -115,12 +115,12 @@ export function App() {
         </header>
         {!noContent && <Tabs mode={separate ? 'separate' : 'default'} onMode={(mode) => update({ mode })} />}
         {separate ? (
-          <div id="panel-separate" className="flex flex-col gap-3.5">
-            <Banner view={view} settings={settings} update={update} retry={retry} />
+          <div key="separate" id="panel-separate" className="mx-in flex flex-col gap-3.5">
+            <Banner key={view.kind} view={view} settings={settings} update={update} retry={retry} />
             <SeparateControls settings={settings} update={update} ready={ready} advancedOpen={advancedOpen} setAdvancedOpen={setAdvancedOpen} splitOpen={splitOpen} setSplitOpen={setSplitOpen} />
           </div>
         ) : (
-          <>
+          <div key="default" className="mx-in flex flex-col gap-3.5">
             <Master settings={settings} update={update} />
             {!noContent && (
               <Card>
@@ -133,7 +133,7 @@ export function App() {
                 </div>
               </Card>
             )}
-          </>
+          </div>
         )}
         <p id="status" role="status" className="m-0 text-[13px] leading-snug text-muted empty:hidden">{note}</p>
       </main>
@@ -145,13 +145,14 @@ function Tabs({ mode, onMode }: { mode: Mode; onMode: (m: Mode) => void }) {
   const blocked = useContext(Blocked);
   const tab = (m: Mode, label: string, icon: ReactNode) => (
     <button id={`tab-${m}`} type="button" role="tab" aria-selected={mode === m} disabled={blocked} onClick={() => onMode(m)}
-      className="flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-full border-0 bg-transparent py-2 text-[13px] font-bold text-muted aria-selected:bg-brand aria-selected:text-white aria-selected:shadow-[0_3px_8px_rgb(225_29_46/0.4)] disabled:opacity-45">
+      className="relative z-10 flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-full border-0 bg-transparent py-2 text-[13px] font-bold text-muted transition-colors duration-200 aria-selected:text-white disabled:opacity-45">
       {icon}
       {label}
     </button>
   );
   return (
-    <div role="tablist" className="flex rounded-full bg-[#f4f0f0] p-1 shadow-[inset_2px_2px_5px_#e2dadb,inset_-2px_-2px_5px_#fff]">
+    <div role="tablist" className="relative flex rounded-full bg-[#f4f0f0] p-1 shadow-[inset_2px_2px_5px_#e2dadb,inset_-2px_-2px_5px_#fff]">
+      <span aria-hidden className={`absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-full bg-brand shadow-[0_3px_8px_rgb(225_29_46/0.4)] transition-transform duration-300 ease-out ${mode === 'separate' ? 'translate-x-full' : ''}`} />
       {tab('default', 'Default', <Volume2 size={15} aria-hidden />)}
       {tab('separate', 'Separate', <AudioLines size={15} aria-hidden />)}
     </div>
@@ -211,7 +212,7 @@ function Banner({ view, settings, update, retry }: { view: SepView; settings: Mi
   }
   return (
     <>
-      <div id="separation-banner" role="status" data-kind={view.kind} className={`flex items-start gap-3 rounded-[20px] p-3.5 ${stopped ? 'bg-ink text-white' : 'bg-brand-tint'}`}>
+      <div id="separation-banner" role="status" data-kind={view.kind} className={`mx-in flex items-start gap-3 rounded-[20px] p-3.5 ${stopped ? 'bg-ink text-white' : 'bg-brand-tint'}`}>
         {icon}
         <div className="min-w-0 flex-1">
           <h2 className="m-0 text-sm font-extrabold">{title}</h2>
@@ -219,7 +220,7 @@ function Banner({ view, settings, update, retry }: { view: SepView; settings: Mi
         </div>
       </div>
       {tooSlow && (
-        <div className="flex flex-col gap-2.5">
+        <div className="mx-in flex flex-col gap-2.5">
           {settings.mlModel !== 'mdx' && <Btn tone="primary" id="act-default-model" onClick={() => update({ mlModel: 'mdx' as MlModel })}><Cpu size={16} aria-hidden />Switch to Default model</Btn>}
           {settings.mlDelayS < MAX_DELAY_S && <Btn id="act-raise-delay" onClick={() => update({ mlDelayS: nextDelay })}><Timer size={16} aria-hidden />Raise delay limit to {nextDelay} s</Btn>}
           <Btn id="act-retry" onClick={() => void retry()}><RefreshCw size={16} aria-hidden />Try again</Btn>
