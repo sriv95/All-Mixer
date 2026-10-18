@@ -1,6 +1,7 @@
 import type { MixerSettings } from './settings';
 import type { ModelId } from './model-store';
 import type { TrackInfo } from '../lyrics/types';
+import type { FoundLyrics } from '../lyrics/lrclib-types';
 import type { OverlayState, VideoDelayStats } from '../content/video-delay/delayed-video';
 import type { Site } from '../content/youtube-dom';
 import type { SeparationState } from '../content/audio/master-chain';
@@ -103,6 +104,25 @@ export interface FetchLyrics {
   track: TrackInfo;
 }
 
+/** Content script → background: free-text LRCLIB search. Response: LrclibRecord[] (usable lyrics only). */
+export interface SearchLyrics {
+  type: 'search-lyrics';
+  q: string;
+}
+
+/** Content script → background: use these lyrics for this video from now on. */
+export interface PinLyrics {
+  type: 'pin-lyrics';
+  videoId: string;
+  found: FoundLyrics;
+}
+
+/** Content script → background: back to the automatic lyrics for this video. */
+export interface UnpinLyrics {
+  type: 'unpin-lyrics';
+  videoId: string;
+}
+
 /** Popup → background: look for newer RoFormer models (the result lands in chrome.storage.local, see model-store.ts). */
 export interface ModelCheck {
   type: 'model-check';
@@ -114,7 +134,16 @@ export interface ModelInstall {
   id: ModelId;
 }
 
-export type BackgroundRequest = GetMyTabSettings | GetTabSettings | SetTabSettings | FetchLyrics | ModelCheck | ModelInstall;
+export type BackgroundRequest =
+  | GetMyTabSettings
+  | GetTabSettings
+  | SetTabSettings
+  | FetchLyrics
+  | SearchLyrics
+  | PinLyrics
+  | UnpinLyrics
+  | ModelCheck
+  | ModelInstall;
 /**
  * QA only (sent via chrome.tabs.sendMessage from extension contexts): force the
  * picture delay, ignoring the graph latency. null clears it. `budgetBytes`

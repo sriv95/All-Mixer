@@ -3,7 +3,7 @@ import type { FoundLyrics, LrclibRecord } from './lrclib-types';
 import { stripMarkup } from './markup';
 import { cleanArtist, cleanTitle, pickBest, usablePlain, usableSynced } from './match';
 
-export type { FoundLyrics,  } from './lrclib-types';
+export type { FoundLyrics } from './lrclib-types';
 
 const BASE = 'https://lrclib.net/api';
 const TIMEOUT_MS = 8000;
@@ -37,7 +37,7 @@ async function searchRecords(params: Record<string, string>, fetchFn: typeof fet
   return (await getJson<LrclibRecord[]>('search', params, fetchFn)) ?? [];
 }
 
-function toFound(record: LrclibRecord): FoundLyrics | null {
+export function toFound(record: LrclibRecord): FoundLyrics | null {
   const synced = usableSynced(record.syncedLyrics);
   const plain = usablePlain(record.plainLyrics && stripMarkup(record.plainLyrics));
   if (record.instrumental || (!synced && !plain)) return null;
@@ -90,4 +90,14 @@ async function findForReading(
     }
   }
   return fallback;
+}
+
+const MAX_SEARCH_RESULTS = 20;
+
+/** Free-text LRCLIB search for the "find other lyrics" dialog: records with usable lyrics, at most 20. */
+export async function searchLyrics(q: string, fetchFn: typeof fetch = fetch): Promise<LrclibRecord[]> {
+  const query = q.trim();
+  if (!query) return [];
+  const records = await searchRecords({ q: query }, fetchFn);
+  return records.filter((r) => toFound(r)).slice(0, MAX_SEARCH_RESULTS);
 }

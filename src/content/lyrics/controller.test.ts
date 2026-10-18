@@ -157,6 +157,18 @@ describe('LyricsController', () => {
     expect(d.fetchLyrics).toHaveBeenCalledTimes(1);
   });
 
+  it('reload() fetches the video’s lyrics again', async () => {
+    const d = deps();
+    const c = new LyricsController('ytmusic', d);
+    c.addSurface(Object.assign(new FakeSurface(), { active: true }));
+    c.setVideoId('v1');
+    await flush();
+    expect(d.fetchLyrics).toHaveBeenCalledTimes(1);
+    c.reload();
+    await flush();
+    expect(d.fetchLyrics).toHaveBeenCalledTimes(2);
+  });
+
   it('aligns with ASR captions when available', async () => {
     const asrTrack = { baseUrl: 'u', languageCode: 'en', kind: 'asr' };
     const words = [
@@ -231,6 +243,24 @@ describe('LyricsController', () => {
     expect(s.times.at(-1)).toBeCloseTo(4.75);
     c.seek(42);
     expect(video.currentTime).toBe(42);
+  });
+
+  it('applies the video’s timing offset to the ticked time and to seeks', async () => {
+    let offset = 500;
+    const c = new LyricsController('youtube', { ...deps(), presentedTime: () => 4.75, offsetMs: (id) => (id === 'v' ? offset : 0) });
+    const s = new FakeSurface();
+    const video = document.createElement('video');
+    Object.defineProperty(video, 'currentTime', { value: 5, writable: true });
+    c.addSurface(s);
+    c.setVideo(video);
+    c.setVideoId('v');
+    await flush();
+    expect(s.times.at(-1)).toBeCloseTo(4.25);
+    c.seek(42);
+    expect(video.currentTime).toBeCloseTo(42.5);
+    offset = -250;
+    c.refresh();
+    expect(s.times.at(-1)).toBeCloseTo(5);
   });
 
   it('falls back to currentTime without a presented time', async () => {

@@ -21,6 +21,53 @@ describe('normalizeLyricsPrefs', () => {
   it('keeps window and fills the rest', () => {
     expect(normalizeLyricsPrefs({ lyricsDisplayMode: 'window' })).toEqual({ ...DEFAULT_LYRICS_PREFS, lyricsDisplayMode: 'window' });
   });
+  it('karaokeColor: white by default, #rrggbb kept lowercase, anything else falls back', () => {
+    expect(DEFAULT_LYRICS_PREFS.karaokeColor).toBe('#ffffff');
+    expect(normalizeLyricsPrefs({ karaokeColor: '#AABBCC' }).karaokeColor).toBe('#aabbcc');
+    for (const bad of ['red', '#fff', '#12345g', 5, null]) expect(normalizeLyricsPrefs({ karaokeColor: bad }).karaokeColor).toBe('#ffffff');
+  });
+
+  it('lyricsOffsets: keeps valid non-zero entries, clamps to 5 s, drops junk, keeps the newest 200', () => {
+    expect(DEFAULT_LYRICS_PREFS.lyricsOffsets).toEqual({});
+    expect(normalizeLyricsPrefs({ lyricsOffsets: { abc: 250.4, big: 99999, zero: 0, 'bad id!': 100, str: '5', nan: NaN } }).lyricsOffsets).toEqual({ abc: 250, big: 5000 });
+    expect(normalizeLyricsPrefs({ lyricsOffsets: 'x' }).lyricsOffsets).toEqual({});
+    const many = Object.fromEntries(Array.from({ length: 250 }, (_, i) => [`v${i}`, 100]));
+    const kept = Object.keys(normalizeLyricsPrefs({ lyricsOffsets: many }).lyricsOffsets);
+    expect(kept).toHaveLength(200);
+    expect(kept[0]).toBe('v50');
+  });
+
+  it('karaoke font, outline and background: known values kept, others default', () => {
+    expect(normalizeLyricsPrefs({ karaokeFont: 'mono', karaokeOutline: 'thick', karaokeBackground: 50 })).toMatchObject({ karaokeFont: 'mono', karaokeOutline: 'thick', karaokeBackground: 50 });
+    expect(normalizeLyricsPrefs({ karaokeFont: 'comic', karaokeOutline: 3, karaokeBackground: 33 })).toMatchObject({ karaokeFont: 'default', karaokeOutline: 'normal', karaokeBackground: 0 });
+  });
+
+  it('karaokeAnimation: none by default, unknown values fall back', () => {
+    expect(DEFAULT_LYRICS_PREFS.karaokeAnimation).toBe('none');
+    expect(normalizeLyricsPrefs({ karaokeAnimation: 'slide' }).karaokeAnimation).toBe('slide');
+    expect(normalizeLyricsPrefs({ karaokeAnimation: 'spin' }).karaokeAnimation).toBe('none');
+  });
+
+  it('lyricsTimingKeys: on by default, only a boolean is taken', () => {
+    expect(DEFAULT_LYRICS_PREFS.lyricsTimingKeys).toBe(true);
+    expect(normalizeLyricsPrefs({ lyricsTimingKeys: false }).lyricsTimingKeys).toBe(false);
+    expect(normalizeLyricsPrefs({ lyricsTimingKeys: 'no' }).lyricsTimingKeys).toBe(true);
+  });
+
+  it('karaokeMyStyle: null by default; a saved style is kept with bad fields fixed; junk is null', () => {
+    expect(DEFAULT_LYRICS_PREFS.karaokeMyStyle).toBeNull();
+    const style = { karaokeColor: '#ABCDEF', karaokeFontSize: 150, karaokeFont: 'serif', karaokeOutline: 'thick', karaokeBackground: 50 };
+    expect(normalizeLyricsPrefs({ karaokeMyStyle: style }).karaokeMyStyle).toEqual({ ...style, karaokeColor: '#abcdef' });
+    expect(normalizeLyricsPrefs({ karaokeMyStyle: { ...style, karaokeFont: 'comic', karaokeColor: 'red' } }).karaokeMyStyle).toMatchObject({ karaokeFont: 'default', karaokeColor: '#ffffff', karaokeFontSize: 150 });
+    for (const bad of [null, 5, 'x', {}, { other: 1 }]) expect(normalizeLyricsPrefs({ karaokeMyStyle: bad }).karaokeMyStyle).toBeNull();
+  });
+
+  it('karaokeFocus: off by default, only a boolean is taken', () => {
+    expect(DEFAULT_LYRICS_PREFS.karaokeFocus).toBe(false);
+    expect(normalizeLyricsPrefs({ karaokeFocus: true }).karaokeFocus).toBe(true);
+    expect(normalizeLyricsPrefs({ karaokeFocus: 1 }).karaokeFocus).toBe(false);
+  });
+
   it('defaults to one karaoke line, auto source and no caption language', () => {
     expect(DEFAULT_LYRICS_PREFS).toMatchObject({ karaokeLines: 1, lyricsSource: 'auto', captionLang: null });
   });

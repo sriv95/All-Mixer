@@ -13,20 +13,20 @@ const captions: CaptionPicker = {
 };
 
 function actions() {
-  return { selectSource: vi.fn(), selectCaptionTrack: vi.fn(), setPrefs: vi.fn() } satisfies MenuActions;
+  return { selectSource: vi.fn(), selectCaptionTrack: vi.fn(), setPrefs: vi.fn(), setOffset: vi.fn(), copyLyrics: vi.fn(() => 'Copied'), saveLrc: vi.fn(() => 'Saved'), findLyrics: vi.fn(), myLyrics: vi.fn() } satisfies MenuActions;
 }
 const prefs = (p: Partial<LyricsPrefs> = {}): LyricsPrefs => ({ ...DEFAULT_LYRICS_PREFS, ...p });
 
 describe('buildMenuRows', () => {
-  it('lists source, language, display, lines and size in karaoke mode', () => {
+  it('lists source, language, display, lines and the karaoke text group in karaoke mode', () => {
     const rows = buildMenuRows({ sources, captions, prefs: prefs() }, actions());
-    expect(rows.map((r) => r.id)).toEqual(['source', 'captionLanguage', 'display', 'lines', 'size']);
+    expect(rows.map((r) => r.id)).toEqual(['source', 'captionLanguage', 'display', 'lines', 'karaokeText']);
   });
 
   it('hides the caption language row for fewer than two options and the source row without data', () => {
     const one = { ...captions, options: captions.options.slice(0, 1) };
-    expect(buildMenuRows({ sources, captions: one, prefs: prefs() }, actions()).map((r) => r.id)).toEqual(['source', 'display', 'lines', 'size']);
-    expect(buildMenuRows({ prefs: prefs() }, actions()).map((r) => r.id)).toEqual(['display', 'lines', 'size']);
+    expect(buildMenuRows({ sources, captions: one, prefs: prefs() }, actions()).map((r) => r.id)).toEqual(['source', 'display', 'lines', 'karaokeText']);
+    expect(buildMenuRows({ prefs: prefs() }, actions()).map((r) => r.id)).toEqual(['display', 'lines', 'karaokeText']);
   });
 
   it('YT Music: only source and caption language, no display rows or reset button', () => {
@@ -47,6 +47,11 @@ describe('buildMenuRows', () => {
     expect(row.note).toContain('automatic order');
   });
 
+  it('names the shown source on the Auto option', () => {
+    const rows = buildMenuRows({ sources: { ...sources, shown: 'youtube-auto-captions' }, prefs: prefs() }, actions());
+    expect(rows[0].options[0].label).toBe('Auto (YouTube auto captions)');
+  });
+
   it('routes selections to the right callback', () => {
     const a = actions();
     const rows = Object.fromEntries(buildMenuRows({ sources, captions, prefs: prefs() }, a).map((r) => [r.id, r]));
@@ -58,9 +63,12 @@ describe('buildMenuRows', () => {
     expect(a.setPrefs).toHaveBeenLastCalledWith({ lyricsDisplayMode: 'window' });
     rows.lines.select('1');
     expect(a.setPrefs).toHaveBeenLastCalledWith({ karaokeLines: 1 });
-    rows.size.select('150');
+    const inner = Object.fromEntries(rows.karaokeText.rows!.map((r) => [r.id, r]));
+    inner.size.select('150');
     expect(a.setPrefs).toHaveBeenLastCalledWith({ karaokeFontSize: 150 });
-    expect(rows.size.options.map((o) => o.label)).toEqual(['50%', '75%', '100%', '125%', '150%', '200%']);
+    inner.color.select('#ffeb3b');
+    expect(a.setPrefs).toHaveBeenLastCalledWith({ karaokeColor: '#ffeb3b' });
+    expect(inner.size.options.map((o) => o.label)).toEqual(['50%', '75%', '100%', '125%', '150%', '200%']);
   });
 
   it('offers Reset position in karaoke mode only', () => {
@@ -72,9 +80,142 @@ describe('buildMenuRows', () => {
     expect(buildMenuButtons({ prefs: prefs({ lyricsDisplayMode: 'window' }) }, a)).toEqual([]);
   });
 
+  it('timing row: only with synced lyrics, after the caption language, in 0.25-2 s steps', () => {
+    const a = actions();
+    const ids = (timing?: { offsetMs: number }, site?: 'ytmusic') => buildMenuRows({ sources, captions, prefs: prefs(), timing, site }, a).map((r) => r.id);
+    expect(ids()).not.toContain('timing');
+    expect(ids({ offsetMs: 0 }).slice(0, 3)).toEqual(['source', 'captionLanguage', 'timing']);
+    expect(ids({ offsetMs: 0 }, 'ytmusic')).toEqual(['source', 'captionLanguage', 'timing', 'timingKeys']);
+    const row = buildMenuRows({ sources, prefs: prefs(), timing: { offsetMs: 500 } }, a).find((r) => r.id === 'timing')!;
+    expect(row.selected).toBe('500');
+    expect(row.options.map((o) => o.label)).toEqual(['-2 s', '-1 s', '-0.5 s', '-0.25 s', '0 s', '+0.25 s', '+0.5 s', '+1 s', '+2 s']);
+    row.select('-250');
+    expect(a.setOffset).toHaveBeenCalledWith(-250);
+  });
+
+  it('font, outline and background rows route to their prefs', () => {
+    const a = actions();
+    const inner = Object.fromEntries(buildMenuRows({ prefs: prefs() }, a).find((r) => r.id === 'karaokeText')!.rows!.map((r) => [r.id, r]));
+    expect([inner.font.selected, inner.outline.selected, inner.background.selected]).toEqual(['default', 'normal', '0']);
+    inner.font.select('serif');
+    expect(a.setPrefs).toHaveBeenLastCalledWith({ karaokeFont: 'serif' });
+    inner.outline.select('thick');
+    expect(a.setPrefs).toHaveBeenLastCalledWith({ karaokeOutline: 'thick' });
+    inner.animation.select('slide');
+    expect(a.setPrefs).toHaveBeenLastCalledWith({ karaokeAnimation: 'slide' });
+    inner.background.select('50');
+    expect(a.setPrefs).toHaveBeenLastCalledWith({ karaokeBackground: 50 });
+  });
+
+  it('style presets: Default matches the stock look, picking one sets every style pref, edits show Custom', () => {
+    const a = actions();
+    const preset = (p = prefs()) => buildMenuRows({ prefs: p }, a).find((r) => r.id === 'karaokeText')!.rows!.find((r) => r.id === 'preset')!;
+    expect(preset().selected).toBe('default');
+    expect(preset().options.map((o) => o.label)).toEqual(['Default', 'Big yellow', 'Clean box', 'Cyan glow', 'Reset style', 'Save the current look as My style']);
+    preset().select('bigYellow');
+    expect(a.setPrefs).toHaveBeenLastCalledWith({ karaokeColor: '#ffeb3b', karaokeFontSize: 150, karaokeFont: 'default', karaokeOutline: 'thick', karaokeBackground: 0 });
+    expect(preset(prefs({ karaokeColor: '#ffeb3b', karaokeFontSize: 150, karaokeOutline: 'thick' })).selected).toBe('bigYellow');
+    const custom = preset(prefs({ karaokeColor: '#123456' }));
+    expect(custom.selected).toBe('custom');
+    expect(custom.options.at(-3)).toEqual({ value: 'custom', label: 'Custom', disabled: true });
+    a.setPrefs.mockClear();
+    custom.select('custom');
+    expect(a.setPrefs).not.toHaveBeenCalled();
+  });
+
+  it('copy and save buttons: copy for any shown lyrics, .lrc only for synced, also on YT Music', () => {
+    const a = actions();
+    const ids = (lyrics?: { synced: boolean }, site?: 'ytmusic') => buildMenuButtons({ prefs: prefs(), lyrics, site }, a).map((b) => b.id);
+    expect(ids()).toEqual(['resetPosition']);
+    expect(ids({ synced: false })).toEqual(['resetPosition', 'copyLyrics']);
+    expect(ids({ synced: true })).toEqual(['resetPosition', 'copyLyrics', 'saveLrc']);
+    expect(ids({ synced: true }, 'ytmusic')).toEqual(['copyLyrics', 'saveLrc']);
+    const [copy, save] = buildMenuButtons({ prefs: prefs({ lyricsDisplayMode: 'window' }), lyrics: { synced: true } }, a);
+    expect(copy.run()).toBe('Copied');
+    expect(save.run()).toBe('Saved');
+  });
+
+  it('timing: an offset between the steps is listed and selected; Timing keys switch routes to the pref', () => {
+    const a = actions();
+    const rows = buildMenuRows({ sources, prefs: prefs(), timing: { offsetMs: 300 } }, a);
+    const timing = rows.find((r) => r.id === 'timing')!;
+    expect(timing.options.map((o) => o.value)).toEqual(['-2000', '-1000', '-500', '-250', '0', '250', '300', '500', '1000', '2000']);
+    expect(timing.selected).toBe('300');
+    const keys = rows.find((r) => r.id === 'timingKeys')!;
+    expect(keys.selected).toBe('on');
+    keys.select('off');
+    expect(a.setPrefs).toHaveBeenLastCalledWith({ lyricsTimingKeys: false });
+  });
+
+  it('Find other lyrics: offered when lyrics are shown or missing, also on YT Music', () => {
+    const a = actions();
+    const ids = (canEdit?: boolean, site?: 'ytmusic') => buildMenuButtons({ prefs: prefs(), canEdit, site }, a).map((b) => b.id);
+    expect(ids()).toEqual(['resetPosition']);
+    expect(ids(true)).toEqual(['resetPosition', 'findLyrics', 'myLyrics']);
+    expect(ids(true, 'ytmusic')).toEqual(['findLyrics', 'myLyrics']);
+    const [find, own] = buildMenuButtons({ prefs: prefs(), canEdit: true, site: 'ytmusic' }, a);
+    find.run();
+    own.run();
+    expect(a.findLyrics).toHaveBeenCalled();
+    expect(a.myLyrics).toHaveBeenCalled();
+  });
+
+  it('My style: save the current look, then pick it; saving is only offered for a look that is not a preset yet', () => {
+    const a = actions();
+    const preset = (p = prefs()) => buildMenuRows({ prefs: p }, a).find((r) => r.id === 'karaokeText')!.rows!.find((r) => r.id === 'preset')!;
+    const save = (r: ReturnType<typeof preset>) => r.options.find((o) => o.value === 'save')!;
+    expect(save(preset()).disabled).toBe(true);
+    const looks = prefs({ karaokeColor: '#123456', karaokeFontSize: 125, karaokeFont: 'mono', karaokeOutline: 'thin', karaokeBackground: 25 });
+    expect(save(preset(looks)).disabled).toBe(false);
+    preset(looks).select('save');
+    expect(a.setPrefs).toHaveBeenLastCalledWith({ karaokeMyStyle: { karaokeColor: '#123456', karaokeFontSize: 125, karaokeFont: 'mono', karaokeOutline: 'thin', karaokeBackground: 25 } });
+    const withMine = prefs({ ...looks, karaokeMyStyle: { karaokeColor: '#123456', karaokeFontSize: 125, karaokeFont: 'mono', karaokeOutline: 'thin', karaokeBackground: 25 } });
+    expect(preset(withMine).selected).toBe('mine');
+    expect(preset(withMine).options.map((o) => o.label)).toContain('My style');
+    expect(save(preset(withMine)).disabled).toBe(true);
+    // Another look: Replace is offered, and picking My style sets all five prefs.
+    const other = prefs({ karaokeMyStyle: withMine.karaokeMyStyle, karaokeColor: '#ff80ab' });
+    expect(save(preset(other)).label).toBe('Replace My style with the current look');
+    expect(save(preset(other)).disabled).toBe(false);
+    preset(other).select('mine');
+    expect(a.setPrefs).toHaveBeenLastCalledWith(withMine.karaokeMyStyle);
+  });
+
+  it('Reset style sets the stock look and no line transition', () => {
+    const a = actions();
+    const row = buildMenuRows({ prefs: prefs({ karaokeColor: '#123456', karaokeAnimation: 'slide' }) }, a).find((r) => r.id === 'karaokeText')!.rows!.find((r) => r.id === 'preset')!;
+    row.select('reset');
+    expect(a.setPrefs).toHaveBeenLastCalledWith({ karaokeColor: '#ffffff', karaokeFontSize: 100, karaokeFont: 'default', karaokeOutline: 'normal', karaokeBackground: 0, karaokeAnimation: 'none' });
+  });
+
+  it('Position presets and Lyrics-only view rows', () => {
+    const a = actions();
+    const inner = (p = prefs()) => Object.fromEntries(buildMenuRows({ prefs: p }, a).find((r) => r.id === 'karaokeText')!.rows!.map((r) => [r.id, r]));
+    expect(inner().position.selected).toBe('bottom');
+    expect(inner().position.options.map((o) => o.label)).toEqual(['Top', 'Middle', 'Bottom']);
+    inner().position.select('top');
+    expect(a.setPrefs).toHaveBeenLastCalledWith({ karaokePosition: { x: 0.5, y: 0.12 } });
+    const dragged = inner(prefs({ karaokePosition: { x: 0.3, y: 0.4 } })).position;
+    expect(dragged.selected).toBe('custom');
+    expect(dragged.options.at(-1)).toMatchObject({ value: 'custom', disabled: true });
+    expect(inner().focus.selected).toBe('off');
+    inner().focus.select('on');
+    expect(a.setPrefs).toHaveBeenLastCalledWith({ karaokeFocus: true });
+  });
+
   it('shows the nearest size step for an off-step stored size', () => {
     const rows = buildMenuRows({ prefs: prefs({ karaokeFontSize: 110 }) }, actions());
-    expect(rows.find((r) => r.id === 'size')!.selected).toBe('100');
+    expect(rows.find((r) => r.id === 'karaokeText')!.rows!.find((r) => r.id === 'size')!.selected).toBe('100');
+  });
+
+  it('color: White first and the default; a color outside the presets is listed as Custom', () => {
+    const color = (c?: string) => buildMenuRows({ prefs: prefs(c ? { karaokeColor: c } : {}) }, actions()).find((r) => r.id === 'karaokeText')!.rows!.find((r) => r.id === 'color')!;
+    expect(color().options[0]).toEqual({ value: '#ffffff', label: 'White' });
+    expect(color().selected).toBe('#ffffff');
+    expect(color().options).toHaveLength(6);
+    const custom = color('#123456');
+    expect(custom.options.at(-1)).toEqual({ value: '#123456', label: 'Custom (#123456)' });
+    expect(custom.selected).toBe('#123456');
   });
 });
 
@@ -166,13 +307,56 @@ describe('YtSettingsMenu', () => {
       'Caption language',
       'Lyrics display',
       'Karaoke lines',
-      'Karaoke size',
+      'Custom Karaoke Text',
       'Reset position',
     ]);
-    expect(items[4].querySelector('.ytp-menuitem-content')!.textContent).toBe('100%');
+    expect(items[4].querySelector('.ytp-menuitem-content')!.textContent).toBe('White · 100%');
     sub().querySelector<HTMLElement>('.ytp-panel-back-button')!.click();
     expect(document.querySelector('[data-am-panel]')).toBeNull();
     expect((document.getElementById('main') as HTMLElement).style.display).toBe('');
+  });
+
+  it('Custom Karaoke Text: opens Color and Size, picks a preset and a custom color', () => {
+    const a = actions();
+    const m = new YtSettingsMenu();
+    setAll(m, a);
+    group().click();
+    settingEl('karaokeText').click();
+    expect(titles()).toEqual(['Custom Karaoke Text']);
+    expect([...sub().querySelectorAll('[data-am-row-setting]')].map((e) => e.getAttribute('data-am-row-setting'))).toEqual(['preset', 'color', 'size', 'font', 'outline', 'background', 'animation', 'position', 'focus']);
+    settingEl('color').click();
+    expect(titles()).toEqual(['Color']);
+    const checked = [...sub().querySelectorAll('.ytp-menuitem')].map((i) => i.getAttribute('aria-checked'));
+    expect(checked.slice(0, 2)).toEqual(['true', 'false']);
+    const input = sub().querySelector<HTMLInputElement>('input[type="color"]')!;
+    expect(input.value).toBe('#ffffff');
+    input.value = '#112233';
+    input.dispatchEvent(new Event('change'));
+    expect(a.setPrefs).toHaveBeenLastCalledWith({ karaokeColor: '#112233' });
+    sub().querySelectorAll<HTMLElement>('.ytp-menuitem')[1].click();
+    expect(a.setPrefs).toHaveBeenLastCalledWith({ karaokeColor: '#ffeb3b' });
+    // A choice returns to the group panel; back leaves it for the Lyrics panel.
+    expect(titles()).toEqual(['Custom Karaoke Text']);
+    sub().querySelector<HTMLElement>('.ytp-panel-back-button')!.click();
+    expect(titles()).toEqual(['Lyrics']);
+  });
+
+  it('a button that returns a message shows it for a moment', () => {
+    vi.useFakeTimers();
+    const a = actions();
+    const m = new YtSettingsMenu();
+    const input = { sources, captions, prefs: prefs(), lyrics: { synced: false } };
+    m.setRows(buildMenuRows(input, a), buildMenuButtons(input, a));
+    group().click();
+    const btn = sub().querySelector<HTMLElement>('[data-am-row-button="copyLyrics"]')!;
+    const text = () => btn.querySelector('.ytp-menuitem-label')!.textContent;
+    expect(text()).toBe('Copy lyrics');
+    btn.click();
+    expect(a.copyLyrics).toHaveBeenCalled();
+    expect(text()).toBe('Copied');
+    vi.advanceTimersByTime(1600);
+    expect(text()).toBe('Copy lyrics');
+    vi.useRealTimers();
   });
 
   it('Reset position runs the action and keeps the panel open', () => {
@@ -215,9 +399,12 @@ describe('YtSettingsMenu', () => {
     });
     setAll(m, a, p);
     group().click();
+    settingEl('karaokeText').click();
     settingEl('size').click();
     sub().querySelectorAll<HTMLElement>('.ytp-menuitem')[4].click();
     expect(settingEl('size').querySelector('.ytp-menuitem-content')!.textContent).toBe('150%');
+    sub().querySelector<HTMLElement>('.ytp-panel-back-button')!.click();
+    expect(settingEl('karaokeText').querySelector('.ytp-menuitem-content')!.textContent).toBe('White · 150%');
     // Disabled source option: no callback, choices stay.
     settingEl('source').click();
     const opts = sub().querySelectorAll<HTMLElement>('.ytp-menuitem');
@@ -264,6 +451,7 @@ describe('YtSettingsMenu', () => {
     const m = new YtSettingsMenu();
     setAll(m, a, p);
     group().click();
+    settingEl('karaokeText').click();
     settingEl('size').click();
     const panel = sub();
     p = { ...p, karaokeFontSize: 150 };
@@ -307,7 +495,7 @@ describe('YtmSettingsPopover', () => {
     expect(pop.isOpen).toBe(true);
     expect(pop.button.getAttribute('aria-expanded')).toBe('true');
     const sels = root.querySelectorAll('select');
-    expect(sels).toHaveLength(5);
+    expect(sels).toHaveLength(13);
     const src = sels[0];
     expect([...src.options].map((o) => o.disabled)).toEqual([false, true, false]);
     src.value = 'captions';
@@ -337,7 +525,7 @@ describe('YtmSettingsPopover', () => {
     pop.setRows(buildMenuRows({ sources, prefs: prefs() }, actions()));
     pop.button.click();
     const root = document.querySelector<HTMLElement>('[data-allmixer-lyrics-popover]')!;
-    expect(root.querySelectorAll('select')).toHaveLength(4);
+    expect(root.querySelectorAll('select')).toHaveLength(12);
     pop.setRows(buildMenuRows({ sources, prefs: prefs({ lyricsDisplayMode: 'window' }) }, actions()));
     expect(root.querySelectorAll('select')).toHaveLength(2);
     pop.destroy();

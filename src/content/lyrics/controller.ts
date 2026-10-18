@@ -23,6 +23,8 @@ export interface SourceMenu {
   available: { lrclib: boolean; captions: boolean };
   /** The pick could not be honoured for this video (missing source); the auto order was used instead. */
   fellBack?: 'lrclib' | 'captions';
+  /** Source of the lyrics on screen; the menu shows it next to "Auto". */
+  shown?: Lyrics['source'];
 }
 
 export type LyricsState =
@@ -52,6 +54,8 @@ export interface LyricsDeps {
   presentedTime?(): number | null;
   /** True while the delayed overlay still has frames queued (the presented time may sit still before the next one is drawn). */
   presentedBusy?(): boolean;
+  /** Timing offset of this video's lyrics in ms (positive: lyrics later). Default 0. */
+  offsetMs?(videoId: string | null): number;
 }
 
 /** Fetched caption track. `index` points into `PlayerInfo.captionTracks`. */
@@ -258,10 +262,16 @@ export class LyricsController {
     if (id) void this.realign(id, true);
   }
 
+  /** The video's lyrics changed behind our back (the user picked others): load them again. */
+  reload(): void {
+    this.loadedFor = null;
+    this.refresh();
+  }
+
   seek(time: number): void {
     const v = this.video;
     if (!v) return;
-    v.currentTime = Math.max(0, time);
+    v.currentTime = Math.max(0, time + this.offsetSec());
     this.tick();
   }
 
@@ -336,6 +346,7 @@ export class LyricsController {
   private ready(lyrics: Lyrics, choice: SourceChoice, info: PlayerInfo, track: TrackInfo, found: FoundLyrics | null, captions: CaptionSet): LyricsState {
     const sources: SourceMenu = {
       pref: this.sourcePref,
+      shown: lyrics.source,
       available: { lrclib: !!found && (hasSynced(found) || !!found.plain), captions: !!captionCandidate(captions) },
       ...(choice.fellBack ? { fellBack: choice.fellBack } : {}),
     };
@@ -406,9 +417,13 @@ export class LyricsController {
   private tick = (): void => {
     const v = this.video;
     if (!v || this.state.kind !== 'ready') return;
-    const t = this.deps.presentedTime?.() ?? v.currentTime;
+    const t = (this.deps.presentedTime?.() ?? v.currentTime) - this.offsetSec();
     for (const s of this.surfaces) if (s.active) s.update(t);
   };
+
+  private offsetSec(): number {
+    return (this.deps.offsetMs?.(this.videoId) ?? 0) / 1000;
+  }
 
   private readonly onVideoEvent = (): void => this.refresh();
 

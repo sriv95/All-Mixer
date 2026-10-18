@@ -13,6 +13,7 @@ const synced: LyricsState = { kind: 'ready', track, lyrics: { kind: 'synced', so
 const plain: LyricsState = { kind: 'ready', track, lyrics: { kind: 'plain', source: 'lrclib', text: 'hello' } };
 
 let prefs: LyricsPrefs;
+const setPrefs = vi.fn();
 let saved: { x: number; y: number }[];
 let player: HTMLElement;
 let size = { width: 800, height: 450 };
@@ -20,7 +21,7 @@ let size = { width: 800, height: 450 };
 const rect = (r: Partial<DOMRect>) => ({ left: 0, top: 0, width: 0, height: 0, right: 0, bottom: 0, x: 0, y: 0, toJSON() {}, ...r }) as DOMRect;
 
 function make(): KaraokeSurface {
-  return new KaraokeSurface({ site: 'youtube', getPrefs: () => prefs, onPosition: (p) => saved.push(p) });
+  return new KaraokeSurface({ site: 'youtube', getPrefs: () => prefs, onPosition: (p) => saved.push(p), setPrefs });
 }
 const root = () => document.getElementById('all-mixer-karaoke');
 const lineEls = () => [...document.querySelectorAll<HTMLElement>('.am-k-line')];
@@ -29,6 +30,7 @@ const block = () => document.querySelector<HTMLElement>('.am-k-block')!;
 
 beforeEach(() => {
   prefs = { ...DEFAULT_LYRICS_PREFS, karaokeLines: 2 };
+  setPrefs.mockClear();
   saved = [];
   size = { width: 800, height: 450 };
   document.body.innerHTML = '<div id="movie_player"><div class="ytp-chrome-bottom"></div></div>';
@@ -69,6 +71,24 @@ describe('KaraokeSurface slots', () => {
     s.update(6);
     // 'three' is line index 2 (row 0); row 1 stays as an empty placeholder.
     expect(lineEls().map((e) => [textOf(e), e.classList.contains('upcoming')])).toEqual([['three', true], ['\u200b', false]]);
+  });
+
+  it('animates only the rows whose text changed, and not with animation none', () => {
+    const anim = () => lineEls().map((e) => [...e.classList].filter((c) => c.startsWith('am-in-')).join(''));
+    const s = make();
+    s.render(synced);
+    s.update(1.5);
+    expect(anim()).toEqual(['', '']);
+    prefs = { ...prefs, karaokeAnimation: 'fade' };
+    s.refreshPrefs();
+    // Same text as before the pref change: nothing animates.
+    expect(anim()).toEqual(['', '']);
+    const before = lineEls().map(textOf);
+    s.update(3.5);
+    const after = lineEls().map(textOf);
+    expect(after).not.toEqual(before);
+    expect(anim()).toEqual(after.map((t, i) => (t === before[i] ? '' : 'am-in-fade')));
+    expect(anim()).toContain('am-in-fade');
   });
 
   it('does not rebuild the DOM while the slots are unchanged', () => {
@@ -170,6 +190,33 @@ describe('KaraokeSurface layout and drag', () => {
     expect(block().style.left).toBe('50%');
   });
 
+  it('applies the color from prefs and follows changes', () => {
+    const s = make();
+    s.render(synced);
+    s.update(1.5);
+    expect(block().style.color).toBe('#ffffff');
+    prefs = { ...prefs, karaokeColor: '#ffeb3b' };
+    s.refreshPrefs();
+    expect(block().style.color).toBe('#ffeb3b');
+  });
+
+  it('applies font, outline and background from prefs', () => {
+    const s = make();
+    s.render(synced);
+    s.update(1.5);
+    expect(block().style.textShadow).toBe('');
+    expect(block().style.background).toBe('');
+    prefs = { ...prefs, karaokeFont: 'serif', karaokeOutline: 'none', karaokeBackground: 50 };
+    s.refreshPrefs();
+    expect(block().style.fontFamily).toContain('Georgia');
+    expect(block().style.textShadow).toBe('none');
+    expect(block().style.background).toContain('rgba(0, 0, 0, 0.5)');
+    prefs = { ...prefs, karaokeOutline: 'thick', karaokeBackground: 0 };
+    s.refreshPrefs();
+    expect(block().style.textShadow).toContain('2px');
+    expect(block().style.background).toBe('');
+  });
+
   it('recomputes the font size when the player resizes', () => {
     let fire = () => {};
     vi.stubGlobal('ResizeObserver', class { constructor(cb: () => void) { fire = cb; } observe() {} disconnect() {} });
@@ -201,6 +248,60 @@ describe('KaraokeSurface layout and drag', () => {
     expect(saved).toHaveLength(1);
     expect(saved[0].x).toBeCloseTo(200 / 800);
     expect(saved[0].y).toBeCloseTo(200 / 450);
+  });
+
+  it('lyrics-only view: dims the player, centers a larger text, and does not drag', () => {
+    prefs = { ...prefs, karaokeFocus: true };
+    const s = make();
+    s.render(synced);
+    s.update(1.5);
+    expect(root()!.classList.contains('am-focus')).toBe(true);
+    expect(block().style.fontSize).toBe('28.8px'); // 18 px x 1.6
+    expect(block().style.left).toBe('50%');
+    expect(block().style.top).toBe('50%');
+    const b = block();
+    b.getBoundingClientRect = () => rect({ left: 300, top: 300, width: 200, height: 40 });
+    const ev = (type: string, x: number, y: number) => {
+      const e = new MouseEvent(type, { clientX: x, clientY: y, bubbles: true }) as MouseEvent & { pointerId: number };
+      Object.defineProperty(e, 'pointerId', { value: 1 });
+      return e;
+    };
+    b.dispatchEvent(ev('pointerdown', 400, 320));
+    b.dispatchEvent(ev('pointerup', 200, 200));
+    expect(saved).toHaveLength(0);
+    prefs = { ...prefs, karaokeFocus: false };
+    s.refreshPrefs();
+    expect(root()!.classList.contains('am-focus')).toBe(false);
+    expect(block().style.fontSize).toBe('18px');
+  });
+
+  it('lyrics-only view does not dim the player without synced lyrics', () => {
+    prefs = { ...prefs, karaokeFocus: true };
+    const s = make();
+    s.render(plain);
+    s.update(1.5);
+    expect(root()!.classList.contains('am-focus')).toBe(false);
+  });
+
+  it('right-click on the text opens the presets menu; a pick sets prefs and closes it', () => {
+    const s = make();
+    s.render(synced);
+    s.update(1.5);
+    const ctx = new MouseEvent('contextmenu', { clientX: 100, clientY: 100, bubbles: true, cancelable: true });
+    block().dispatchEvent(ctx);
+    expect(ctx.defaultPrevented).toBe(true);
+    const menu = () => document.querySelector('[data-allmixer-karaoke-menu]');
+    const item = (label: string) => [...menu()!.querySelectorAll('button')].find((b) => b.textContent?.replace('✓ ', '') === label)!;
+    expect([...menu()!.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Top', 'Middle', '✓ Bottom', '✓ Default', 'Big yellow', 'Clean box', 'Cyan glow', 'Lyrics-only view']);
+    item('Top').click();
+    expect(setPrefs).toHaveBeenLastCalledWith({ karaokePosition: { x: 0.5, y: 0.12 } });
+    expect(menu()).toBeNull();
+    block().dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    item('Big yellow').click();
+    expect(setPrefs).toHaveBeenLastCalledWith(expect.objectContaining({ karaokeColor: '#ffeb3b', karaokeFontSize: 150 }));
+    block().dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    item('Lyrics-only view').click();
+    expect(setPrefs).toHaveBeenLastCalledWith({ karaokeFocus: true });
   });
 
   it('keeps clicks and keys on the text away from YouTube', () => {
@@ -246,7 +347,7 @@ describe('KaraokeSurface mount on YT Music', () => {
     document.body.innerHTML = '<ytmusic-player><div id="movie_player"></div><div id="song-media-window"></div></ytmusic-player>';
     const p = document.getElementById('movie_player')!;
     p.getBoundingClientRect = () => rect({ left: 10, top: 20, width: 800, height: 450, right: 810, bottom: 470 });
-    const s = new KaraokeSurface({ site: 'ytmusic', getPrefs: () => prefs, onPosition: () => {} });
+    const s = new KaraokeSurface({ site: 'ytmusic', getPrefs: () => prefs, onPosition: () => {}, setPrefs });
     s.render(synced);
     s.update(1.5);
     expect(root()!.parentElement!.tagName.toLowerCase()).toBe('ytmusic-player');
@@ -259,7 +360,7 @@ describe('KaraokeSurface mount on YT Music', () => {
     document.body.innerHTML = '<ytmusic-player><div id="movie_player"></div></ytmusic-player>';
     const p = document.getElementById('movie_player')!;
     p.getBoundingClientRect = () => rect({ left: 0, top: 0, width: 800, height: 450, right: 800, bottom: 450 });
-    const s = new KaraokeSurface({ site: 'ytmusic', getPrefs: () => prefs, onPosition: () => {} });
+    const s = new KaraokeSurface({ site: 'ytmusic', getPrefs: () => prefs, onPosition: () => {}, setPrefs });
     s.render(synced);
     s.update(1.5);
     const own = () => (s as unknown as { root: HTMLElement }).root.parentElement;
