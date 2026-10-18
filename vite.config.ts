@@ -54,6 +54,10 @@ export default defineConfig({
     target: 'chrome120',
     modulePreload: false,
     rollupOptions: {
+      // lucide-react marks files "use client" (React Server Components): meaningless in a popup bundle.
+      onwarn(warning, warn) {
+        if (warning.code !== 'MODULE_LEVEL_DIRECTIVE') warn(warning);
+      },
       input: {
         popup: resolve(import.meta.dirname, 'src/popup/popup.html'),
         ml: resolve(import.meta.dirname, 'src/ml/ml.html'),
