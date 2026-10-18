@@ -8,7 +8,7 @@ Chrome extension (Manifest V3) for youtube.com and music.youtube.com.
 bun install
 uv sync            # Python env for the model scripts (.venv, from pyproject.toml)
 bun run fetch-model      # public/ml/vocals.onnx + mdx.onnx (needed to build)
-bun run export-roformer  # public/ml/{roformer,kim,deux}.onnx, optional (~1.4 GB of checkpoints, ~1 min each)
+bun run export-roformer  # models-out/{roformer,deux}.onnx, optional: only to publish a new model version (~1.4 GB of checkpoints, ~1 min each)
 bun run build      # typecheck + vite build → dist/
 bun run test       # unit tests (vitest + happy-dom)
 bun run lint
@@ -41,7 +41,24 @@ Use `bun run test`, not `bun test`. `bun test` starts Bun's own test runner; thi
 - If Chrome's autoplay policy keeps the AudioContext suspended, the extension waits for one click / key press on the page before routing audio, so the video is never muted. The popup shows a hint.
 - Settings are per browser tab and survive SPA navigation and reloads; they are cleared when the tab closes.
 - Separate mode uses the ML engine (MDX-Net 9482 vocal model plus a Spleeter mask for Karaoke, on WebGPU; 1.97 s audio delay, the video is delayed to match). Until it is running, or when it cannot run, the original mix plays and the popup says why.
-- Separate tab, Model menu (experimental): three Mel-Band RoFormers to compare with the default: "Kim FT (unwa)", "Kim (original)" and "Deux (becruily)". Each replaces MDX-Net and Spleeter with one fp16 transformer (436, 436 and 235 MB; built by `bun run export-roformer [name] [--force]` into `public/ml/`, packed into `dist/`, optional: the build only warns for a missing one). They give a cleaner voice/instrumental split and need a fast GPU; 1.99 s delay. Deux has two stems; only its vocal stem is used (the instrumental is mix minus vocal, as for the others). Measured on an M1: Kim FT and Kim take ~0.67 s per step (gate 0.77 s), Deux ~0.95 s (12 layers), so Deux reports "too slow on this device" there. Geometry per model is in `src/worklet/protocol.ts` (`GEOMETRY`); the STFT, mask scatter and iSTFT are in `src/ml/roformer.ts`. The weights are unwa's `mel_band_roformer_kim_ft_unwa`, Kimberley Jensen's `MelBandRoformer.ckpt` and becruily's `mel-band-roformer-deux`. `spike/bench/rof_bench.mjs <model> <frames> <inputs>` times an exported core on WebGPU.
+- Separate tab, Model menu (experimental): "Default" is MDX-Net + Spleeter. "High quality" is a Mel-Band RoFormer (unwa's `mel_band_roformer_kim_ft_unwa`, 436 MB) and "Best quality" is becruily's Deux (235 MB, 12 layers, vocal stem only; needs a good GPU: ~0.9 s per step on an M1 against a 0.77 s gate, so it reports "too slow on this device" there). Each replaces MDX-Net and Spleeter with one fp16 transformer and gives a cleaner voice/instrumental split; 1.99 s delay. They are not in the extension package: the popup offers a one-time download of the selected model from the public Hugging Face repo `MODEL_BASE_URL` (`src/shared/model-store.ts`) into the extension's own storage (OPFS), and an Update button when the repo's `manifest.json` names a newer version of it. Geometry per model is in `src/worklet/protocol.ts` (`GEOMETRY`); the STFT, mask scatter and iSTFT are in `src/ml/roformer.ts`. `spike/bench/rof_bench.mjs <model> <frames> <inputs>` times an exported core on WebGPU.
+
+## Publish a new RoFormer model version
+
+The models (`roformer` = High quality, `deux` = Best quality) are not in the extension; users download them from the public Hugging Face repo `sriv95/all-mixer-models` (`MODEL_BASE_URL` in `src/shared/model-store.ts`). Every model has its own version in `manifest.json`; users get an Update button in the popup when it names a newer one for that model. No extension release is needed, unless the file contract changed (see below).
+
+```sh
+uvx --from huggingface_hub hf auth login          # once; needs a token with write access
+bun run export-roformer [roformer|deux] [--force] # models-out/<name>.onnx + <name>-meta.json (new weights: edit the checkpoint in scripts/export-roformer.py)
+bun run model-manifest roformer=1 deux=2          # every model with its version (the new one bumped) -> models-out/hf/manifest.json + v<n>/
+uvx --from huggingface_hub hf upload sriv95/all-mixer-models models-out/hf/v2 v2    # new version folder first
+uvx --from huggingface_hub hf upload sriv95/all-mixer-models models-out/hf/manifest.json manifest.json   # manifest last
+```
+
+- Upload the manifest last: users are offered the update as soon as it names the new version. A manifest in the old single-model shape (extension builds before 2026-10-18) is not understood.
+- Old `vN/` folders can stay in the repo; the extension only downloads the version that `manifest.json` names.
+- If the new model changes the contract with `src/ml/roformer.ts` (chunk length, mel bands, graph inputs/outputs), bump `MODEL_FORMAT` in `src/shared/model-store.ts` and `FORMAT` in `scripts/model-manifest.mjs`, and release the extension first. Extensions with another format ignore the manifest and show "needs a newer version" instead of updating.
+- Check the weights' license before publishing (the repo is public). Deux is CC BY-NC 4.0: non-commercial, with attribution (the repo's model card says so). Test with `chrome.storage.local.set({'debug.modelBaseUrl': 'http://localhost:8765'})` in the service-worker console against a local static server with CORS and Range support.
 
 ## Debug
 

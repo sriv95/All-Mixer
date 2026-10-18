@@ -1,4 +1,5 @@
 import type { MixerSettings } from './settings';
+import type { ModelId } from './model-store';
 import type { TrackInfo } from '../lyrics/types';
 import type { OverlayState, VideoDelayStats } from '../content/video-delay/delayed-video';
 import type { Site } from '../content/youtube-dom';
@@ -102,7 +103,18 @@ export interface FetchLyrics {
   track: TrackInfo;
 }
 
-export type BackgroundRequest = GetMyTabSettings | GetTabSettings | SetTabSettings | FetchLyrics;
+/** Popup → background: look for newer RoFormer models (the result lands in chrome.storage.local, see model-store.ts). */
+export interface ModelCheck {
+  type: 'model-check';
+}
+
+/** Popup → background: download the newest version of one RoFormer model (progress lands in chrome.storage.local). */
+export interface ModelInstall {
+  type: 'model-install';
+  id: ModelId;
+}
+
+export type BackgroundRequest = GetMyTabSettings | GetTabSettings | SetTabSettings | FetchLyrics | ModelCheck | ModelInstall;
 /**
  * QA only (sent via chrome.tabs.sendMessage from extension contexts): force the
  * picture delay, ignoring the graph latency. null clears it. `budgetBytes`
