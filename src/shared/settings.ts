@@ -20,15 +20,12 @@ export interface MixerSettings {
   drumsPct: number;
   /** Gain of the rest of the instrumental (everything but the drums), percent (0–600). */
   othersPct: number;
-  /** Delay limit, seconds (MIN_DELAY_S to MAX_DELAY_S): the audio delay stays below it; a longer limit gives the model a longer chunk. */
+  /** Delay limit, seconds (MIN_DELAY_S to MAX_DELAY_S): the audio delay stays below it (the drum split adds its own wait on top); a longer limit gives the model a longer chunk. */
   mlDelayS: number;
 }
 
 const GAIN_MIN_PCT = 0;
 const GAIN_MAX_PCT = 600;
-
-/** Shortest delay limit (s) at which the RoFormer models can also run the drum split on a fast GPU; the popup raises the limit to it. */
-export const DRUMS_MIN_DELAY_S = 8;
 
 export const DEFAULT_SETTINGS: Readonly<MixerSettings> = Object.freeze({
   mode: 'default',
