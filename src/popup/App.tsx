@@ -120,7 +120,7 @@ export function App() {
         {separate ? (
           <motion.div key="separate" id="panel-separate" {...fade} className="flex flex-col gap-3.5">
             <AnimatePresence mode="wait" initial={false}>
-              <Banner key={view.kind} view={view} settings={settings} update={update} retry={retry} />
+              {view.kind !== 'off' && <Banner key="banner" view={view} settings={settings} update={update} retry={retry} />}
             </AnimatePresence>
             <SeparateControls settings={settings} update={update} ready={ready} advancedOpen={advancedOpen} setAdvancedOpen={setAdvancedOpen} splitOpen={splitOpen} setSplitOpen={setSplitOpen} />
           </motion.div>
@@ -231,12 +231,13 @@ function Banner({ view, settings, update, retry }: { view: SepView; settings: Mi
   }
   return (
     <motion.div {...fade} className="flex flex-col gap-3.5">
-      <div id="separation-banner" role="status" data-kind={view.kind} className={`flex items-start gap-3 rounded-[20px] p-3.5 ${stopped ? 'bg-ink text-white' : 'bg-brand-tint'}`}>
-        {icon}
-        <div className="min-w-0 flex-1">
+      {/* The banner stays while its state changes: the colour fades, the icon pops in, the text slides in. */}
+      <div id="separation-banner" role="status" data-kind={view.kind} className={`flex items-start gap-3 rounded-[20px] p-3.5 transition-colors duration-300 ${stopped ? 'bg-ink text-white' : 'bg-brand-tint'}`}>
+        <motion.span key={`icon-${view.kind}`} initial={{ scale: 0.4, opacity: 0, rotate: -30 }} animate={{ scale: 1, opacity: 1, rotate: 0 }} transition={{ type: 'spring', stiffness: 500, damping: 22 }} className="shrink-0">{icon}</motion.span>
+        <motion.div key={`text-${view.kind}`} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className="min-w-0 flex-1">
           <h2 className="m-0 text-sm font-extrabold">{title}</h2>
           <p className={`m-0 mt-0.5 text-[12.5px] leading-snug ${stopped ? 'text-[#ddd0d2]' : 'text-[#4c4047]'}`}>{text}</p>
-        </div>
+        </motion.div>
       </div>
       {tooSlow && (
         <div className="flex flex-col gap-2.5">
