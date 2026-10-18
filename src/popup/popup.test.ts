@@ -57,12 +57,12 @@ afterEach(() => {
 });
 
 describe('popup', () => {
-  it('disables everything on a non-YouTube tab', async () => {
-    await load({ tab: { id: 1, url: 'https://example.com/' } });
+  it('disables everything on a non-web tab', async () => {
+    await load({ tab: { id: 1, url: 'chrome://extensions/' } });
     for (const e of document.querySelectorAll<HTMLInputElement | HTMLButtonElement>('input, button')) {
       expect(e.disabled).toBe(true);
     }
-    expect(el('status').textContent).toMatch(/youtube\.com/);
+    expect(el('status').textContent).toMatch(/web page/);
   });
 
   it('disables everything when the tab url is hidden', async () => {
@@ -279,7 +279,7 @@ describe('popup', () => {
 
   it('asks for a reload when there is no content script', async () => {
     await load({ status: 'reject' });
-    expect(el('status').textContent).toMatch(/Reload this YouTube tab/);
+    expect(el('status').textContent).toMatch(/Reload this tab/);
   });
 
   describe('Separate tab', () => {

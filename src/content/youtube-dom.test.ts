@@ -19,6 +19,31 @@ describe('detectSite', () => {
   });
 });
 
+describe('findMainVideo generic', () => {
+  it('picks the biggest video', () => {
+    document.body.innerHTML = '<video id="small"></video><video id="big"></video>';
+    const rect = (w: number) => () => ({ width: w, height: w }) as DOMRect;
+    document.querySelector('#small')!.getBoundingClientRect = rect(10);
+    document.querySelector('#big')!.getBoundingClientRect = rect(100);
+    expect(findMainVideo('generic')?.id).toBe('big');
+  });
+  it('prefers what is playing', () => {
+    document.body.innerHTML = '<video id="v"></video><audio id="a"></audio>';
+    const a = document.querySelector<HTMLAudioElement>('#a')!;
+    Object.defineProperty(a, 'paused', { value: false });
+    expect(findMainVideo('generic')?.id).toBe('a');
+  });
+  it('takes an <audio>, and prefers a video', () => {
+    document.body.innerHTML = '<audio id="a"></audio>';
+    expect(findMainVideo('generic')?.id).toBe('a');
+    document.body.innerHTML += '<video id="v"></video>';
+    expect(findMainVideo('generic')?.id).toBe('v');
+  });
+  it('is null without media', () => {
+    expect(findMainVideo('generic')).toBeNull();
+  });
+});
+
 describe('getVideoId', () => {
   it.each([
     ['https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=10', 'dQw4w9WgXcQ'],
