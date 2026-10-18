@@ -94,7 +94,7 @@ export class EngineSelector {
   update(req: SelectorRequest): void {
     const turnedOn = req.on && !this.on;
     const model = req.model ?? 'mdx';
-    const delayMs = model === 'mdx' ? null : (req.delayMs ?? null); // the default model has a fixed delay
+    const delayMs = req.delayMs ?? null;
     const restart = req.on && this.on && (model !== this.model || delayMs !== this.delayMs);
     this.model = model;
     this.delayMs = delayMs;

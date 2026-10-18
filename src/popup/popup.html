@@ -49,14 +49,14 @@
           <span id="model-text"></span>
           <button id="model-btn" type="button" hidden></button>
         </p>
-        <div id="chunk-row" hidden>
+        <div id="chunk-row">
           <label for="ml-delay">Delay limit</label>
           <div class="row">
             <input id="ml-delay" type="range" min="2" max="15" step="1" value="2" />
             <output id="ml-delay-value" for="ml-delay">2 s</output>
             <button id="ml-delay-apply" type="button" disabled>Apply</button>
           </div>
-          <p class="note">The audio delay stays under the limit. A longer limit gives the model more of the song at once, which separates better but needs a faster GPU.</p>
+          <p class="note">The audio delay stays under the limit. A longer limit gives the model more of the song at once, which separates better but needs a faster GPU. The Default model stops growing at about 6.5 s.</p>
         </div>
       </details>
     </section>
