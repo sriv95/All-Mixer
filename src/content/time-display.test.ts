@@ -50,4 +50,37 @@ describe('TimeDisplay (youtube)', () => {
     td = new TimeDisplay('youtube', video, () => presented);
     expect(q('.ytp-time-current').textContent).toBe('1:40');
   });
+
+  it('moves the bar back across a chapter boundary', () => {
+    td.destroy();
+    document.body.innerHTML = `<div id="movie_player"><div class="ytp-progress-bar">
+      <div class="ytp-play-progress" style="transform: scaleX(1)"></div>
+      <div class="ytp-play-progress" style="transform: scaleX(0.01)"></div></div></div>`;
+    const [a, b] = [...document.querySelectorAll<HTMLElement>('.ytp-play-progress')];
+    Object.defineProperty(a, 'offsetWidth', { value: 600 });
+    Object.defineProperty(b, 'offsetWidth', { value: 400 });
+    Object.defineProperty(video, 'currentTime', { value: 120.8, writable: true });
+    presented = 118.8;
+    td = new TimeDisplay('youtube', video, () => presented);
+    expect(parseFloat(a.style.transform.slice(7))).toBeCloseTo(0.99, 5);
+    expect(parseFloat(b.style.transform.slice(7))).toBe(0);
+  });
+
+  it('leaves the bar alone while the user drags it', () => {
+    td.destroy();
+    document.body.innerHTML = `<div id="movie_player" class="seeking-mode"><span class="ytp-time-current">1:40</span>
+      <div class="ytp-progress-bar"><div class="ytp-play-progress" style="transform: scaleX(0.5)"></div></div></div>`;
+    td = new TimeDisplay('youtube', video, () => presented);
+    expect(q('.ytp-time-current').textContent).toBe('1:40');
+    expect(q('.ytp-play-progress').style.transform).toBe('scaleX(0.5)');
+  });
+
+  it('gives screen readers the presented time', () => {
+    td.destroy();
+    document.body.innerHTML = `<div id="movie_player"><div class="ytp-progress-bar" aria-valuenow="100"
+      aria-valuetext="1 Minutes 40 Seconds of 3 Minutes 20 Seconds"></div></div>`;
+    td = new TimeDisplay('youtube', video, () => presented);
+    expect(q('.ytp-progress-bar').getAttribute('aria-valuenow')).toBe('98');
+    expect(q('.ytp-progress-bar').getAttribute('aria-valuetext')).toBe('1 Minutes 38 Seconds of 3 Minutes 20 Seconds');
+  });
 });

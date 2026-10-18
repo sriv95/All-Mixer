@@ -127,20 +127,24 @@ const TIME_SELECTORS = {
     fills: '#movie_player .ytp-play-progress',
     knob: '#movie_player .ytp-scrubber-container',
     bar: '#movie_player .ytp-progress-bar',
+    /** The user drags the seek bar: the bar shows the dragged position, not the playing one. */
+    dragging: '#movie_player.seeking-mode',
   },
   ytmusic: {
     text: 'ytmusic-player-bar .time-info',
     fills: 'ytmusic-player-bar #primaryProgress',
     knob: 'ytmusic-player-bar #sliderKnob',
     bar: 'ytmusic-player-bar #progress-bar',
+    dragging: null,
   },
-} as const satisfies Record<Site, Record<string, string>>;
+} as const satisfies Record<Site, Record<string, string | null>>;
 
 export interface TimeElements {
   text: HTMLElement | null;
   fills: HTMLElement[];
   knob: HTMLElement | null;
   bar: HTMLElement | null;
+  dragging: boolean;
 }
 
 export function findTimeElements(site: Site, doc: ParentNode = document): TimeElements {
@@ -150,6 +154,7 @@ export function findTimeElements(site: Site, doc: ParentNode = document): TimeEl
     fills: [...doc.querySelectorAll<HTMLElement>(s.fills)],
     knob: doc.querySelector<HTMLElement>(s.knob),
     bar: doc.querySelector<HTMLElement>(s.bar),
+    dragging: s.dragging !== null && doc.querySelector(s.dragging) !== null,
   };
 }
 
