@@ -8,7 +8,7 @@ Chrome extension (Manifest V3) for youtube.com and music.youtube.com.
 bun install
 uv sync            # Python env for the model scripts (.venv, from pyproject.toml)
 bun run fetch-model      # public/ml/vocals.onnx + mdx.onnx (needed to build)
-bun run export-roformer  # public/ml/roformer.onnx, optional (913 MB download, ~1 min)
+bun run export-roformer  # public/ml/{roformer,kim,deux}.onnx, optional (~1.4 GB of checkpoints, ~1 min each)
 bun run build      # typecheck + vite build → dist/
 bun run test       # unit tests (vitest + happy-dom)
 bun run lint
@@ -41,7 +41,7 @@ Use `bun run test`, not `bun test`. `bun test` starts Bun's own test runner; thi
 - If Chrome's autoplay policy keeps the AudioContext suspended, the extension waits for one click / key press on the page before routing audio, so the video is never muted. The popup shows a hint.
 - Settings are per browser tab and survive SPA navigation and reloads; they are cleared when the tab closes.
 - Separate mode uses the ML engine (MDX-Net 9482 vocal model plus a Spleeter mask for Karaoke, on WebGPU; 1.97 s audio delay, the video is delayed to match). Until it is running, or when it cannot run, the original mix plays and the popup says why.
-- Separate tab, Model menu (experimental): "Mel-Band RoFormer, Kim fine-tune" replaces MDX-Net and Spleeter with one fp16 transformer (436 MB, built by `bun run export-roformer`, optional: the build only warns without it). It gives a cleaner voice/instrumental split and needs a fast GPU; 1.99 s delay. Geometry per model is in `src/worklet/protocol.ts` (`GEOMETRY`); the STFT, mask scatter and iSTFT are in `src/ml/roformer.ts`. The weights are unwa's `mel_band_roformer_kim_ft_unwa`. `spike/bench/rof_bench.mjs <model> <frames> <inputs>` times an exported core on WebGPU.
+- Separate tab, Model menu (experimental): three Mel-Band RoFormers to compare with the default: "Kim FT (unwa)", "Kim (original)" and "Deux (becruily)". Each replaces MDX-Net and Spleeter with one fp16 transformer (436, 436 and 235 MB; built by `bun run export-roformer [name] [--force]` into `public/ml/`, packed into `dist/`, optional: the build only warns for a missing one). They give a cleaner voice/instrumental split and need a fast GPU; 1.99 s delay. Deux has two stems; only its vocal stem is used (the instrumental is mix minus vocal, as for the others). Measured on an M1: Kim FT and Kim take ~0.67 s per step (gate 0.77 s), Deux ~0.95 s (12 layers), so Deux reports "too slow on this device" there. Geometry per model is in `src/worklet/protocol.ts` (`GEOMETRY`); the STFT, mask scatter and iSTFT are in `src/ml/roformer.ts`. The weights are unwa's `mel_band_roformer_kim_ft_unwa`, Kimberley Jensen's `MelBandRoformer.ckpt` and becruily's `mel-band-roformer-deux`. `spike/bench/rof_bench.mjs <model> <frames> <inputs>` times an exported core on WebGPU.
 
 ## Debug
 

@@ -16,5 +16,6 @@ __pycache__/
 scripts/qa-*.mjs*
 .DS_Store
 out/
-public/ml/roformer.onnx
-public/ml/roformer-meta.json
+public/ml/roformer*
+public/ml/kim*
+public/ml/deux*

@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
 
 // ML engine assets (SRI-24, SRI-117): the models are fetched at build time (public/ml/vocals.onnx + mdx.onnx, copied by
-// publicDir; the optional public/ml/roformer.onnx comes from scripts/export-roformer.py) and ORT's WebGPU wasm is copied next to the worker, which loads it by URL.
+// publicDir; the optional public/ml/{roformer,kim,deux}.onnx come from scripts/export-roformer.py) and ORT's WebGPU wasm is copied next to the worker, which loads it by URL.
 const ORT_FILES = ['ort-wasm-simd-threaded.asyncify.wasm', 'ort-wasm-simd-threaded.asyncify.mjs'];
 function mlAssets(): Plugin {
   return {
@@ -12,8 +12,8 @@ function mlAssets(): Plugin {
       for (const f of ['vocals.onnx', 'mdx.onnx']) {
         if (!existsSync(resolve(__dirname, 'public/ml', f))) this.error(`public/ml/${f} is missing: run bun run fetch-model (mdx.onnx needs PY=python with onnx + onnxconverter-common)`);
       }
-      // Optional: without it the RoFormer option in the popup reports "unavailable" and the original mix plays.
-      for (const f of ['roformer.onnx', 'roformer-meta.json']) {
+      // Optional: without one the matching RoFormer option in the popup reports "unavailable" and the original mix plays.
+      for (const f of ['roformer', 'kim', 'deux'].flatMap((n) => [`${n}.onnx`, `${n}-meta.json`])) {
         if (!existsSync(resolve(__dirname, 'public/ml', f))) this.warn(`public/ml/${f} is missing: that RoFormer model option will be unavailable (bun run export-roformer)`);
       }
     },

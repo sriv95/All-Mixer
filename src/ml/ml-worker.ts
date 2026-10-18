@@ -1,7 +1,7 @@
 // ML worker (runs inside the ml.html iframe, which gets a real WebGPU adapter): receives block
 // buffers from the separator worklet on a MessagePort, runs MDX-Net 9482 (vocal) and the Spleeter vocals
 // model (Karaoke mask) with onnxruntime-web (webgpu EP only, one run in flight at a time) and sends the
-// same buffers back with the Vk and vocal blocks (src/ml/pipeline.ts). With model 'roformer' it runs the
+// same buffers back with the Vk and vocal blocks (src/ml/pipeline.ts). With a RoFormer model it runs the
 // Mel-Band RoFormer core instead (src/ml/roformer.ts): the vocal block is both Vk and the A cappella.
 import {
   GEOMETRY,

@@ -137,6 +137,7 @@ describe('popup', () => {
     await load({ stored: { mode: 'separate', mlModel: 'roformer' } });
     const select = el<HTMLSelectElement>('ml-model');
     expect(select.value).toBe('roformer');
+    expect([...select.options].map((o) => o.value)).toEqual(['mdx', 'roformer', 'kim', 'deux']);
     select.value = 'mdx';
     select.dispatchEvent(new Event('change', { bubbles: true }));
     await settle();

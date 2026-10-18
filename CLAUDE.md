@@ -17,12 +17,12 @@ bun run lint                          # eslint . (spike/, scripts/qa-* ignored)
 bun run typecheck                     # tsc --noEmit
 uv sync                               # Python env (.venv) for the model scripts
 bun run fetch-model                   # downloads public/ml/vocals.onnx + mdx.onnx (gitignored)
-bun run export-roformer               # optional: builds public/ml/roformer.onnx (gitignored)
+bun run export-roformer               # optional: builds public/ml/{roformer,kim,deux}.onnx, the Model menu entries (gitignored; name/--force args)
 bun run build                         # typecheck + 4 vite builds -> dist/
 bun run dev                           # watch build of the content script only
 ```
 
-- `bun run build` fails if `public/ml/vocals.onnx` / `mdx.onnx` are missing. `mdx.onnx` conversion uses `.venv/bin/python` from `uv sync` (override with `PY=/path/to/python`). `roformer.onnx` is optional; without it the build only warns.
+- `bun run build` fails if `public/ml/vocals.onnx` / `mdx.onnx` are missing. `mdx.onnx` conversion uses `.venv/bin/python` from `uv sync` (override with `PY=/path/to/python`). The RoFormer files (`roformer`, `kim`, `deux`; `.onnx` + `-meta.json`) are optional; without one the build only warns and that menu entry reports "unavailable".
 - Build is 4 separate vite runs because the artifacts differ: main (popup, `ml.html`, background service worker, ES), content script (single IIFE), MAIN-world page bridge (IIFE, `ENTRY=page`), separator AudioWorklet (one ES module). After a rebuild, reload the extension in `chrome://extensions` and reload the YouTube tab.
 - CI (`.github/workflows/ci.yml`) runs only lint + typecheck + test, and only after a PR merges to `main` (or a `package.json` push). It never builds, since the models are not in git.
 - Release: add `## [x.y.z] - date` to `CHANGELOG.md` and bump `version` in `package.json` (single source; the build stamps it into `dist/manifest.json`, so do not edit the version in `public/manifest.json`). Changelog entries describe user-visible behavior in plain language, under `## [Unreleased]` until released. See README "Release".
