@@ -54,6 +54,19 @@ export interface SelectorRequest {
 }
 
 const RATE_CAUSE = 'the audio context is not at 44.1 kHz';
+/**
+ * Turning Separate off keeps a warmed-up host for this long, so turning it on again (to compare with the original, say)
+ * does not pay the 3 to 40 s warm-up again. The host holds the model on the GPU (up to ~0.5 GB), so it is not kept for long.
+ */
+export const KEEP_WARM_MS = 3 * 60 * 1000;
+
+/** A host that passed its warm-up, and what it was started for. */
+interface Warm {
+  model: MlModel;
+  delayMs: number | null;
+  drums: boolean;
+  geometry: MlGeometry;
+}
 
 /**
  * ML-only engine choice. Separate mode starts on the original mix (bypass); this probes the ML
@@ -69,6 +82,9 @@ export class EngineSelector {
   private delayMs: number | null = null;
   private drums = false;
   private choice: EngineChoice = { state: 'off' };
+  /** Set while the host in `host` has passed its warm-up (cleared with the host). */
+  private warm: Warm | null = null;
+  private idleTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(
     private readonly chain: EngineChain,
@@ -107,11 +123,13 @@ export class EngineSelector {
     this.on = req.on;
     if (!req.on) {
       if (this.mlActive) this.chain.setEngine('bypass', 'auto');
-      this.disposeHost();
       this.mlActive = false;
+      if (this.warm) this.idleTimer = setTimeout(() => this.disposeHost(), KEEP_WARM_MS);
+      else this.disposeHost();
       this.setChoice({ state: 'off' });
       return;
     }
+    if (turnedOn && this.warm && this.resume(model, delayMs, drums)) return;
     if (restart) {
       // A new model, delay budget or drum split: back to the original mix, drop the old host, probe again.
       if (this.mlActive) this.chain.setEngine('bypass', 'auto');
@@ -125,7 +143,8 @@ export class EngineSelector {
   private probe(): void {
     if (!this.chain.canRunMl()) return this.giveUp(RATE_CAUSE);
     const model = this.model;
-    const host = this.createHost(model, this.delayMs, this.drums);
+    const { delayMs, drums } = this;
+    const host = this.createHost(model, delayMs, drums);
     this.host = host;
     this.probing = true;
     this.setChoice({ state: 'warming' });
@@ -137,6 +156,7 @@ export class EngineSelector {
       if (m.geometry) this.chain.setMlGeometry(m.geometry);
       else if (m.p90 >= GEOMETRY[model].warmupP90Ms) return this.giveUp(`too slow on this device (p90 ${m.p90.toFixed(1)} ms)`);
       if (!this.chain.setEngine('ml', 'auto')) return this.giveUp(RATE_CAUSE);
+      this.warm = { model, delayMs, drums, geometry: m.geometry ?? GEOMETRY[model] };
       this.mlActive = true;
       this.setChoice({ state: 'on' });
     });
@@ -146,8 +166,26 @@ export class EngineSelector {
     }
   }
 
+  /** Separate turned on again while a warmed-up host is kept: use it if it was made for these settings. */
+  private resume(model: MlModel, delayMs: number | null, drums: boolean): boolean {
+    const w = this.warm!;
+    clearTimeout(this.idleTimer);
+    if (w.model === model && w.delayMs === delayMs && w.drums === drums) {
+      this.chain.setMlGeometry(w.geometry);
+      if (this.chain.setEngine('ml', 'auto')) {
+        this.mlActive = true;
+        this.setChoice({ state: 'on' });
+        return true;
+      }
+    }
+    this.disposeHost(); // other settings, or ML refused: a fresh probe
+    return false;
+  }
+
   /** The downloaded files of model `id` changed (first download, update): probe again if it is in use. */
   reload(id: ModelId): void {
+    // A kept host runs the old files: drop it.
+    if (this.warm && !this.on && (id === 'drums' ? this.warm.drums : this.warm.model === id)) this.disposeHost();
     if (!this.on || (id === 'drums' ? !this.drums : this.model !== id)) return;
     if (this.mlActive) this.chain.setEngine('bypass', 'auto');
     this.disposeHost();
@@ -162,8 +200,10 @@ export class EngineSelector {
   }
 
   private disposeHost(): void {
+    clearTimeout(this.idleTimer);
     this.host?.dispose();
     this.host = null;
+    this.warm = null;
     this.probing = false;
   }
 }

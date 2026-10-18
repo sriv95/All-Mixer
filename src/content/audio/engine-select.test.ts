@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { GEOMETRY, ML_WARMUP_P90_MS, type FromMlWorker, type MlGeometry, type MlModel } from '../../worklet/protocol';
-import { EngineSelector, type MlHostLike } from './engine-select';
+import { EngineSelector, KEEP_WARM_MS, type MlHostLike } from './engine-select';
 import type { LatencyListener } from './latency';
 
 class FakeHost implements MlHostLike {
@@ -189,15 +189,81 @@ describe('EngineSelector', () => {
     expect(sel.status.state).toBe('warming');
   });
 
-  it('Separate off while ML runs sends the worklet back to bypass', () => {
+  it('Separate off while ML runs sends the worklet back to bypass and keeps the warmed-up host', () => {
     const { sel, hosts, chain } = setup();
     sel.update(req());
     hosts[0].onStatus!(ready(20));
     chain.setEngine.mockClear();
     sel.update(req(false));
     expect(chain.setEngine).toHaveBeenCalledWith('bypass', 'auto');
-    expect(hosts[0].disposed).toBe(true);
+    expect(hosts[0].disposed).toBe(false);
     expect(sel.status).toEqual({ state: 'off' });
+  });
+
+  describe('keeping the host warm after Separate turns off', () => {
+    it('turning on again resumes without a new warm-up', () => {
+      vi.useFakeTimers();
+      const { sel, hosts, chain } = setup();
+      const seen: string[] = [];
+      sel.update(req(true, 'roformer', 4000));
+      hosts[0].onStatus!(ready(20, planned));
+      sel.update(req(false, 'roformer', 4000));
+      vi.advanceTimersByTime(KEEP_WARM_MS - 1000);
+      sel.onChange = (c) => seen.push(c.state);
+      chain.setMlGeometry.mockClear();
+      chain.setEngine.mockClear();
+      sel.update(req(true, 'roformer', 4000));
+      expect(hosts).toHaveLength(1);
+      expect(seen).toEqual(['on']); // never "warming": no pause, no spinner
+      expect(chain.setMlGeometry).toHaveBeenCalledWith(planned);
+      expect(chain.setEngine).toHaveBeenCalledWith('ml', 'auto');
+      vi.advanceTimersByTime(2 * KEEP_WARM_MS);
+      expect(hosts[0].disposed).toBe(false); // in use again: the idle timer is gone
+      vi.useRealTimers();
+    });
+
+    it('the host is disposed after the idle time', () => {
+      vi.useFakeTimers();
+      const { sel, hosts } = setup();
+      sel.update(req());
+      hosts[0].onStatus!(ready(20));
+      sel.update(req(false));
+      vi.advanceTimersByTime(KEEP_WARM_MS);
+      expect(hosts[0].disposed).toBe(true);
+      sel.update(req());
+      expect(hosts).toHaveLength(2);
+      expect(sel.status).toEqual({ state: 'warming' });
+      vi.useRealTimers();
+    });
+
+    it('other settings when it turns on again: the kept host is dropped and a new one probes', () => {
+      const { sel, hosts } = setup();
+      sel.update(req(true, 'mdx'));
+      hosts[0].onStatus!(ready(20));
+      sel.update(req(false));
+      sel.update(req(true, 'roformer'));
+      expect(hosts[0].disposed).toBe(true);
+      expect(hosts).toHaveLength(2);
+      expect(sel.status).toEqual({ state: 'warming' });
+    });
+
+    it('new model files while it is kept drop the host', () => {
+      const { sel, hosts } = setup();
+      sel.update(req(true, 'roformer'));
+      hosts[0].onStatus!(ready(20, planned));
+      sel.update(req(false, 'roformer'));
+      sel.reload('deux');
+      expect(hosts[0].disposed).toBe(false);
+      sel.reload('roformer');
+      expect(hosts[0].disposed).toBe(true);
+    });
+
+    it('a host that never passed its warm-up is not kept', () => {
+      const { sel, hosts } = setup();
+      sel.update(req());
+      sel.update(req(false));
+      expect(hosts[0].disposed).toBe(true);
+    });
   });
 
   it('Separate off during warm-up disposes the host and ignores its late result', () => {
