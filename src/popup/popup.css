@@ -39,6 +39,28 @@ body {
   @apply outline-2 outline-offset-4 outline-brand;
 }
 
+/* Fine tune: while a thumb is held, its number grows and turns red and the other rows of the card dim. */
+.mx-row {
+  transition: opacity 0.2s;
+}
+.mx-row output {
+  display: inline-block;
+  transform-origin: right center;
+  transition:
+    transform 0.2s,
+    color 0.2s;
+}
+.mx-row-left output {
+  transform-origin: left center;
+}
+.mx-row:has(.mx-range:active) output {
+  transform: scale(1.2);
+  color: var(--color-brand);
+}
+.mx-rows:has(.mx-range:active) .mx-row:not(:has(.mx-range:active)) {
+  opacity: 0.4;
+}
+
 .mx-range::-webkit-slider-thumb {
   transition: transform 0.15s ease-out;
 }
