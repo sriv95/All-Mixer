@@ -1,8 +1,10 @@
 import type { LyricLine } from '../../lyrics/types';
 import { selectKaraokeLines, type KaraokeSlot } from '../../lyrics/karaoke-lines';
-import type { LyricsPrefs } from '../../shared/lyrics-prefs';
+import type { KaraokeFont, KaraokeOutline, LyricsPrefs } from '../../shared/lyrics-prefs';
 import { findControlBar, findKaraokeHost, findPlayer, KARAOKE_MOUNT, isAdShowing, type Site } from '../youtube-dom';
 import type { LyricsState, LyricsSurface } from './controller';
+import { openContextMenu, type ContextEntry } from './karaoke-menu';
+import { POSITION_PRESETS, matchedPosition, matchedStylePreset, stylePresets } from './karaoke-presets';
 
 export interface Size {
   w: number;
@@ -12,6 +14,9 @@ export interface Pos {
   x: number;
   y: number;
 }
+
+/** Lyrics-only view: the text this much larger. */
+const FOCUS_SCALE = 1.6;
 
 /** Base font size: about 4% of the player height, kept in a readable range. */
 export function karaokeFontPx(playerHeight: number, sizePercent: number): number {
@@ -33,6 +38,22 @@ export function clampKaraokePosition(pos: Pos, block: Size, player: Size, bottom
   return { x: cx / player.w, y: cy / player.h };
 }
 
+const FONT_FAMILIES: Record<KaraokeFont, string> = {
+  default: '"YouTube Noto",Roboto,Arial,sans-serif',
+  sans: 'system-ui,"Segoe UI",Helvetica,Arial,sans-serif',
+  serif: 'Georgia,"Times New Roman",serif',
+  mono: 'ui-monospace,Menlo,Consolas,monospace',
+};
+
+const outline = (w: number): string => [[-w, -w], [w, -w], [-w, w], [w, w]].map(([x, y]) => `${x}px ${y}px 0 #000`).join(',');
+/** Text-shadow per outline step. `normal` is the stylesheet's own (outline + glow). */
+const OUTLINES: Record<KaraokeOutline, string> = {
+  none: 'none',
+  thin: outline(0.5),
+  normal: '',
+  thick: `${outline(2)},0 0 8px rgba(0,0,0,.9)`,
+};
+
 const ROOT_ID = 'all-mixer-karaoke';
 const STYLE = `
 #${ROOT_ID} { position:absolute; inset:0; z-index:10; pointer-events:none; overflow:hidden; }
@@ -40,9 +61,17 @@ const STYLE = `
   font-family:"YouTube Noto",Roboto,Arial,sans-serif; font-weight:500; line-height:1.3; cursor:grab; user-select:none; touch-action:none;
   pointer-events:auto; text-shadow:-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000,1px 1px 0 #000,0 0 6px rgba(0,0,0,.8); }
 #${ROOT_ID}.am-ad .am-k-block { display:none !important; }
+#${ROOT_ID}.am-focus { background:rgba(0,0,0,.65); -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px); }
+#${ROOT_ID}.am-focus.am-ad { background:none; -webkit-backdrop-filter:none; backdrop-filter:none; }
+#${ROOT_ID}.am-focus .am-k-block { cursor:default; max-width:80%; }
 #${ROOT_ID} .am-k-block.dragging { cursor:grabbing; }
 #${ROOT_ID} .am-k-line { display:block; }
 #${ROOT_ID} .am-k-line.upcoming { opacity:.6; }
+@keyframes am-k-fade { from { opacity:0; } }
+@keyframes am-k-slide { from { opacity:0; transform:translateY(.4em); } }
+#${ROOT_ID} .am-k-line.am-in-fade { animation:am-k-fade .3s ease-out; }
+#${ROOT_ID} .am-k-line.am-in-slide { animation:am-k-slide .3s ease-out; }
+@media (prefers-reduced-motion: reduce) { #${ROOT_ID} .am-k-line { animation:none !important; } }
 `;
 
 export interface KaraokeOptions {
@@ -50,6 +79,8 @@ export interface KaraokeOptions {
   getPrefs(): LyricsPrefs;
   /** Called once when a drag ends, with the clamped position. */
   onPosition(pos: Pos): void;
+  /** The right-click menu changes prefs (position, style, lyrics-only view). */
+  setPrefs(patch: Partial<LyricsPrefs>): void;
 }
 
 /** Karaoke text on the video: one block inside the player, driven by the controller's clock. */
@@ -62,6 +93,9 @@ export class KaraokeSurface implements LyricsSurface {
   private key: string | null = null;
   private lastTime = 0;
   private pos: Pos;
+  private closeMenu: (() => void) | null = null;
+  /** Text per row of the last build: only a row whose text changed animates in. */
+  private prevRows: string[] = [];
   private dragging: { pointerId: number; dx: number; dy: number } | null = null;
 
   constructor(
@@ -77,9 +111,10 @@ export class KaraokeSurface implements LyricsSurface {
     this.block.className = 'am-k-block';
     this.block.style.display = 'none';
     this.root.append(style, this.block);
-    for (const ev of ['click', 'dblclick', 'mousedown', 'keydown', 'keyup'] as const) {
+    for (const ev of ['click', 'dblclick', 'mousedown', 'keydown', 'keyup', 'contextmenu'] as const) {
       this.block.addEventListener(ev, (e) => e.stopPropagation());
     }
+    this.block.addEventListener('contextmenu', this.onContextMenu);
     this.block.addEventListener('pointerdown', this.onDown);
     this.block.addEventListener('pointermove', this.onMove);
     this.block.addEventListener('pointerup', this.onUp);
@@ -116,6 +151,7 @@ export class KaraokeSurface implements LyricsSurface {
   sync(): boolean {
     const player = this.active ? findPlayer(this.opts.site, this.doc) : null;
     if (!player) {
+      this.closeMenu?.();
       this.root.remove();
       this.observe(null);
       return false;
@@ -131,7 +167,7 @@ export class KaraokeSurface implements LyricsSurface {
     return true;
   }
 
-  /** Prefs changed (font size, line count, position, mode). */
+  /** Prefs changed (font size, color, font, outline, background, animation, line count, position, mode). */
   refreshPrefs(): void {
     this.pos = this.opts.getPrefs().karaokePosition;
     this.key = null;
@@ -140,6 +176,7 @@ export class KaraokeSurface implements LyricsSurface {
   }
 
   destroy(): void {
+    this.closeMenu?.();
     this.observe(null);
     this.root.remove();
     this.doc.removeEventListener('fullscreenchange', this.onFullscreen);
@@ -161,12 +198,16 @@ export class KaraokeSurface implements LyricsSurface {
     // 2-line mode keeps both rows even when one has no line, so a lone line does not jump.
     const rows: (KaraokeSlot | null)[] = this.opts.getPrefs().karaokeLines === 2 && slots.length > 0 ? [null, null] : [];
     for (const slot of slots) rows[slot.row] = slot;
-    rows.forEach((slot) => {
+    const animation = this.opts.getPrefs().karaokeAnimation;
+    const texts = rows.map((slot) => slot?.text ?? '');
+    rows.forEach((slot, i) => {
       const el = this.doc.createElement('span');
       el.className = slot ? `am-k-line ${slot.state}` : 'am-k-line empty';
+      if (slot && animation !== 'none' && slot.text !== this.prevRows[i]) el.classList.add(`am-in-${animation}`);
       el.textContent = slot ? slot.text : '\u200b';
       this.block.append(el);
     });
+    this.prevRows = texts;
     this.block.style.display = slots.length > 0 ? '' : 'none';
   }
 
@@ -190,8 +231,19 @@ export class KaraokeSurface implements LyricsSurface {
     const player = this.playerSize();
     if (player.w <= 0 || player.h <= 0) return;
     this.fitRoot();
-    this.block.style.fontSize = `${karaokeFontPx(player.h, this.opts.getPrefs().karaokeFontSize)}px`;
-    this.place(this.pos);
+    const prefs = this.opts.getPrefs();
+    const st = this.block.style;
+    st.color = prefs.karaokeColor;
+    st.fontFamily = FONT_FAMILIES[prefs.karaokeFont];
+    st.textShadow = OUTLINES[prefs.karaokeOutline];
+    st.background = prefs.karaokeBackground ? `rgba(0,0,0,${prefs.karaokeBackground / 100})` : '';
+    st.padding = prefs.karaokeBackground ? '.15em .5em' : '';
+    st.borderRadius = prefs.karaokeBackground ? '.3em' : '';
+    const focus = prefs.karaokeFocus && !!this.lines;
+    this.root.classList.toggle('am-focus', focus);
+    const px = karaokeFontPx(player.h, prefs.karaokeFontSize);
+    this.block.style.fontSize = `${focus ? Math.round(px * FOCUS_SCALE * 10) / 10 : px}px`;
+    this.place(focus ? { x: 0.5, y: 0.5 } : this.pos);
   };
 
   private onFullscreen = (): void => {
@@ -227,8 +279,28 @@ export class KaraokeSurface implements LyricsSurface {
     return clamped;
   }
 
+  /** Right-click on the text: position and style presets, and the lyrics-only view. */
+  private readonly onContextMenu = (e: MouseEvent): void => {
+    e.preventDefault();
+    const prefs = this.opts.getPrefs();
+    const set = (patch: Partial<LyricsPrefs>) => this.opts.setPrefs(patch);
+    const position = matchedPosition(prefs);
+    const style = matchedStylePreset(prefs);
+    const entries: ContextEntry[] = [
+      { label: 'Position', heading: true },
+      ...POSITION_PRESETS.map((p) => ({ label: p.label, checked: position?.id === p.id, run: () => set({ karaokePosition: { x: 0.5, y: p.y } }) })),
+      { label: 'Style', heading: true },
+      ...stylePresets(prefs).map((p) => ({ label: p.label, checked: style?.id === p.id, run: () => set(p.style) })),
+      { label: 'View', heading: true },
+      { label: 'Lyrics-only view', checked: prefs.karaokeFocus, run: () => set({ karaokeFocus: !prefs.karaokeFocus }) },
+    ];
+    const r = this.root.getBoundingClientRect();
+    this.closeMenu?.();
+    this.closeMenu = openContextMenu(this.root, { x: e.clientX - r.left, y: e.clientY - r.top }, entries);
+  };
+
   private readonly onDown = (e: PointerEvent): void => {
-    if (e.button > 0 || !this.player) return;
+    if (e.button > 0 || !this.player || this.opts.getPrefs().karaokeFocus) return;
     e.stopPropagation();
     e.preventDefault();
     const rect = this.block.getBoundingClientRect();

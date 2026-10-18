@@ -50,6 +50,24 @@ describe('LyricsCache', () => {
   });
 });
 
+describe('LyricsCache pin', () => {
+  it('a pin wins over the automatic lookup, survives eviction and the negative TTL, and unpin forgets it', async () => {
+    let now = 0;
+    const area = memArea();
+    const c = new LyricsCache(area as never, () => now++);
+    const mine = { plain: 'mine', record: { id: 0, trackName: 'a', artistName: 'b', duration: 1 } };
+    await c.pin('keep', mine);
+    for (let i = 0; i < 305; i++) await c.store(`v${i}`, found);
+    expect(Object.keys(area.d)).toContain('lyrics:keep');
+    const load = vi.fn().mockResolvedValue(found);
+    expect(await c.getOrFetch(t('keep'), load)).toEqual(mine);
+    expect(load).not.toHaveBeenCalled();
+    await c.unpin('keep');
+    expect(await c.lookup('keep')).toEqual({ hit: false, found: null });
+    expect(await c.getOrFetch(t('keep'), load)).toEqual(found);
+  });
+});
+
 describe('LyricsCache in-flight', () => {
   it('shares one fetch between concurrent requests for the same video', async () => {
     const c = new LyricsCache(memArea() as never);

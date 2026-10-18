@@ -1,13 +1,17 @@
-import type { FetchLyrics } from '../../shared/messages';
-import type { FoundLyrics } from '../../lyrics/lrclib-types';
+import type { FetchLyrics, PinLyrics, SearchLyrics, UnpinLyrics } from '../../shared/messages';
+import type { FoundLyrics, LrclibRecord } from '../../lyrics/lrclib-types';
+import { toFound } from '../../lyrics/lrclib';
 import { CC_BUTTON_SELECTOR, clickCaptionsButton, findLyricsControls, getCaptionsButtonState, findPlayer, getVideoId, onCaptionsButtonOn, onNavigate, setYtCaptionsHidden, type Site } from '../youtube-dom';
+import { linesToLrc, lyricsToText } from '../../lyrics/export';
 import { getPlayerInfo, getTimedText, onCaptionsAvailable } from './bridge-client';
 import { LyricsController, type LyricsState } from './controller';
-import { YtSettingsMenu, YtmSettingsPopover, buildMenuButtons, buildMenuRows, type LyricsMenu } from './settings-menu';
+import { YtSettingsMenu, YtmSettingsPopover, buildMenuButtons, buildMenuRows, timingLabel, type LyricsMenu } from './settings-menu';
+import { openFindDialog, openOwnDialog } from './lyrics-dialog';
+import { showToast, timingKeyDelta } from './timing-keys';
 import { PanelSurface, YtmTabSurface } from './surfaces';
 import { CaptionBoot } from './caption-boot';
 import { KaraokeSurface } from './karaoke-overlay';
-import { DEFAULT_LYRICS_PREFS, loadLyricsPrefs, saveLyricsPrefs, watchLyricsPrefs, type LyricsPrefs } from '../../shared/lyrics-prefs';
+import { DEFAULT_LYRICS_PREFS, MAX_LYRICS_OFFSET_MS, loadLyricsPrefs, saveLyricsPrefs, watchLyricsPrefs, type LyricsPrefs } from '../../shared/lyrics-prefs';
 
 const BUTTON_ATTR = 'data-allmixer-lyrics-btn';
 
@@ -44,6 +48,7 @@ export function initLyrics(site: Site, presentedTime: () => number | null, prese
     fetchLyrics: (track) => chrome.runtime.sendMessage({ type: 'fetch-lyrics', track } satisfies FetchLyrics) as Promise<FoundLyrics | null>,
     presentedTime,
     presentedBusy,
+    offsetMs: (id) => (id ? (prefs.lyricsOffsets[id] ?? 0) : 0),
   });
   const view = {
     onSeek: (t: number) => controller.seek(t),
@@ -78,6 +83,7 @@ export function initLyrics(site: Site, presentedTime: () => number | null, prese
       prefs = { ...prefs, karaokePosition };
       if (storage) void saveLyricsPrefs(storage, { karaokePosition });
     },
+    setPrefs: (patch) => setPrefs(patch),
   });
   if (!tabOnly) controller.addSurface(karaoke);
 
@@ -145,10 +151,58 @@ export function initLyrics(site: Site, presentedTime: () => number | null, prese
       setPrefs({ captionLang: controller.captionLang });
     },
     setPrefs,
+    copyLyrics: () => {
+      const lyrics = lastState.kind === 'ready' ? lastState.lyrics : null;
+      if (!lyrics) return;
+      void navigator.clipboard?.writeText(lyricsToText(lyrics)).catch(() => {});
+      return 'Copied';
+    },
+    saveLrc: () => {
+      if (lastState.kind !== 'ready' || lastState.lyrics.kind !== 'synced') return;
+      const { track, lyrics } = lastState;
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([linesToLrc(lyrics.lines, track)], { type: 'text/plain;charset=utf-8' }));
+      a.download = `${`${track.artist} - ${track.title}`.replace(/[\\/:*?"<>|]+/g, '_')}.lrc`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      return 'Saved';
+    },
+    findLyrics: () => {
+      const track = lastState.kind === 'ready' || lastState.kind === 'not-found' ? lastState.track : undefined;
+      openFindDialog({
+        track,
+        search: (q) => chrome.runtime.sendMessage({ type: 'search-lyrics', q } satisfies SearchLyrics) as Promise<LrclibRecord[]>,
+        choose: (record) => void useLyrics(toFound(record)),
+        reset: () => void useLyrics(null),
+      });
+    },
+    myLyrics: () => {
+      const track = lastState.kind === 'ready' || lastState.kind === 'not-found' ? lastState.track : undefined;
+      openOwnDialog({ track, choose: (found) => void useLyrics(found), reset: () => void useLyrics(null) });
+    },
+    setOffset: (ms: number) => {
+      if (!lastVideoId) return;
+      // Delete first so a changed entry moves to the end (newest) of the stored map.
+      const offsets = { ...prefs.lyricsOffsets };
+      delete offsets[lastVideoId];
+      if (ms) offsets[lastVideoId] = ms;
+      setPrefs({ lyricsOffsets: offsets });
+    },
+  };
+  /** Make `found` (or, with null, the automatic match) this video's lyrics, kept from now on. */
+  const useLyrics = async (found: FoundLyrics | null) => {
+    const videoId = lastVideoId;
+    if (!videoId) return;
+    const msg: PinLyrics | UnpinLyrics = found ? { type: 'pin-lyrics', videoId, found } : { type: 'unpin-lyrics', videoId };
+    await chrome.runtime.sendMessage(msg);
+    controller.reload();
+    // A picked LRCLIB text would stay hidden behind captions otherwise.
+    if (found) setPrefs({ lyricsSource: 'lrclib' });
   };
   const syncMenu = () => {
     const ready = lastState.kind === 'ready' ? lastState : null;
-    const input = { sources: ready?.sources, captions: ready?.captions, prefs, site };
+    const timing = ready?.lyrics.kind === 'synced' && lastVideoId ? { offsetMs: prefs.lyricsOffsets[lastVideoId] ?? 0 } : undefined;
+    const input = { sources: ready?.sources, captions: ready?.captions, prefs, site, timing, lyrics: ready ? { synced: ready.lyrics.kind === 'synced' } : undefined, canEdit: !!lastVideoId && (lastState.kind === 'ready' || lastState.kind === 'not-found') };
     const rows = buildMenuRows(input, actions);
     const buttons = buildMenuButtons(input, actions);
     for (const m of menus) m.setRows(rows, buttons);
@@ -180,6 +234,23 @@ export function initLyrics(site: Site, presentedTime: () => number | null, prese
       });
     }).observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ['aria-selected'] });
   }
+
+  // [ and ] nudge the timing of the shown synced lyrics (capture phase, so YouTube's own handler does not also see them).
+  document.addEventListener(
+    'keydown',
+    (e) => {
+      const delta = prefs.lyricsTimingKeys ? timingKeyDelta(e) : 0;
+      const id = lastVideoId;
+      if (!delta || !id || lastState.kind !== 'ready' || lastState.lyrics.kind !== 'synced') return;
+      if (!(karaoke.active || panel.active || tab?.active)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const ms = Math.max(-MAX_LYRICS_OFFSET_MS, Math.min(MAX_LYRICS_OFFSET_MS, (prefs.lyricsOffsets[id] ?? 0) + delta));
+      actions.setOffset(ms);
+      showToast(`Lyrics timing ${timingLabel(ms)}`);
+    },
+    true,
+  );
 
   // CC turned on: the event from the page bridge can be missed, so re-align a few times on our own.
   if (site === 'youtube') {

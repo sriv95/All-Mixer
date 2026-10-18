@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { findLyrics } from './lrclib';
+import { findLyrics, searchLyrics } from './lrclib';
 import type { TrackInfo } from './types';
 
 const track: TrackInfo = { videoId: 'v', title: 'Yellow (Official Video)', artist: 'Coldplay - Topic', duration: 269.4 };
@@ -106,5 +106,25 @@ describe.skipIf(!process.env.LRCLIB_LIVE)('live LRCLIB', () => {
       expect(res?.record.id).toBe(5);
       expect(f).toHaveBeenCalledTimes(1);
     });
+  });
+});
+
+describe('searchLyrics', () => {
+  it('searches with q, keeps only records with usable lyrics, at most 20', async () => {
+    const junk = { ...record, id: 99, syncedLyrics: null, plainLyrics: null };
+    const many = Array.from({ length: 30 }, (_, i) => ({ ...record, id: i + 1 }));
+    const f = vi.fn().mockResolvedValue(json([junk, ...many]));
+    const res = await searchLyrics('  coldplay yellow ', f as unknown as typeof fetch);
+    expect(res).toHaveLength(20);
+    expect(res.some((r) => r.id === 99)).toBe(false);
+    const url = new URL(f.mock.calls[0][0] as string);
+    expect(url.pathname).toBe('/api/search');
+    expect(url.searchParams.get('q')).toBe('coldplay yellow');
+  });
+
+  it('an empty query makes no request', async () => {
+    const f = vi.fn();
+    expect(await searchLyrics('   ', f as unknown as typeof fetch)).toEqual([]);
+    expect(f).not.toHaveBeenCalled();
   });
 });
