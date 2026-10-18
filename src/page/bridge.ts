@@ -168,12 +168,13 @@ window.addEventListener('message', (e: MessageEvent) => {
   else if (req.kind === 'timedtext') void timedText(req.videoId, req.track).then(reply);
 });
 
-// While the end of a video is held back (src/content/deferred-end.ts) the player thinks it is still playing, so a
-// pause click calls pause() on an element that already ended and that fires nothing: tell the content script.
+// Two cases where the player thinks it is playing but the element is not (src/content/deferred-end.ts holds the end of
+// a video, src/content/warmup-hold.ts holds a video for the ML warm-up): a pause click calls pause() on an element that
+// is already paused or ended, which fires nothing. Tell the content script.
 // Play on an ended element would restart the video: the content script may cancel it to continue the held tail.
 const origPause = HTMLMediaElement.prototype.pause;
 HTMLMediaElement.prototype.pause = function (this: HTMLMediaElement) {
-  if (this.ended) this.dispatchEvent(new Event(PAUSE_REQUEST_EVENT));
+  if (this.paused || this.ended) this.dispatchEvent(new Event(PAUSE_REQUEST_EVENT));
   return origPause.call(this);
 };
 const origPlay = HTMLMediaElement.prototype.play;
