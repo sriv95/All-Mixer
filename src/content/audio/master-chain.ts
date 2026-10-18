@@ -70,6 +70,15 @@ export const ERR_OTHER_COPY =
 export const ERR_OTHER_OWNER =
   "Another extension or script already controls this video's audio. Turn it off for YouTube, then reload the page.";
 
+export const ERR_CROSS_ORIGIN =
+  'This site serves its media from another origin without CORS, so the browser would mute it in the mixer. The sound is left as it is.';
+
+/** createMediaElementSource() outputs silence for no-CORS cross-origin media; blob/MSE and same-origin are fine. */
+export function isOpaqueMedia(el: HTMLMediaElement): boolean {
+  if (el.crossOrigin !== null || !/^https?:/.test(el.currentSrc)) return false;
+  return new URL(el.currentSrc).origin !== location.origin;
+}
+
 export class MasterChain {
   private ctx: AudioContext | null = null;
   private gain: GainNode | null = null;
@@ -417,6 +426,10 @@ export class MasterChain {
     }
     this.stopListeningForGesture();
     if (!video || this.sources.has(video)) return;
+    if (isOpaqueMedia(video)) {
+      this.fail(ERR_CROSS_ORIGIN);
+      return;
+    }
     try {
       const source = ctx.createMediaElementSource(video);
       source.connect(direct);

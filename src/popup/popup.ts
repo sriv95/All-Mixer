@@ -1,7 +1,6 @@
 import type { ContentStatus, GetStatus, GetTabSettings, SetTabSettings } from '../shared/messages';
 import { clampDelayS, clampPct, normalizeSettings, type MixerSettings, type Mode } from '../shared/settings';
 import type { MlModel } from '../worklet/protocol';
-import { detectSite } from '../content/youtube-dom';
 import { MODEL_IDS, MODEL_LABEL, keyInstalled, keyProgress, keyRemote, mb, modelState, type InstalledModel, type ModelId, type ModelState, type Progress, type RemoteRecord } from '../shared/model-store';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -78,7 +77,7 @@ function setMode(mode: Mode): void {
 
 const STATUS_TEXT: Record<ContentStatus['audio'], string> = {
   idle: '',
-  'waiting-for-gesture': 'Click anywhere on the YouTube page once to enable the boost.',
+  'waiting-for-gesture': 'Click anywhere on the page once to enable the boost.',
   active: '',
   error: 'Audio error',
 };
@@ -114,7 +113,7 @@ async function refreshStatus(): Promise<void> {
   const req: GetStatus = { type: 'get-status' };
   const s: ContentStatus | undefined = await chrome.tabs.sendMessage(tabId, req).catch(() => undefined);
   if (!s) {
-    status.textContent = 'Reload this YouTube tab to start All Mixer!.';
+    status.textContent = 'Reload this tab to start All Mixer!.';
   } else if (s.audio === 'error') {
     status.textContent = `${STATUS_TEXT.error}: ${s.error ?? 'unknown'}`;
   } else if (!s.videoFound && settings.masterPct !== 100) {
@@ -219,10 +218,10 @@ advanced.addEventListener('toggle', () => {
 
 async function init(): Promise<void> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  // `tab.url` is only visible for our host permissions, i.e. YouTube / YT Music.
-  if (tab?.id === undefined || !tab.url || !detectSite(new URL(tab.url).hostname)) {
+  // The content script runs on web pages only (not chrome:// or the web store).
+  if (tab?.id === undefined || !tab.url?.startsWith('http')) {
     render();
-    disableAll('Open a youtube.com or music.youtube.com tab to use All Mixer!.');
+    disableAll('Open a web page to use All Mixer!.');
     return;
   }
   tabId = tab.id;
