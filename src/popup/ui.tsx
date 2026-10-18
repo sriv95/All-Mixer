@@ -132,11 +132,14 @@ export function Btn({ tone = 'raised', className, disabled, type = 'button', ...
 /** A switch: a real checkbox with role="switch", styled as a pressed track and a raised thumb that slides. */
 export function Switch({ id, checked, onChange, disabled }: { id: string; checked: boolean; onChange: (on: boolean) => void; disabled?: boolean }) {
   const blocked = useContext(Blocked);
+  // The thumb squeezes wide while pressed and springs back as it lands.
+  const [down, setDown] = useState(false);
+  const release = () => setDown(false);
   return (
     <span className="relative inline-flex shrink-0">
-      <input id={id} type="checkbox" role="switch" className="peer absolute inset-0 z-10 m-0 size-full cursor-pointer opacity-0 disabled:cursor-default" checked={checked} disabled={blocked || disabled} onChange={(e) => onChange(e.currentTarget.checked)} />
+      <input id={id} type="checkbox" role="switch" className="peer absolute inset-0 z-10 m-0 size-full cursor-pointer opacity-0 disabled:cursor-default" checked={checked} disabled={blocked || disabled} onChange={(e) => onChange(e.currentTarget.checked)} onPointerDown={() => setDown(true)} onPointerUp={release} onPointerLeave={release} onPointerCancel={release} onBlur={release} />
       <span aria-hidden className={cx('flex h-8 w-[54px] items-center rounded-full p-1 shadow-pressed transition-colors peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand peer-disabled:opacity-45', checked ? 'justify-end bg-brand-tint' : 'justify-start bg-well')}>
-        <motion.span layout transition={{ type: 'spring', stiffness: 700, damping: 35 }} className={cx('size-6 rounded-full shadow-[3px_3px_6px_#d0c6c7,-2px_-2px_5px_#fff] transition-colors', checked ? 'bg-brand' : 'bg-well')} />
+        <motion.span layout animate={{ scaleX: down ? 1.28 : 1, scaleY: down ? 0.92 : 1 }} transition={{ type: 'spring', stiffness: 700, damping: 22 }} style={{ originX: checked ? 1 : 0 }} className={cx('size-6 rounded-full shadow-[3px_3px_6px_#d0c6c7,-2px_-2px_5px_#fff] transition-colors', checked ? 'bg-brand' : 'bg-well')} />
       </span>
     </span>
   );
