@@ -20,6 +20,19 @@ if (site) {
   const probe = new AvProbe();
   const chain = new MasterChain(() => syncDelay(), undefined, probe);
   const selector = new EngineSelector(chain);
+  // The warm-up takes 10 to 40 s: hold the video (sound and picture) until it is over, then resume what we paused.
+  let pausedForWarmup: HTMLVideoElement | null = null;
+  selector.onChange = ({ state }) => {
+    if (state === 'warming') {
+      if (video && !video.paused) {
+        video.pause();
+        pausedForWarmup = video;
+      }
+    } else if (pausedForWarmup) {
+      void pausedForWarmup.play().catch(() => {}); // autoplay rules can refuse; the user presses play then
+      pausedForWarmup = null;
+    }
+  };
   // A RoFormer model was downloaded or updated in the background: load it if it is the one in use.
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
