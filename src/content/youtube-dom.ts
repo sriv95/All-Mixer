@@ -5,6 +5,8 @@
  */
 
 export type Site = 'youtube' | 'ytmusic';
+/** Any other site gets volume boost / Separate mode only: no lyrics. */
+export type PageSite = Site | 'generic';
 
 const SELECTORS = {
   youtube: {
@@ -15,6 +17,21 @@ const SELECTORS = {
     mainVideo: ['ytmusic-player #movie_player video', '#movie_player video', 'video.html5-main-video'],
   },
 } as const satisfies Record<Site, { mainVideo: readonly string[] }>;
+
+/** Generic pages: what is playing wins, then the biggest picture (previews and ad slots are smaller), then a video over an <audio>. */
+function findBestMedia(root: ParentNode): HTMLMediaElement | null {
+  let best: HTMLMediaElement | null = null;
+  let bestScore = -1;
+  for (const el of root.querySelectorAll<HTMLMediaElement>('video, audio')) {
+    const r = el.getBoundingClientRect();
+    const score = (el.paused ? 0 : 1e9) + (el instanceof HTMLVideoElement ? r.width * r.height + 1 : 0);
+    if (score > bestScore) {
+      best = el;
+      bestScore = score;
+    }
+  }
+  return best;
+}
 
 /** Custom events YouTube's SPA router fires on `document` after navigation. */
 export const NAVIGATION_EVENTS = ['yt-navigate-finish', 'yt-page-data-updated'] as const;
@@ -27,7 +44,8 @@ export function detectSite(hostname: string): Site | null {
   return null;
 }
 
-export function findMainVideo(site: Site, root: ParentNode = document): HTMLVideoElement | null {
+export function findMainVideo(site: PageSite, root: ParentNode = document): HTMLMediaElement | null {
+  if (site === 'generic') return findBestMedia(root);
   for (const selector of SELECTORS[site].mainVideo) {
     const el = root.querySelector(selector);
     if (el instanceof HTMLVideoElement) return el;
@@ -66,11 +84,11 @@ export function onNavigate(cb: () => void, target: Document = document): () => v
  * fullscreen, but we re-check on DOM mutations and navigation to be safe.
  */
 export function watchMainVideo(
-  site: Site,
-  cb: (video: HTMLVideoElement) => void,
+  site: PageSite,
+  cb: (media: HTMLMediaElement) => void,
   doc: Document = document,
 ): () => void {
-  let current: HTMLVideoElement | null = null;
+  let current: HTMLMediaElement | null = null;
   let scheduled = false;
 
   const check = () => {
@@ -90,11 +108,14 @@ export function watchMainVideo(
   const observer = new MutationObserver(schedule);
   observer.observe(doc.documentElement, { childList: true, subtree: true });
   const offNav = onNavigate(schedule, doc);
+  // Media events do not bubble but can be captured: a player that starts is a new candidate.
+  if (site === 'generic') doc.addEventListener('playing', schedule, true);
   check();
 
   return () => {
     observer.disconnect();
     offNav();
+    doc.removeEventListener('playing', schedule, true);
   };
 }
 
