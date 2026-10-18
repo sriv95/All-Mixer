@@ -12,7 +12,7 @@ interface MenuOption {
 }
 
 export interface MenuRow {
-  id: 'source' | 'captionLanguage' | 'timing' | 'timingKeys' | 'display' | 'lines' | 'karaokeText' | 'size' | 'preset' | 'color' | 'font' | 'outline' | 'background' | 'animation';
+  id: 'source' | 'captionLanguage' | 'timing' | 'timingKeys' | 'display' | 'lines' | 'karaokeText' | 'size' | 'preset' | 'color' | 'font' | 'outline' | 'background' | 'animation' | 'focus';
   label: string;
   options: MenuOption[];
   selected: string;
@@ -230,6 +230,17 @@ export function buildMenuRows(input: MenuInput, actions: MenuActions): MenuRow[]
           selected: prefs.karaokeAnimation,
           note: 'Off when your system asks to reduce motion.',
           select: (v) => actions.setPrefs({ karaokeAnimation: v as KaraokeAnimation }),
+        },
+        {
+          id: 'focus',
+          label: 'Lyrics-only view',
+          options: [
+            { value: 'off', label: 'Off' },
+            { value: 'on', label: 'On' },
+          ],
+          selected: prefs.karaokeFocus ? 'on' : 'off',
+          note: 'Large text in the middle over a dimmed, blurred video.',
+          select: (v) => actions.setPrefs({ karaokeFocus: v === 'on' }),
         },
       ],
       select: () => {},

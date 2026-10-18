@@ -248,6 +248,39 @@ describe('KaraokeSurface layout and drag', () => {
     expect(saved[0].y).toBeCloseTo(200 / 450);
   });
 
+  it('lyrics-only view: dims the player, centers a larger text, and does not drag', () => {
+    prefs = { ...prefs, karaokeFocus: true };
+    const s = make();
+    s.render(synced);
+    s.update(1.5);
+    expect(root()!.classList.contains('am-focus')).toBe(true);
+    expect(block().style.fontSize).toBe('28.8px'); // 18 px x 1.6
+    expect(block().style.left).toBe('50%');
+    expect(block().style.top).toBe('50%');
+    const b = block();
+    b.getBoundingClientRect = () => rect({ left: 300, top: 300, width: 200, height: 40 });
+    const ev = (type: string, x: number, y: number) => {
+      const e = new MouseEvent(type, { clientX: x, clientY: y, bubbles: true }) as MouseEvent & { pointerId: number };
+      Object.defineProperty(e, 'pointerId', { value: 1 });
+      return e;
+    };
+    b.dispatchEvent(ev('pointerdown', 400, 320));
+    b.dispatchEvent(ev('pointerup', 200, 200));
+    expect(saved).toHaveLength(0);
+    prefs = { ...prefs, karaokeFocus: false };
+    s.refreshPrefs();
+    expect(root()!.classList.contains('am-focus')).toBe(false);
+    expect(block().style.fontSize).toBe('18px');
+  });
+
+  it('lyrics-only view does not dim the player without synced lyrics', () => {
+    prefs = { ...prefs, karaokeFocus: true };
+    const s = make();
+    s.render(plain);
+    s.update(1.5);
+    expect(root()!.classList.contains('am-focus')).toBe(false);
+  });
+
   it('keeps clicks and keys on the text away from YouTube', () => {
     const s = make();
     s.render(synced);

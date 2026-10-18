@@ -188,6 +188,14 @@ describe('buildMenuRows', () => {
     expect(a.setPrefs).toHaveBeenLastCalledWith({ karaokeColor: '#ffffff', karaokeFontSize: 100, karaokeFont: 'default', karaokeOutline: 'normal', karaokeBackground: 0, karaokeAnimation: 'none' });
   });
 
+  it('Lyrics-only view row', () => {
+    const a = actions();
+    const focus = buildMenuRows({ prefs: prefs() }, a).find((r) => r.id === 'karaokeText')!.rows!.find((r) => r.id === 'focus')!;
+    expect(focus.selected).toBe('off');
+    focus.select('on');
+    expect(a.setPrefs).toHaveBeenLastCalledWith({ karaokeFocus: true });
+  });
+
   it('shows the nearest size step for an off-step stored size', () => {
     const rows = buildMenuRows({ prefs: prefs({ karaokeFontSize: 110 }) }, actions());
     expect(rows.find((r) => r.id === 'karaokeText')!.rows!.find((r) => r.id === 'size')!.selected).toBe('100');
@@ -308,7 +316,7 @@ describe('YtSettingsMenu', () => {
     group().click();
     settingEl('karaokeText').click();
     expect(titles()).toEqual(['Custom Karaoke Text']);
-    expect([...sub().querySelectorAll('[data-am-row-setting]')].map((e) => e.getAttribute('data-am-row-setting'))).toEqual(['preset', 'color', 'size', 'font', 'outline', 'background', 'animation']);
+    expect([...sub().querySelectorAll('[data-am-row-setting]')].map((e) => e.getAttribute('data-am-row-setting'))).toEqual(['preset', 'color', 'size', 'font', 'outline', 'background', 'animation', 'focus']);
     settingEl('color').click();
     expect(titles()).toEqual(['Color']);
     const checked = [...sub().querySelectorAll('.ytp-menuitem')].map((i) => i.getAttribute('aria-checked'));
@@ -480,7 +488,7 @@ describe('YtmSettingsPopover', () => {
     expect(pop.isOpen).toBe(true);
     expect(pop.button.getAttribute('aria-expanded')).toBe('true');
     const sels = root.querySelectorAll('select');
-    expect(sels).toHaveLength(11);
+    expect(sels).toHaveLength(12);
     const src = sels[0];
     expect([...src.options].map((o) => o.disabled)).toEqual([false, true, false]);
     src.value = 'captions';
@@ -510,7 +518,7 @@ describe('YtmSettingsPopover', () => {
     pop.setRows(buildMenuRows({ sources, prefs: prefs() }, actions()));
     pop.button.click();
     const root = document.querySelector<HTMLElement>('[data-allmixer-lyrics-popover]')!;
-    expect(root.querySelectorAll('select')).toHaveLength(10);
+    expect(root.querySelectorAll('select')).toHaveLength(11);
     pop.setRows(buildMenuRows({ sources, prefs: prefs({ lyricsDisplayMode: 'window' }) }, actions()));
     expect(root.querySelectorAll('select')).toHaveLength(2);
     pop.destroy();

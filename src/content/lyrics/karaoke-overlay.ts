@@ -13,6 +13,9 @@ export interface Pos {
   y: number;
 }
 
+/** Lyrics-only view: the text this much larger. */
+const FOCUS_SCALE = 1.6;
+
 /** Base font size: about 4% of the player height, kept in a readable range. */
 export function karaokeFontPx(playerHeight: number, sizePercent: number): number {
   const base = Math.min(48, Math.max(12, playerHeight * 0.04));
@@ -56,6 +59,9 @@ const STYLE = `
   font-family:"YouTube Noto",Roboto,Arial,sans-serif; font-weight:500; line-height:1.3; cursor:grab; user-select:none; touch-action:none;
   pointer-events:auto; text-shadow:-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000,1px 1px 0 #000,0 0 6px rgba(0,0,0,.8); }
 #${ROOT_ID}.am-ad .am-k-block { display:none !important; }
+#${ROOT_ID}.am-focus { background:rgba(0,0,0,.65); -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px); }
+#${ROOT_ID}.am-focus.am-ad { background:none; -webkit-backdrop-filter:none; backdrop-filter:none; }
+#${ROOT_ID}.am-focus .am-k-block { cursor:default; max-width:80%; }
 #${ROOT_ID} .am-k-block.dragging { cursor:grabbing; }
 #${ROOT_ID} .am-k-line { display:block; }
 #${ROOT_ID} .am-k-line.upcoming { opacity:.6; }
@@ -225,8 +231,11 @@ export class KaraokeSurface implements LyricsSurface {
     st.background = prefs.karaokeBackground ? `rgba(0,0,0,${prefs.karaokeBackground / 100})` : '';
     st.padding = prefs.karaokeBackground ? '.15em .5em' : '';
     st.borderRadius = prefs.karaokeBackground ? '.3em' : '';
-    this.block.style.fontSize = `${karaokeFontPx(player.h, this.opts.getPrefs().karaokeFontSize)}px`;
-    this.place(this.pos);
+    const focus = prefs.karaokeFocus && !!this.lines;
+    this.root.classList.toggle('am-focus', focus);
+    const px = karaokeFontPx(player.h, prefs.karaokeFontSize);
+    this.block.style.fontSize = `${focus ? Math.round(px * FOCUS_SCALE * 10) / 10 : px}px`;
+    this.place(focus ? { x: 0.5, y: 0.5 } : this.pos);
   };
 
   private onFullscreen = (): void => {
@@ -263,7 +272,7 @@ export class KaraokeSurface implements LyricsSurface {
   }
 
   private readonly onDown = (e: PointerEvent): void => {
-    if (e.button > 0 || !this.player) return;
+    if (e.button > 0 || !this.player || this.opts.getPrefs().karaokeFocus) return;
     e.stopPropagation();
     e.preventDefault();
     const rect = this.block.getBoundingClientRect();

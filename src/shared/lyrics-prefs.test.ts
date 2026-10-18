@@ -62,6 +62,12 @@ describe('normalizeLyricsPrefs', () => {
     for (const bad of [null, 5, 'x', {}, { other: 1 }]) expect(normalizeLyricsPrefs({ karaokeMyStyle: bad }).karaokeMyStyle).toBeNull();
   });
 
+  it('karaokeFocus: off by default, only a boolean is taken', () => {
+    expect(DEFAULT_LYRICS_PREFS.karaokeFocus).toBe(false);
+    expect(normalizeLyricsPrefs({ karaokeFocus: true }).karaokeFocus).toBe(true);
+    expect(normalizeLyricsPrefs({ karaokeFocus: 1 }).karaokeFocus).toBe(false);
+  });
+
   it('defaults to one karaoke line, auto source and no caption language', () => {
     expect(DEFAULT_LYRICS_PREFS).toMatchObject({ karaokeLines: 1, lyricsSource: 'auto', captionLang: null });
   });

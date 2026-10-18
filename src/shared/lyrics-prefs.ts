@@ -37,6 +37,8 @@ export interface LyricsPrefs {
   karaokeAnimation: KaraokeAnimation;
   /** The look the user saved as "My style"; null = none saved. */
   karaokeMyStyle: KaraokeStyle | null;
+  /** Lyrics-only view: the text large and centered over a dimmed, blurred video. */
+  karaokeFocus: boolean;
   /** Lyrics timing per video id, in ms: positive shows the lyrics later. Zero entries are not kept. */
   lyricsOffsets: Record<string, number>;
   /** `[` and `]` shift the lyrics timing by 0.1 s while synced lyrics are shown. */
@@ -60,6 +62,7 @@ export const DEFAULT_LYRICS_PREFS: LyricsPrefs = {
   karaokeBackground: 0,
   karaokeAnimation: 'none',
   karaokeMyStyle: null,
+  karaokeFocus: false,
   karaokePosition: { x: 0.5, y: 0.82 },
   lyricsOffsets: {},
   lyricsTimingKeys: true,
@@ -107,6 +110,7 @@ export function normalizeLyricsPrefs(raw: unknown): LyricsPrefs {
     karaokeBackground: KARAOKE_BACKGROUNDS.find((b) => b === r.karaokeBackground) ?? d.karaokeBackground,
     karaokeAnimation: KARAOKE_ANIMATIONS.find((a) => a === r.karaokeAnimation) ?? d.karaokeAnimation,
     karaokeMyStyle: normalizeMyStyle(r.karaokeMyStyle),
+    karaokeFocus: typeof r.karaokeFocus === 'boolean' ? r.karaokeFocus : d.karaokeFocus,
     lyricsOffsets: normalizeOffsets(r.lyricsOffsets),
     lyricsTimingKeys: typeof r.lyricsTimingKeys === 'boolean' ? r.lyricsTimingKeys : d.lyricsTimingKeys,
     karaokePosition: { x: num(pos.x, d.karaokePosition.x, 0, 1), y: num(pos.y, d.karaokePosition.y, 0, 1) },
