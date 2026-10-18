@@ -42,6 +42,22 @@ const ready = (p90: number): FromMlWorker => ({ type: 'ready', p50: p90 / 2, p90
 const req = (on = true, model?: MlModel) => ({ on, model });
 
 describe('EngineSelector', () => {
+  it('reload probes a RoFormer again (new model files), and does nothing for the default model or when off', () => {
+    const { sel, hosts } = setup();
+    sel.reload();
+    expect(hosts).toHaveLength(0);
+    sel.update(req(true, 'mdx'));
+    sel.reload();
+    expect(hosts).toHaveLength(1);
+    sel.update(req(true, 'roformer'));
+    hosts[1].onStatus!({ type: 'unavailable', reason: 'the Best quality model is not downloaded' });
+    expect(sel.status.state).toBe('unavailable');
+    sel.reload();
+    expect(hosts).toHaveLength(3);
+    expect(hosts[1].disposed).toBe(true);
+    expect(sel.status).toEqual({ state: 'warming' });
+  });
+
   it('is off until Separate turns on, and never probes while off', () => {
     const { sel, hosts } = setup();
     sel.update(req(false));

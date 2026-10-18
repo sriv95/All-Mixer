@@ -11,7 +11,7 @@ export interface MixerSettings {
   vocalPct: number;
   /** Separate mode instrumental volume, percent (0–600). Used once separation lands. */
   instrumentalPct: number;
-  /** Separate mode ML model: 'mdx' (MDX-Net 9482 + Spleeter, the default) or a Mel-Band RoFormer: 'roformer' (Kim fine-tune), 'kim' (original Kim), 'deux' (becruily); experimental. */
+  /** Separate mode ML model: 'mdx' (MDX-Net 9482 + Spleeter, the default) or 'roformer' (Mel-Band RoFormer, Kim fine-tune, experimental). */
   mlModel: MlModel;
 }
 

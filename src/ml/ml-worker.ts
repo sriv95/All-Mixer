@@ -1,7 +1,7 @@
 // ML worker (runs inside the ml.html iframe, which gets a real WebGPU adapter): receives block
 // buffers from the separator worklet on a MessagePort, runs MDX-Net 9482 (vocal) and the Spleeter vocals
 // model (Karaoke mask) with onnxruntime-web (webgpu EP only, one run in flight at a time) and sends the
-// same buffers back with the Vk and vocal blocks (src/ml/pipeline.ts). With a RoFormer model it runs the
+// same buffers back with the Vk and vocal blocks (src/ml/pipeline.ts). With model 'roformer' it runs the
 // Mel-Band RoFormer core instead (src/ml/roformer.ts): the vocal block is both Vk and the A cappella.
 import {
   GEOMETRY,
@@ -19,6 +19,7 @@ import { MlPipeline, type Models } from './pipeline';
 import { warmUp, warmUpGated, type WarmUpResult } from './warmup';
 import { makeStall, type StallOpts } from './stall';
 import { MlTiming } from './timing';
+import { opfsFiles, readModelFile } from '../shared/model-files';
 import { RoformerStream, ROF_FRAMES, type RoformerMeta } from './roformer';
 
 type Ort = typeof import('onnxruntime-web/webgpu');
@@ -125,11 +126,14 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
     ort.env.wasm.numThreads = 1;
     ort.env.wasm.proxy = false;
     ort.env.logLevel = 'error';
+    const inst = init.installed;
+    if (!inst) return unavailable('the Best quality model is not downloaded');
+    const files = opfsFiles();
     const [buf, m] = await Promise.all([
-      fetch(init.roformerUrl).then((r) => r.arrayBuffer()),
-      fetch(init.roformerMetaUrl).then((r) => r.json() as Promise<RoformerMeta>),
+      readModelFile(files, inst.version, 'roformer.onnx', inst.files['roformer.onnx']).then((b) => b.arrayBuffer()),
+      readModelFile(files, inst.version, 'roformer-meta.json', inst.files['roformer-meta.json']).then((b) => b.text()),
     ]);
-    meta = m;
+    meta = JSON.parse(m) as RoformerMeta;
     session = await ort.InferenceSession.create(buf, { executionProviders: ['webgpu'], graphOptimizationLevel: 'all', logSeverityLevel: 3 });
   } catch (e) {
     return unavailable(`model: ${String(e)}`);

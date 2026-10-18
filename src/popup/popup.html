@@ -33,11 +33,13 @@
       </div>
       <label for="ml-model">Model</label>
       <select id="ml-model">
-        <option value="mdx">MDX-Net 9482 + Spleeter (default)</option>
-        <option value="roformer">Kim FT (unwa), experimental</option>
-        <option value="kim">Kim (original), experimental</option>
-        <option value="deux">Deux (becruily), experimental</option>
+        <option value="mdx">Default</option>
+        <option value="roformer">Best quality</option>
       </select>
+      <p id="model-row" class="note" hidden>
+        <span id="model-text"></span>
+        <button id="model-btn" type="button" hidden></button>
+      </p>
       <div class="presets" role="group" aria-label="Presets">
         <button type="button" id="preset-karaoke" data-vocal="0" data-instrumental="100" aria-pressed="false">Karaoke</button>
         <button type="button" id="preset-half-karaoke" data-vocal="50" data-instrumental="100" aria-pressed="false">Half Karaoke</button>
