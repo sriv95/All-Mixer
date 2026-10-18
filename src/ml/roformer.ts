@@ -21,10 +21,6 @@ const K = C - H; // history
 const E = K - R; // context-only prefix of the emitted region
 export const ROF_FRAMES = Math.floor(C / HOP) + 1;
 const PAD = N_FFT / 2;
-// Gate: a bin whose mask is mostly below GATE_LO is dropped, one above GATE_HI is kept. Tuned by ear on one song
-// (strong, smoothed variant); only the A cappella uses it.
-const GATE_LO = 0.15;
-const GATE_HI = 0.5;
 
 /** public/ml/roformer-meta.json */
 export interface RoformerMeta {
@@ -68,11 +64,6 @@ export class RoformerStream {
   /** Cross-fade ramp (rises over R) and the last R output samples of the previous chunk, [L: R][R: R]. */
   private readonly ramp = new Float32Array(R);
   private readonly tail = new Float32Array(2 * R);
-  /** The same for the gated output, and the gate's mask sizes and gains per (frame, bin·2 + channel). */
-  private readonly olaGate: Float64Array;
-  private readonly tailGate = new Float32Array(2 * R);
-  private readonly mag = new Float32Array(ROF_FRAMES * FS);
-  private readonly gain = new Float32Array(ROF_FRAMES * FS);
 
   constructor(meta: RoformerMeta) {
     if (meta.frames !== ROF_FRAMES || meta.chunk !== C || meta.nFft !== N_FFT || meta.hop !== HOP) {
@@ -83,7 +74,6 @@ export class RoformerStream {
     this.x = new Float32Array(ROF_FRAMES * this.fin);
     this.invBands = Float32Array.from(meta.bands, (b) => 1 / Math.max(b, 1e-8));
     this.ola = new Float64Array(2 * this.padded);
-    this.olaGate = new Float64Array(2 * this.padded);
     for (let i = 0; i < N_FFT; i++) this.win[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / N_FFT);
     const env = new Float64Array(this.padded);
     for (let t = 0; t < ROF_FRAMES; t++) for (let n = 0; n < N_FFT; n++) env[t * HOP + n] += this.win[n] * this.win[n];
@@ -94,7 +84,6 @@ export class RoformerStream {
   reset(): void {
     this.chunk.fill(0);
     this.tail.fill(0);
-    this.tailGate.fill(0);
   }
 
   /** Block b in (`inL`/`inR`: ROF_BLOCK samples): slide the chunk, STFT its frames, gather the model input into `x`. */
@@ -134,12 +123,11 @@ export class RoformerStream {
 
   /**
    * Masks `m` for the chunk `analyze` just built → the vocal block for input [b·H − R, (b + 1)·H − R),
-   * written to outL/outR (ROF_BLOCK samples each). With `gated`, a second inverse transform writes the same block
-   * with weak-vocal bins attenuated (see `gate`) to gated.l / gated.r.
+   * written to outL/outR (ROF_BLOCK samples each).
    */
-  synthesize(m: Float32Array, outL: Float32Array, outR: Float32Array, gated?: { l: Float32Array; r: Float32Array }): void {
-    const { sel, fin, accRe, accIm } = this;
-    // masks of the bands that overlap a bin, summed (averaged in `inverse`)
+  synthesize(m: Float32Array, outL: Float32Array, outR: Float32Array): void {
+    const { sel, fin, accRe, accIm, invBands, specRe, specIm, re, im, win, fft, ola, norm, padded, ramp, tail } = this;
+    // masks of the bands that overlap a bin, averaged
     accRe.fill(0);
     accIm.fill(0);
     for (let t = 0; t < ROF_FRAMES; t++) {
@@ -149,42 +137,6 @@ export class RoformerStream {
         accIm[base + sel[j]] += m[row + 2 * j + 1];
       }
     }
-    this.inverse(false, this.ola, this.tail, outL, outR);
-    if (gated) {
-      this.gate();
-      this.inverse(true, this.olaGate, this.tailGate, gated.l, gated.r);
-    }
-  }
-
-  /** Per bin gain from the mask size: 0 below GATE_LO, 1 above GATE_HI, smoothstep between, on the 3 x 3 mean. */
-  private gate(): void {
-    const { accRe, accIm, invBands, mag, gain } = this;
-    for (let t = 0; t < ROF_FRAMES; t++) {
-      for (let k = 0; k < BINS; k++) {
-        const w = invBands[k];
-        for (let c = 0; c < 2; c++) {
-          const a = t * FS + 2 * k + c;
-          mag[a] = Math.hypot(accRe[a], accIm[a]) * w;
-        }
-      }
-    }
-    for (let t = 0; t < ROF_FRAMES; t++) {
-      const t0 = Math.max(t - 1, 0), t1 = Math.min(t + 1, ROF_FRAMES - 1);
-      for (let k = 0; k < BINS; k++) {
-        const k0 = Math.max(k - 1, 0), k1 = Math.min(k + 1, BINS - 1);
-        for (let c = 0; c < 2; c++) {
-          let sum = 0;
-          for (let tt = t0; tt <= t1; tt++) for (let kk = k0; kk <= k1; kk++) sum += mag[tt * FS + 2 * kk + c];
-          const u = Math.min(1, Math.max(0, (sum / ((t1 - t0 + 1) * (k1 - k0 + 1)) - GATE_LO) / (GATE_HI - GATE_LO)));
-          gain[t * FS + 2 * k + c] = u * u * (3 - 2 * u);
-        }
-      }
-    }
-  }
-
-  /** iSTFT of X · mask (· gain when `gated`), overlap-added into `ola`; then the block, cross-faded with `tail`. */
-  private inverse(gated: boolean, ola: Float64Array, tail: Float32Array, outL: Float32Array, outR: Float32Array): void {
-    const { accRe, accIm, invBands, gain, specRe, specIm, re, im, win, fft, norm, padded, ramp } = this;
     ola.fill(0);
     const P = ROF_FRAMES * BINS;
     for (let t = 0; t < ROF_FRAMES; t++) {
@@ -192,9 +144,9 @@ export class RoformerStream {
       im.fill(0);
       for (let k = 0; k < BINS; k++) {
         // Y = X · mask per channel; Z = Y_L + i·Y_R packs both channels into one inverse FFT
+        const w = invBands[k];
         const aL = t * FS + 2 * k, aR = aL + 1;
-        const wL = invBands[k] * (gated ? gain[aL] : 1), wR = invBands[k] * (gated ? gain[aR] : 1);
-        const mLr = accRe[aL] * wL, mLi = accIm[aL] * wL, mRr = accRe[aR] * wR, mRi = accIm[aR] * wR;
+        const mLr = accRe[aL] * w, mLi = accIm[aL] * w, mRr = accRe[aR] * w, mRi = accIm[aR] * w;
         const oL = t * BINS + k, oR = P + oL;
         const yLr = specRe[oL] * mLr - specIm[oL] * mLi, yLi = specRe[oL] * mLi + specIm[oL] * mLr;
         const yRr = specRe[oR] * mRr - specIm[oR] * mRi, yRi = specRe[oR] * mRi + specIm[oR] * mRr;
@@ -235,9 +187,9 @@ export class RoformerStream {
   }
 
   /** analyze + model + synthesize. */
-  async process(inL: Float32Array, inR: Float32Array, model: RoformerModelFn, outL: Float32Array, outR: Float32Array, gated?: { l: Float32Array; r: Float32Array }): Promise<void> {
+  async process(inL: Float32Array, inR: Float32Array, model: RoformerModelFn, outL: Float32Array, outR: Float32Array): Promise<void> {
     this.analyze(inL, inR);
     const m = await model(this.x);
-    this.synthesize(m, outL, outR, gated);
+    this.synthesize(m, outL, outR);
   }
 }

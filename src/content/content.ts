@@ -45,7 +45,7 @@ if (site) {
     chain.setGain(masterGainFor(settings));
     const sep = separationFor(settings);
     chain.setSeparation(sep);
-    selector.update({ ...sep, model: settings.mlModel, gate: settings.mlGate });
+    selector.update({ ...sep, model: settings.mlModel });
     syncDelay();
   };
 
