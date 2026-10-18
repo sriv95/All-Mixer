@@ -29,6 +29,23 @@ export function Collapse({ show, children }: { show: boolean; children: ReactNod
   );
 }
 
+/** A number whose digits roll up when they change, like an odometer. `still` draws it plain, for a glide that already moves it. */
+export function Roll({ text, still }: { text: string; still?: boolean }) {
+  if (still) return <>{text}</>;
+  return (
+    <span className="-my-[0.1em] inline-flex overflow-hidden py-[0.1em] align-bottom whitespace-pre">
+      {[...text].map((ch, i) => (
+        // The key counts from the right, so a digit keeps its place when the number gains or loses a digit.
+        <span key={text.length - i} className="relative inline-flex">
+          <AnimatePresence mode="popLayout" initial={false}>
+            <motion.span key={ch} initial={{ y: '70%', opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: '-70%', opacity: 0 }} transition={{ duration: 0.18, ease: 'easeOut' }} className="inline-block">{ch}</motion.span>
+          </AnimatePresence>
+        </span>
+      ))}
+    </span>
+  );
+}
+
 const cx = (...c: (string | false | undefined)[]) => c.filter(Boolean).join(' ');
 
 interface SliderProps {
@@ -77,7 +94,7 @@ export function Slider({ id, value, shown = value, min, max, step, onValue, disa
 
 /** A labelled slider with its value (and `unit`) on the right. */
 export function SliderRow({ id, label, icon, unit, hint, onValue, ...slider }: SliderProps & { label: ReactNode; icon: ReactNode; unit: string; hint?: ReactNode }) {
-  const { shown, mine } = useGlide(slider.value);
+  const { shown, gliding, mine } = useGlide(slider.value);
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-baseline justify-between gap-2">
@@ -86,7 +103,7 @@ export function SliderRow({ id, label, icon, unit, hint, onValue, ...slider }: S
           {label}
           {hint && <span className="text-xs font-medium text-muted">{hint}</span>}
         </label>
-        <output id={`${id}-value`} htmlFor={id} className="min-w-12 text-right text-[15px] font-extrabold tabular-nums">{Math.round(shown)}{unit}</output>
+        <output id={`${id}-value`} htmlFor={id} className="min-w-12 text-right text-[15px] font-extrabold tabular-nums"><Roll text={`${Math.round(shown)}${unit}`} still={gliding} /></output>
       </div>
       <Slider id={id} {...slider} shown={shown} onValue={(v) => { mine(v); onValue(v); }} />
     </div>
