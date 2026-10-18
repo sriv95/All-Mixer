@@ -12,3 +12,5 @@ output { min-width: 3.5em; text-align: right; font-variant-numeric: tabular-nums
 .presets { display: flex; gap: 4px; margin: 8px 0; }
 .presets button { flex: 1; padding: 5px; border: 1px solid #999; background: #f2f2f2; cursor: pointer; }
 .presets button[aria-pressed='true'] { background: #dde8ff; border-color: #36c; font-weight: 600; }
+details { margin-top: 8px; }
+summary { cursor: pointer; font-weight: 600; }

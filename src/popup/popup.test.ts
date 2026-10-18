@@ -51,6 +51,7 @@ const sent = () =>
 
 beforeEach(() => vi.useRealTimers());
 afterEach(() => {
+  localStorage.clear();
   vi.unstubAllGlobals();
   document.body.innerHTML = '';
 });
@@ -147,6 +148,27 @@ describe('popup', () => {
     await settle();
     expect(sent().at(-1).settings.mlModel).toBe('mdx');
   });
+  describe('advanced section', () => {
+    const adv = () => el<HTMLDetailsElement>('advanced');
+    it('holds the model and delay controls and is closed by default', async () => {
+      await load({ stored: { mode: 'separate' } });
+      expect(adv().open).toBe(false);
+      for (const id of ['ml-model', 'model-row', 'chunk-row', 'ml-delay']) expect(adv().contains(el(id))).toBe(true);
+      expect(adv().contains(el('vocal'))).toBe(false);
+    });
+    it('opens by itself when a non-default model is in use', async () => {
+      await load({ stored: { mode: 'separate', mlModel: 'deux' } });
+      expect(adv().open).toBe(true);
+    });
+    it('remembers being opened', async () => {
+      await load({ stored: { mode: 'separate' } });
+      adv().open = true;
+      adv().dispatchEvent(new Event('toggle'));
+      await load({ stored: { mode: 'separate' } });
+      expect(adv().open).toBe(true);
+    });
+  });
+
   describe('chunk length', () => {
     const select = (m: string) => {
       const s = el<HTMLSelectElement>('ml-model');
