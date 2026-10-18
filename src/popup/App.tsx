@@ -269,19 +269,18 @@ function SeparateControls({ settings, update, ready, advancedOpen, setAdvancedOp
     <>
       <Master settings={settings} update={update} compact />
       <Card>
-        <SliderRow id="vocal" icon={<Mic size={15} />} label="Vocal" valueText={`${settings.vocalPct}%`} value={settings.vocalPct} min={0} max={100} step={5} onValue={(v) => update({ vocalPct: clampPct(v) })} />
-        <SliderRow id="instrumental" icon={<Music size={15} />} label="Instrumental" valueText={`${settings.instrumentalPct}%`} value={settings.instrumentalPct} min={0} max={100} step={5} onValue={(v) => update({ instrumentalPct: clampPct(v) })} />
+        <SliderRow id="vocal" icon={<Mic size={15} />} label="Vocal" unit="%" value={settings.vocalPct} min={0} max={100} step={5} onValue={(v) => update({ vocalPct: clampPct(v) })} />
+        <SliderRow id="instrumental" icon={<Music size={15} />} label="Instrumental" unit="%" value={settings.instrumentalPct} min={0} max={100} step={5} onValue={(v) => update({ instrumentalPct: clampPct(v) })} />
         {settings.splitInstrumental && (
           <div id="split-mix" className="flex flex-col gap-3.5 border-t border-well pt-3.5">
-            <SliderRow id="drums" icon={<Drum size={15} />} label="Drums" hint="in the instrumental" valueText={`${settings.drumsPct}%`} value={settings.drumsPct} min={0} max={100} step={5} onValue={(v) => update({ drumsPct: clampPct(v) })} />
-            <SliderRow id="others" icon={<AudioLines size={15} />} label="Others" hint="in the instrumental" valueText={`${settings.othersPct}%`} value={settings.othersPct} min={0} max={100} step={5} onValue={(v) => update({ othersPct: clampOthersPct(v) })} />
+            <SliderRow id="drums" icon={<Drum size={15} />} label="Drums" hint="in the instrumental" unit="%" value={settings.drumsPct} min={0} max={100} step={5} onValue={(v) => update({ drumsPct: clampPct(v) })} />
+            <SliderRow id="others" icon={<AudioLines size={15} />} label="Others" hint="in the instrumental" unit="%" value={settings.othersPct} min={0} max={100} step={5} onValue={(v) => update({ othersPct: clampOthersPct(v) })} />
           </div>
         )}
       </Card>
       <div className="presets grid grid-cols-2 gap-2.5" role="group" aria-label="Presets">
         {PRESETS.map((p) => (
-          <Btn key={p.id} id={p.id} aria-pressed={p.vocal === settings.vocalPct && p.instrumental === settings.instrumentalPct}
-            className="h-auto! py-2.5 text-[13px] aria-pressed:text-brand-dark aria-pressed:shadow-pressed"
+          <Btn key={p.id} id={p.id} tone="preset" aria-pressed={p.vocal === settings.vocalPct && p.instrumental === settings.instrumentalPct}
             onClick={() => update({ vocalPct: p.vocal, instrumentalPct: p.instrumental, ...(p.id === 'preset-reset' ? { drumsPct: 100, othersPct: 100 } : {}) })}>
             {p.icon}
             {p.label}
@@ -297,7 +296,7 @@ function SeparateControls({ settings, update, ready, advancedOpen, setAdvancedOp
           </div>
           {models.model && <ModelRow idPrefix="model" line={models.model} />}
           <div id="chunk-row" className="flex flex-col gap-3">
-            <SliderRow id="ml-delay" icon={<Timer size={15} />} label="Delay limit" valueText={`${delayDraft} s`} value={delayDraft} min={MIN_DELAY_S} max={MAX_DELAY_S} step={1} onValue={(v) => setDelayDraft(clampDelayS(v))} />
+            <SliderRow id="ml-delay" icon={<Timer size={15} />} label="Delay limit" unit=" s" value={delayDraft} min={MIN_DELAY_S} max={MAX_DELAY_S} step={1} onValue={(v) => setDelayDraft(clampDelayS(v))} />
             <div className="flex items-center justify-between gap-3">
               <p className="m-0 text-xs leading-snug text-muted">More audio delay gives more quality but uses more GPU.</p>
               <Btn id="ml-delay-apply" tone="small" disabled={delayDraft === settings.mlDelayS} onClick={() => update({ mlDelayS: clampDelayS(delayDraft) })}>Apply</Btn>

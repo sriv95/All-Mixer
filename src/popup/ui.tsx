@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, type ComponentProps, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import { Check, ChevronDown } from 'lucide-react';
-import { motion } from 'motion/react';
+import { animate, motion } from 'motion/react';
 
 /** True on a page the extension cannot run on: every control below is disabled. */
 export const Blocked = createContext(false);
@@ -20,14 +20,43 @@ interface SliderProps {
   disabled?: boolean;
 }
 
-export function Slider({ id, value, min, max, step, onValue, disabled }: SliderProps) {
-  const blocked = useContext(Blocked);
-  const style = { '--p': ((value - min) / (max - min)) * 100 } as CSSProperties;
-  return <input id={id} type="range" className="mx-range" min={min} max={max} step={step} value={value} style={style} disabled={blocked || disabled} onChange={(e) => onValue(Number(e.currentTarget.value))} />;
+/**
+ * The value a slider shows. A change the user made (a drag) shows at once; any other change (a preset, Reset)
+ * glides there, and the thumb, the fill and the number move together.
+ */
+function useGlide(value: number): { shown: number; gliding: boolean; mine: (v: number) => void } {
+  const [shown, setShown] = useState(value);
+  const at = useRef(value);
+  const mine = useRef<number | null>(null);
+  useEffect(() => {
+    if (at.current === value) return;
+    if (mine.current === value || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      at.current = value;
+      setShown(value);
+      return;
+    }
+    mine.current = null;
+    const run = animate(at.current, value, { duration: 0.35, ease: 'easeOut', onUpdate: (v) => { at.current = v; setShown(v); } });
+    return () => run.stop();
+  }, [value]);
+  return { shown, gliding: shown !== value, mine: (v) => (mine.current = v) };
 }
 
-/** A labelled slider with its value on the right. */
-export function SliderRow({ id, label, icon, valueText, hint, ...slider }: SliderProps & { label: ReactNode; icon: ReactNode; valueText: string; hint?: ReactNode }) {
+interface RangeProps extends SliderProps {
+  /** The value to draw, when it differs from `value` (while gliding). */
+  shown?: number;
+}
+
+export function Slider({ id, value, shown = value, min, max, step, onValue, disabled }: RangeProps) {
+  const blocked = useContext(Blocked);
+  const style = { '--p': ((shown - min) / (max - min)) * 100 } as CSSProperties;
+  // A glide passes between the steps: let the thumb follow it.
+  return <input id={id} type="range" className="mx-range" min={min} max={max} step={shown !== value ? 'any' : step} value={shown} style={style} disabled={blocked || disabled} onChange={(e) => onValue(Number(e.currentTarget.value))} />;
+}
+
+/** A labelled slider with its value (and `unit`) on the right. */
+export function SliderRow({ id, label, icon, unit, hint, onValue, ...slider }: SliderProps & { label: ReactNode; icon: ReactNode; unit: string; hint?: ReactNode }) {
+  const { shown, mine } = useGlide(slider.value);
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-baseline justify-between gap-2">
@@ -36,9 +65,9 @@ export function SliderRow({ id, label, icon, valueText, hint, ...slider }: Slide
           {label}
           {hint && <span className="text-xs font-medium text-muted">{hint}</span>}
         </label>
-        <output id={`${id}-value`} htmlFor={id} className="min-w-12 text-right text-[15px] font-extrabold tabular-nums">{valueText}</output>
+        <output id={`${id}-value`} htmlFor={id} className="min-w-12 text-right text-[15px] font-extrabold tabular-nums">{Math.round(shown)}{unit}</output>
       </div>
-      <Slider id={id} {...slider} />
+      <Slider id={id} {...slider} shown={shown} onValue={(v) => { mine(v); onValue(v); }} />
     </div>
   );
 }
@@ -47,17 +76,19 @@ export function Card({ children, className, ...rest }: { children: ReactNode; cl
   return <div {...rest} className={cx('flex flex-col gap-3.5 rounded-[20px] bg-card p-4', className)}>{children}</div>;
 }
 
-type BtnProps = ComponentProps<typeof motion.button> & { tone?: 'raised' | 'primary' | 'small' };
+type BtnProps = ComponentProps<typeof motion.button> & { tone?: 'raised' | 'primary' | 'small' | 'preset' };
 const TONE = {
-  raised: 'h-11 w-full rounded-[14px] bg-card text-sm text-ink shadow-raised',
-  primary: 'h-11 w-full rounded-[14px] bg-linear-to-br from-[#ef3a45] to-[#cf1722] text-sm text-white shadow-raised',
-  small: 'h-8 rounded-[11px] bg-card px-3 text-xs text-ink shadow-raised-sm',
+  raised: 'h-11 w-full rounded-[14px] bg-card text-sm font-extrabold text-ink shadow-raised',
+  primary: 'h-11 w-full rounded-[14px] bg-linear-to-br from-[#ef3a45] to-[#cf1722] text-sm font-extrabold text-white shadow-raised',
+  small: 'h-8 rounded-[11px] bg-card px-3 text-xs font-extrabold text-ink shadow-raised-sm',
+  // The chosen preset goes bold, the one it replaces goes back to regular: the weight glides (variable font).
+  preset: 'w-full rounded-[14px] bg-card py-2.5 text-[13px] text-ink shadow-raised font-semibold transition-[font-weight,color,box-shadow] duration-300 aria-pressed:font-extrabold aria-pressed:text-brand-dark aria-pressed:shadow-pressed',
 };
 
 export function Btn({ tone = 'raised', className, disabled, type = 'button', ...rest }: BtnProps) {
   const blocked = useContext(Blocked);
   const off = blocked || disabled;
-  return <motion.button {...rest} type={type} disabled={off} whileTap={off ? undefined : { scale: 0.96 }} transition={{ type: 'spring', stiffness: 600, damping: 30 }} className={cx('inline-flex cursor-pointer items-center justify-center gap-2 border-0 font-extrabold transition-[box-shadow,opacity] duration-150 disabled:cursor-default disabled:opacity-45', TONE[tone], className)} />;
+  return <motion.button {...rest} type={type} disabled={off} whileTap={off ? undefined : { scale: 0.96 }} transition={{ type: 'spring', stiffness: 600, damping: 30 }} className={cx('inline-flex cursor-pointer items-center justify-center gap-2 border-0 transition-[box-shadow,opacity] duration-150 disabled:cursor-default disabled:opacity-45', TONE[tone], className)} />;
 }
 
 /** A switch: a real checkbox with role="switch", styled as a pressed track and a raised thumb that slides. */
