@@ -24,7 +24,7 @@ import { MlTiming } from './timing';
 import { opfsFiles, readModelFile } from '../shared/model-files';
 import { MODEL_FORMAT, MODEL_LABEL, modelFileNames, type ModelId } from '../shared/model-store';
 import { RoformerStream, DEFAULT_ROF_GEOMETRY, type RoformerMeta } from './roformer';
-import { MAX_DELAY_S, gateMs, planAuto, planRof, stepMs, type RofGeometry } from './rof-plan';
+import { MAX_DELAY_S, MIN_DELAY_S, gateMs, planRof, stepMs, type RofGeometry } from './rof-plan';
 
 type Ort = typeof import('onnxruntime-web/webgpu');
 type Session = Awaited<ReturnType<Ort['InferenceSession']['create']>>;
@@ -181,9 +181,8 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
       throw e;
     }
   };
-  // 1. Speed of this GPU: a step at the 2 s geometry. 2. Plan a chunk for the delay budget (or the smallest budget that
-  // works, 2 s to 15 s, in auto mode). 3. Time the plan itself; when it is slower than predicted, correct the speed and plan again.
-  const wantMs = init.delayMs ?? null;
+  // 1. Speed of this GPU: a step at the 2 s geometry. 2. Plan a chunk for the delay budget. 3. Time the plan itself; when it is slower than predicted, correct the speed and plan again.
+  const wantMs = init.delayMs ?? MIN_DELAY_S * 1000;
   let chosen: Run | null = null;
   let note = '';
   try {
@@ -191,9 +190,9 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
     let baseMs = first.wu.p90;
     void first.session.release();
     for (let attempt = 0; attempt < 3 && !chosen; attempt++) {
-      const g = wantMs === null ? planAuto(baseMs) : planRof((wantMs / 1000) * ML_SAMPLE_RATE, baseMs);
+      const g = planRof((wantMs / 1000) * ML_SAMPLE_RATE, baseMs);
       if (!g) {
-        note = wantMs === null ? `too slow on this device (a step takes ${baseMs.toFixed(0)} ms for 1.1 s of audio; even a ${MAX_DELAY_S} s delay is not enough)` : `too slow for a ${Math.round(wantMs / 1000)} s delay (a step takes ${baseMs.toFixed(0)} ms for 1.1 s of audio): use a longer delay or Auto`;
+        note = `too slow for a ${Math.round(wantMs / 1000)} s delay (a step takes ${baseMs.toFixed(0)} ms for 1.1 s of audio)${wantMs < MAX_DELAY_S * 1000 ? ': try a longer delay limit' : ''}`;
         break;
       }
       try {

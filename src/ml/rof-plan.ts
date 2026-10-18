@@ -16,7 +16,7 @@ export const MARGIN = 1.15;
 export const BASE_FRAMES = 112;
 /** Longest chunk: attention memory grows with its square. */
 export const MAX_FRAMES = 900;
-/** Delay budgets the popup offers, seconds. */
+/** Delay budgets the popup offers, seconds (the slider; MIN_DELAY_S is the default). */
 export const MIN_DELAY_S = 2;
 export const MAX_DELAY_S = 15;
 /** Smallest block worth running: 0.5 s. */
@@ -70,15 +70,6 @@ export function planRof(delaySamples: number, baseMs: number): RofGeometry | nul
     if (framesFor(block, OVERLAP) > MAX_FRAMES) continue;
     const slack = slackFor(block);
     if (block + slack <= budget && slack <= block) return makeGeometry(block, OVERLAP, slack);
-  }
-  return null;
-}
-
-/** Auto mode: the smallest whole-second delay from MIN_DELAY_S up that works. */
-export function planAuto(baseMs: number): RofGeometry | null {
-  for (let s = MIN_DELAY_S; s <= MAX_DELAY_S; s++) {
-    const g = planRof(s * ML_SAMPLE_RATE, baseMs);
-    if (g) return g;
   }
   return null;
 }
