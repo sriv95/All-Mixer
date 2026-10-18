@@ -1,12 +1,13 @@
 import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { AudioLines, AudioWaveform, ChevronDown, Cpu, Download, Drum, LoaderCircle, Mic, MicOff, Music, RefreshCw, RotateCcw, Settings2, SlidersVertical, Timer, TriangleAlert, Volume2 } from 'lucide-react';
+import { AudioLines, AudioWaveform, Cpu, Download, Drum, LoaderCircle, Mic, MicOff, Music, RefreshCw, RotateCcw, Settings2, SlidersVertical, Timer, TriangleAlert, Volume2 } from 'lucide-react';
 import type { ContentStatus, GetStatus, GetTabSettings, SetTabSettings } from '../shared/messages';
 import { clampDelayS, clampOthersPct, clampPct, masterPctAt, masterPosOf, MASTER_POS_MAX, normalizeSettings, type MixerSettings, type Mode } from '../shared/settings';
 import { separationView, type SepView } from '../shared/separation-view';
 import { MAX_DELAY_S, MIN_DELAY_S } from '../ml/rof-plan';
 import type { MlModel } from '../worklet/protocol';
 import { installModel, useModels, type ModelLine } from './models';
-import { Blocked, Btn, Card, Select, Slider, SliderRow, Switch, type Choice } from './ui';
+import { AnimatePresence, MotionConfig, motion } from 'motion/react';
+import { Blocked, Btn, Card, Disclosure, Select, Slider, SliderRow, Switch, fade, type Choice } from './ui';
 
 type Update = (patch: Partial<MixerSettings>) => void;
 
@@ -107,6 +108,7 @@ export function App() {
   const note = noteText(blocked, settings, loaded);
 
   return (
+    <MotionConfig reducedMotion="user">
     <Blocked.Provider value={blocked}>
       <main className="flex flex-col gap-3.5">
         <header className="flex items-center gap-2.5 text-[17px] font-extrabold tracking-tight">
@@ -114,13 +116,16 @@ export function App() {
           All Mixer!
         </header>
         {!noContent && <Tabs mode={separate ? 'separate' : 'default'} onMode={(mode) => update({ mode })} />}
+        <AnimatePresence mode="wait">
         {separate ? (
-          <div key="separate" id="panel-separate" className="mx-in flex flex-col gap-3.5">
-            <Banner key={view.kind} view={view} settings={settings} update={update} retry={retry} />
+          <motion.div key="separate" id="panel-separate" {...fade} className="flex flex-col gap-3.5">
+            <AnimatePresence mode="wait" initial={false}>
+              <Banner key={view.kind} view={view} settings={settings} update={update} retry={retry} />
+            </AnimatePresence>
             <SeparateControls settings={settings} update={update} ready={ready} advancedOpen={advancedOpen} setAdvancedOpen={setAdvancedOpen} splitOpen={splitOpen} setSplitOpen={setSplitOpen} />
-          </div>
+          </motion.div>
         ) : (
-          <div key="default" className="mx-in flex flex-col gap-3.5">
+          <motion.div key="default" {...fade} className="flex flex-col gap-3.5">
             <Master settings={settings} update={update} />
             {!noContent && (
               <Card>
@@ -133,11 +138,13 @@ export function App() {
                 </div>
               </Card>
             )}
-          </div>
+          </motion.div>
         )}
+        </AnimatePresence>
         <p id="status" role="status" className="m-0 text-[13px] leading-snug text-muted empty:hidden">{note}</p>
       </main>
     </Blocked.Provider>
+    </MotionConfig>
   );
 }
 
@@ -145,14 +152,16 @@ function Tabs({ mode, onMode }: { mode: Mode; onMode: (m: Mode) => void }) {
   const blocked = useContext(Blocked);
   const tab = (m: Mode, label: string, icon: ReactNode) => (
     <button id={`tab-${m}`} type="button" role="tab" aria-selected={mode === m} disabled={blocked} onClick={() => onMode(m)}
-      className="relative z-10 flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-full border-0 bg-transparent py-2 text-[13px] font-bold text-muted transition-colors duration-200 aria-selected:text-white disabled:opacity-45">
-      {icon}
-      {label}
+      className="relative flex flex-1 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent py-2 text-[13px] font-bold text-muted transition-colors duration-200 aria-selected:text-white disabled:opacity-45">
+      {mode === m && <motion.span layoutId="tab-pill" transition={{ type: 'spring', stiffness: 500, damping: 38 }} className="absolute inset-0 rounded-full bg-brand shadow-[0_3px_8px_rgb(225_29_46/0.4)]" />}
+      <span className="relative z-10 flex items-center gap-1.5">
+        {icon}
+        {label}
+      </span>
     </button>
   );
   return (
-    <div role="tablist" className="relative flex rounded-full bg-[#f4f0f0] p-1 shadow-[inset_2px_2px_5px_#e2dadb,inset_-2px_-2px_5px_#fff]">
-      <span aria-hidden className={`absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-full bg-brand shadow-[0_3px_8px_rgb(225_29_46/0.4)] transition-transform duration-300 ease-out ${mode === 'separate' ? 'translate-x-full' : ''}`} />
+    <div role="tablist" className="flex rounded-full bg-[#f4f0f0] p-1 shadow-[inset_2px_2px_5px_#e2dadb,inset_-2px_-2px_5px_#fff]">
       {tab('default', 'Default', <Volume2 size={15} aria-hidden />)}
       {tab('separate', 'Separate', <AudioLines size={15} aria-hidden />)}
     </div>
@@ -191,7 +200,7 @@ function Banner({ view, settings, update, retry }: { view: SepView; settings: Mi
   let text: string;
   switch (view.kind) {
     case 'warming':
-      icon = <span className={`${bannerIcon} bg-white text-brand`}><LoaderCircle size={20} className="animate-spin" aria-hidden /></span>;
+      icon = <span className={`${bannerIcon} bg-white text-brand`}><motion.span animate={{ rotate: 360 }} transition={{ repeat: Infinity, ease: 'linear', duration: 1 }} className="grid"><LoaderCircle size={20} aria-hidden /></motion.span></span>;
       title = 'Warming up';
       text = 'Testing your GPU speed. The original mix keeps playing until it is ready.';
       break;
@@ -211,8 +220,8 @@ function Banner({ view, settings, update, retry }: { view: SepView; settings: Mi
       text = `${view.cause}. The original mix is playing.`;
   }
   return (
-    <>
-      <div id="separation-banner" role="status" data-kind={view.kind} className={`mx-in flex items-start gap-3 rounded-[20px] p-3.5 ${stopped ? 'bg-ink text-white' : 'bg-brand-tint'}`}>
+    <motion.div {...fade} className="flex flex-col gap-3.5">
+      <div id="separation-banner" role="status" data-kind={view.kind} className={`flex items-start gap-3 rounded-[20px] p-3.5 ${stopped ? 'bg-ink text-white' : 'bg-brand-tint'}`}>
         {icon}
         <div className="min-w-0 flex-1">
           <h2 className="m-0 text-sm font-extrabold">{title}</h2>
@@ -220,13 +229,13 @@ function Banner({ view, settings, update, retry }: { view: SepView; settings: Mi
         </div>
       </div>
       {tooSlow && (
-        <div className="mx-in flex flex-col gap-2.5">
+        <div className="flex flex-col gap-2.5">
           {settings.mlModel !== 'mdx' && <Btn tone="primary" id="act-default-model" onClick={() => update({ mlModel: 'mdx' as MlModel })}><Cpu size={16} aria-hidden />Switch to Default model</Btn>}
           {settings.mlDelayS < MAX_DELAY_S && <Btn id="act-raise-delay" onClick={() => update({ mlDelayS: nextDelay })}><Timer size={16} aria-hidden />Raise delay limit to {nextDelay} s</Btn>}
           <Btn id="act-retry" onClick={() => void retry()}><RefreshCw size={16} aria-hidden />Try again</Btn>
         </div>
       )}
-    </>
+    </motion.div>
   );
 }
 
@@ -279,11 +288,8 @@ function SeparateControls({ settings, update, ready, advancedOpen, setAdvancedOp
           </Btn>
         ))}
       </div>
-      <details id="advanced" open={advancedOpen} onToggle={(e) => persistAdvanced(e.currentTarget.open, setAdvancedOpen)} className="group rounded-[20px] bg-card">
-        <summary className="flex cursor-pointer list-none items-center justify-between p-4 text-[13px] font-bold [&::-webkit-details-marker]:hidden">
-          <span className="flex items-center gap-1.5"><Settings2 size={15} className="text-brand" aria-hidden />Advanced <span className="font-medium text-muted">(model, delay)</span></span>
-          <ChevronDown size={16} className="transition-transform group-open:rotate-180" aria-hidden />
-        </summary>
+      <Disclosure id="advanced" open={advancedOpen} onOpen={(open) => persistAdvanced(open, setAdvancedOpen)} className="rounded-[20px] bg-card" buttonClassName="p-4"
+        title={<span className="flex items-center gap-1.5"><Settings2 size={15} className="text-brand" aria-hidden />Advanced <span className="font-medium text-muted">(model, delay)</span></span>}>
         <div className="flex flex-col gap-3.5 px-4 pb-4">
           <div className="flex flex-col gap-1.5">
             <label htmlFor="ml-model" className="text-[13px] font-bold">Model</label>
@@ -297,11 +303,8 @@ function SeparateControls({ settings, update, ready, advancedOpen, setAdvancedOp
               <Btn id="ml-delay-apply" tone="small" disabled={delayDraft === settings.mlDelayS} onClick={() => update({ mlDelayS: clampDelayS(delayDraft) })}>Apply</Btn>
             </div>
           </div>
-          <details id="split" open={splitOpen} onToggle={(e) => setSplitOpen(e.currentTarget.open)} className="group/split rounded-2xl bg-white/70">
-            <summary className="flex cursor-pointer list-none items-center justify-between p-3 text-[13px] font-bold [&::-webkit-details-marker]:hidden">
-              <span className="flex items-center gap-1.5"><Drum size={15} className="text-brand" aria-hidden />Split instrumental</span>
-              <ChevronDown size={16} className="transition-transform group-open/split:rotate-180" aria-hidden />
-            </summary>
+          <Disclosure id="split" open={splitOpen} onOpen={setSplitOpen} className="rounded-2xl bg-white/70" buttonClassName="p-3"
+            title={<span className="flex items-center gap-1.5"><Drum size={15} className="text-brand" aria-hidden />Split instrumental</span>}>
             <div className="flex flex-col gap-3 px-3 pb-3">
               <div className="flex items-center justify-between gap-3">
                 <label htmlFor="split-on" className="text-[13px] font-bold">Drums</label>
@@ -310,9 +313,9 @@ function SeparateControls({ settings, update, ready, advancedOpen, setAdvancedOp
               <p className="m-0 text-xs leading-snug text-muted">Splitting the instrumental adds more delay over the Delay limit.</p>
               {models.drums && <ModelRow idPrefix="drums" line={models.drums} />}
             </div>
-          </details>
+          </Disclosure>
         </div>
-      </details>
+      </Disclosure>
     </>
   );
 }
