@@ -37,6 +37,11 @@ describe('normalizeLyricsPrefs', () => {
     expect(kept[0]).toBe('v50');
   });
 
+  it('karaoke font, outline and background: known values kept, others default', () => {
+    expect(normalizeLyricsPrefs({ karaokeFont: 'mono', karaokeOutline: 'thick', karaokeBackground: 50 })).toMatchObject({ karaokeFont: 'mono', karaokeOutline: 'thick', karaokeBackground: 50 });
+    expect(normalizeLyricsPrefs({ karaokeFont: 'comic', karaokeOutline: 3, karaokeBackground: 33 })).toMatchObject({ karaokeFont: 'default', karaokeOutline: 'normal', karaokeBackground: 0 });
+  });
+
   it('defaults to one karaoke line, auto source and no caption language', () => {
     expect(DEFAULT_LYRICS_PREFS).toMatchObject({ karaokeLines: 1, lyricsSource: 'auto', captionLang: null });
   });

@@ -2,6 +2,14 @@ export type LyricsDisplayMode = 'karaoke' | 'window';
 /** Which lyrics source the user wants. */
 export type LyricsSource = 'auto' | 'lrclib' | 'captions';
 
+export const KARAOKE_FONTS = ['default', 'sans', 'serif', 'mono'] as const;
+export type KaraokeFont = (typeof KARAOKE_FONTS)[number];
+export const KARAOKE_OUTLINES = ['none', 'thin', 'normal', 'thick'] as const;
+export type KaraokeOutline = (typeof KARAOKE_OUTLINES)[number];
+/** Opacity of the dark box behind the text, percent. */
+export const KARAOKE_BACKGROUNDS = [0, 25, 50, 75] as const;
+export type KaraokeBackground = (typeof KARAOKE_BACKGROUNDS)[number];
+
 export interface LyricsPrefs {
   /** The ♪ button: show or hide the lyrics (karaoke text or window, whichever the display mode is). */
   lyricsVisible: boolean;
@@ -15,6 +23,9 @@ export interface LyricsPrefs {
   karaokeFontSize: number;
   /** Karaoke text color, #rrggbb lowercase. */
   karaokeColor: string;
+  karaokeFont: KaraokeFont;
+  karaokeOutline: KaraokeOutline;
+  karaokeBackground: KaraokeBackground;
   /** Lyrics timing per video id, in ms: positive shows the lyrics later. Zero entries are not kept. */
   lyricsOffsets: Record<string, number>;
   /** Fractions 0..1 of the player width/height: x = horizontal center, y = vertical center of the text block. */
@@ -31,6 +42,9 @@ export const DEFAULT_LYRICS_PREFS: LyricsPrefs = {
   karaokeLines: 1,
   karaokeFontSize: 100,
   karaokeColor: '#ffffff',
+  karaokeFont: 'default',
+  karaokeOutline: 'normal',
+  karaokeBackground: 0,
   karaokePosition: { x: 0.5, y: 0.82 },
   lyricsOffsets: {},
 };
@@ -65,6 +79,9 @@ export function normalizeLyricsPrefs(raw: unknown): LyricsPrefs {
     karaokeLines: r.karaokeLines === 1 || r.karaokeLines === 2 ? r.karaokeLines : d.karaokeLines,
     karaokeFontSize: Math.round(num(r.karaokeFontSize, d.karaokeFontSize, 50, 200)),
     karaokeColor: typeof r.karaokeColor === 'string' && /^#[0-9a-f]{6}$/i.test(r.karaokeColor) ? r.karaokeColor.toLowerCase() : d.karaokeColor,
+    karaokeFont: KARAOKE_FONTS.find((f) => f === r.karaokeFont) ?? d.karaokeFont,
+    karaokeOutline: KARAOKE_OUTLINES.find((o) => o === r.karaokeOutline) ?? d.karaokeOutline,
+    karaokeBackground: KARAOKE_BACKGROUNDS.find((b) => b === r.karaokeBackground) ?? d.karaokeBackground,
     lyricsOffsets: normalizeOffsets(r.lyricsOffsets),
     karaokePosition: { x: num(pos.x, d.karaokePosition.x, 0, 1), y: num(pos.y, d.karaokePosition.y, 0, 1) },
   };

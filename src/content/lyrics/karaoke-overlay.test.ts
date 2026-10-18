@@ -180,6 +180,23 @@ describe('KaraokeSurface layout and drag', () => {
     expect(block().style.color).toBe('#ffeb3b');
   });
 
+  it('applies font, outline and background from prefs', () => {
+    const s = make();
+    s.render(synced);
+    s.update(1.5);
+    expect(block().style.textShadow).toBe('');
+    expect(block().style.background).toBe('');
+    prefs = { ...prefs, karaokeFont: 'serif', karaokeOutline: 'none', karaokeBackground: 50 };
+    s.refreshPrefs();
+    expect(block().style.fontFamily).toContain('Georgia');
+    expect(block().style.textShadow).toBe('none');
+    expect(block().style.background).toContain('rgba(0, 0, 0, 0.5)');
+    prefs = { ...prefs, karaokeOutline: 'thick', karaokeBackground: 0 };
+    s.refreshPrefs();
+    expect(block().style.textShadow).toContain('2px');
+    expect(block().style.background).toBe('');
+  });
+
   it('recomputes the font size when the player resizes', () => {
     let fire = () => {};
     vi.stubGlobal('ResizeObserver', class { constructor(cb: () => void) { fire = cb; } observe() {} disconnect() {} });

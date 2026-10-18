@@ -1,4 +1,4 @@
-import { DEFAULT_LYRICS_PREFS, type LyricsDisplayMode, type LyricsPrefs } from '../../shared/lyrics-prefs';
+import { DEFAULT_LYRICS_PREFS, KARAOKE_BACKGROUNDS, type KaraokeBackground, type KaraokeFont, type KaraokeOutline, type LyricsDisplayMode, type LyricsPrefs } from '../../shared/lyrics-prefs';
 import { SETTINGS_SELECTORS, findSettingsMainMenu, findSettingsPopup, type Site } from '../youtube-dom';
 import type { CaptionPicker, SourceMenu, SourcePref } from './controller';
 import type { CaptionPick } from './track-info';
@@ -11,7 +11,7 @@ interface MenuOption {
 }
 
 export interface MenuRow {
-  id: 'source' | 'captionLanguage' | 'timing' | 'display' | 'lines' | 'karaokeText' | 'size' | 'color';
+  id: 'source' | 'captionLanguage' | 'timing' | 'display' | 'lines' | 'karaokeText' | 'size' | 'color' | 'font' | 'outline' | 'background';
   label: string;
   options: MenuOption[];
   selected: string;
@@ -19,6 +19,8 @@ export interface MenuRow {
   note?: string;
   /** A group: opens a panel with these settings instead of choices (www only). */
   rows?: MenuRow[];
+  /** What a group shows on its right; default: its settings' values joined. */
+  summary?: string;
   /** Also offer a native color picker under the choices; the values are #rrggbb. */
   picker?: 'color';
   select(value: string): void;
@@ -65,6 +67,9 @@ const COLOR_PRESETS: readonly [string, string][] = [
   ['#ff80ab', 'Pink'],
   ['#ffab40', 'Orange'],
 ];
+
+const FONT_LABELS: Record<KaraokeFont, string> = { default: 'YouTube', sans: 'Sans-serif', serif: 'Serif', mono: 'Monospace' };
+const OUTLINE_LABELS: Record<KaraokeOutline, string> = { none: 'None', thin: 'Thin', normal: 'Normal', thick: 'Thick' };
 
 const FALLBACK_NOTES = {
   lrclib: 'LRCLIB has no lyrics for this video, so the automatic order is used.',
@@ -121,6 +126,55 @@ export function buildMenuRows(input: MenuInput, actions: MenuActions): MenuRow[]
     select: (v) => actions.setPrefs({ lyricsDisplayMode: v as LyricsDisplayMode }),
   });
   if (prefs.lyricsDisplayMode === 'karaoke') {
+    const group: MenuRow = {
+      id: 'karaokeText',
+      label: 'Custom Karaoke Text',
+      options: [],
+      selected: '',
+      rows: [
+        {
+          id: 'color',
+          label: 'Color',
+          options: [
+            ...COLOR_PRESETS.map(([value, label]) => ({ value, label })),
+            ...(COLOR_PRESETS.some(([c]) => c === prefs.karaokeColor) ? [] : [{ value: prefs.karaokeColor, label: `Custom (${prefs.karaokeColor})` }]),
+          ],
+          selected: prefs.karaokeColor,
+          picker: 'color',
+          select: (v) => actions.setPrefs({ karaokeColor: v }),
+        },
+        {
+          id: 'size',
+          label: 'Size',
+          options: KARAOKE_SIZES.map((n) => ({ value: String(n), label: `${n}%` })),
+          selected: String(nearestSize(prefs.karaokeFontSize)),
+          select: (v) => actions.setPrefs({ karaokeFontSize: Number(v) }),
+        },
+        {
+          id: 'font',
+          label: 'Font',
+          options: Object.entries(FONT_LABELS).map(([value, label]) => ({ value, label })),
+          selected: prefs.karaokeFont,
+          select: (v) => actions.setPrefs({ karaokeFont: v as KaraokeFont }),
+        },
+        {
+          id: 'outline',
+          label: 'Outline',
+          options: Object.entries(OUTLINE_LABELS).map(([value, label]) => ({ value, label })),
+          selected: prefs.karaokeOutline,
+          select: (v) => actions.setPrefs({ karaokeOutline: v as KaraokeOutline }),
+        },
+        {
+          id: 'background',
+          label: 'Background',
+          options: KARAOKE_BACKGROUNDS.map((n) => ({ value: String(n), label: n ? `${n}%` : 'None' })),
+          selected: String(prefs.karaokeBackground),
+          select: (v) => actions.setPrefs({ karaokeBackground: Number(v) as KaraokeBackground }),
+        },
+      ],
+      select: () => {},
+    };
+    group.summary = group.rows!.slice(0, 2).map(selectedLabel).join(' · ');
     rows.push(
       {
         id: 'lines',
@@ -132,33 +186,7 @@ export function buildMenuRows(input: MenuInput, actions: MenuActions): MenuRow[]
         selected: String(prefs.karaokeLines),
         select: (v) => actions.setPrefs({ karaokeLines: v === '1' ? 1 : 2 }),
       },
-      {
-        id: 'karaokeText',
-        label: 'Custom Karaoke Text',
-        options: [],
-        selected: '',
-        rows: [
-          {
-            id: 'color',
-            label: 'Color',
-            options: [
-              ...COLOR_PRESETS.map(([value, label]) => ({ value, label })),
-              ...(COLOR_PRESETS.some(([c]) => c === prefs.karaokeColor) ? [] : [{ value: prefs.karaokeColor, label: `Custom (${prefs.karaokeColor})` }]),
-            ],
-            selected: prefs.karaokeColor,
-            picker: 'color',
-            select: (v) => actions.setPrefs({ karaokeColor: v }),
-          },
-          {
-            id: 'size',
-            label: 'Size',
-            options: KARAOKE_SIZES.map((n) => ({ value: String(n), label: `${n}%` })),
-            selected: String(nearestSize(prefs.karaokeFontSize)),
-            select: (v) => actions.setPrefs({ karaokeFontSize: Number(v) }),
-          },
-        ],
-        select: () => {},
-      },
+      group,
     );
   }
   return rows;
@@ -175,7 +203,7 @@ function nearestSize(size: number): number {
 }
 
 const selectedLabel = (row: MenuRow): string =>
-  row.rows ? row.rows.map(selectedLabel).join(' · ') : (row.options.find((o) => o.value === row.selected)?.label ?? '');
+  row.rows ? (row.summary ?? row.rows.map(selectedLabel).join(' · ')) : (row.options.find((o) => o.value === row.selected)?.label ?? '');
 
 /** Both renderers take the new settings whenever the state or prefs change. */
 export interface LyricsMenu {

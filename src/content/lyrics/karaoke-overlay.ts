@@ -1,6 +1,6 @@
 import type { LyricLine } from '../../lyrics/types';
 import { selectKaraokeLines, type KaraokeSlot } from '../../lyrics/karaoke-lines';
-import type { LyricsPrefs } from '../../shared/lyrics-prefs';
+import type { KaraokeFont, KaraokeOutline, LyricsPrefs } from '../../shared/lyrics-prefs';
 import { findControlBar, findKaraokeHost, findPlayer, KARAOKE_MOUNT, isAdShowing, type Site } from '../youtube-dom';
 import type { LyricsState, LyricsSurface } from './controller';
 
@@ -32,6 +32,22 @@ export function clampKaraokePosition(pos: Pos, block: Size, player: Size, bottom
   const cy = fit(pos.y * player.h, block.h, 0, player.h - Math.max(0, bottomInset));
   return { x: cx / player.w, y: cy / player.h };
 }
+
+const FONT_FAMILIES: Record<KaraokeFont, string> = {
+  default: '"YouTube Noto",Roboto,Arial,sans-serif',
+  sans: 'system-ui,"Segoe UI",Helvetica,Arial,sans-serif',
+  serif: 'Georgia,"Times New Roman",serif',
+  mono: 'ui-monospace,Menlo,Consolas,monospace',
+};
+
+const outline = (w: number): string => [[-w, -w], [w, -w], [-w, w], [w, w]].map(([x, y]) => `${x}px ${y}px 0 #000`).join(',');
+/** Text-shadow per outline step. `normal` is the stylesheet's own (outline + glow). */
+const OUTLINES: Record<KaraokeOutline, string> = {
+  none: 'none',
+  thin: outline(0.5),
+  normal: '',
+  thick: `${outline(2)},0 0 8px rgba(0,0,0,.9)`,
+};
 
 const ROOT_ID = 'all-mixer-karaoke';
 const STYLE = `
@@ -131,7 +147,7 @@ export class KaraokeSurface implements LyricsSurface {
     return true;
   }
 
-  /** Prefs changed (font size, color, line count, position, mode). */
+  /** Prefs changed (font size, color, font, outline, background, line count, position, mode). */
   refreshPrefs(): void {
     this.pos = this.opts.getPrefs().karaokePosition;
     this.key = null;
@@ -190,7 +206,14 @@ export class KaraokeSurface implements LyricsSurface {
     const player = this.playerSize();
     if (player.w <= 0 || player.h <= 0) return;
     this.fitRoot();
-    this.block.style.color = this.opts.getPrefs().karaokeColor;
+    const prefs = this.opts.getPrefs();
+    const st = this.block.style;
+    st.color = prefs.karaokeColor;
+    st.fontFamily = FONT_FAMILIES[prefs.karaokeFont];
+    st.textShadow = OUTLINES[prefs.karaokeOutline];
+    st.background = prefs.karaokeBackground ? `rgba(0,0,0,${prefs.karaokeBackground / 100})` : '';
+    st.padding = prefs.karaokeBackground ? '.15em .5em' : '';
+    st.borderRadius = prefs.karaokeBackground ? '.3em' : '';
     this.block.style.fontSize = `${karaokeFontPx(player.h, this.opts.getPrefs().karaokeFontSize)}px`;
     this.place(this.pos);
   };
