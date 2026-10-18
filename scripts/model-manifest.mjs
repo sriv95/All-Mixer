@@ -10,7 +10,7 @@
 import { copyFileSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const FORMAT = 1; // MODEL_FORMAT in src/shared/model-store.ts
+const FORMAT = 2; // MODEL_FORMAT in src/shared/model-store.ts
 const IDS = ['roformer', 'deux']; // MODEL_IDS in src/shared/model-store.ts
 const args = Object.fromEntries(process.argv.slice(2).map((a) => a.split('=')));
 const bad = Object.entries(args).filter(([id, v]) => !IDS.includes(id) || !Number.isSafeInteger(Number(v)) || Number(v) < 1);

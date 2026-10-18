@@ -1,14 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { ROF_BLOCK, ROF_CHUNK, ROF_OVERLAP } from '../worklet/protocol';
-import { ROF_FRAMES, RoformerStream, type RoformerMeta } from './roformer';
+import { DEFAULT_ROF_GEOMETRY, RoformerStream, type RoformerMeta } from './roformer';
+import { makeGeometry } from './rof-plan';
+
+const ROF_FRAMES = DEFAULT_ROF_GEOMETRY.frames;
 
 const H = ROF_BLOCK, R = ROF_OVERLAP, K = ROF_CHUNK - ROF_BLOCK;
 const BINS = 1025;
 
 /** Every (bin, channel) value goes to the model once, covered by one band: masks of 1 give the identity. */
 const meta: RoformerMeta = {
-  frames: ROF_FRAMES,
-  chunk: ROF_CHUNK,
   nFft: 2048,
   hop: 441,
   sel: Array.from({ length: 2 * BINS }, (_, i) => i),
@@ -29,8 +30,25 @@ const identity = (x: Float32Array): Float32Array => {
 describe('RoformerStream', () => {
   it('geometry: 112 frames, history + block = chunk, overlap smaller than the history', () => {
     expect(ROF_FRAMES).toBe(112);
+    expect(DEFAULT_ROF_GEOMETRY.chunk).toBe(ROF_CHUNK);
     expect(K + H).toBe(ROF_CHUNK);
     expect(R).toBeLessThan(K);
+  });
+
+  it('another geometry (longer block and overlap, 262 frames) also reproduces the input, delayed by its overlap', async () => {
+    const g = makeGeometry(2 * H, 2 * R, 0);
+    expect(g.frames).toBeGreaterThan(200);
+    const s = new RoformerStream(meta, g);
+    expect(s.x.length).toBe(g.frames * 4100);
+    const blk = (f: (n: number) => number, b: number) => Float32Array.from({ length: g.block }, (_, i) => f(b * g.block + i));
+    const outL = new Float32Array(g.block), outR = new Float32Array(g.block);
+    let worst = 0;
+    for (let b = 0; b < 3; b++) {
+      await s.process(blk(sineL, b), blk(sineR, b), identity, outL, outR);
+      if (b === 0) continue;
+      for (let i = 0; i < g.block; i++) worst = Math.max(worst, Math.abs(outL[i] - sineL(b * g.block - g.overlap + i)), Math.abs(outR[i] - sineR(b * g.block - g.overlap + i)));
+    }
+    expect(worst).toBeLessThan(2e-4);
   });
 
   it('STFT matches torch.stft (n_fft 2048, hop 441, hann, centre reflect) on a two-block signal', () => {
@@ -109,7 +127,9 @@ describe('RoformerStream', () => {
     expect(Array.from(c.subarray(0, 100))).toEqual(Array.from(a.subarray(0, 100)));
   });
 
-  it('rejects a meta that does not match the geometry', () => {
-    expect(() => new RoformerStream({ ...meta, frames: 111 })).toThrow();
+  it('rejects a meta or a geometry that does not fit', () => {
+    expect(() => new RoformerStream({ ...meta, hop: 512 })).toThrow();
+    expect(() => new RoformerStream(meta, { ...DEFAULT_ROF_GEOMETRY, frames: 111 })).toThrow();
+    expect(() => new RoformerStream(meta, { ...DEFAULT_ROF_GEOMETRY, block: DEFAULT_ROF_GEOMETRY.block + 1 })).toThrow();
   });
 });

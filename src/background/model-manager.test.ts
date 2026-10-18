@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ModelFiles } from '../shared/model-files';
-import { CHUNK, chunkName, keyInstalled, keyProgress, keyRemote } from '../shared/model-store';
+import { CHUNK, MODEL_FORMAT, chunkName, keyInstalled, keyProgress, keyRemote } from '../shared/model-store';
 import { ModelManager } from './model-manager';
 
 function memArea() {
@@ -37,7 +37,7 @@ function server(version: number, over: { format?: number; noDeux?: boolean; fail
         roformer: { version, files: { 'roformer.onnx': ONNX, 'roformer-meta.json': META } },
         ...(over.noDeux ? {} : { deux: { version: 1, files: { 'deux.onnx': ONNX, 'deux-meta.json': META } } }),
       };
-      return new Response(JSON.stringify({ format: over.format ?? 1, models }));
+      return new Response(JSON.stringify({ format: over.format ?? MODEL_FORMAT, models }));
     }
     const m = /bytes=(\d+)-(\d+)/.exec((init?.headers as Record<string, string>).Range)!;
     const from = +m[1], to = +m[2];
@@ -67,7 +67,7 @@ describe('ModelManager', () => {
     const area = memArea();
     const { m, files } = memFiles();
     await new ModelManager(area as never, files, server(1).fetchFn).install('roformer');
-    expect(area.d[keyInstalled('roformer')]).toEqual({ version: 1, files: { 'roformer.onnx': ONNX, 'roformer-meta.json': META } });
+    expect(area.d[keyInstalled('roformer')]).toEqual({ format: MODEL_FORMAT, version: 1, files: { 'roformer.onnx': ONNX, 'roformer-meta.json': META } });
     expect(keyProgress('roformer') in area.d).toBe(false);
     expect([...m.keys()].sort()).toEqual(['v1-roformer-meta.json.0000', 'v1-roformer.onnx.0000', 'v1-roformer.onnx.0001', 'v1-roformer.onnx.0002']);
     expect(m.get(chunkName(1, 'roformer.onnx', 2))!.length).toBe(100);
@@ -111,7 +111,7 @@ describe('ModelManager', () => {
   it('refuses a manifest of another format', async () => {
     const area = memArea();
     const { files } = memFiles();
-    await new ModelManager(area as never, files, server(1, { format: 2 }).fetchFn).install('roformer');
+    await new ModelManager(area as never, files, server(1, { format: MODEL_FORMAT + 1 }).fetchFn).install('roformer');
     expect(area.d[keyProgress('roformer')]).toMatchObject({ phase: 'error', error: expect.stringContaining('newer version') });
   });
 
@@ -129,7 +129,7 @@ describe('ModelManager', () => {
     const { m, files } = memFiles();
     await new ModelManager(area as never, files, server(1).fetchFn).install('roformer');
     await new ModelManager(area as never, files, server(1).fetchFn).install('deux');
-    expect(area.d[keyInstalled('deux')]).toEqual({ version: 1, files: { 'deux.onnx': ONNX, 'deux-meta.json': META } });
+    expect(area.d[keyInstalled('deux')]).toEqual({ format: MODEL_FORMAT, version: 1, files: { 'deux.onnx': ONNX, 'deux-meta.json': META } });
     expect(m.has(chunkName(1, 'deux.onnx', 0))).toBe(true);
     await new ModelManager(area as never, files, server(2).fetchFn).install('roformer');
     expect(area.d[keyInstalled('roformer')]).toMatchObject({ version: 2 });

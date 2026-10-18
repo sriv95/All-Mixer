@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ContentStatus } from '../shared/messages';
+import { MODEL_FORMAT } from '../shared/model-store';
 
 const html = readFileSync('src/popup/popup.html', 'utf8');
 const body = /<body[^>]*>([\s\S]*)<\/body>/.exec(html)![1].replace(/<script[\s\S]*?<\/script>/g, '');
@@ -146,11 +147,56 @@ describe('popup', () => {
     await settle();
     expect(sent().at(-1).settings.mlModel).toBe('mdx');
   });
+  describe('chunk length', () => {
+    const select = (m: string) => {
+      const s = el<HTMLSelectElement>('ml-model');
+      s.value = m;
+      s.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+    it('is hidden for the default model and shown, in Auto, for a RoFormer', async () => {
+      await load({ stored: { mode: 'separate', mlModel: 'mdx' } });
+      expect(el('chunk-row').hidden).toBe(true);
+      select('roformer');
+      await settle();
+      expect(el('chunk-row').hidden).toBe(false);
+      expect(el<HTMLInputElement>('ml-auto').checked).toBe(true);
+      expect(el<HTMLInputElement>('ml-delay').disabled).toBe(true);
+      expect(el<HTMLOutputElement>('ml-delay-value').value).toBe('Auto');
+    });
+
+    it('Auto off enables the slider (2 to 15 s, 1 s steps) and sends the setting', async () => {
+      await load({ stored: { mode: 'separate', mlModel: 'deux', mlAuto: true } });
+      const auto = el<HTMLInputElement>('ml-auto');
+      auto.checked = false;
+      auto.dispatchEvent(new Event('change', { bubbles: true }));
+      await settle();
+      const slider = el<HTMLInputElement>('ml-delay');
+      expect([slider.min, slider.max, slider.step]).toEqual(['2', '15', '1']);
+      expect(slider.disabled).toBe(false);
+      expect(sent().at(-1).settings).toMatchObject({ mlAuto: false, mlDelayS: 4 });
+    });
+
+    it('dragging only moves the label; releasing sends the delay limit once', async () => {
+      await load({ stored: { mode: 'separate', mlModel: 'roformer', mlAuto: false, mlDelayS: 4 } });
+      const slider = el<HTMLInputElement>('ml-delay');
+      const before = sent().length;
+      slider.value = '9';
+      slider.dispatchEvent(new Event('input', { bubbles: true }));
+      await settle();
+      expect(el<HTMLOutputElement>('ml-delay-value').value).toBe('9 s');
+      expect(sent()).toHaveLength(before);
+      slider.dispatchEvent(new Event('change', { bubbles: true }));
+      await settle();
+      expect(sent().at(-1).settings.mlDelayS).toBe(9);
+      expect(sent()).toHaveLength(before + 1);
+    });
+  });
+
   describe('model download', () => {
     const files = { 'roformer.onnx': 100 * 2 ** 20, 'roformer-meta.json': 1000 };
     const dfiles = { 'deux.onnx': 50 * 2 ** 20, 'deux-meta.json': 1000 };
-    const remote = (version: number, f: Record<string, number> = files) => ({ format: 1, version, files: f, checkedAt: 0 });
-    const installedV1 = { version: 1, files };
+    const remote = (version: number, f: Record<string, number> = files) => ({ format: MODEL_FORMAT, version, files: f, checkedAt: 0 });
+    const installedV1 = { format: MODEL_FORMAT, version: 1, files };
     const row = () => el('model-row');
 
     it('is hidden for the default model and shown for a downloadable one', async () => {

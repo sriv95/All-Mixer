@@ -1,5 +1,5 @@
 import type { ContentStatus, GetStatus, GetTabSettings, SetTabSettings } from '../shared/messages';
-import { clampPct, normalizeSettings, type MixerSettings, type Mode } from '../shared/settings';
+import { clampDelayS, clampPct, normalizeSettings, type MixerSettings, type Mode } from '../shared/settings';
 import type { MlModel } from '../worklet/protocol';
 import { detectSite } from '../content/youtube-dom';
 import { MODEL_IDS, MODEL_LABEL, keyInstalled, keyProgress, keyRemote, mb, modelState, type InstalledModel, type ModelId, type ModelState, type Progress, type RemoteRecord } from '../shared/model-store';
@@ -14,6 +14,10 @@ const vocalValue = $<HTMLOutputElement>('vocal-value');
 const instrumental = $<HTMLInputElement>('instrumental');
 const instrumentalValue = $<HTMLOutputElement>('instrumental-value');
 const mlModel = $<HTMLSelectElement>('ml-model');
+const chunkRow = $<HTMLDivElement>('chunk-row');
+const mlAuto = $<HTMLInputElement>('ml-auto');
+const mlDelay = $<HTMLInputElement>('ml-delay');
+const mlDelayValue = $<HTMLOutputElement>('ml-delay-value');
 const modelRow = $<HTMLParagraphElement>('model-row');
 const modelText = $<HTMLSpanElement>('model-text');
 const modelBtn = $<HTMLButtonElement>('model-btn');
@@ -37,6 +41,11 @@ function render(): void {
   instrumental.value = String(settings.instrumentalPct);
   instrumentalValue.value = `${settings.instrumentalPct}%`;
   mlModel.value = settings.mlModel;
+  chunkRow.hidden = !isModelId(settings.mlModel); // the default model has a fixed delay
+  mlAuto.checked = settings.mlAuto;
+  mlDelay.disabled = settings.mlAuto;
+  mlDelay.value = String(settings.mlDelayS);
+  mlDelayValue.value = settings.mlAuto ? 'Auto' : `${settings.mlDelayS} s`;
   renderModel();
   for (const b of presets) {
     const on = Number(b.dataset.vocal) === settings.vocalPct && Number(b.dataset.instrumental) === settings.instrumentalPct;
@@ -231,6 +240,18 @@ vocal.addEventListener('input', () => {
 
 instrumental.addEventListener('input', () => {
   settings = { ...settings, instrumentalPct: clampPct(instrumental.value) };
+  save();
+});
+
+mlAuto.addEventListener('change', () => {
+  settings = { ...settings, mlAuto: mlAuto.checked };
+  save();
+});
+
+// While dragging only the label moves; the chunk is re-planned (a new warm-up) when the slider is released.
+mlDelay.addEventListener('input', () => (mlDelayValue.value = `${clampDelayS(mlDelay.value)} s`));
+mlDelay.addEventListener('change', () => {
+  settings = { ...settings, mlDelayS: clampDelayS(mlDelay.value) };
   save();
 });
 

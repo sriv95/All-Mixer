@@ -120,14 +120,15 @@ interface Rig {
   run(nq: number): void;
 }
 
-function rig(seconds: number, signal: (n: number, seed: number) => Float32Array = noise, model: MlModel = 'mdx'): Rig {
+function rig(seconds: number, signal: (n: number, seed: number) => Float32Array = noise, model: MlModel | MlGeometry = 'mdx'): Rig {
   const total = Math.ceil((seconds * SR) / QUANTUM) * QUANTUM;
   const sigL = signal(total, 1);
   const sigR = signal(total, 2);
   const msgs: FromWorklet[] = [];
   const core = new SeparatorCore(SR, (m) => msgs.push(m));
-  core.setModel(model);
-  const port = new FakePort(sigL, sigR, GEOMETRY[model]);
+  if (typeof model === 'string') core.setModel(model);
+  else core.setGeometry(model);
+  const port = new FakePort(sigL, sigR, typeof model === 'string' ? GEOMETRY[model] : model);
   core.setPort(port as unknown as MessagePort);
   const vl = new Float32Array(QUANTUM);
   const vr = new Float32Array(QUANTUM);
@@ -583,5 +584,36 @@ describe('SeparatorCore, RoFormer geometry', () => {
     r.core.setActive(false);
     r.core.setActive(true, 'ml');
     expect(r.core.latencySamples).toBe(ML_LATENCY_SAMPLES);
+  });
+});
+
+describe('SeparatorCore, geometry planned at run time', () => {
+  /** A 5 s block with a 5 s compute slack: 9.7 s of delay. */
+  const planned: MlGeometry = { block: 1722 * QUANTUM, resultOffset: 69 * QUANTUM, latency: (1722 + 69 + 1563 + 1) * QUANTUM, warmupP90Ms: 4000 };
+
+  it('output is the input delayed by the planned latency (stems sum to it)', () => {
+    const r = rig(26, noise, planned);
+    r.core.setActive(true, 'ml');
+    expect(r.core.engine).toBe('ml');
+    expect(r.core.latencySamples).toBe(planned.latency);
+    r.run(Math.ceil((26 * SR) / QUANTUM) - 1);
+    expect(maxErr(r, planned.latency, 0, r.vL.length)).toBeLessThanOrEqual(1e-6);
+    expect(r.core.stats.misses).toBe(0);
+    expect(r.msgs).toEqual([]);
+  });
+
+  it('a geometry that is off the quantum grid or does not fit the ring is ignored', () => {
+    for (const bad of [{ ...planned, block: planned.block + 1 }, { ...planned, latency: planned.latency + 1 }, { ...planned, resultOffset: 5 }]) {
+      const r = rig(2, noise, bad);
+      r.core.setActive(true, 'ml');
+      expect(r.core.latencySamples).toBe(GEOMETRY.mdx.latency);
+    }
+  });
+
+  it('the longest plan (15 s) fits the ring', () => {
+    const max: MlGeometry = { block: 56 * 128 * 10, resultOffset: 69 * QUANTUM, latency: Math.floor((15 * SR) / QUANTUM) * QUANTUM, warmupP90Ms: 1 };
+    const r = rig(1, noise, max);
+    r.core.setActive(true, 'ml');
+    expect(r.core.latencySamples).toBe(max.latency);
   });
 });

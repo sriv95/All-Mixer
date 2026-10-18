@@ -8,7 +8,7 @@ import {
   SEPARATOR_PROCESSOR,
   type FromWorklet,
   type MlEngine,
-  type MlModel,
+  type MlGeometry,
   type MlReason,
   type ToWorklet,
 } from '../../worklet/protocol';
@@ -86,9 +86,9 @@ export class MasterChain {
   private engine: MlEngine = 'bypass';
   private engineReason: EngineReason = 'auto';
   private pendingMlPort: MessagePort | null = null;
-  /** Model whose geometry the worklet uses for the next ML stream, and the one whose delay the ML engine has now. */
-  private mlModel: MlModel = 'mdx';
-  private runModel: MlModel = 'mdx';
+  /** Geometry the worklet uses for the next ML stream, and the one whose delay the ML engine has now. */
+  private mlGeometry: MlGeometry = GEOMETRY.mdx;
+  private runGeometry: MlGeometry = GEOMETRY.mdx;
   private pendingEngine: { engine: MlEngine; reason: MlReason } | null = null;
   private offTimer: ReturnType<typeof setTimeout> | undefined;
   private separation: SeparationRequest = OFF;
@@ -156,7 +156,7 @@ export class MasterChain {
   /** Current total audio delay (D1). */
   get latency(): LatencyInfo {
     const sampleRate = this.ctx?.sampleRate ?? 48000;
-    const processingSamples = !this.separating ? 0 : this.engine === 'ml' ? GEOMETRY[this.runModel].latency : 0;
+    const processingSamples = !this.separating ? 0 : this.engine === 'ml' ? this.runGeometry.latency : 0;
     const processingMs = (processingSamples / sampleRate) * 1000;
     const deviceMs = this.deviceLatencyMs;
     return {
@@ -196,10 +196,10 @@ export class MasterChain {
     this.sep.port.postMessage({ type: 'ml-port', port } satisfies ToWorklet, [port]);
   }
 
-  /** Block geometry for the next ML stream (the worklet applies it on the original mix); call before `setMlPort`. */
-  setMlModel(model: MlModel): void {
-    this.mlModel = model;
-    this.post({ type: 'model', model }); // before the worklet exists: sent when it loads
+  /** Block geometry for the next ML stream (the worklet applies it on the original mix); call before `setEngine('ml')`. */
+  setMlGeometry(geometry: MlGeometry): void {
+    this.mlGeometry = geometry;
+    this.post({ type: 'geometry', geometry }); // before the worklet exists: sent when it loads
   }
 
   /** True when the graph can run the ML engine (context at the model rate, or not built yet). */
@@ -212,7 +212,7 @@ export class MasterChain {
     if (engine === 'bypass') this.pendingEngine = null;
     // The model has no resampler: ML only runs when the context is at the model rate.
     if (engine === 'ml' && this.ctx?.sampleRate !== ML_SAMPLE_RATE) return false;
-    if (engine === 'ml') this.runModel = this.mlModel;
+    if (engine === 'ml') this.runGeometry = this.mlGeometry;
     if (this.workletOn) this.post({ type: 'engine', engine, reason });
     else this.pendingEngine = { engine, reason }; // applied once the separator has started
     return true;
@@ -364,7 +364,7 @@ export class MasterChain {
         const source = this.video && this.sources.get(this.video);
         source?.connect(node);
         this.sep = node;
-        if (this.mlModel !== 'mdx') node.port.postMessage({ type: 'model', model: this.mlModel } satisfies ToWorklet); // the worklet starts on mdx
+        if (this.mlGeometry !== GEOMETRY.mdx) node.port.postMessage({ type: 'geometry', geometry: this.mlGeometry } satisfies ToWorklet); // the worklet starts on mdx
         if (this.pendingMlPort) {
           const port = this.pendingMlPort;
           this.pendingMlPort = null;
