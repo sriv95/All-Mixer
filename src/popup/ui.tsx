@@ -51,7 +51,7 @@ const TONE = {
 
 export function Btn({ tone = 'raised', className, disabled, type = 'button', ...rest }: BtnProps) {
   const blocked = useContext(Blocked);
-  return <button {...rest} type={type} disabled={blocked || disabled} className={cx('inline-flex cursor-pointer items-center justify-center gap-2 border-0 font-extrabold disabled:cursor-default disabled:opacity-45', TONE[tone], className)} />;
+  return <button {...rest} type={type} disabled={blocked || disabled} className={cx('inline-flex cursor-pointer items-center justify-center gap-2 border-0 font-extrabold transition-[transform,box-shadow,opacity] duration-150 active:scale-[0.97] disabled:cursor-default disabled:opacity-45 disabled:active:scale-100', TONE[tone], className)} />;
 }
 
 /** A switch: a real checkbox with role="switch", styled as a pressed track and a raised thumb. */
