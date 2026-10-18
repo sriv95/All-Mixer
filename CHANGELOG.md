@@ -12,6 +12,7 @@ CI builds the extension, creates tag `vx.y.z` and a GitHub release with this sec
 
 ### Changed
 
+- Popup: when the tab needs a reload (no All Mixer! running in it yet), the Separate mode checkbox is hidden and the popup says to reload the tab.
 - Popup: the Vocal, Instrumental and Drums sliders now go from 0 to 100 %. Only Global Volume boosts.
 - Popup: the Default / Separate tabs are replaced by a **Separate mode** checkbox. Checked shows the Separate settings.
 - Separation: **Split instrumental** adds its delay on top of the Delay limit, so the limit no longer jumps to 8 s.

@@ -352,6 +352,7 @@ describe('popup', () => {
   it('asks for a reload when there is no content script', async () => {
     await load({ status: 'reject' });
     expect(el('status').textContent).toMatch(/Reload this tab/);
+    expect(modeBox().parentElement!.hidden).toBe(true);
   });
 
   describe('Separate tab', () => {
