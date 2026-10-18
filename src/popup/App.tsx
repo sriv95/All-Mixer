@@ -197,7 +197,7 @@ function Banner({ view, settings, update, retry }: { view: SepView; settings: Mi
     case 'live':
       icon = <span className={`${bannerIcon} mx-pulse bg-brand text-white`}><AudioWaveform size={20} aria-hidden /></span>;
       title = 'Separating live';
-      text = `${view.delayS} s audio delay. The picture is delayed to match.`;
+      text = `${view.delayS} s audio delay.`;
       break;
     case 'stopped':
       icon = <span className={`${bannerIcon} bg-brand text-white`}><TriangleAlert size={20} aria-hidden /></span>;
@@ -251,6 +251,7 @@ function SeparateControls({ settings, update, ready, advancedOpen, setAdvancedOp
 
   return (
     <>
+      <Master settings={settings} update={update} compact />
       <Card>
         <SliderRow id="vocal" icon={<Mic size={15} />} label="Vocal" valueText={`${settings.vocalPct}%`} value={settings.vocalPct} min={0} max={100} step={5} onValue={(v) => update({ vocalPct: clampPct(v) })} />
         <SliderRow id="instrumental" icon={<Music size={15} />} label="Instrumental" valueText={`${settings.instrumentalPct}%`} value={settings.instrumentalPct} min={0} max={100} step={5} onValue={(v) => update({ instrumentalPct: clampPct(v) })} />
@@ -271,7 +272,6 @@ function SeparateControls({ settings, update, ready, advancedOpen, setAdvancedOp
           </Btn>
         ))}
       </div>
-      <Master settings={settings} update={update} compact />
       <details id="advanced" open={advancedOpen} onToggle={(e) => persistAdvanced(e.currentTarget.open, setAdvancedOpen)} className="group rounded-[20px] bg-card">
         <summary className="flex cursor-pointer list-none items-center justify-between p-4 text-[13px] font-bold [&::-webkit-details-marker]:hidden">
           <span className="flex items-center gap-1.5"><Settings2 size={15} className="text-brand" aria-hidden />Advanced <span className="font-medium text-muted">(model, delay)</span></span>
