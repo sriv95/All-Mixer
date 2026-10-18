@@ -304,15 +304,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ================================================================
-3. Mel-Band RoFormer vocal model (optional, experimental; NOT shipped in the repository)
+3. Mel-Band RoFormer vocal model (optional, experimental; downloaded on request, NOT shipped in the extension or the repository)
    Weights (one Model menu entry each):
-     roformer  Unwa, "mel_band_roformer_kim_ft_unwa" (a fine-tune of Kimberley Jensen's Mel-Band RoFormer).
-     kim       Kimberley Jensen, "MelBandRoformer.ckpt" (huggingface.co/KimberleyJSN/melbandroformer; GPL-3.0 at
-               release, relicensed MIT on 2026-04-22).
-     deux      becruily, "mel-band-roformer-deux" (huggingface.co/becruily/mel-band-roformer-deux), CC BY-NC 4.0:
-               non-commercial use only, with attribution; do not publish a build that contains it commercially.
+     roformer (High quality)  Unwa, "mel_band_roformer_kim_ft_unwa" (a fine-tune of Kimberley Jensen's Mel-Band RoFormer).
+     deux (Best quality)      becruily, "mel-band-roformer-deux" (huggingface.co/becruily/mel-band-roformer-deux),
+                              CC BY-NC 4.0: non-commercial use only, with attribution. Only its vocal stem is used.
    Code: Mel-Band RoFormer architecture (Lucidrains, ZFTurbo / audio-separator implementations).
-   public/ml/{roformer,kim,deux}.onnx are built locally by scripts/export-roformer.py (fp16, STFT removed, RMSNorm rewritten
-   for fp16). The licence of the weights was not verified when this was added (a secondary source says MIT):
-   read the LICENSE of the upstream repository before redistributing a build that contains one of them.
+   The ONNX file (fp16, STFT removed, RMSNorm rewritten for fp16) is built by scripts/export-roformer.py and
+   downloaded by the user from a Hugging Face repo at run time (src/shared/model-store.ts), not packed in the extension. The licence of the unwa weights was not verified when this was added (a secondary source says MIT):
+   read the LICENSE of the upstream repository before publishing the converted model file.
 ================================================================

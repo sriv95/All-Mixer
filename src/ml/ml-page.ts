@@ -4,6 +4,8 @@
 // worker's ready/unavailable → parent. Blocks then flow worklet ↔ worker without touching this page.
 import { ML_INIT, ML_MODELS, type FromMlWorker, type MlModel, type MlWorkerInit, type ToMlWorker } from '../worklet/protocol';
 
+import { keyInstalled, type InstalledModel } from '../shared/model-store';
+
 const ALLOWED = ['https://www.youtube.com', 'https://music.youtube.com'];
 const parentOrigin = (): string | null => {
   const o = location.ancestorOrigins?.[0];
@@ -30,7 +32,7 @@ window.addEventListener('message', (e: MessageEvent) => {
     const w = worker;
     // Debug stall hook (off by default): see README, Debug.
     void chrome.storage.local
-      .get(['debug.mlStallMs', 'debug.mlStallAfterMs', 'debug.mlTiming'])
+      .get(['debug.mlStallMs', 'debug.mlStallAfterMs', 'debug.mlTiming', ...(model === 'mdx' ? [] : [keyInstalled(model)])])
       .catch(() => ({}) as Record<string, unknown>)
       .then((o) => {
         const stallMs = Number(o['debug.mlStallMs']) > 0 ? Number(o['debug.mlStallMs']) : 0;
@@ -44,8 +46,7 @@ window.addEventListener('message', (e: MessageEvent) => {
             port,
             modelUrl: chrome.runtime.getURL('ml/vocals.onnx'),
             mdxUrl: chrome.runtime.getURL('ml/mdx.onnx'),
-            roformerUrl: chrome.runtime.getURL(`ml/${model}.onnx`),
-            roformerMetaUrl: chrome.runtime.getURL(`ml/${model}-meta.json`),
+            installed: model === 'mdx' ? undefined : (o[keyInstalled(model)] as InstalledModel | undefined),
             wasmBase: chrome.runtime.getURL('ml/'),
             stallMs,
             stallAfterMs,
