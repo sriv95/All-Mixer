@@ -6,7 +6,7 @@ export type Mode = 'default' | 'separate';
 export interface MixerSettings {
   /** Which popup tab / audio mode is active. */
   mode: Mode;
-  /** Default mode master volume, percent (0–600). */
+  /** Global volume (a boost on top of either mode), percent (100–600). */
   masterPct: number;
   /** Separate mode vocal volume, percent (0–600). Used once separation lands. */
   vocalPct: number;
@@ -18,7 +18,7 @@ export interface MixerSettings {
   splitInstrumental: boolean;
   /** Drums gain inside the instrumental, percent (0–600); the instrumental gain applies on top. Used when splitInstrumental is on. */
   drumsPct: number;
-  /** Gain of the rest of the instrumental (everything but the drums), percent (0–600). */
+  /** Gain of the rest of the instrumental (everything but the drums), percent (0–100). */
   othersPct: number;
   /** Delay limit, seconds (MIN_DELAY_S to MAX_DELAY_S): the audio delay stays below it (the drum split adds its own wait on top); a longer limit gives the model a longer chunk. */
   mlDelayS: number;
@@ -39,24 +39,30 @@ export const DEFAULT_SETTINGS: Readonly<MixerSettings> = Object.freeze({
   mlDelayS: MIN_DELAY_S,
 });
 
-export function clampPct(value: unknown, fallback = 100): number {
+export function clampPct(value: unknown, fallback = 100, min = GAIN_MIN_PCT, max = GAIN_MAX_PCT): number {
   const n = typeof value === 'string' ? Number(value) : value;
   if (typeof n !== 'number' || !Number.isFinite(n)) return fallback;
-  return Math.min(GAIN_MAX_PCT, Math.max(GAIN_MIN_PCT, Math.round(n)));
+  return Math.min(max, Math.max(min, Math.round(n)));
 }
+
+/** Global volume only boosts: 100–600 %. */
+export const clampMasterPct = (value: unknown): number => clampPct(value, DEFAULT_SETTINGS.masterPct, 100);
+
+/** Others can only be turned down: 0–100 %. */
+export const clampOthersPct = (value: unknown): number => clampPct(value, DEFAULT_SETTINGS.othersPct, GAIN_MIN_PCT, 100);
 
 /** Turn any stored / messaged value into a valid settings object. */
 export function normalizeSettings(raw: unknown): MixerSettings {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Partial<Record<keyof MixerSettings, unknown>>;
   return {
     mode: r.mode === 'separate' ? 'separate' : 'default',
-    masterPct: clampPct(r.masterPct, DEFAULT_SETTINGS.masterPct),
+    masterPct: clampMasterPct(r.masterPct),
     vocalPct: clampPct(r.vocalPct, DEFAULT_SETTINGS.vocalPct),
     instrumentalPct: clampPct(r.instrumentalPct, DEFAULT_SETTINGS.instrumentalPct),
     mlModel: ML_MODELS.includes(r.mlModel as MlModel) ? (r.mlModel as MlModel) : DEFAULT_SETTINGS.mlModel,
     splitInstrumental: r.splitInstrumental === true,
     drumsPct: clampPct(r.drumsPct, DEFAULT_SETTINGS.drumsPct),
-    othersPct: clampPct(r.othersPct, DEFAULT_SETTINGS.othersPct),
+    othersPct: clampOthersPct(r.othersPct),
     mlDelayS: clampDelayS(r.mlDelayS),
   };
 }
@@ -70,9 +76,9 @@ export function clampDelayS(value: unknown): number {
 /** RoFormer delay limit for the engine selector, ms. */
 export const mlDelayMsFor = (settings: MixerSettings): number => settings.mlDelayS * 1000;
 
-/** Linear gain for the master stage. Separate mode uses the per-stem gains instead. */
+/** Linear gain for the master stage: the global volume, in both modes (Separate mode adds its per-stem gains before it). */
 export function masterGainFor(settings: MixerSettings): number {
-  return settings.mode === 'default' ? settings.masterPct / 100 : 1;
+  return settings.masterPct / 100;
 }
 
 /** What the audio engine's separator should do for these settings (gains linear, 0–6). */
