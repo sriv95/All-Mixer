@@ -55,7 +55,8 @@ jobs:
         if: steps.version.outputs.exists == 'false'
         run: |
           bun install --frozen-lockfile
-          bun run fetch-model
+          pip install onnx==1.23.2 onnxconverter-common==1.16.0
+          PY=python3 bun run fetch-model
           bun run lint
           bun run typecheck
           bun run test
