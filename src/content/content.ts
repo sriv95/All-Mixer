@@ -10,7 +10,8 @@ import { overlayDelayMs } from './video-delay/schedule';
 import { detectSite, watchMainVideo, type PageSite } from './youtube-dom';
 
 // Lyrics exist for YouTube / YT Music only; every other site gets the mixer without them.
-const lyricsSite = detectSite(location.hostname);
+// Frames (embeds, ads) run the mixer too, but a YouTube embed gets no lyrics UI.
+const lyricsSite = window === window.top ? detectSite(location.hostname) : null;
 const site: PageSite = lyricsSite ?? 'generic';
 
 let settings: MixerSettings = { ...DEFAULT_SETTINGS };
@@ -59,16 +60,20 @@ const syncDelay = (force = false, want = wantedDelayMs(), effectiveAt?: number) 
 chain.onLatencyChange((info, at) => syncDelay(false, wantedDelayMs(info.videoDelayMs), at));
 
 let modeKnown = false; // the first settings load is not a toggle
-const apply = (raw: unknown) => {
-  const prevMode = settings.mode;
-  settings = normalizeSettings(raw);
-  if (settings.mode !== prevMode && modeKnown) lyrics.modeChanged();
-  modeKnown = true;
+// Nothing starts (audio context, ML host) in a frame or page until it has media: most frames have none.
+const push = () => {
   chain.setGain(masterGainFor(settings));
   const sep = separationFor(settings);
   chain.setSeparation(sep);
   selector.update({ ...sep, model: settings.mlModel, delayMs: mlDelayMsFor(settings) });
   syncDelay();
+};
+const apply = (raw: unknown) => {
+  const prevMode = settings.mode;
+  settings = normalizeSettings(raw);
+  if (settings.mode !== prevMode && modeKnown) lyrics.modeChanged();
+  modeKnown = true;
+  if (video) push();
 };
 
 // The content script lives for the whole tab session, so the settings survive
@@ -86,6 +91,7 @@ watchMainVideo(site, (v) => {
     overlay = new DelayedVideo(v, undefined, probe);
     syncDelay(true);
   }
+  push();
 });
 
 chrome.runtime.onMessage.addListener((msg: ContentRequest, _sender, sendResponse) => {

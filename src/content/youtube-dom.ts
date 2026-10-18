@@ -18,19 +18,19 @@ const SELECTORS = {
   },
 } as const satisfies Record<Site, { mainVideo: readonly string[] }>;
 
-/** Generic pages: the biggest <video> on screen (previews and ad slots are smaller), else the first <audio> in the DOM. */
-function findLargestMedia(root: ParentNode): HTMLMediaElement | null {
+/** Generic pages: what is playing wins, then the biggest picture (previews and ad slots are smaller), then a video over an <audio>. */
+function findBestMedia(root: ParentNode): HTMLMediaElement | null {
   let best: HTMLMediaElement | null = null;
-  let bestArea = -1;
-  for (const v of root.querySelectorAll('video')) {
-    const r = v.getBoundingClientRect();
-    if (r.width * r.height > bestArea) {
-      best = v;
-      bestArea = r.width * r.height;
+  let bestScore = -1;
+  for (const el of root.querySelectorAll<HTMLMediaElement>('video, audio')) {
+    const r = el.getBoundingClientRect();
+    const score = (el.paused ? 0 : 1e9) + (el instanceof HTMLVideoElement ? r.width * r.height + 1 : 0);
+    if (score > bestScore) {
+      best = el;
+      bestScore = score;
     }
   }
-  // shortcut: an <audio> never added to the DOM (new Audio()) is not found, when it matters hook HTMLMediaElement.prototype.play.
-  return best ?? root.querySelector('audio');
+  return best;
 }
 
 /** Custom events YouTube's SPA router fires on `document` after navigation. */
@@ -45,7 +45,7 @@ export function detectSite(hostname: string): Site | null {
 }
 
 export function findMainVideo(site: PageSite, root: ParentNode = document): HTMLMediaElement | null {
-  if (site === 'generic') return findLargestMedia(root);
+  if (site === 'generic') return findBestMedia(root);
   for (const selector of SELECTORS[site].mainVideo) {
     const el = root.querySelector(selector);
     if (el instanceof HTMLVideoElement) return el;
@@ -108,11 +108,14 @@ export function watchMainVideo(
   const observer = new MutationObserver(schedule);
   observer.observe(doc.documentElement, { childList: true, subtree: true });
   const offNav = onNavigate(schedule, doc);
+  // Media events do not bubble but can be captured: a player that starts is a new candidate.
+  if (site === 'generic') doc.addEventListener('playing', schedule, true);
   check();
 
   return () => {
     observer.disconnect();
     offNav();
+    doc.removeEventListener('playing', schedule, true);
   };
 }
 

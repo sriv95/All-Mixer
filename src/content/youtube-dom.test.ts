@@ -27,7 +27,13 @@ describe('findMainVideo generic', () => {
     document.querySelector('#big')!.getBoundingClientRect = rect(100);
     expect(findMainVideo('generic')?.id).toBe('big');
   });
-  it('falls back to an <audio>, and prefers a video', () => {
+  it('prefers what is playing', () => {
+    document.body.innerHTML = '<video id="v"></video><audio id="a"></audio>';
+    const a = document.querySelector<HTMLAudioElement>('#a')!;
+    Object.defineProperty(a, 'paused', { value: false });
+    expect(findMainVideo('generic')?.id).toBe('a');
+  });
+  it('takes an <audio>, and prefers a video', () => {
     document.body.innerHTML = '<audio id="a"></audio>';
     expect(findMainVideo('generic')?.id).toBe('a');
     document.body.innerHTML += '<video id="v"></video>';
