@@ -17,6 +17,7 @@ CI builds the extension, creates tag `vx.y.z` and a GitHub release with this sec
 - Karaoke text: a "Custom Karaoke Text" group in the lyrics settings (youtube.com) with a Color (White by default, Yellow, Cyan, Green, Pink, Orange, or any color from the color picker) and the Size, which moved there from the main lyrics settings.
 - Lyrics: a "Lyrics timing" setting (-2 s to +2 s) shifts synced lyrics, karaoke text and the lyrics window for the current video when they run early or late. "+" shows the lyrics later. The shift is remembered per video.
 - Karaoke text: more styling in "Custom Karaoke Text": Font (YouTube, Sans-serif, Serif, Monospace), Outline (None, Thin, Normal, Thick) and Background (a dark box behind the text, 25-75 %).
+- Karaoke text: a "Style preset" setting in "Custom Karaoke Text" (Default, Big yellow, Clean box, Cyan glow) sets color, size, font, outline and background in one tap. It reads "Custom" after you change any of them.
 - Lyrics: the caption language menu lists every caption track, including auto-generated ones, which are labelled (e.g. "English (auto-generated)").
 - Karaoke text: the current line turns blue from left to right while it is sung, over the line's own time (by word timing when known). A "Reset position" button in the lyrics settings puts the text back at its default place.
 

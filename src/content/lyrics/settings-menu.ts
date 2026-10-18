@@ -11,7 +11,7 @@ interface MenuOption {
 }
 
 export interface MenuRow {
-  id: 'source' | 'captionLanguage' | 'timing' | 'display' | 'lines' | 'karaokeText' | 'size' | 'color' | 'font' | 'outline' | 'background';
+  id: 'source' | 'captionLanguage' | 'timing' | 'display' | 'lines' | 'karaokeText' | 'size' | 'preset' | 'color' | 'font' | 'outline' | 'background';
   label: string;
   options: MenuOption[];
   selected: string;
@@ -66,6 +66,16 @@ const COLOR_PRESETS: readonly [string, string][] = [
   ['#69f0ae', 'Green'],
   ['#ff80ab', 'Pink'],
   ['#ffab40', 'Orange'],
+];
+
+type KaraokeStyle = Pick<LyricsPrefs, 'karaokeColor' | 'karaokeFontSize' | 'karaokeFont' | 'karaokeOutline' | 'karaokeBackground'>;
+
+/** One-tap looks for the karaoke text. The first is the stock look. */
+const STYLE_PRESETS: readonly { id: string; label: string; style: KaraokeStyle }[] = [
+  { id: 'default', label: 'Default', style: { karaokeColor: '#ffffff', karaokeFontSize: 100, karaokeFont: 'default', karaokeOutline: 'normal', karaokeBackground: 0 } },
+  { id: 'bigYellow', label: 'Big yellow', style: { karaokeColor: '#ffeb3b', karaokeFontSize: 150, karaokeFont: 'default', karaokeOutline: 'thick', karaokeBackground: 0 } },
+  { id: 'cleanBox', label: 'Clean box', style: { karaokeColor: '#ffffff', karaokeFontSize: 100, karaokeFont: 'sans', karaokeOutline: 'none', karaokeBackground: 50 } },
+  { id: 'cyanGlow', label: 'Cyan glow', style: { karaokeColor: '#4dd0e1', karaokeFontSize: 125, karaokeFont: 'sans', karaokeOutline: 'thick', karaokeBackground: 0 } },
 ];
 
 const FONT_LABELS: Record<KaraokeFont, string> = { default: 'YouTube', sans: 'Sans-serif', serif: 'Serif', mono: 'Monospace' };
@@ -126,12 +136,23 @@ export function buildMenuRows(input: MenuInput, actions: MenuActions): MenuRow[]
     select: (v) => actions.setPrefs({ lyricsDisplayMode: v as LyricsDisplayMode }),
   });
   if (prefs.lyricsDisplayMode === 'karaoke') {
+    const matched = STYLE_PRESETS.find((p) => (Object.keys(p.style) as (keyof KaraokeStyle)[]).every((k) => p.style[k] === (k === 'karaokeFontSize' ? nearestSize(prefs[k]) : prefs[k])));
     const group: MenuRow = {
       id: 'karaokeText',
       label: 'Custom Karaoke Text',
       options: [],
       selected: '',
       rows: [
+        {
+          id: 'preset',
+          label: 'Style preset',
+          options: [...STYLE_PRESETS.map((p) => ({ value: p.id, label: p.label })), ...(matched ? [] : [{ value: 'custom', label: 'Custom', disabled: true }])],
+          selected: matched?.id ?? 'custom',
+          select: (v) => {
+            const preset = STYLE_PRESETS.find((p) => p.id === v);
+            if (preset) actions.setPrefs(preset.style);
+          },
+        },
         {
           id: 'color',
           label: 'Color',
@@ -174,7 +195,7 @@ export function buildMenuRows(input: MenuInput, actions: MenuActions): MenuRow[]
       ],
       select: () => {},
     };
-    group.summary = group.rows!.slice(0, 2).map(selectedLabel).join(' · ');
+    group.summary = group.rows!.slice(1, 3).map(selectedLabel).join(' · ');
     rows.push(
       {
         id: 'lines',

@@ -105,6 +105,22 @@ describe('buildMenuRows', () => {
     expect(a.setPrefs).toHaveBeenLastCalledWith({ karaokeBackground: 50 });
   });
 
+  it('style presets: Default matches the stock look, picking one sets every style pref, edits show Custom', () => {
+    const a = actions();
+    const preset = (p = prefs()) => buildMenuRows({ prefs: p }, a).find((r) => r.id === 'karaokeText')!.rows!.find((r) => r.id === 'preset')!;
+    expect(preset().selected).toBe('default');
+    expect(preset().options.map((o) => o.label)).toEqual(['Default', 'Big yellow', 'Clean box', 'Cyan glow']);
+    preset().select('bigYellow');
+    expect(a.setPrefs).toHaveBeenLastCalledWith({ karaokeColor: '#ffeb3b', karaokeFontSize: 150, karaokeFont: 'default', karaokeOutline: 'thick', karaokeBackground: 0 });
+    expect(preset(prefs({ karaokeColor: '#ffeb3b', karaokeFontSize: 150, karaokeOutline: 'thick' })).selected).toBe('bigYellow');
+    const custom = preset(prefs({ karaokeColor: '#123456' }));
+    expect(custom.selected).toBe('custom');
+    expect(custom.options.at(-1)).toEqual({ value: 'custom', label: 'Custom', disabled: true });
+    a.setPrefs.mockClear();
+    custom.select('custom');
+    expect(a.setPrefs).not.toHaveBeenCalled();
+  });
+
   it('shows the nearest size step for an off-step stored size', () => {
     const rows = buildMenuRows({ prefs: prefs({ karaokeFontSize: 110 }) }, actions());
     expect(rows.find((r) => r.id === 'karaokeText')!.rows!.find((r) => r.id === 'size')!.selected).toBe('100');
@@ -225,7 +241,7 @@ describe('YtSettingsMenu', () => {
     group().click();
     settingEl('karaokeText').click();
     expect(titles()).toEqual(['Custom Karaoke Text']);
-    expect([...sub().querySelectorAll('[data-am-row-setting]')].map((e) => e.getAttribute('data-am-row-setting'))).toEqual(['color', 'size', 'font', 'outline', 'background']);
+    expect([...sub().querySelectorAll('[data-am-row-setting]')].map((e) => e.getAttribute('data-am-row-setting'))).toEqual(['preset', 'color', 'size', 'font', 'outline', 'background']);
     settingEl('color').click();
     expect(titles()).toEqual(['Color']);
     const checked = [...sub().querySelectorAll('.ytp-menuitem')].map((i) => i.getAttribute('aria-checked'));
@@ -379,7 +395,7 @@ describe('YtmSettingsPopover', () => {
     expect(pop.isOpen).toBe(true);
     expect(pop.button.getAttribute('aria-expanded')).toBe('true');
     const sels = root.querySelectorAll('select');
-    expect(sels).toHaveLength(9);
+    expect(sels).toHaveLength(10);
     const src = sels[0];
     expect([...src.options].map((o) => o.disabled)).toEqual([false, true, false]);
     src.value = 'captions';
@@ -409,7 +425,7 @@ describe('YtmSettingsPopover', () => {
     pop.setRows(buildMenuRows({ sources, prefs: prefs() }, actions()));
     pop.button.click();
     const root = document.querySelector<HTMLElement>('[data-allmixer-lyrics-popover]')!;
-    expect(root.querySelectorAll('select')).toHaveLength(8);
+    expect(root.querySelectorAll('select')).toHaveLength(9);
     pop.setRows(buildMenuRows({ sources, prefs: prefs({ lyricsDisplayMode: 'window' }) }, actions()));
     expect(root.querySelectorAll('select')).toHaveLength(2);
     pop.destroy();
