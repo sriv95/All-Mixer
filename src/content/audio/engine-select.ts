@@ -124,15 +124,6 @@ export class EngineSelector {
     }
   }
 
-  /** The downloaded model files changed (first download, update): probe again if a RoFormer is wanted. */
-  reload(): void {
-    if (!this.on || this.model === 'mdx') return;
-    if (this.mlActive) this.chain.setEngine('bypass', 'auto');
-    this.disposeHost();
-    this.mlActive = false;
-    this.probe();
-  }
-
   /** Stay on the original mix. */
   private giveUp(cause: string): void {
     this.disposeHost();

@@ -1,6 +1,5 @@
 """Export the Mel-Band RoFormer vocal model for the extension: Unwa's `mel_band_roformer_kim_ft_unwa`.
-Writes models-out/roformer.onnx + roformer-meta.json. They are not part of the extension build: `bun run model-manifest <version>`
-prepares them for upload to the Hugging Face repo that the extension downloads from (src/shared/model-store.ts).
+Writes public/ml/roformer.onnx + roformer-meta.json.
 
 The ONNX file is fp16 weights, fp32 input/output, fixed 112-frame chunk. The graph is the transformer core only: band
 split, 6 x (time + frequency transformer), mask estimator. The STFT, the gather of the mel-band bins, the mask
@@ -94,7 +93,7 @@ def main():
     fin = len(m.freq_indices) * 2
     core = Core(m).eval()
     x = torch.randn(1, FRAMES, fin) * 0.5
-    out = ROOT / 'models-out'
+    out = ROOT / 'public/ml'
     out.mkdir(parents=True, exist_ok=True)
     tmp = ROOT / f'.cache/models/{name}_fp32.onnx'
     tmp.parent.mkdir(parents=True, exist_ok=True)
