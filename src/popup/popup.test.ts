@@ -507,6 +507,30 @@ describe('popup', () => {
       });
     });
 
+    describe('tips', () => {
+      const tip = () => document.querySelector('[role=tooltip]');
+      it('shows what a preset does on keyboard focus and hides it on blur', async () => {
+        await load({ stored: { mode: 'separate' } });
+        expect(tip()).toBeNull();
+        el('preset-karaoke').dispatchEvent(new Event('focusin', { bubbles: true }));
+        await settle();
+        expect(tip()!.textContent).toBe('Vocal 0%, instrumental 100%');
+        el('preset-karaoke').dispatchEvent(new Event('focusout', { bubbles: true }));
+        await settle();
+        expect(tip()).toBeNull();
+      });
+
+      it('shows after a short hover and goes away on a press', async () => {
+        await load({ stored: { mode: 'separate' } });
+        el('preset-acappella').dispatchEvent(new Event('pointerover', { bubbles: true }));
+        await new Promise((r) => setTimeout(r, 650));
+        expect(tip()!.textContent).toBe('Vocal 100%, instrumental 0%');
+        el('preset-acappella').dispatchEvent(new Event('pointerdown', { bubbles: true }));
+        await settle();
+        expect(tip()).toBeNull();
+      });
+    });
+
     it('moving a slider clears the preset highlight', async () => {
       await load({ stored: { mode: 'separate' } });
       expect(pressed()).toEqual(['preset-reset']);

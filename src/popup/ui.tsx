@@ -51,6 +51,34 @@ export function Skeleton({ className }: { className?: string }) {
   return <div aria-hidden className={cx('rounded-[20px] bg-card motion-safe:animate-pulse', className)} />;
 }
 
+/** A short hint above or below a control: after a half second of hover, or at once on keyboard focus. */
+export function Tip({ text, side = 'top', align = 'center', className, children }: { text: string; side?: 'top' | 'bottom'; align?: 'start' | 'center' | 'end'; className?: string; children: ReactNode }) {
+  const [show, setShow] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const open = (delay: number) => {
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => setShow(true), delay);
+  };
+  const close = () => {
+    clearTimeout(timer.current);
+    setShow(false);
+  };
+  useEffect(() => () => clearTimeout(timer.current), []);
+  return (
+    <span className={cx('relative flex', className)} onPointerEnter={() => open(500)} onPointerLeave={close} onPointerDown={close} onFocus={() => open(0)} onBlur={close}>
+      {children}
+      <AnimatePresence>
+        {show && (
+          <motion.span role="tooltip" initial={{ opacity: 0, y: side === 'top' ? 4 : -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
+            className={cx('pointer-events-none absolute z-20 w-max max-w-[210px] rounded-lg bg-stop px-2.5 py-1.5 text-xs leading-snug font-semibold text-white shadow-lg', side === 'top' ? 'bottom-full mb-2' : 'top-full mt-2', align === 'center' ? 'left-1/2 -translate-x-1/2' : align === 'start' ? 'left-0' : 'right-0')}>
+            {text}
+          </motion.span>
+        )}
+      </AnimatePresence>
+    </span>
+  );
+}
+
 const cx = (...c: (string | false | undefined)[]) => c.filter(Boolean).join(' ');
 
 interface SliderProps {
