@@ -7,7 +7,7 @@ import { MAX_DELAY_S, MIN_DELAY_S } from '../ml/rof-plan';
 import type { MlModel } from '../worklet/protocol';
 import { installModel, useModels, type ModelLine } from './models';
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
-import { Blocked, Btn, Card, Disclosure, Select, Slider, SliderRow, Switch, fade, type Choice } from './ui';
+import { Blocked, Btn, Card, Disclosure, Select, Slider, SliderRow, Switch, fade, useGlide, type Choice } from './ui';
 
 type Update = (patch: Partial<MixerSettings>) => void;
 
@@ -170,17 +170,27 @@ function Tabs({ mode, onMode }: { mode: Mode; onMode: (m: Mode) => void }) {
 
 /** Global volume: a big number on the Default tab, a compact row on the Separate tab. */
 function Master({ settings, update, compact }: { settings: MixerSettings; update: Update; compact?: boolean }) {
+  // Reset and the other non-drag changes glide: the number and the thumb together.
+  const num = useGlide(settings.masterPct);
+  const pos = useGlide(masterPosOf(settings.masterPct));
+  const pct = `${Math.round(num.shown)}%`;
   return (
     <Card>
       <div className="flex items-center justify-between gap-2">
         <label htmlFor="master" className="flex items-center gap-1.5 text-[13px] font-bold"><Volume2 size={15} className="text-brand" aria-hidden />Global volume</label>
         <div className="flex items-center gap-2">
-          {compact && <output id="master-value" htmlFor="master" className="text-[15px] font-extrabold tabular-nums">{settings.masterPct}%</output>}
+          {compact && <output id="master-value" htmlFor="master" className="text-[15px] font-extrabold tabular-nums">{pct}</output>}
           <Btn id="master-reset" tone="small" onClick={() => update({ masterPct: 100 })}><RotateCcw size={13} aria-hidden />Reset</Btn>
         </div>
       </div>
-      {!compact && <output id="master-value" htmlFor="master" className="text-[44px] leading-none font-extrabold tracking-tight tabular-nums">{settings.masterPct}%</output>}
-      <Slider id="master" value={masterPosOf(settings.masterPct)} min={0} max={MASTER_POS_MAX} step={1} onValue={(pos) => update({ masterPct: masterPctAt(pos, settings.masterPct) })} />
+      {!compact && <output id="master-value" htmlFor="master" className="text-[44px] leading-none font-extrabold tracking-tight tabular-nums">{pct}</output>}
+      <Slider id="master" value={masterPosOf(settings.masterPct)} shown={pos.shown} min={0} max={MASTER_POS_MAX} step={1}
+        onValue={(p) => {
+          const next = masterPctAt(p, settings.masterPct);
+          num.mine(next);
+          pos.mine(masterPosOf(next));
+          update({ masterPct: next });
+        }} />
       {!compact && (
         <div className="flex justify-between text-xs text-muted"><span>0%</span><span>Boost up to 600%</span></div>
       )}
