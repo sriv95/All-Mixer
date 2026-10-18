@@ -252,6 +252,12 @@ function Banner({ view, settings, update, retry }: { view: SepView; settings: Mi
         <motion.div key={`text-${view.kind}`} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className="min-w-0 flex-1">
           <h2 className="m-0 text-sm font-extrabold">{title}</h2>
           <p className={`m-0 mt-0.5 text-[12.5px] leading-snug ${stopped ? 'text-[#ddd0d2]' : 'text-[#4c4047]'}`}>{text}</p>
+          {/* No progress to report during the 10 to 40 s warm-up: a bar that sweeps shows it is alive. */}
+          {view.kind === 'warming' && (
+            <span aria-hidden className="mt-2.5 block h-1.5 overflow-hidden rounded-full bg-white">
+              <motion.span animate={{ x: ['-100%', '300%'] }} transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }} className="block h-full w-1/3 rounded-full bg-brand" />
+            </span>
+          )}
         </motion.div>
       </div>
       {tooSlow && (
