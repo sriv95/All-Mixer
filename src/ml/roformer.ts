@@ -3,29 +3,22 @@
 // mel-band bins, the mask scatter-add and the iSTFT are done here, as in MelBandRoformer.forward
 // (torch.stft n_fft 2048 / hop 441 / periodic Hann / centre reflect padding, torch.istft).
 //
-// Block b in = input [b·H, (b + 1)·H), H = ROF_BLOCK. The chunk is the 9271 samples before it plus the block
-// (ROF_CHUNK = 111 hops → 112 frames). The vocal block it completes is input [b·H − R, (b + 1)·H − R), R = ROF_OVERLAP:
-// the first R samples cross-fade with the tail of the previous chunk (its last R samples), and the first
-// K − R = 439 samples of the chunk are context only. Delay before inference: H + R.
+// Block b in = input [b·H, (b + 1)·H), H = geometry.block. The chunk is the K samples before it plus the block
+// (K = chunk − H; the default geometry is 111 hops → 112 frames, K = 9271). The vocal block it completes is input
+// [b·H − R, (b + 1)·H − R), R = geometry.overlap: the first R samples cross-fade with the tail of the previous chunk
+// (its last R samples), and the first K − R samples of the chunk (439 to 879) are context only. Delay before
+// inference: H + R. The geometry (src/ml/rof-plan.ts) is chosen at run time from the speed of the GPU.
 import { FFT } from './fft.js';
-import { ROF_BLOCK, ROF_CHUNK, ROF_OVERLAP } from '../worklet/protocol';
+import { HOP, makeGeometry, type RofGeometry } from './rof-plan';
+import { ML_QUANTUM } from '../worklet/protocol';
 
 const N_FFT = 2048;
-const HOP = 441;
 const BINS = N_FFT / 2 + 1;
 const FS = 2 * BINS; // (bin, channel) interleaved
-const C = ROF_CHUNK;
-const H = ROF_BLOCK;
-const R = ROF_OVERLAP;
-const K = C - H; // history
-const E = K - R; // context-only prefix of the emitted region
-export const ROF_FRAMES = Math.floor(C / HOP) + 1;
 const PAD = N_FFT / 2;
 
 /** public/ml/roformer-meta.json */
 export interface RoformerMeta {
-  frames: number;
-  chunk: number;
   nFft: number;
   hop: number;
   /** Per model input value: index into the interleaved (bin·2 + channel) axis. */
@@ -34,12 +27,22 @@ export interface RoformerMeta {
   bands: number[];
 }
 
-/** Model call: reads `x` ([1, 112, sel.length · 2]), returns the masks, same layout. */
+/** The 2 s geometry (39680-sample block, 0.2 s overlap, 112 frames) that GEOMETRY.roformer / .deux start with. */
+export const DEFAULT_ROF_GEOMETRY: RofGeometry = makeGeometry(39680, 8832, 39040);
+
+/** Model call: reads `x` ([1, frames, sel.length · 2]), returns the masks, same layout. */
 export type RoformerModelFn = (x: Float32Array) => Promise<Float32Array> | Float32Array;
 
 export class RoformerStream {
   /** Model input, owned by the stream and refreshed in place. */
   readonly x: Float32Array;
+  readonly frames: number;
+
+  private readonly C: number; // chunk
+  private readonly H: number; // block
+  private readonly R: number; // overlap
+  private readonly K: number; // history = chunk − block
+  private readonly E: number; // context-only prefix of the emitted region
 
   private readonly sel: Int32Array;
   private readonly invBands: Float32Array;
@@ -49,36 +52,52 @@ export class RoformerStream {
   private readonly re = new Float64Array(N_FFT);
   private readonly im = new Float64Array(N_FFT);
   /** Chunk, [L: C][R: C]. */
-  private readonly chunk = new Float32Array(2 * C);
+  private readonly chunk: Float32Array;
   /** Spectra of the chunk, [ch][t][bin]. */
-  private readonly specRe = new Float32Array(2 * ROF_FRAMES * BINS);
-  private readonly specIm = new Float32Array(2 * ROF_FRAMES * BINS);
+  private readonly specRe: Float32Array;
+  private readonly specIm: Float32Array;
   /** Mask sums per (frame, bin·2 + channel). */
-  private readonly accRe = new Float32Array(ROF_FRAMES * FS);
-  private readonly accIm = new Float32Array(ROF_FRAMES * FS);
+  private readonly accRe: Float32Array;
+  private readonly accIm: Float32Array;
   /** iSTFT overlap-add, [L: padded][R: padded]. */
   private readonly ola: Float64Array;
-  private readonly padded = C + N_FFT;
+  private readonly padded: number;
   /** 1 / Σw² per padded sample. */
   private readonly norm: Float64Array;
   /** Cross-fade ramp (rises over R) and the last R output samples of the previous chunk, [L: R][R: R]. */
-  private readonly ramp = new Float32Array(R);
-  private readonly tail = new Float32Array(2 * R);
+  private readonly ramp: Float32Array;
+  private readonly tail: Float32Array;
 
-  constructor(meta: RoformerMeta) {
-    if (meta.frames !== ROF_FRAMES || meta.chunk !== C || meta.nFft !== N_FFT || meta.hop !== HOP) {
-      throw new Error('roformer meta does not match the stream geometry');
+  constructor(meta: RoformerMeta, g: RofGeometry = DEFAULT_ROF_GEOMETRY) {
+    if (meta.nFft !== N_FFT || meta.hop !== HOP) throw new Error('roformer meta does not match the stream geometry');
+    if (g.chunk !== (g.frames - 1) * HOP || g.block % ML_QUANTUM || g.overlap % ML_QUANTUM || g.overlap > g.block || g.chunk - g.block < g.overlap) {
+      throw new Error('bad roformer geometry');
     }
+    const { frames: F, chunk: C } = g;
+    this.frames = F;
+    this.C = C;
+    this.H = g.block;
+    this.R = g.overlap;
+    this.K = C - g.block;
+    this.E = this.K - g.overlap;
+    this.padded = C + N_FFT;
+    this.chunk = new Float32Array(2 * C);
+    this.specRe = new Float32Array(2 * F * BINS);
+    this.specIm = new Float32Array(2 * F * BINS);
+    this.accRe = new Float32Array(F * FS);
+    this.accIm = new Float32Array(F * FS);
+    this.ramp = new Float32Array(g.overlap);
+    this.tail = new Float32Array(2 * g.overlap);
     this.sel = Int32Array.from(meta.sel);
     this.fin = this.sel.length * 2;
-    this.x = new Float32Array(ROF_FRAMES * this.fin);
+    this.x = new Float32Array(F * this.fin);
     this.invBands = Float32Array.from(meta.bands, (b) => 1 / Math.max(b, 1e-8));
     this.ola = new Float64Array(2 * this.padded);
     for (let i = 0; i < N_FFT; i++) this.win[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / N_FFT);
     const env = new Float64Array(this.padded);
-    for (let t = 0; t < ROF_FRAMES; t++) for (let n = 0; n < N_FFT; n++) env[t * HOP + n] += this.win[n] * this.win[n];
+    for (let t = 0; t < F; t++) for (let n = 0; n < N_FFT; n++) env[t * HOP + n] += this.win[n] * this.win[n];
     this.norm = env.map((e) => (e > 1e-11 ? 1 / e : 1));
-    for (let i = 0; i < R; i++) this.ramp[i] = 0.5 - 0.5 * Math.cos((Math.PI * (i + 0.5)) / R);
+    for (let i = 0; i < g.overlap; i++) this.ramp[i] = 0.5 - 0.5 * Math.cos((Math.PI * (i + 0.5)) / g.overlap);
   }
 
   reset(): void {
@@ -86,14 +105,15 @@ export class RoformerStream {
     this.tail.fill(0);
   }
 
-  /** Block b in (`inL`/`inR`: ROF_BLOCK samples): slide the chunk, STFT its frames, gather the model input into `x`. */
+  /** Block b in (`inL`/`inR`: `block` samples): slide the chunk, STFT its frames, gather the model input into `x`. */
   analyze(inL: Float32Array, inR: Float32Array): void {
-    const { chunk, win, re, im, fft, specRe, specIm, x, sel, fin } = this;
+    const { chunk, win, re, im, fft, specRe, specIm, x, sel, fin, C, H, K } = this;
+    const F = this.frames;
     chunk.copyWithin(0, H, C);
     chunk.copyWithin(C, C + H, 2 * C);
     chunk.set(inL.subarray(0, H), K);
     chunk.set(inR.subarray(0, H), C + K);
-    for (let t = 0; t < ROF_FRAMES; t++) {
+    for (let t = 0; t < F; t++) {
       for (let n = 0; n < N_FFT; n++) {
         let s = t * HOP + n - PAD; // reflect padding, torch centre=True
         if (s < 0) s = -s;
@@ -108,13 +128,13 @@ export class RoformerStream {
         const o = t * BINS + k;
         specRe[o] = 0.5 * (re[k] + re[nk]);
         specIm[o] = 0.5 * (im[k] - im[nk]);
-        specRe[ROF_FRAMES * BINS + o] = 0.5 * (im[k] + im[nk]);
-        specIm[ROF_FRAMES * BINS + o] = -0.5 * (re[k] - re[nk]);
+        specRe[F * BINS + o] = 0.5 * (im[k] + im[nk]);
+        specIm[F * BINS + o] = -0.5 * (re[k] - re[nk]);
       }
       const row = t * fin;
       for (let j = 0; j < sel.length; j++) {
         const fs = sel[j];
-        const o = (fs & 1) * ROF_FRAMES * BINS + t * BINS + (fs >> 1);
+        const o = (fs & 1) * F * BINS + t * BINS + (fs >> 1);
         x[row + 2 * j] = specRe[o];
         x[row + 2 * j + 1] = specIm[o];
       }
@@ -123,14 +143,15 @@ export class RoformerStream {
 
   /**
    * Masks `m` for the chunk `analyze` just built → the vocal block for input [b·H − R, (b + 1)·H − R),
-   * written to outL/outR (ROF_BLOCK samples each).
+   * written to outL/outR (`block` samples each).
    */
   synthesize(m: Float32Array, outL: Float32Array, outR: Float32Array): void {
-    const { sel, fin, accRe, accIm, invBands, specRe, specIm, re, im, win, fft, ola, norm, padded, ramp, tail } = this;
+    const { sel, fin, accRe, accIm, invBands, specRe, specIm, re, im, win, fft, ola, norm, padded, ramp, tail, H, R, E } = this;
+    const F = this.frames;
     // masks of the bands that overlap a bin, averaged
     accRe.fill(0);
     accIm.fill(0);
-    for (let t = 0; t < ROF_FRAMES; t++) {
+    for (let t = 0; t < F; t++) {
       const row = t * fin, base = t * FS;
       for (let j = 0; j < sel.length; j++) {
         accRe[base + sel[j]] += m[row + 2 * j];
@@ -138,8 +159,8 @@ export class RoformerStream {
       }
     }
     ola.fill(0);
-    const P = ROF_FRAMES * BINS;
-    for (let t = 0; t < ROF_FRAMES; t++) {
+    const P = F * BINS;
+    for (let t = 0; t < F; t++) {
       re.fill(0);
       im.fill(0);
       for (let k = 0; k < BINS; k++) {

@@ -41,6 +41,15 @@
         <span id="model-text"></span>
         <button id="model-btn" type="button" hidden></button>
       </p>
+      <div id="chunk-row" hidden>
+        <label class="check"><input id="ml-auto" type="checkbox" checked /> Auto chunk length</label>
+        <label for="ml-delay">Delay limit</label>
+        <div class="row">
+          <input id="ml-delay" type="range" min="2" max="15" step="1" value="4" />
+          <output id="ml-delay-value" for="ml-delay">4 s</output>
+        </div>
+        <p class="note">Auto: the shortest delay (2 to 15 s) that this GPU can keep up with. Off: the audio delay stays under the limit; a longer limit gives the model more audio at once.</p>
+      </div>
       <div class="presets" role="group" aria-label="Presets">
         <button type="button" id="preset-karaoke" data-vocal="0" data-instrumental="100" aria-pressed="false">Karaoke</button>
         <button type="button" id="preset-half-karaoke" data-vocal="50" data-instrumental="100" aria-pressed="false">Half Karaoke</button>

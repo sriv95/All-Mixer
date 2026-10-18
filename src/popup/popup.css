@@ -3,6 +3,7 @@ body { font: 13px system-ui, sans-serif; width: 280px; margin: 0; padding: 10px;
 [role='tab'] { flex: 1; padding: 6px; border: 1px solid #999; background: #f2f2f2; cursor: pointer; }
 [role='tab'][aria-selected='true'] { background: #fff; border-bottom-color: #fff; font-weight: 600; }
 label { display: block; margin-top: 6px; }
+label.check { display: flex; align-items: center; gap: 6px; }
 select { width: 100%; margin-top: 2px; }
 .row { display: flex; align-items: center; gap: 8px; }
 .row input { flex: 1; }

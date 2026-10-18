@@ -115,7 +115,7 @@ export class SeparatorCore {
   private held = false;
   private wantMl: MlReason | null = null;
   private wantBypass: MlReason | null = null;
-  private pendingModel: MlModel | null = null;
+  private pendingGeometry: MlGeometry | null = null;
 
   // ML stream
   private port: MessagePort | null = null;
@@ -153,15 +153,21 @@ export class SeparatorCore {
    * on the original mix, so a hiccup of the allocation is not heard).
    */
   setModel(model: MlModel): void {
-    this.pendingModel = model;
-    this.applyModel();
+    this.setGeometry(GEOMETRY[model]);
   }
 
-  private applyModel(): void {
-    if (this.pendingModel === null || this.engine !== 'bypass' || this.phase !== 'steady') return;
-    const g = GEOMETRY[this.pendingModel];
-    this.pendingModel = null;
-    if (g === this.g) return;
+  /** Same as `setModel`, for a geometry that is not in the table (the RoFormer chunk plan, src/ml/rof-plan.ts). */
+  setGeometry(g: MlGeometry): void {
+    if (!ringOk(ringFor(g), g.latency, g.block) || g.block <= 0 || g.block % QUANTUM || g.resultOffset % QUANTUM || g.latency % QUANTUM) return;
+    this.pendingGeometry = g;
+    this.applyGeometry();
+  }
+
+  private applyGeometry(): void {
+    if (this.pendingGeometry === null || this.engine !== 'bypass' || this.phase !== 'steady') return;
+    const g = this.pendingGeometry;
+    this.pendingGeometry = null;
+    if (g.block === this.g.block && g.resultOffset === this.g.resultOffset && g.latency === this.g.latency) return;
     this.stopStream();
     this.g = g;
     const ring = ringFor(g);
@@ -193,7 +199,7 @@ export class SeparatorCore {
     this.phase = 'steady';
     this.wantMl = this.wantBypass = null;
     this.engine = 'bypass';
-    this.applyModel();
+    this.applyGeometry();
     this.engine = on && engine === 'ml' && this.mlAllowed() ? 'ml' : 'bypass';
     this.reason = reason;
     this.delay = this.latencySamples;
@@ -333,7 +339,7 @@ export class SeparatorCore {
       this.stopStream();
     }
     this.pos = pos + QUANTUM;
-    if (this.pendingModel !== null) this.applyModel();
+    if (this.pendingGeometry !== null) this.applyGeometry();
   }
 
   /** ML needs a port and a 44.1 kHz context (the model has no resampler). */
@@ -363,7 +369,7 @@ export class SeparatorCore {
       this.phase = 'steady';
       this.reason = reason;
       this.stopStream();
-      this.applyModel();
+      this.applyGeometry();
       this.onEngine({ type: 'engine', engine: 'bypass', reason, at: this.timeOf(pos) });
       return;
     }
