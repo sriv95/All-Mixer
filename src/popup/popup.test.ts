@@ -291,35 +291,18 @@ describe('popup', () => {
       expect(el<HTMLInputElement>('others').value).toBe('40');
     });
 
-    it('the checkbox sends the setting; with a RoFormer it also raises the delay limit to 8 s', async () => {
-      await load({ stored: { mode: 'separate', mlModel: 'mdx' } });
+    it('the checkbox sends the setting and leaves the delay limit alone', async () => {
+      await load({ stored: { mode: 'separate', mlModel: 'roformer', mlDelayS: 3 } });
       const on = el<HTMLInputElement>('split-on');
       on.checked = true;
       on.dispatchEvent(new Event('change', { bubbles: true }));
       await settle();
-      expect(sent().at(-1).settings).toMatchObject({ splitInstrumental: true, mlDelayS: 2 }); // the default model has a fixed delay
+      expect(sent().at(-1).settings).toMatchObject({ splitInstrumental: true, mlDelayS: 3 });
       expect(el('split-mix').hidden).toBe(false);
       on.checked = false;
       on.dispatchEvent(new Event('change', { bubbles: true }));
       await settle();
       expect(sent().at(-1).settings.splitInstrumental).toBe(false);
-
-      await load({ stored: { mode: 'separate', mlModel: 'roformer', mlDelayS: 3 } });
-      const on2 = el<HTMLInputElement>('split-on');
-      on2.checked = true;
-      on2.dispatchEvent(new Event('change', { bubbles: true }));
-      await settle();
-      expect(sent().at(-1).settings).toMatchObject({ splitInstrumental: true, mlDelayS: 8 });
-      expect(el<HTMLInputElement>('ml-delay').value).toBe('8');
-    });
-
-    it('does not shorten a longer delay limit', async () => {
-      await load({ stored: { mode: 'separate', mlModel: 'deux', mlDelayS: 12 } });
-      const on = el<HTMLInputElement>('split-on');
-      on.checked = true;
-      on.dispatchEvent(new Event('change', { bubbles: true }));
-      await settle();
-      expect(sent().at(-1).settings.mlDelayS).toBe(12);
     });
 
     it('the Drums and Others sliders send their gains', async () => {

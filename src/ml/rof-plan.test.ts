@@ -78,7 +78,7 @@ describe('planRof with the drum stage', () => {
     expect(g).not.toBeNull();
     expect(g.extra).toBe(SC_LAG);
     expect(g.latency).toBe(g.block + g.overlap + g.extra + g.slack + ML_QUANTUM);
-    expect(g.latency).toBeLessThanOrEqual(10 * S);
+    expect(g.latency).toBeLessThanOrEqual(10 * S + SC_LAG);
     expect(g.slack).toBeGreaterThanOrEqual(Math.floor((MARGIN * (stepMs(g.frames, FAST) + drumRuns(g.block) * DRUM) * S) / 1000));
     expect(g.slack).toBeLessThanOrEqual(g.block);
     for (const v of [g.block, g.overlap, g.extra, g.slack, g.latency]) expect(v % ML_QUANTUM).toBe(0);
@@ -86,8 +86,9 @@ describe('planRof with the drum stage', () => {
   it('the same budget gives a shorter block with drums', () => {
     expect(planRof(10 * S, FAST, DRUM)!.block).toBeLessThan(planRof(10 * S, FAST)!.block);
   });
-  it('2 s cannot hold the drum chunk, and a GPU that cannot do both in real time never plans (an M1 with the High quality model)', () => {
-    expect(planRof(2 * S, FAST, DRUM)).toBeNull();
+  it('the drum wait is on top of the budget, and a GPU that cannot do both in real time never plans (an M1 with the High quality model)', () => {
+    const g = planRof(2 * S, FAST, DRUM)!;
+    expect(g.latency).toBe(g.block + g.overlap + g.slack + ML_QUANTUM + SC_LAG);
     expect(planRof(15 * S, 717, 820)).toBeNull();
   });
   it('a slower GPU needs a longer budget', () => {

@@ -8,6 +8,12 @@ CI builds the extension, creates tag `vx.y.z` and a GitHub release with this sec
 
 ## [Unreleased]
 
+## [Unreleased]
+
+### Changed
+
+- Separation: **Split instrumental** adds its delay on top of the Delay limit, so the limit no longer jumps to 8 s.
+
 ## [0.3.0] - 2026-10-18
 
 ### Added

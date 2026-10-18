@@ -1,5 +1,5 @@
 import type { ContentStatus, GetStatus, GetTabSettings, SetTabSettings } from '../shared/messages';
-import { DRUMS_MIN_DELAY_S, clampDelayS, clampPct, normalizeSettings, type MixerSettings, type Mode } from '../shared/settings';
+import { clampDelayS, clampPct, normalizeSettings, type MixerSettings, type Mode } from '../shared/settings';
 import type { MlModel } from '../worklet/protocol';
 import { MODEL_IDS, MODEL_LABEL, keyInstalled, keyProgress, keyRemote, mb, modelState, type InstalledModel, type ModelId, type ModelState, type Progress, type RemoteRecord } from '../shared/model-store';
 
@@ -295,10 +295,8 @@ others.addEventListener('input', () => {
   save();
 });
 
-// The drum split runs on a RoFormer only with a longer delay limit than the default 2 s, so the limit goes up with it.
 splitOn.addEventListener('change', () => {
-  const needsDelay = splitOn.checked && settings.mlModel !== 'mdx' && settings.mlDelayS < DRUMS_MIN_DELAY_S;
-  settings = { ...settings, splitInstrumental: splitOn.checked, ...(needsDelay ? { mlDelayS: DRUMS_MIN_DELAY_S } : {}) };
+  settings = { ...settings, splitInstrumental: splitOn.checked };
   save();
 });
 
