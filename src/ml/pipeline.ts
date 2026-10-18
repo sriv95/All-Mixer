@@ -1,29 +1,28 @@
 // One ML block step in the worker (no ORT, DOM or ports, so Node can test it with fake models).
 //
-// Block b in = input [b·H, (b + 1)·H), H = ML_BLOCK. MDX-Net runs on [block b − 1, block b] (src/ml/mdx.ts) and
+// Block b in = input [b·H, (b + 1)·H), H = the block size (half an MDX segment). MDX-Net runs on [block b − 1, block b] (src/ml/mdx.ts) and
 // completes the vocal for [(b − 1)·H, b·H). The Spleeter vocal mask (src/ml/stream.ts) runs on the same input in
 // its own 4096-sample steps, from a FIFO, and feeds the Karaoke combine (src/ml/karaoke.ts), which lags the
-// MDX vocal by KARAOKE_TAIL. The block returns [blockStart − ML_RESULT_OFFSET, + H): Vk (x − Karaoke
+// MDX vocal by KARAOKE_TAIL. H is half an MDX segment: ML_BLOCK for the default 64 frames, more for a longer one.
+// The block returns [blockStart − ML_RESULT_OFFSET, + H): Vk (x − Karaoke
 // instrumental) and the MDX vocal V (A cappella).
 //
 // Scheduling (SRI-116: the GPU runs one model at a time, so a queued MDX run waits behind Spleeter runs):
 // MDX first, then only the Spleeter steps the combine needs for this block, then the caller sends the
 // block back, then `catchUp` runs the remaining Spleeter steps. Masks are needed ~1.3 s before the result is
 // due, so Spleeter has far more slack than MDX.
-import { ML_BLOCK, KARAOKE_TAIL } from '../worklet/protocol';
+import { KARAOKE_TAIL } from '../worklet/protocol';
 import { KaraokeCombiner } from './karaoke';
-import { MdxStream, type MdxModelFn } from './mdx';
+import { MdxStream, MDX_T, type MdxModelFn } from './mdx';
 import { BINS, SPL_BLOCK, SpleeterStream, type ModelFn } from './stream';
 
-const H = ML_BLOCK;
 /**
  * Longest wait for Spleeter masks after the MDX step of a block (SRI-130). Slack to the deadline is 319 ms
  * (14080 samples + block); MDX p95 is 160 ms, so 60 ms keeps ~100 ms margin for the post and the worklet read.
  * Still missing → the block is combined with mask 0 (ungated x − V_mdx).
  */
 const SPL_WAIT_MS = 60;
-const FIFO = 65536; // > H + SPL_BLOCK, power of two
-const FMASK = FIFO - 1;
+const pow2Ceil = (n: number): number => 2 ** Math.ceil(Math.log2(n));
 
 export interface Models {
   mdx: MdxModelFn;
@@ -31,16 +30,19 @@ export interface Models {
 }
 
 export class MlPipeline {
-  readonly mdx = new MdxStream();
+  readonly mdx: MdxStream;
   readonly spl = new SpleeterStream();
   readonly kara: KaraokeCombiner;
-  /** Input not yet given to Spleeter, [L: FIFO][R: FIFO], by absolute position. */
-  private readonly fifo = new Float32Array(2 * FIFO);
+  /** Samples per block. */
+  readonly block: number;
+  /** Input not yet given to Spleeter, [L: fifo][R: fifo], by absolute position; a power of two above H + SPL_BLOCK. */
+  private readonly fifo: Float32Array;
+  private readonly fifoSize: number;
   private readonly sL = new Float32Array(SPL_BLOCK);
   private readonly sR = new Float32Array(SPL_BLOCK);
   private readonly maskBlock = new Float32Array(4 * 2 * BINS);
-  private readonly regL = new Float32Array(H);
-  private readonly regR = new Float32Array(H);
+  private readonly regL: Float32Array;
+  private readonly regR: Float32Array;
   /** Next block index; input position of its first sample is b·H. */
   private b = 0;
   /** Spleeter has consumed input below this. */
@@ -57,8 +59,15 @@ export class MlPipeline {
   /** Bumped by reset: a step still in flight from the old stream is dropped. */
   private gen = 0;
 
-  constructor(g?: number, private readonly splWaitMs: number = SPL_WAIT_MS, fill = true) {
-    this.kara = new KaraokeCombiner(g, fill);
+  /** `frames`: STFT frames of the MDX segment (src/ml/mdx-plan.ts); the block is half a segment. */
+  constructor(g?: number, private readonly splWaitMs: number = SPL_WAIT_MS, fill = true, frames: number = MDX_T) {
+    this.mdx = new MdxStream(frames);
+    this.block = this.mdx.block;
+    this.kara = new KaraokeCombiner(g, fill, undefined, this.block);
+    this.fifoSize = pow2Ceil(this.block + SPL_BLOCK + 1);
+    this.fifo = new Float32Array(2 * this.fifoSize);
+    this.regL = new Float32Array(this.block);
+    this.regR = new Float32Array(this.block);
   }
 
   reset(): void {
@@ -75,7 +84,7 @@ export class MlPipeline {
   }
 
   /**
-   * Block in (`inL`/`inR`, ML_BLOCK samples; read before any output is written, so they may alias the outputs)
+   * Block in (`inL`/`inR`, H samples; read before any output is written, so they may alias the outputs)
    * → vkL/vkR (x − Karaoke instrumental) and vL/vR (MDX vocal) for input [b·H − ML_RESULT_OFFSET, + H).
    */
   async process(
@@ -87,14 +96,15 @@ export class MlPipeline {
     vL: Float32Array,
     vR: Float32Array,
   ): Promise<void> {
-    const { kara, regL, regR } = this;
+    const { kara, regL, regR, fifoSize } = this;
+    const H = this.block, FMASK = fifoSize - 1;
     const pos = this.b * H;
     this.inEnd = pos + H;
     kara.writeInput(pos, inL, inR, H);
     for (let i = 0; i < H; i++) {
       const j = (pos + i) & FMASK;
       this.fifo[j] = inL[i];
-      this.fifo[FIFO + j] = inR[i];
+      this.fifo[fifoSize + j] = inR[i];
     }
     // 1. MDX first.
     await this.mdx.process(inL, inR, models.mdx, regL, regR);
@@ -143,13 +153,14 @@ export class MlPipeline {
   }
 
   private async spleeterLoop(): Promise<void> {
-    const { fifo, sL, sR, kara } = this;
+    const { fifo, fifoSize, sL, sR, kara } = this;
+    const FMASK = fifoSize - 1;
     const gen = this.gen;
     while (gen === this.gen && this.splPos + SPL_BLOCK <= this.inEnd && kara.maskFrame < this.splTarget) {
       for (let i = 0; i < SPL_BLOCK; i++) {
         const j = (this.splPos + i) & FMASK;
         sL[i] = fifo[j];
-        sR[i] = fifo[FIFO + j];
+        sR[i] = fifo[fifoSize + j];
       }
       this.spl.analyze(sL, sR);
       const v = await this.splModel!(this.spl.x);

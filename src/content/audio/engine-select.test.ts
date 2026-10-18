@@ -228,7 +228,7 @@ describe('EngineSelector', () => {
     expect(sel.status).toEqual({ state: 'on' });
   });
 
-  it('the delay budget goes to the host; a change restarts the probe, the default model ignores it', () => {
+  it('the delay budget goes to the host; a change restarts the probe, for the default model too', () => {
     const { sel, hosts, delays, chain } = setup();
     sel.update(req(true, 'roformer', null));
     sel.update(req(true, 'roformer', null));
@@ -241,9 +241,10 @@ describe('EngineSelector', () => {
     chain.setEngine.mockClear();
     sel.update(req(true, 'mdx', 6000));
     expect(chain.setEngine).toHaveBeenCalledWith('bypass', 'auto');
-    expect(delays.at(-1)).toBeNull();
+    expect(delays.at(-1)).toBe(6000);
     sel.update(req(true, 'mdx', 9000));
-    expect(hosts).toHaveLength(3);
+    expect(hosts).toHaveLength(4);
+    expect(delays.at(-1)).toBe(9000);
   });
 
   it('a model change while on goes back to the original mix and probes the new model', () => {

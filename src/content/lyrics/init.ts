@@ -281,8 +281,9 @@ export function initLyrics(site: Site, presentedTime: () => number | null, prese
       lastVideoId = id;
       captionsForced = false;
       boot.cancel();
-      syncCaptions();
     }
+    // Also when the id is unchanged: on a fresh load the player may only exist now (the first call found no player, so no boot).
+    syncCaptions();
     controller.setVideoId(id);
   };
 

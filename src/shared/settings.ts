@@ -20,7 +20,7 @@ export interface MixerSettings {
   drumsPct: number;
   /** Gain of the rest of the instrumental (everything but the drums), percent (0–600). */
   othersPct: number;
-  /** RoFormer delay limit, seconds (MIN_DELAY_S to MAX_DELAY_S): the audio delay stays below it; a longer limit gives the model a longer chunk. */
+  /** Delay limit, seconds (MIN_DELAY_S to MAX_DELAY_S): the audio delay stays below it; a longer limit gives the model a longer chunk. */
   mlDelayS: number;
 }
 

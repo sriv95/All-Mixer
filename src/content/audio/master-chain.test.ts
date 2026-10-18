@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ML_LATENCY_SAMPLES } from '../../worklet/protocol';
 import type { AvProbe } from '../av-probe';
-import { ERR_OTHER_COPY, ERR_OTHER_OWNER, MasterChain, OWNER_ATTR } from './master-chain';
+import { ERR_OTHER_COPY, ERR_OTHER_OWNER, MasterChain, OWNER_ATTR, isOpaqueMedia } from './master-chain';
 
 // Minimal Web Audio fakes: enough to observe graph wiring and context state.
 class FakeNode {
@@ -475,5 +475,15 @@ describe('MasterChain separation', () => {
     expect(chain.state).toBe('active');
     expect(chain.latency.engine).toBe('bypass');
     expect(worklets).toHaveLength(0);
+  });
+});
+
+describe('isOpaqueMedia', () => {
+  const media = (currentSrc: string, crossOrigin: string | null) => ({ currentSrc, crossOrigin }) as HTMLMediaElement;
+  it('flags only no-CORS cross-origin http media', () => {
+    expect(isOpaqueMedia(media('https://cdn.example.net/a.mp3', null))).toBe(true);
+    expect(isOpaqueMedia(media('https://cdn.example.net/a.mp3', 'anonymous'))).toBe(false);
+    expect(isOpaqueMedia(media(`${location.origin}/a.mp3`, null))).toBe(false);
+    expect(isOpaqueMedia(media('blob:https://x.test/1', null))).toBe(false);
   });
 });

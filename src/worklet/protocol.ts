@@ -25,7 +25,7 @@ export const ML_RESULT_OFFSET = ML_BLOCK + KARAOKE_TAIL;
 /** Algorithmic delay: a cross-fade region needs its whole next segment (2·ML_BLOCK), plus the Karaoke tail. */
 export const ML_ALGO_SAMPLES = MDX_SEGMENT + KARAOKE_TAIL;
 /** Compute slack: 319 ms, ≥ 2× the MDX response p95 (152 ms WebGPU compute, SRI-100/116). */
-const ML_SLACK_SAMPLES = 14080;
+export const ML_SLACK_SAMPLES = 14080;
 /** One render quantum, so the worklet can decide ML vs the original mix for a block one quantum before it starts. */
 export const ML_QUANTUM = 128;
 /** ML output delay: 72704 + 14080 + 128 = 86912 samples = 1970.9 ms at 44.1 kHz. */
@@ -82,7 +82,7 @@ export const ML_BUFFER_BYTES = ML_HEADER_BYTES + 4 * ML_BLOCK * 4;
 /** Control messages between the content script and the ML worker (via the ml.html iframe). */
 export const ML_PAGE_PATH = 'ml/ml.html';
 export const ML_INIT = 'all-mixer-ml-init';
-/** The ML_INIT message also carries `model: MlModel`, `delayMs` (RoFormer delay budget; null = automatic) and `drums` (split the instrumental). */
+/** The ML_INIT message also carries `model: MlModel`, `delayMs` (the delay budget: it sets the RoFormer chunk and the MDX segment; null = the 2 s default) and `drums` (split the instrumental). */
 /** Warm-up gate: p90 of 20 timed runs (ignores the two slowest) of one MDX block step (analyze + model + synthesize) must leave ≥ 1.5× in the 319 ms compute slack (~213 ms). The runtime deadline-miss fallback is the final guard. */
 export const ML_WARMUP_P90_MS = (ML_SLACK_SAMPLES / ML_SAMPLE_RATE) * 1000 / 1.5;
 

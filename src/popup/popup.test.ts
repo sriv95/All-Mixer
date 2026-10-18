@@ -57,12 +57,12 @@ afterEach(() => {
 });
 
 describe('popup', () => {
-  it('disables everything on a non-YouTube tab', async () => {
-    await load({ tab: { id: 1, url: 'https://example.com/' } });
+  it('disables everything on a non-web tab', async () => {
+    await load({ tab: { id: 1, url: 'chrome://extensions/' } });
     for (const e of document.querySelectorAll<HTMLInputElement | HTMLButtonElement>('input, button')) {
       expect(e.disabled).toBe(true);
     }
-    expect(el('status').textContent).toMatch(/youtube\.com/);
+    expect(el('status').textContent).toMatch(/web page/);
   });
 
   it('disables everything when the tab url is hidden', async () => {
@@ -175,9 +175,9 @@ describe('popup', () => {
       s.value = m;
       s.dispatchEvent(new Event('change', { bubbles: true }));
     };
-    it('is hidden for the default model and shown for a RoFormer, as a 2 to 15 s slider in 1 s steps starting at 2 s', async () => {
+    it('is shown for every model, as a 2 to 15 s slider in 1 s steps starting at 2 s', async () => {
       await load({ stored: { mode: 'separate', mlModel: 'mdx' } });
-      expect(el('chunk-row').hidden).toBe(true);
+      expect(el('chunk-row').hidden).toBe(false);
       select('roformer');
       await settle();
       expect(el('chunk-row').hidden).toBe(false);
@@ -367,7 +367,7 @@ describe('popup', () => {
 
   it('asks for a reload when there is no content script', async () => {
     await load({ status: 'reject' });
-    expect(el('status').textContent).toMatch(/Reload this YouTube tab/);
+    expect(el('status').textContent).toMatch(/Reload this tab/);
   });
 
   describe('Separate tab', () => {

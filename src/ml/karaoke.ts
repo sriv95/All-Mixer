@@ -30,6 +30,7 @@
 //
 // Everything is in absolute stream positions in power-of-two rings. No allocation after construction.
 import { FFT } from './fft.js';
+import { KARAOKE_TAIL, ML_BLOCK } from '../worklet/protocol';
 import { BINS, HOP, N_FFT } from './stream';
 
 /** Margin g (runtime constant, tune after listening). */
@@ -72,10 +73,7 @@ const PRES_BIN = [...PRES_EDGES_HZ.map((e) => { let k = 0; while ((k * SAMPLE_RA
 const GATE_LOOKAHEAD = 2;
 /** hann(7) without its zero ends, sum 1 (np.hanning(7)[1:-1] / sum). */
 const SMOOTH = [0.25 / 3, 0.75 / 3, 1 / 3, 0.75 / 3, 0.25 / 3];
-const RING = 131072; // > 2 · 34304 + 4096, power of two
-const MASK = RING - 1;
-const MRING = 128; // mask frames kept; the producer is at most ~40 frames ahead of the consumer
-const MMASK = MRING - 1;
+const pow2Ceil = (n: number): number => 2 ** Math.ceil(Math.log2(n));
 
 /** Max of the last `size` pushed values (monotonic deque in a ring of 256, no allocation after construction). */
 export class SlidingMax {
@@ -130,16 +128,22 @@ export class KaraokeCombiner {
   private readonly pres = new Float64Array(3);
   /** Input ends here. */
   private inTo = 0;
-  /** Input and MDX vocal, [L: RING][R: RING], by absolute position. */
-  private readonly xr = new Float32Array(2 * RING);
-  private readonly vr = new Float32Array(2 * RING);
+  /** Samples kept per channel: a power of two above 2 · block + KARAOKE_TAIL (the span from the newest input to the oldest sample still read). */
+  private readonly ring: number;
+  private readonly mask: number;
+  /** Mask frames kept (a power of two): the masks run ahead of the combine by that span. */
+  private readonly mring: number;
+  private readonly mmask: number;
+  /** Input and MDX vocal, [L: ring][R: ring], by absolute position. */
+  private readonly xr: Float32Array;
+  private readonly vr: Float32Array;
   /** iSTFT overlap-add of the instrumental and of Σw². */
-  private readonly acc = new Float32Array(2 * RING);
-  private readonly env = new Float32Array(RING);
+  private readonly acc: Float32Array;
+  private readonly env: Float32Array;
   /** iSTFT overlap-add of the vocal change g · (Vs − Vm). */
-  private readonly dv = new Float32Array(2 * RING);
-  /** Spleeter vocal masks, [frame & MMASK][2][BINS]. */
-  private readonly masks = new Float32Array(MRING * 2 * BINS);
+  private readonly dv: Float32Array;
+  /** Spleeter vocal masks, [frame & mmask][2][BINS]. */
+  private readonly masks: Float32Array;
   /** Next frame to add. Frame −1 (start −2048) is the first one python has. */
   private next = -1;
   /** Newest mask frame stored. */
@@ -152,7 +156,18 @@ export class KaraokeCombiner {
     return this.peak - FILL_FLOOR_DB;
   }
 
-  constructor(readonly g: number = KARAOKE_G, readonly fill = true, readonly presGate: number = KARAOKE_PRES_GATE) {
+  /** `block`: samples per ML block (ML_BLOCK for the default segment); it sets the sizes of the rings. */
+  constructor(readonly g: number = KARAOKE_G, readonly fill = true, readonly presGate: number = KARAOKE_PRES_GATE, block: number = ML_BLOCK) {
+    this.ring = pow2Ceil(2 * block + KARAOKE_TAIL + 1);
+    this.mask = this.ring - 1;
+    this.mring = pow2Ceil(Math.ceil((2 * block + KARAOKE_TAIL) / HOP) + 8);
+    this.mmask = this.mring - 1;
+    this.xr = new Float32Array(2 * this.ring);
+    this.vr = new Float32Array(2 * this.ring);
+    this.acc = new Float32Array(2 * this.ring);
+    this.env = new Float32Array(this.ring);
+    this.dv = new Float32Array(2 * this.ring);
+    this.masks = new Float32Array(this.mring * 2 * BINS);
     this.pres.fill(1);
     for (let i = 0; i < N_FFT; i++) this.win[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / N_FFT);
   }
@@ -181,8 +196,9 @@ export class KaraokeCombiner {
     return this.maskTo;
   }
 
-  /** Store input samples [pos, pos + n) (n ≤ RING). */
+  /** Store input samples [pos, pos + n) (n ≤ ring). */
   writeInput(pos: number, l: Float32Array, r: Float32Array, n: number): void {
+    const { ring: RING, mask: MASK } = this;
     for (let i = 0; i < n; i++) {
       const j = (pos + i) & MASK;
       this.xr[j] = l[i];
@@ -193,6 +209,7 @@ export class KaraokeCombiner {
 
   /** Store MDX vocal samples [pos, pos + n); samples before the stream start (pos + i < 0) are skipped. */
   writeVocal(pos: number, l: Float32Array, r: Float32Array, n: number): void {
+    const { ring: RING, mask: MASK } = this;
     for (let i = Math.max(0, -pos); i < n; i++) {
       const j = (pos + i) & MASK;
       this.vr[j] = l[i];
@@ -202,6 +219,7 @@ export class KaraokeCombiner {
 
   /** Store the four mask frames t0 … t0 + 3 from SpleeterStream.masks (layout dst[(f · 2 + ch) · BINS + k]). */
   pushMasks(t0: number, m: Float32Array): void {
+    const { mmask: MMASK } = this;
     for (let f = 0; f < 4; f++) {
       const t = t0 + f;
       if (t < 0) continue; // before the stream: no mask (python's frame −1 has none either)
@@ -230,6 +248,7 @@ export class KaraokeCombiner {
 
   /** Vk = x − instrumental for [pos, pos + n); the samples must be complete (`pos + n ≤ completeTo`). */
   emit(pos: number, n: number, outL: Float32Array, outR: Float32Array): void {
+    const { ring: RING, mask: MASK } = this;
     const { xr, acc, env } = this;
     for (let i = 0; i < n; i++) {
       const j = (pos + i) & MASK;
@@ -241,6 +260,7 @@ export class KaraokeCombiner {
 
   /** The vocal Vz for [pos, pos + n) (A cappella stem): the MDX vocal plus the dip fill. */
   emitVocal(pos: number, n: number, outL: Float32Array, outR: Float32Array): void {
+    const { ring: RING, mask: MASK } = this;
     const { vr, dv, env } = this;
     for (let i = 0; i < n; i++) {
       const j = (pos + i) & MASK;
@@ -257,6 +277,7 @@ export class KaraokeCombiner {
 
   /** Free the ring for samples below `pos` (after `emit`). */
   release(pos: number, n: number): void {
+    const { ring: RING, mask: MASK } = this;
     for (let i = 0; i < n; i++) {
       const j = (pos + i) & MASK;
       this.acc[j] = 0;
@@ -269,6 +290,7 @@ export class KaraokeCombiner {
 
   /** Raw gate of frame u from x and the mask (python frame u + 1); 0 when either is missing. Frames run in order. */
   private evidence(u: number): void {
+    const { ring: RING, mask: MASK, mmask: MMASK } = this;
     const { re2: re, im2: im, win, fft, xr, masks } = this;
     let raw = 0;
     const s0 = HOP * u - HOP;
@@ -335,6 +357,7 @@ export class KaraokeCombiner {
   }
 
   private frame(t: number): void {
+    const { ring: RING, mask: MASK, mmask: MMASK } = this;
     const { re, im, re2, im2, re3, im3, win, fft, xr, vr, acc, env, dv, masks, g } = this;
     const gt = this.fill && t >= 0 ? this.gate(t) : 0;
     const s0 = HOP * t - HOP;
