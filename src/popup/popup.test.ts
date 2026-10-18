@@ -24,6 +24,8 @@ const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as
 const has = (id: string) => document.getElementById(id) !== null;
 const settle = () => new Promise((r) => setTimeout(r, 50));
 const banner = () => document.getElementById('separation-banner');
+/** A Disclosure (Advanced, Split instrumental) is open when its button says so. */
+const isOpen = (id: string) => el(`${id}-toggle`).getAttribute('aria-expanded') === 'true';
 const tabSeparate = () => el('tab-separate').click();
 const tabDefault = () => el('tab-default').click();
 
@@ -57,6 +59,8 @@ async function load(o: Opts = {}) {
     runtime: { sendMessage },
     storage: { local: { get: vi.fn().mockResolvedValue(o.local ?? {}) }, onChanged: { addListener: vi.fn() } },
   });
+  // Animations finish at once, so panels that leave are gone after one settle.
+  (await import('motion/react')).MotionGlobalConfig.skipAnimations = true;
   await import('./popup');
   await settle();
 }
@@ -211,23 +215,23 @@ describe('popup', () => {
     });
   });
   describe('advanced section', () => {
-    const adv = () => el<HTMLDetailsElement>('advanced');
+    const adv = () => el('advanced');
     it('holds the model and delay controls and is closed by default', async () => {
       await load({ stored: { mode: 'separate' } });
-      expect(adv().open).toBe(false);
+      expect(isOpen('advanced')).toBe(false);
       for (const id of ['ml-model', 'chunk-row', 'ml-delay']) expect(adv().contains(el(id))).toBe(true);
       expect(adv().contains(el('vocal'))).toBe(false);
     });
     it('opens by itself when a non-default model is in use', async () => {
       await load({ stored: { mode: 'separate', mlModel: 'deux' } });
-      expect(adv().open).toBe(true);
+      expect(isOpen('advanced')).toBe(true);
     });
     it('remembers being opened', async () => {
       await load({ stored: { mode: 'separate' } });
-      adv().open = true;
-      adv().dispatchEvent(new Event('toggle'));
+      el('advanced-toggle').click();
+      await settle();
       await load({ stored: { mode: 'separate' } });
-      expect(adv().open).toBe(true);
+      expect(isOpen('advanced')).toBe(true);
     });
   });
 
@@ -327,13 +331,13 @@ describe('popup', () => {
       expect(el<HTMLInputElement>('split-on').checked).toBe(false);
       expect(has('split-mix')).toBe(false);
       expect(has('drums-row')).toBe(false);
-      expect(el<HTMLDetailsElement>('split').open).toBe(false);
+      expect(isOpen('split')).toBe(false);
     });
 
     it('opens by itself when the split is on, and shows the Drums and Others sliders with their values', async () => {
       await load({ stored: sepSplit({ drumsPct: 60, othersPct: 40 }) });
-      expect(el<HTMLDetailsElement>('advanced').open).toBe(true);
-      expect(el<HTMLDetailsElement>('split').open).toBe(true);
+      expect(isOpen('advanced')).toBe(true);
+      expect(isOpen('split')).toBe(true);
       expect(el<HTMLInputElement>('split-on').checked).toBe(true);
       expect(has('split-mix')).toBe(true);
       expect(el<HTMLInputElement>('drums').value).toBe('60');

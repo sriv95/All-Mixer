@@ -48,16 +48,6 @@ body {
   box-shadow: 0 0 0 0 rgb(225 29 46 / 0.5);
   animation: mx-pulse 1.6s ease-out infinite;
 }
-@keyframes mx-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-}
-.mx-in {
-  animation: mx-in 0.28s ease-out both;
-}
-
 .mx-range::-webkit-slider-thumb {
   transition: transform 0.15s ease-out;
 }
@@ -65,27 +55,8 @@ body {
   transform: scale(1.12);
 }
 
-/* Details open and close with a slide (Chrome 131+; older Chrome just snaps). */
-:root {
-  interpolate-size: allow-keywords;
-}
-details::details-content {
-  block-size: 0;
-  overflow: clip;
-  transition:
-    block-size 0.25s ease,
-    content-visibility 0.25s allow-discrete;
-}
-details[open]::details-content {
-  block-size: auto;
-}
-
 @media (prefers-reduced-motion: reduce) {
-  *,
-  ::before,
-  ::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+  .mx-pulse {
+    animation: none;
   }
 }
