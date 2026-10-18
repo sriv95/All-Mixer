@@ -62,7 +62,9 @@ async function load(o: Opts = {}) {
   // Animations finish at once, so panels that leave are gone after one settle.
   (await import('motion/react')).MotionGlobalConfig.skipAnimations = true;
   await import('./popup');
-  await settle();
+  // The popup reads the tab, its settings, the status and the model records one after another: wait for the first reads, then let the renders land (a busy parallel run needs more than one settle).
+  if ((o.tab ?? YT).url?.startsWith('http')) await vi.waitFor(() => expect(chrome.tabs.sendMessage).toHaveBeenCalled(), { timeout: 2000 });
+  await new Promise((r) => setTimeout(r, 150));
 }
 
 const sent = () =>
