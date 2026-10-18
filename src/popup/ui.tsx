@@ -96,7 +96,7 @@ export function Slider({ id, value, shown = value, min, max, step, onValue, disa
 export function SliderRow({ id, label, icon, unit, hint, onValue, ...slider }: SliderProps & { label: ReactNode; icon: ReactNode; unit: string; hint?: ReactNode }) {
   const { shown, gliding, mine } = useGlide(slider.value);
   return (
-    <div className="flex flex-col gap-3">
+    <div className="mx-row flex flex-col gap-3">
       <div className="flex items-baseline justify-between gap-2">
         <label htmlFor={id} className="flex items-center gap-1.5 text-[13px] font-bold">
           <span className="text-brand" aria-hidden>{icon}</span>

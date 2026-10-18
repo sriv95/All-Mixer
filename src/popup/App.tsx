@@ -177,7 +177,7 @@ function Master({ settings, update, compact }: { settings: MixerSettings; update
   const pos = useGlide(masterPosOf(settings.masterPct));
   const pct = <Roll text={`${Math.round(num.shown)}%`} still={num.gliding} />;
   return (
-    <Card>
+    <Card className={compact ? 'mx-row' : 'mx-row mx-row-left'}>
       <div className="flex items-center justify-between gap-2">
         <label htmlFor="master" className="flex items-center gap-1.5 text-[13px] font-bold"><Volume2 size={15} className="text-brand" aria-hidden />Global volume</label>
         <div className="flex items-center gap-2">
@@ -305,7 +305,7 @@ function SeparateControls({ settings, update, ready, advancedOpen, setAdvancedOp
     <>
       <Rise i={0}><Master settings={settings} update={update} compact /></Rise>
       <Rise i={1}>
-      <Card>
+      <Card className="mx-rows">
         <SliderRow id="vocal" icon={<Mic size={15} />} label="Vocal" unit="%" value={settings.vocalPct} min={0} max={100} step={5} onValue={(v) => update({ vocalPct: clampPct(v) })} />
         <SliderRow id="instrumental" icon={<Music size={15} />} label="Instrumental" unit="%" value={settings.instrumentalPct} min={0} max={100} step={5} onValue={(v) => update({ instrumentalPct: clampPct(v) })} />
         <Collapse show={settings.splitInstrumental}>
