@@ -12,6 +12,7 @@ CI builds the extension, creates tag `vx.y.z` and a GitHub release with this sec
 
 ### Changed
 
+- High / Best quality: the warm-up remembers the speed of your GPU, so the next one skips the speed test and is about 40 % shorter (on an M-series Mac at an 8 s limit: 24 s, then 14 s). The chunk it plans is still timed and checked, and a speed that no longer holds is measured again.
 - Separate mode: turning it off and on again within 3 minutes starts at once, with no warm-up (the model stays loaded in the tab meanwhile, up to about 0.5 GB of GPU memory). Other settings or a longer wait warm up again.
 - Popup: when the tab needs a reload (no All Mixer! running in it yet), the Separate mode checkbox is hidden and the popup says to reload the tab.
 - Separate mode: while the model warms up (the video is held for 10 to 40 s), the player's loading spinner shows over the picture, with "Preparing vocal separation… 12 s" under it. The player keeps showing "playing" meanwhile (no paused look), and pressing pause during the wait pauses for real and the video stays paused after it. The other waits say what they are for too.

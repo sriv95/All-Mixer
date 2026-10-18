@@ -28,6 +28,7 @@ import { MODEL_FORMAT, MODEL_LABEL, modelFileNames, type ModelId } from '../shar
 import { RoformerStream, DEFAULT_ROF_GEOMETRY, type RoformerMeta } from './roformer';
 import { MAX_DELAY_S, MIN_DELAY_S, drumRuns, gateMs, planMdxDrums, planRof, stepMs, type RofGeometry } from './rof-plan';
 import { withDrums, type BlockEngine } from './drum-engine';
+import { lookupSpeed, speedKey } from './plan-cache';
 import { SC_BINS, SC_FRAMES, SC_INPUT, type ScnetModelFn } from './scnet';
 
 type Ort = typeof import('onnxruntime-web/webgpu');
@@ -228,20 +229,22 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
       throw e;
     }
   };
-  // 1. Speed of this GPU: a step at the 2 s geometry. 2. Plan a chunk for the delay budget. 3. Time the plan itself; when it is slower than predicted, correct the speed and plan again.
+  // 1. Speed of this GPU: a step at the 2 s geometry (remembered from an earlier warm-up when there is one: the plan is timed and gated below anyway).
+  // 2. Plan a chunk for the delay budget. 3. Time the plan itself; when it is slower than predicted, correct the speed and plan again.
   const wantMs = init.delayMs ?? MIN_DELAY_S * 1000;
-  let chosen: Run | null = null;
+  let chosen = null as Run | null; // set in `search`
   let drums: { run: ScnetModelFn; ms: number } | null = null;
   let note = '';
-  try {
-    if (init.drums) {
-      const d = await loadDrums(ort, init);
-      if (typeof d === 'string') return unavailable(d);
-      drums = d;
-    }
+  const speedKeyOf = speedKey({ model: id, modelVersion: init.installed?.version ?? 0, appVersion: init.appVersion ?? '', adapter: adapterName });
+  const measureSpeed = async (): Promise<number> => {
     const first = await measure(DEFAULT_ROF_GEOMETRY, { skip: 2, n: 6 });
-    let baseMs = first.wu.p90;
     void first.session.release();
+    return first.wu.p90;
+  };
+  /** The speed the plan that was chosen is based on (after corrections). */
+  let planBaseMs = 0;
+  const search = async (start: number, w: { skip: number; n: number }): Promise<void> => {
+    let baseMs = start;
     for (let attempt = 0; attempt < 3 && !chosen; attempt++) {
       const g = planRof((wantMs / 1000) * ML_SAMPLE_RATE, baseMs, drums?.ms);
       if (!g) {
@@ -249,9 +252,11 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
         break;
       }
       try {
-        const r = await measure(g, { skip: 1, n: 4 });
-        if (r.wu.p90 + (drums ? drumRuns(g.block) * drums.ms : 0) <= gateMs(g)) chosen = r;
-        else {
+        const r = await measure(g, w);
+        if (r.wu.p90 + (drums ? drumRuns(g.block) * drums.ms : 0) <= gateMs(g)) {
+          chosen = r;
+          planBaseMs = baseMs;
+        } else {
           baseMs *= r.wu.p90 / stepMs(g.frames, baseMs);
           void r.session.release();
         }
@@ -259,6 +264,20 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
         baseMs *= 1.5; // most likely out of GPU memory at this chunk length
         note = `chunk of ${g.frames} frames failed: ${String(e)}`;
       }
+    }
+  };
+  const remembered = lookupSpeed(init.speeds, speedKeyOf);
+  try {
+    if (init.drums) {
+      const d = await loadDrums(ort, init);
+      if (typeof d === 'string') return unavailable(d);
+      drums = d;
+    }
+    if (remembered !== null) await search(remembered, { skip: 1, n: 3 });
+    // Nothing remembered, or it no longer holds (another load on the GPU): measure now.
+    if (!chosen) {
+      note = '';
+      await search(await measureSpeed(), { skip: 1, n: 4 });
     }
   } catch (e) {
     return unavailable(`warm-up: ${String(e)}`);
@@ -268,7 +287,7 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
   const geometry: MlGeometry = { block: g.block, resultOffset: g.overlap + g.extra, latency: g.latency, warmupP90Ms: gateMs(g), ...(drums ? { drums: true } : {}) };
   const createMs = performance.now() - t0;
   if (init.timing) console.info(`[all-mixer ml] ${id} chunk ${g.frames} frames (${((g.chunk / ML_SAMPLE_RATE)).toFixed(2)} s), block ${(g.block / ML_SAMPLE_RATE).toFixed(2)} s, overlap ${(g.overlap / ML_SAMPLE_RATE).toFixed(2)} s, delay ${(g.latency / ML_SAMPLE_RATE).toFixed(2)} s; warm-up p50 ${wu.p50.toFixed(1)} p90 ${wu.p90.toFixed(1)} p95 ${wu.p95.toFixed(1)} (gate ${geometry.warmupP90Ms.toFixed(1)}), ready after ${createMs.toFixed(0)} ms, ${adapterName}`);
-  ctx.postMessage({ type: 'ready', p50: wu.p50, p90: wu.p90, p95: wu.p95, createMs, adapter: adapterName, geometry });
+  ctx.postMessage({ type: 'ready', p50: wu.p50, p90: wu.p90, p95: wu.p95, createMs, adapter: adapterName, geometry, speed: { key: speedKeyOf, baseMs: planBaseMs } });
 
   const vocalEngine: BlockEngine = {
     block: g.block,
