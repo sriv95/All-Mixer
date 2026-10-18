@@ -10,6 +10,9 @@ export type KaraokeOutline = (typeof KARAOKE_OUTLINES)[number];
 export const KARAOKE_BACKGROUNDS = [0, 25, 50, 75] as const;
 export type KaraokeBackground = (typeof KARAOKE_BACKGROUNDS)[number];
 
+export const KARAOKE_ANIMATIONS = ['none', 'fade', 'slide'] as const;
+export type KaraokeAnimation = (typeof KARAOKE_ANIMATIONS)[number];
+
 export interface LyricsPrefs {
   /** The ♪ button: show or hide the lyrics (karaoke text or window, whichever the display mode is). */
   lyricsVisible: boolean;
@@ -26,6 +29,8 @@ export interface LyricsPrefs {
   karaokeFont: KaraokeFont;
   karaokeOutline: KaraokeOutline;
   karaokeBackground: KaraokeBackground;
+  /** How a line that just changed comes in. */
+  karaokeAnimation: KaraokeAnimation;
   /** Lyrics timing per video id, in ms: positive shows the lyrics later. Zero entries are not kept. */
   lyricsOffsets: Record<string, number>;
   /** Fractions 0..1 of the player width/height: x = horizontal center, y = vertical center of the text block. */
@@ -45,6 +50,7 @@ export const DEFAULT_LYRICS_PREFS: LyricsPrefs = {
   karaokeFont: 'default',
   karaokeOutline: 'normal',
   karaokeBackground: 0,
+  karaokeAnimation: 'none',
   karaokePosition: { x: 0.5, y: 0.82 },
   lyricsOffsets: {},
 };
@@ -82,6 +88,7 @@ export function normalizeLyricsPrefs(raw: unknown): LyricsPrefs {
     karaokeFont: KARAOKE_FONTS.find((f) => f === r.karaokeFont) ?? d.karaokeFont,
     karaokeOutline: KARAOKE_OUTLINES.find((o) => o === r.karaokeOutline) ?? d.karaokeOutline,
     karaokeBackground: KARAOKE_BACKGROUNDS.find((b) => b === r.karaokeBackground) ?? d.karaokeBackground,
+    karaokeAnimation: KARAOKE_ANIMATIONS.find((a) => a === r.karaokeAnimation) ?? d.karaokeAnimation,
     lyricsOffsets: normalizeOffsets(r.lyricsOffsets),
     karaokePosition: { x: num(pos.x, d.karaokePosition.x, 0, 1), y: num(pos.y, d.karaokePosition.y, 0, 1) },
   };

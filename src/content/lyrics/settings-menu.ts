@@ -1,4 +1,4 @@
-import { DEFAULT_LYRICS_PREFS, KARAOKE_BACKGROUNDS, type KaraokeBackground, type KaraokeFont, type KaraokeOutline, type LyricsDisplayMode, type LyricsPrefs } from '../../shared/lyrics-prefs';
+import { DEFAULT_LYRICS_PREFS, KARAOKE_BACKGROUNDS, type KaraokeAnimation, type KaraokeBackground, type KaraokeFont, type KaraokeOutline, type LyricsDisplayMode, type LyricsPrefs } from '../../shared/lyrics-prefs';
 import { SETTINGS_SELECTORS, findSettingsMainMenu, findSettingsPopup, type Site } from '../youtube-dom';
 import type { CaptionPicker, SourceMenu, SourcePref } from './controller';
 import type { CaptionPick } from './track-info';
@@ -11,7 +11,7 @@ interface MenuOption {
 }
 
 export interface MenuRow {
-  id: 'source' | 'captionLanguage' | 'timing' | 'display' | 'lines' | 'karaokeText' | 'size' | 'preset' | 'color' | 'font' | 'outline' | 'background';
+  id: 'source' | 'captionLanguage' | 'timing' | 'display' | 'lines' | 'karaokeText' | 'size' | 'preset' | 'color' | 'font' | 'outline' | 'background' | 'animation';
   label: string;
   options: MenuOption[];
   selected: string;
@@ -191,6 +191,18 @@ export function buildMenuRows(input: MenuInput, actions: MenuActions): MenuRow[]
           options: KARAOKE_BACKGROUNDS.map((n) => ({ value: String(n), label: n ? `${n}%` : 'None' })),
           selected: String(prefs.karaokeBackground),
           select: (v) => actions.setPrefs({ karaokeBackground: Number(v) as KaraokeBackground }),
+        },
+        {
+          id: 'animation',
+          label: 'Line transition',
+          options: [
+            { value: 'none', label: 'None' },
+            { value: 'fade', label: 'Fade' },
+            { value: 'slide', label: 'Slide up' },
+          ],
+          selected: prefs.karaokeAnimation,
+          note: 'Off when your system asks to reduce motion.',
+          select: (v) => actions.setPrefs({ karaokeAnimation: v as KaraokeAnimation }),
         },
       ],
       select: () => {},

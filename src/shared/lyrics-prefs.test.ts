@@ -42,6 +42,12 @@ describe('normalizeLyricsPrefs', () => {
     expect(normalizeLyricsPrefs({ karaokeFont: 'comic', karaokeOutline: 3, karaokeBackground: 33 })).toMatchObject({ karaokeFont: 'default', karaokeOutline: 'normal', karaokeBackground: 0 });
   });
 
+  it('karaokeAnimation: none by default, unknown values fall back', () => {
+    expect(DEFAULT_LYRICS_PREFS.karaokeAnimation).toBe('none');
+    expect(normalizeLyricsPrefs({ karaokeAnimation: 'slide' }).karaokeAnimation).toBe('slide');
+    expect(normalizeLyricsPrefs({ karaokeAnimation: 'spin' }).karaokeAnimation).toBe('none');
+  });
+
   it('defaults to one karaoke line, auto source and no caption language', () => {
     expect(DEFAULT_LYRICS_PREFS).toMatchObject({ karaokeLines: 1, lyricsSource: 'auto', captionLang: null });
   });

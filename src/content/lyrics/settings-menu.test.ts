@@ -101,6 +101,8 @@ describe('buildMenuRows', () => {
     expect(a.setPrefs).toHaveBeenLastCalledWith({ karaokeFont: 'serif' });
     inner.outline.select('thick');
     expect(a.setPrefs).toHaveBeenLastCalledWith({ karaokeOutline: 'thick' });
+    inner.animation.select('slide');
+    expect(a.setPrefs).toHaveBeenLastCalledWith({ karaokeAnimation: 'slide' });
     inner.background.select('50');
     expect(a.setPrefs).toHaveBeenLastCalledWith({ karaokeBackground: 50 });
   });
@@ -241,7 +243,7 @@ describe('YtSettingsMenu', () => {
     group().click();
     settingEl('karaokeText').click();
     expect(titles()).toEqual(['Custom Karaoke Text']);
-    expect([...sub().querySelectorAll('[data-am-row-setting]')].map((e) => e.getAttribute('data-am-row-setting'))).toEqual(['preset', 'color', 'size', 'font', 'outline', 'background']);
+    expect([...sub().querySelectorAll('[data-am-row-setting]')].map((e) => e.getAttribute('data-am-row-setting'))).toEqual(['preset', 'color', 'size', 'font', 'outline', 'background', 'animation']);
     settingEl('color').click();
     expect(titles()).toEqual(['Color']);
     const checked = [...sub().querySelectorAll('.ytp-menuitem')].map((i) => i.getAttribute('aria-checked'));
@@ -395,7 +397,7 @@ describe('YtmSettingsPopover', () => {
     expect(pop.isOpen).toBe(true);
     expect(pop.button.getAttribute('aria-expanded')).toBe('true');
     const sels = root.querySelectorAll('select');
-    expect(sels).toHaveLength(10);
+    expect(sels).toHaveLength(11);
     const src = sels[0];
     expect([...src.options].map((o) => o.disabled)).toEqual([false, true, false]);
     src.value = 'captions';
@@ -425,7 +427,7 @@ describe('YtmSettingsPopover', () => {
     pop.setRows(buildMenuRows({ sources, prefs: prefs() }, actions()));
     pop.button.click();
     const root = document.querySelector<HTMLElement>('[data-allmixer-lyrics-popover]')!;
-    expect(root.querySelectorAll('select')).toHaveLength(9);
+    expect(root.querySelectorAll('select')).toHaveLength(10);
     pop.setRows(buildMenuRows({ sources, prefs: prefs({ lyricsDisplayMode: 'window' }) }, actions()));
     expect(root.querySelectorAll('select')).toHaveLength(2);
     pop.destroy();

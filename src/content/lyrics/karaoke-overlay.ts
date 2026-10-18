@@ -59,6 +59,11 @@ const STYLE = `
 #${ROOT_ID} .am-k-block.dragging { cursor:grabbing; }
 #${ROOT_ID} .am-k-line { display:block; }
 #${ROOT_ID} .am-k-line.upcoming { opacity:.6; }
+@keyframes am-k-fade { from { opacity:0; } }
+@keyframes am-k-slide { from { opacity:0; transform:translateY(.4em); } }
+#${ROOT_ID} .am-k-line.am-in-fade { animation:am-k-fade .3s ease-out; }
+#${ROOT_ID} .am-k-line.am-in-slide { animation:am-k-slide .3s ease-out; }
+@media (prefers-reduced-motion: reduce) { #${ROOT_ID} .am-k-line { animation:none !important; } }
 `;
 
 export interface KaraokeOptions {
@@ -78,6 +83,8 @@ export class KaraokeSurface implements LyricsSurface {
   private key: string | null = null;
   private lastTime = 0;
   private pos: Pos;
+  /** Text per row of the last build: only a row whose text changed animates in. */
+  private prevRows: string[] = [];
   private dragging: { pointerId: number; dx: number; dy: number } | null = null;
 
   constructor(
@@ -147,7 +154,7 @@ export class KaraokeSurface implements LyricsSurface {
     return true;
   }
 
-  /** Prefs changed (font size, color, font, outline, background, line count, position, mode). */
+  /** Prefs changed (font size, color, font, outline, background, animation, line count, position, mode). */
   refreshPrefs(): void {
     this.pos = this.opts.getPrefs().karaokePosition;
     this.key = null;
@@ -177,12 +184,16 @@ export class KaraokeSurface implements LyricsSurface {
     // 2-line mode keeps both rows even when one has no line, so a lone line does not jump.
     const rows: (KaraokeSlot | null)[] = this.opts.getPrefs().karaokeLines === 2 && slots.length > 0 ? [null, null] : [];
     for (const slot of slots) rows[slot.row] = slot;
-    rows.forEach((slot) => {
+    const animation = this.opts.getPrefs().karaokeAnimation;
+    const texts = rows.map((slot) => slot?.text ?? '');
+    rows.forEach((slot, i) => {
       const el = this.doc.createElement('span');
       el.className = slot ? `am-k-line ${slot.state}` : 'am-k-line empty';
+      if (slot && animation !== 'none' && slot.text !== this.prevRows[i]) el.classList.add(`am-in-${animation}`);
       el.textContent = slot ? slot.text : '\u200b';
       this.block.append(el);
     });
+    this.prevRows = texts;
     this.block.style.display = slots.length > 0 ? '' : 'none';
   }
 

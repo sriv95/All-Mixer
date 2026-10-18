@@ -71,6 +71,24 @@ describe('KaraokeSurface slots', () => {
     expect(lineEls().map((e) => [textOf(e), e.classList.contains('upcoming')])).toEqual([['three', true], ['\u200b', false]]);
   });
 
+  it('animates only the rows whose text changed, and not with animation none', () => {
+    const anim = () => lineEls().map((e) => [...e.classList].filter((c) => c.startsWith('am-in-')).join(''));
+    const s = make();
+    s.render(synced);
+    s.update(1.5);
+    expect(anim()).toEqual(['', '']);
+    prefs = { ...prefs, karaokeAnimation: 'fade' };
+    s.refreshPrefs();
+    // Same text as before the pref change: nothing animates.
+    expect(anim()).toEqual(['', '']);
+    const before = lineEls().map(textOf);
+    s.update(3.5);
+    const after = lineEls().map(textOf);
+    expect(after).not.toEqual(before);
+    expect(anim()).toEqual(after.map((t, i) => (t === before[i] ? '' : 'am-in-fade')));
+    expect(anim()).toContain('am-in-fade');
+  });
+
   it('does not rebuild the DOM while the slots are unchanged', () => {
     const s = make();
     s.render(synced);
