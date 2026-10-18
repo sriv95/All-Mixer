@@ -13,14 +13,9 @@
       <button id="master-reset" type="button">Reset</button>
     </div>
 
-    <div role="tablist" aria-label="Mode">
-      <button role="tab" id="tab-default" aria-controls="panel-default" data-mode="default">Default mode</button>
-      <button role="tab" id="tab-separate" aria-controls="panel-separate" data-mode="separate">Separate mode</button>
-    </div>
+    <label class="check"><input id="separate-mode" type="checkbox" /> Separate mode</label>
 
-    <section role="tabpanel" id="panel-default" aria-labelledby="tab-default"></section>
-
-    <section role="tabpanel" id="panel-separate" aria-labelledby="tab-separate" hidden>
+    <section id="panel-separate" hidden>
       <label for="vocal">Vocal</label>
       <div class="row">
         <input id="vocal" type="range" min="0" max="600" step="5" value="100" />
