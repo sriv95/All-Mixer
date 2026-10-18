@@ -17,6 +17,7 @@ const mlModel = $<HTMLSelectElement>('ml-model');
 const chunkRow = $<HTMLDivElement>('chunk-row');
 const mlDelay = $<HTMLInputElement>('ml-delay');
 const mlDelayValue = $<HTMLOutputElement>('ml-delay-value');
+const mlDelayApply = $<HTMLButtonElement>('ml-delay-apply');
 const modelRow = $<HTMLParagraphElement>('model-row');
 const modelText = $<HTMLSpanElement>('model-text');
 const modelBtn = $<HTMLButtonElement>('model-btn');
@@ -44,6 +45,7 @@ function render(): void {
   chunkRow.hidden = !isModelId(settings.mlModel); // the default model has a fixed delay
   mlDelay.value = String(settings.mlDelayS);
   mlDelayValue.value = `${settings.mlDelayS} s`;
+  mlDelayApply.disabled = true;
   renderModel();
   for (const b of presets) {
     const on = Number(b.dataset.vocal) === settings.vocalPct && Number(b.dataset.instrumental) === settings.instrumentalPct;
@@ -257,9 +259,13 @@ instrumental.addEventListener('input', () => {
   save();
 });
 
-// While dragging only the label moves; the chunk is re-planned (a new warm-up) when the slider is released.
-mlDelay.addEventListener('input', () => (mlDelayValue.value = `${clampDelayS(mlDelay.value)} s`));
-mlDelay.addEventListener('change', () => {
+// Moving the slider only changes the label; Apply re-plans the chunk (a new warm-up).
+mlDelay.addEventListener('input', () => {
+  const s = clampDelayS(mlDelay.value);
+  mlDelayValue.value = `${s} s`;
+  mlDelayApply.disabled = s === settings.mlDelayS;
+});
+mlDelayApply.addEventListener('click', () => {
   settings = { ...settings, mlDelayS: clampDelayS(mlDelay.value) };
   save();
 });

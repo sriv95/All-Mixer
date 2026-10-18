@@ -74,13 +74,21 @@ export class EngineSelector {
       if (this.mlActive && info.engine === 'bypass' && info.reason === 'deadline-miss') {
         this.mlActive = false;
         this.disposeHost();
-        this.choice = { state: 'stopped', cause: 'ML missed its deadline' };
+        this.setChoice({ state: 'stopped', cause: 'ML missed its deadline' });
       }
     });
   }
 
   get status(): EngineChoice {
     return this.choice;
+  }
+
+  /** Called whenever `status` changes (the content script pauses the video while it is `warming`). */
+  onChange: ((choice: EngineChoice) => void) | null = null;
+
+  private setChoice(choice: EngineChoice): void {
+    this.choice = choice;
+    this.onChange?.(choice);
   }
 
   update(req: SelectorRequest): void {
@@ -95,7 +103,7 @@ export class EngineSelector {
       if (this.mlActive) this.chain.setEngine('bypass', 'auto');
       this.disposeHost();
       this.mlActive = false;
-      this.choice = { state: 'off' };
+      this.setChoice({ state: 'off' });
       return;
     }
     if (restart) {
@@ -114,7 +122,7 @@ export class EngineSelector {
     const host = this.createHost(model, this.delayMs);
     this.host = host;
     this.probing = true;
-    this.choice = { state: 'warming' };
+    this.setChoice({ state: 'warming' });
     const port = host.start((m) => {
       if (this.host !== host || !this.probing) return;
       this.probing = false;
@@ -124,7 +132,7 @@ export class EngineSelector {
       else if (m.p90 >= GEOMETRY[model].warmupP90Ms) return this.giveUp(`too slow on this device (p90 ${m.p90.toFixed(1)} ms)`);
       if (!this.chain.setEngine('ml', 'auto')) return this.giveUp(RATE_CAUSE);
       this.mlActive = true;
-      this.choice = { state: 'on' };
+      this.setChoice({ state: 'on' });
     });
     if (port) {
       this.chain.setMlGeometry(GEOMETRY[model]); // the default; a RoFormer plan replaces it once the worker is ready
@@ -144,7 +152,7 @@ export class EngineSelector {
   /** Stay on the original mix. */
   private giveUp(cause: string): void {
     this.disposeHost();
-    this.choice = { state: 'unavailable', cause };
+    this.setChoice({ state: 'unavailable', cause });
   }
 
   private disposeHost(): void {
