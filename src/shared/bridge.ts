@@ -6,6 +6,9 @@
 
 export const BRIDGE_TAG = '__allMixer';
 
+/** Fired on a media element (main world -> content script) when the page calls pause() on one that has ended. */
+export const PAUSE_REQUEST_EVENT = '__allMixerPauseRequest';
+
 export interface CaptionTrack {
   baseUrl: string;
   languageCode: string;
