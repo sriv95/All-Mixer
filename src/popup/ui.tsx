@@ -1,4 +1,5 @@
-import { createContext, useContext, type ButtonHTMLAttributes, type CSSProperties, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ButtonHTMLAttributes, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
+import { Check, ChevronDown } from 'lucide-react';
 
 /** True on a page the extension cannot run on: every control below is disabled. */
 export const Blocked = createContext(false);
@@ -63,5 +64,81 @@ export function Switch({ id, checked, onChange, disabled }: { id: string; checke
       <span aria-hidden className="h-8 w-[54px] rounded-full bg-well shadow-pressed transition-colors peer-checked:bg-brand-tint peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand peer-disabled:opacity-45" />
       <span aria-hidden className="pointer-events-none absolute left-1 top-1 size-6 rounded-full bg-well shadow-[3px_3px_6px_#d0c6c7,-2px_-2px_5px_#fff] transition-transform peer-checked:translate-x-[22px] peer-checked:bg-brand" />
     </span>
+  );
+}
+
+export interface Choice<T extends string> {
+  value: T;
+  label: string;
+  hint: string;
+}
+
+/** A listbox dropdown: the options open inline under the button (no OS popup, nothing clipped) with a slide. */
+export function Select<T extends string>({ id, value, options, onValue }: { id: string; value: T; options: readonly Choice<T>[]; onValue: (v: T) => void }) {
+  const blocked = useContext(Blocked);
+  const [open, setOpen] = useState(false);
+  const selected = Math.max(0, options.findIndex((o) => o.value === value));
+  const [active, setActive] = useState(selected);
+  const root = useRef<HTMLDivElement>(null);
+  const cur = options[selected];
+  const optionId = (v: string) => `${id}-option-${v}`;
+
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => {
+      if (!root.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('pointerdown', away);
+    return () => document.removeEventListener('pointerdown', away);
+  }, [open]);
+
+  const show = () => {
+    setActive(selected);
+    setOpen(true);
+  };
+  const pick = (v: T) => {
+    setOpen(false);
+    if (v !== value) onValue(v);
+  };
+  const key = (e: KeyboardEvent) => {
+    const last = options.length - 1;
+    const move = { ArrowDown: Math.min(last, active + 1), ArrowUp: Math.max(0, active - 1), Home: 0, End: last }[e.key];
+    if (move !== undefined) {
+      e.preventDefault();
+      if (open) setActive(move);
+      else show();
+    } else if (e.key === 'Escape' && open) {
+      e.stopPropagation();
+      setOpen(false);
+    }
+  };
+
+  return (
+    <div ref={root} className="flex flex-col" onKeyDown={key}>
+      <button id={id} type="button" role="combobox" aria-haspopup="listbox" aria-expanded={open} aria-controls={`${id}-list`} aria-activedescendant={open ? optionId(options[active].value) : undefined} disabled={blocked}
+        // A keyboard Enter / Space on an open list picks the highlighted option; a mouse click toggles it.
+        onClick={(e) => (open && e.detail === 0 ? pick(options[active].value) : open ? setOpen(false) : show())}
+        className="flex w-full cursor-pointer items-center justify-between gap-2 rounded-xl border-0 bg-well px-3 py-2.5 text-left text-ink shadow-pressed transition-[box-shadow,opacity] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-default disabled:opacity-45">
+        <span className="min-w-0">
+          <span className="block text-[13px] font-bold">{cur.label}</span>
+          <span className="block text-xs text-muted">{cur.hint}</span>
+        </span>
+        <ChevronDown size={16} className={cx('shrink-0 transition-transform duration-200', open && 'rotate-180')} aria-hidden />
+      </button>
+      <div inert={!open} className={cx('grid transition-[grid-template-rows,opacity,margin] duration-200 ease-out', open ? 'mt-2 grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0')}>
+        <ul id={`${id}-list`} role="listbox" aria-labelledby={id} className="m-0 flex min-h-0 list-none flex-col overflow-hidden rounded-xl bg-white p-0">
+          {options.map((o, i) => (
+            <li key={o.value} id={optionId(o.value)} role="option" aria-selected={o.value === value} data-value={o.value} data-active={open && i === active} onClick={() => pick(o.value)} onPointerMove={() => setActive(i)}
+              className="flex cursor-pointer items-center justify-between gap-2 px-3 py-2.5 transition-colors data-[active=true]:bg-brand-tint">
+              <span className="min-w-0">
+                <span className={cx('block text-[13px]', o.value === value ? 'font-extrabold text-brand-dark' : 'font-semibold')}>{o.label}</span>
+                <span className="block text-xs text-muted">{o.hint}</span>
+              </span>
+              <Check size={16} className={cx('shrink-0 text-brand transition-opacity', o.value === value ? 'opacity-100' : 'opacity-0')} aria-hidden />
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
   );
 }

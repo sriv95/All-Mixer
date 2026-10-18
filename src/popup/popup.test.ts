@@ -28,13 +28,16 @@ const tabSeparate = () => el('tab-separate').click();
 const tabDefault = () => el('tab-default').click();
 
 /** React tracks the value it last set: write through the prototype setter so the event counts as a user change. */
-function setNative(e: HTMLInputElement | HTMLSelectElement, value: string, event: 'input' | 'change'): void {
-  const proto = e instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
-  Object.getOwnPropertyDescriptor(proto, 'value')!.set!.call(e, value);
-  e.dispatchEvent(new Event(event, { bubbles: true }));
+function input(id: string, v: string): void {
+  const e = el<HTMLInputElement>(id);
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(e, v);
+  e.dispatchEvent(new Event('input', { bubbles: true }));
 }
-const input = (id: string, v: string) => setNative(el<HTMLInputElement>(id), v, 'input');
-const choose = (id: string, v: string) => setNative(el<HTMLSelectElement>(id), v, 'change');
+/** Pick an option of a dropdown the way a user does: open it, click the option. */
+function choose(id: string, v: string): void {
+  el(id).click();
+  el(`${id}-option-${v}`).click();
+}
 
 let sendMessage: ReturnType<typeof vi.fn>;
 
@@ -150,20 +153,62 @@ describe('popup', () => {
     expect(sent().at(-1).settings).toMatchObject({ mode: 'separate', masterPct: 100 });
   });
 
-  it('has no separation-quality selector, only the ML model one', async () => {
+  it('has no separation-quality selector, only the ML model dropdown', async () => {
     await load({ stored: { mode: 'separate', separationQuality: 'light' } });
     expect(has('separation-quality')).toBe(false);
-    expect(document.querySelectorAll('select')).toHaveLength(1);
+    expect(document.querySelectorAll('select')).toHaveLength(0);
+    expect(document.querySelectorAll('[role=combobox]')).toHaveLength(1);
   });
 
-  it('the model selector shows the stored model and sends a change', async () => {
-    await load({ stored: { mode: 'separate', mlModel: 'roformer' } });
-    const select = el<HTMLSelectElement>('ml-model');
-    expect(select.value).toBe('roformer');
-    expect([...select.options].map((o) => o.value)).toEqual(['mdx', 'roformer', 'deux']);
-    choose('ml-model', 'mdx');
-    await settle();
-    expect(sent().at(-1).settings.mlModel).toBe('mdx');
+  describe('model dropdown', () => {
+    const trigger = () => el('ml-model');
+    const values = () => [...document.querySelectorAll<HTMLElement>('#ml-model-list [role=option]')].map((o) => o.dataset.value);
+    const key = (k: string) => trigger().dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true }));
+
+    it('shows the stored model and sends a change', async () => {
+      await load({ stored: { mode: 'separate', mlModel: 'roformer' } });
+      expect(trigger().textContent).toMatch(/High quality/);
+      expect(values()).toEqual(['mdx', 'roformer', 'deux']);
+      expect(el('ml-model-option-roformer').getAttribute('aria-selected')).toBe('true');
+      choose('ml-model', 'mdx');
+      await settle();
+      expect(sent().at(-1).settings.mlModel).toBe('mdx');
+      expect(trigger().textContent).toMatch(/Default/);
+      expect(trigger().getAttribute('aria-expanded')).toBe('false');
+    });
+
+    it('opens on click and closes on Escape, an outside press, or choosing the same model', async () => {
+      await load({ stored: { mode: 'separate' } });
+      expect(trigger().getAttribute('aria-expanded')).toBe('false');
+      trigger().click();
+      await settle();
+      expect(trigger().getAttribute('aria-expanded')).toBe('true');
+      key('Escape');
+      await settle();
+      expect(trigger().getAttribute('aria-expanded')).toBe('false');
+      trigger().click();
+      await settle();
+      document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+      await settle();
+      expect(trigger().getAttribute('aria-expanded')).toBe('false');
+      const before = sent().length;
+      choose('ml-model', 'mdx'); // already the model: no message
+      await settle();
+      expect(sent()).toHaveLength(before);
+      expect(trigger().getAttribute('aria-expanded')).toBe('false');
+    });
+
+    it('works from the keyboard: arrows move, Enter picks', async () => {
+      await load({ stored: { mode: 'separate' } });
+      key('ArrowDown'); // opens on the current model (Default)
+      await settle();
+      key('ArrowDown');
+      await settle();
+      expect(trigger().getAttribute('aria-activedescendant')).toBe('ml-model-option-roformer');
+      trigger().dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 0 }));
+      await settle();
+      expect(sent().at(-1).settings.mlModel).toBe('roformer');
+    });
   });
   describe('advanced section', () => {
     const adv = () => el<HTMLDetailsElement>('advanced');
