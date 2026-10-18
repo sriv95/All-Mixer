@@ -27,8 +27,7 @@ describe('normalizeSettings', () => {
       vocalPct: 0,
       instrumentalPct: 100,
       mlModel: 'mdx',
-      mlAuto: true,
-      mlDelayS: 4,
+      mlDelayS: 2,
     });
     expect(normalizeSettings({ mode: 'weird' }).mode).toBe('default');
   });
@@ -39,21 +38,19 @@ describe('normalizeSettings', () => {
     expect(normalizeSettings({ mlModel: 'nope' }).mlModel).toBe('mdx');
     expect(normalizeSettings({ mlModel: 3 }).mlModel).toBe('mdx');
   });
-  it('keeps the RoFormer delay limit between 2 and 15 s and Auto unless it is switched off', () => {
+  it('keeps the RoFormer delay limit between 2 and 15 s (default 2) and converts it to ms', () => {
     expect(normalizeSettings({ mlDelayS: 9 }).mlDelayS).toBe(9);
     expect(normalizeSettings({ mlDelayS: '7' }).mlDelayS).toBe(7);
     expect(normalizeSettings({ mlDelayS: 1 }).mlDelayS).toBe(2);
     expect(normalizeSettings({ mlDelayS: 99 }).mlDelayS).toBe(15);
-    expect(normalizeSettings({ mlDelayS: 'x' }).mlDelayS).toBe(4);
-    expect(normalizeSettings({}).mlAuto).toBe(true);
-    expect(normalizeSettings({ mlAuto: false }).mlAuto).toBe(false);
-    expect(normalizeSettings({ mlAuto: 'no' }).mlAuto).toBe(true);
-    expect(mlDelayMsFor(normalizeSettings({ mlAuto: true, mlDelayS: 6 }))).toBeNull();
-    expect(mlDelayMsFor(normalizeSettings({ mlAuto: false, mlDelayS: 6 }))).toBe(6000);
+    expect(normalizeSettings({ mlDelayS: 'x' }).mlDelayS).toBe(2);
+    expect(normalizeSettings({}).mlDelayS).toBe(2);
+    expect('mlAuto' in normalizeSettings({ mlAuto: true })).toBe(false); // the removed Auto setting is dropped
+    expect(mlDelayMsFor(normalizeSettings({ mlDelayS: 6 }))).toBe(6000);
   });
   it.each(['light', 'auto', 'quality', 'ultra', 3])('drops a stored separationQuality (%s) from older versions', (q) => {
     const out = normalizeSettings({ mode: 'separate', masterPct: 200, separationQuality: q });
-    expect(out).toEqual({ mode: 'separate', masterPct: 200, vocalPct: 100, instrumentalPct: 100, mlModel: 'mdx', mlAuto: true, mlDelayS: 4 });
+    expect(out).toEqual({ mode: 'separate', masterPct: 200, vocalPct: 100, instrumentalPct: 100, mlModel: 'mdx', mlDelayS: 2 });
     expect('separationQuality' in out).toBe(false);
     expect('separationQuality' in DEFAULT_SETTINGS).toBe(false);
   });
