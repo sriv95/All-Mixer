@@ -273,6 +273,8 @@ function SeparateControls({ settings, update, ready, advancedOpen, setAdvancedOp
 }) {
   const models = useModels(settings.mlModel, settings.splitInstrumental, ready);
   const [delayDraft, setDelayDraft] = useState(settings.mlDelayS);
+  // The preset that was pressed last (n counts presses, so pressing it again replays the ring).
+  const [ripple, setRipple] = useState<{ id: string; n: number } | null>(null);
   useEffect(() => setDelayDraft(settings.mlDelayS), [settings.mlDelayS]);
 
   return (
@@ -289,13 +291,21 @@ function SeparateControls({ settings, update, ready, advancedOpen, setAdvancedOp
         )}
       </Card>
       <div className="presets grid grid-cols-2 gap-2.5" role="group" aria-label="Presets">
-        {PRESETS.map((p) => (
-          <Btn key={p.id} id={p.id} tone="preset" aria-pressed={p.vocal === settings.vocalPct && p.instrumental === settings.instrumentalPct}
-            onClick={() => update({ vocalPct: p.vocal, instrumentalPct: p.instrumental, ...(p.id === 'preset-reset' ? { drumsPct: 100, othersPct: 100 } : {}) })}>
-            {p.icon}
-            {p.label}
-          </Btn>
-        ))}
+        {PRESETS.map((p) => {
+          const pressed = p.vocal === settings.vocalPct && p.instrumental === settings.instrumentalPct;
+          return (
+            <Btn key={p.id} id={p.id} tone="preset" aria-pressed={pressed}
+              onClick={() => {
+                setRipple((r) => ({ id: p.id, n: (r?.n ?? 0) + 1 }));
+                update({ vocalPct: p.vocal, instrumentalPct: p.instrumental, ...(p.id === 'preset-reset' ? { drumsPct: 100, othersPct: 100 } : {}) });
+              }}>
+              {/* A ring spreads from the preset that was just chosen (not on opening the popup). */}
+              {pressed && ripple?.id === p.id && <motion.span key={ripple.n} aria-hidden initial={{ opacity: 0.55, scale: 0.92 }} animate={{ opacity: 0, scale: 1.18 }} transition={{ duration: 0.55, ease: 'easeOut' }} className="pointer-events-none absolute inset-0 rounded-[14px] ring-2 ring-brand" />}
+              {p.icon}
+              {p.label}
+            </Btn>
+          );
+        })}
       </div>
       <Disclosure id="advanced" open={advancedOpen} onOpen={(open) => persistAdvanced(open, setAdvancedOpen)} className="rounded-[20px] bg-card" buttonClassName="p-4"
         title={<span className="flex items-center gap-1.5"><Settings2 size={15} className="text-brand" aria-hidden />Advanced <span className="font-medium text-muted">(model, delay)</span></span>}>
