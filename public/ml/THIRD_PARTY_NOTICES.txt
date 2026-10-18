@@ -308,7 +308,7 @@ SOFTWARE.
    Weights: Kimberley Jensen, "vocals_mel_band_roformer" (UVR model registry).
    Code: Mel-Band RoFormer architecture (Lucidrains, ZFTurbo / audio-separator implementations).
    public/ml/roformer.onnx is built locally by scripts/export-roformer.py (fp16, STFT removed, RMSNorm rewritten
-   for fp16). The "Karaoke tuned" variant is Unwa's melband_roformer_inst_v1, converted the same way
-   (roformer-inst.onnx); inst V2 is melband_roformer_inst_v2 (roformer-inst2.onnx). The licence of the weights was not verified when this was added (a secondary source says MIT):
+   for fp16). The "Kim fine-tune" variant is Unwa's mel_band_roformer_kim_ft_unwa, converted the same way
+   (roformer-kim.onnx). The licence of the weights was not verified when this was added (a secondary source says MIT):
    read the LICENSE of the upstream repository before redistributing a build that contains roformer.onnx.
 ================================================================

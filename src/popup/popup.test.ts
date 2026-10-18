@@ -142,6 +142,15 @@ describe('popup', () => {
     await settle();
     expect(sent().at(-1).settings.mlModel).toBe('mdx');
   });
+  it('the gate checkbox shows the stored value and sends a change', async () => {
+    await load({ stored: { mode: 'separate', mlGate: true } });
+    const box = el<HTMLInputElement>('ml-gate');
+    expect(box.checked).toBe(true);
+    box.checked = false;
+    box.dispatchEvent(new Event('change', { bubbles: true }));
+    await settle();
+    expect(sent().at(-1).settings.mlGate).toBe(false);
+  });
   it('shows the waiting-for-gesture hint', async () => {
     await load({ status: { ...okStatus, audio: 'waiting-for-gesture' } });
     expect(el('status').textContent).toMatch(/Click anywhere/);

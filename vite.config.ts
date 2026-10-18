@@ -13,8 +13,8 @@ function mlAssets(): Plugin {
         if (!existsSync(resolve(__dirname, 'public/ml', f))) this.error(`public/ml/${f} is missing: run bun run fetch-model (mdx.onnx needs PY=python with onnx + onnxconverter-common)`);
       }
       // Optional: without it the RoFormer option in the popup reports "unavailable" and the original mix plays.
-      for (const f of ['roformer.onnx', 'roformer-meta.json', 'roformer-inst.onnx', 'roformer-inst-meta.json', 'roformer-inst2.onnx', 'roformer-inst2-meta.json']) {
-        if (!existsSync(resolve(__dirname, 'public/ml', f))) this.warn(`public/ml/${f} is missing: that RoFormer model option will be unavailable (bun run export-roformer / export-roformer-inst / export-roformer-inst2)`);
+      for (const f of ['roformer.onnx', 'roformer-meta.json', 'roformer-kim.onnx', 'roformer-kim-meta.json']) {
+        if (!existsSync(resolve(__dirname, 'public/ml', f))) this.warn(`public/ml/${f} is missing: that RoFormer model option will be unavailable (bun run export-roformer / export-roformer-kim)`);
       }
     },
     closeBundle() {
