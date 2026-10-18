@@ -1,0 +1,338 @@
+import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { AudioLines, AudioWaveform, ChevronDown, Cpu, Download, Drum, LoaderCircle, Mic, MicOff, Music, RefreshCw, RotateCcw, Settings2, SlidersVertical, Timer, TriangleAlert, Volume2 } from 'lucide-react';
+import type { ContentStatus, GetStatus, GetTabSettings, SetTabSettings } from '../shared/messages';
+import { clampDelayS, clampOthersPct, clampPct, masterPctAt, masterPosOf, MASTER_POS_MAX, normalizeSettings, type MixerSettings, type Mode } from '../shared/settings';
+import { separationView, type SepView } from '../shared/separation-view';
+import { MAX_DELAY_S, MIN_DELAY_S } from '../ml/rof-plan';
+import type { MlModel } from '../worklet/protocol';
+import { installModel, useModels, type ModelLine } from './models';
+import { Blocked, Btn, Card, Slider, SliderRow, Switch } from './ui';
+
+type Update = (patch: Partial<MixerSettings>) => void;
+
+const LOADING_POLL_MS = 500;
+/** One click on "Raise delay limit" adds this many seconds. */
+const DELAY_STEP_S = 4;
+// The Advanced section stays open between popup openings, and opens by itself when a non-default model is in use.
+const ADVANCED_KEY = 'advancedOpen';
+
+function readAdvanced(): boolean {
+  try {
+    return localStorage.getItem(ADVANCED_KEY) === '1';
+  } catch {
+    return false; // storage blocked: stays closed
+  }
+}
+
+function noteText(blocked: boolean, settings: MixerSettings, loaded: { s: ContentStatus | undefined } | null): string {
+  if (blocked) return 'Open a web page to use All Mixer!.';
+  if (!loaded) return '';
+  const s = loaded.s;
+  // No content script yet (extension just installed or updated): Separate mode cannot work until the tab is reloaded.
+  if (!s) return 'Reload this tab to start All Mixer! and show Separate mode.';
+  if (s.audio === 'error') return `Audio error: ${s.error ?? 'unknown'}`;
+  if (!s.videoFound && settings.masterPct !== 100) return 'No video player on this page yet.';
+  return s.audio === 'waiting-for-gesture' ? 'Click anywhere on the page once to enable the boost.' : '';
+}
+
+export function App() {
+  const [blocked, setBlocked] = useState(false);
+  const [ready, setReady] = useState(false);
+  const [settings, setSettings] = useState<MixerSettings>(() => normalizeSettings({}));
+  const [loaded, setLoaded] = useState<{ s: ContentStatus | undefined } | null>(null);
+  const [advancedOpen, setAdvancedOpen] = useState(readAdvanced);
+  const [splitOpen, setSplitOpen] = useState(false);
+  const tabId = useRef<number | null>(null);
+  const latest = useRef(settings);
+  const pending = useRef(false);
+
+  const refresh = useCallback(async () => {
+    if (tabId.current === null) return;
+    const req: GetStatus = { type: 'get-status' };
+    const s: ContentStatus | undefined = await chrome.tabs.sendMessage(tabId.current, req).catch(() => undefined);
+    setLoaded({ s });
+  }, []);
+
+  const update = useCallback<Update>(
+    (patch) => {
+      latest.current = { ...latest.current, ...patch };
+      setSettings(latest.current);
+      // Coalesce slider drags to one message per frame.
+      if (pending.current || tabId.current === null) return;
+      pending.current = true;
+      requestAnimationFrame(() => {
+        pending.current = false;
+        const msg: SetTabSettings = { type: 'set-tab-settings', tabId: tabId.current!, settings: latest.current };
+        void chrome.runtime.sendMessage(msg).then(refresh);
+      });
+    },
+    [refresh],
+  );
+
+  useEffect(() => {
+    void (async () => {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      // The content script runs on web pages only (not chrome:// or the web store).
+      if (tab?.id === undefined || !tab.url?.startsWith('http')) return setBlocked(true);
+      tabId.current = tab.id;
+      const req: GetTabSettings = { type: 'get-tab-settings', tabId: tab.id };
+      latest.current = normalizeSettings(await chrome.runtime.sendMessage(req));
+      setSettings(latest.current);
+      if (latest.current.mlModel !== 'mdx' || latest.current.splitInstrumental) setAdvancedOpen(true);
+      if (latest.current.splitInstrumental) setSplitOpen(true);
+      setReady(true);
+      await refresh();
+    })();
+  }, [refresh]);
+
+  const view = separationView(settings.mode, loaded?.s);
+  const warming = view.kind === 'warming';
+  // While the separator starts or ML warms up, poll so the banner moves on by itself.
+  useEffect(() => {
+    if (!warming) return;
+    const t = setTimeout(() => void refresh(), LOADING_POLL_MS);
+    return () => clearTimeout(t);
+  }, [warming, loaded, refresh]);
+
+  // Stopped, too slow: off and on again is the retry the content script understands.
+  const retry = async () => {
+    if (tabId.current === null) return;
+    const off: SetTabSettings = { type: 'set-tab-settings', tabId: tabId.current, settings: { ...latest.current, mode: 'default' } };
+    await chrome.runtime.sendMessage(off);
+    update({ mode: 'separate' });
+  };
+
+  const noContent = loaded !== null && !loaded.s;
+  const separate = settings.mode === 'separate' && !noContent;
+  const note = noteText(blocked, settings, loaded);
+
+  return (
+    <Blocked.Provider value={blocked}>
+      <main className="flex flex-col gap-3.5">
+        <header className="flex items-center gap-2.5 text-[17px] font-extrabold tracking-tight">
+          <span className="grid size-8 place-items-center rounded-[10px] bg-brand text-white"><SlidersVertical size={18} aria-hidden /></span>
+          All Mixer!
+        </header>
+        {!noContent && <Tabs mode={separate ? 'separate' : 'default'} onMode={(mode) => update({ mode })} />}
+        {separate ? (
+          <div id="panel-separate" className="flex flex-col gap-3.5">
+            <Banner view={view} settings={settings} update={update} retry={retry} />
+            <SeparateControls settings={settings} update={update} ready={ready} advancedOpen={advancedOpen} setAdvancedOpen={setAdvancedOpen} splitOpen={splitOpen} setSplitOpen={setSplitOpen} />
+          </div>
+        ) : (
+          <>
+            <Master settings={settings} update={update} />
+            {!noContent && (
+              <Card>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <label htmlFor="separate-mode" className="text-sm font-bold">Separate mode</label>
+                    <p className="mt-0.5 text-xs leading-snug text-muted">Split vocals and music live and mix them yourself.</p>
+                  </div>
+                  <Switch id="separate-mode" checked={false} onChange={() => update({ mode: 'separate' })} />
+                </div>
+              </Card>
+            )}
+          </>
+        )}
+        <p id="status" role="status" className="m-0 text-[13px] leading-snug text-muted empty:hidden">{note}</p>
+      </main>
+    </Blocked.Provider>
+  );
+}
+
+function Tabs({ mode, onMode }: { mode: Mode; onMode: (m: Mode) => void }) {
+  const blocked = useContext(Blocked);
+  const tab = (m: Mode, label: string, icon: ReactNode) => (
+    <button id={`tab-${m}`} type="button" role="tab" aria-selected={mode === m} disabled={blocked} onClick={() => onMode(m)}
+      className="flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-full border-0 bg-transparent py-2 text-[13px] font-bold text-muted aria-selected:bg-brand aria-selected:text-white aria-selected:shadow-[0_3px_8px_rgb(225_29_46/0.4)] disabled:opacity-45">
+      {icon}
+      {label}
+    </button>
+  );
+  return (
+    <div role="tablist" className="flex rounded-full bg-[#f4f0f0] p-1 shadow-[inset_2px_2px_5px_#e2dadb,inset_-2px_-2px_5px_#fff]">
+      {tab('default', 'Default', <Volume2 size={15} aria-hidden />)}
+      {tab('separate', 'Separate', <AudioLines size={15} aria-hidden />)}
+    </div>
+  );
+}
+
+/** Global volume: a big number on the Default tab, a compact row on the Separate tab. */
+function Master({ settings, update, compact }: { settings: MixerSettings; update: Update; compact?: boolean }) {
+  return (
+    <Card>
+      <div className="flex items-center justify-between gap-2">
+        <label htmlFor="master" className="flex items-center gap-1.5 text-[13px] font-bold"><Volume2 size={15} className="text-brand" aria-hidden />Global volume</label>
+        <div className="flex items-center gap-2">
+          {compact && <output id="master-value" htmlFor="master" className="text-[15px] font-extrabold tabular-nums">{settings.masterPct}%</output>}
+          <Btn id="master-reset" tone="small" onClick={() => update({ masterPct: 100 })}><RotateCcw size={13} aria-hidden />Reset</Btn>
+        </div>
+      </div>
+      {!compact && <output id="master-value" htmlFor="master" className="text-[44px] leading-none font-extrabold tracking-tight tabular-nums">{settings.masterPct}%</output>}
+      <Slider id="master" value={masterPosOf(settings.masterPct)} min={0} max={MASTER_POS_MAX} step={1} onValue={(pos) => update({ masterPct: masterPctAt(pos, settings.masterPct) })} />
+      {!compact && (
+        <div className="flex justify-between text-xs text-muted"><span>0%</span><span>Boost up to 600%</span></div>
+      )}
+    </Card>
+  );
+}
+
+const bannerIcon = 'grid size-9 shrink-0 place-items-center rounded-full';
+
+function Banner({ view, settings, update, retry }: { view: SepView; settings: MixerSettings; update: Update; retry: () => Promise<void> }) {
+  if (view.kind === 'off') return null;
+  const stopped = view.kind === 'stopped' || view.kind === 'error' || view.kind === 'unavailable';
+  const tooSlow = view.kind === 'stopped' || (view.kind === 'unavailable' && /too slow/.test(view.cause));
+  const nextDelay = Math.min(MAX_DELAY_S, settings.mlDelayS + DELAY_STEP_S);
+  let icon: ReactNode;
+  let title: string;
+  let text: string;
+  switch (view.kind) {
+    case 'warming':
+      icon = <span className={`${bannerIcon} bg-white text-brand`}><LoaderCircle size={20} className="animate-spin" aria-hidden /></span>;
+      title = 'Warming up';
+      text = 'Testing your GPU speed. The original mix keeps playing until it is ready.';
+      break;
+    case 'live':
+      icon = <span className={`${bannerIcon} mx-pulse bg-brand text-white`}><AudioWaveform size={20} aria-hidden /></span>;
+      title = 'Separating live';
+      text = `${view.delayS} s audio delay. The picture is delayed to match.`;
+      break;
+    case 'stopped':
+      icon = <span className={`${bannerIcon} bg-brand text-white`}><TriangleAlert size={20} aria-hidden /></span>;
+      title = 'Separation stopped';
+      text = `This device is too slow to separate in real time (${view.cause}). The original mix is playing.`;
+      break;
+    default:
+      icon = <span className={`${bannerIcon} bg-brand text-white`}><TriangleAlert size={20} aria-hidden /></span>;
+      title = 'Separation unavailable';
+      text = `${view.cause}. The original mix is playing.`;
+  }
+  return (
+    <>
+      <div id="separation-banner" role="status" data-kind={view.kind} className={`flex items-start gap-3 rounded-[20px] p-3.5 ${stopped ? 'bg-ink text-white' : 'bg-brand-tint'}`}>
+        {icon}
+        <div className="min-w-0 flex-1">
+          <h2 className="m-0 text-sm font-extrabold">{title}</h2>
+          <p className={`m-0 mt-0.5 text-[12.5px] leading-snug ${stopped ? 'text-[#ddd0d2]' : 'text-[#4c4047]'}`}>{text}</p>
+        </div>
+      </div>
+      {tooSlow && (
+        <div className="flex flex-col gap-2.5">
+          {settings.mlModel !== 'mdx' && <Btn tone="primary" id="act-default-model" onClick={() => update({ mlModel: 'mdx' as MlModel })}><Cpu size={16} aria-hidden />Switch to Default model</Btn>}
+          {settings.mlDelayS < MAX_DELAY_S && <Btn id="act-raise-delay" onClick={() => update({ mlDelayS: nextDelay })}><Timer size={16} aria-hidden />Raise delay limit to {nextDelay} s</Btn>}
+          <Btn id="act-retry" onClick={() => void retry()}><RefreshCw size={16} aria-hidden />Try again</Btn>
+        </div>
+      )}
+    </>
+  );
+}
+
+const PRESETS = [
+  { id: 'preset-karaoke', label: 'Karaoke', vocal: 0, instrumental: 100, icon: <MicOff size={15} aria-hidden /> },
+  { id: 'preset-half-karaoke', label: 'Half karaoke', vocal: 50, instrumental: 100, icon: <AudioLines size={15} aria-hidden /> },
+  { id: 'preset-acappella', label: 'A cappella', vocal: 100, instrumental: 0, icon: <Mic size={15} aria-hidden /> },
+  { id: 'preset-reset', label: 'Reset', vocal: 100, instrumental: 100, icon: <RotateCcw size={15} aria-hidden /> },
+];
+
+function SeparateControls({ settings, update, ready, advancedOpen, setAdvancedOpen, splitOpen, setSplitOpen }: {
+  settings: MixerSettings;
+  update: Update;
+  ready: boolean;
+  advancedOpen: boolean;
+  setAdvancedOpen: (open: boolean) => void;
+  splitOpen: boolean;
+  setSplitOpen: (open: boolean) => void;
+}) {
+  const models = useModels(settings.mlModel, settings.splitInstrumental, ready);
+  const [delayDraft, setDelayDraft] = useState(settings.mlDelayS);
+  useEffect(() => setDelayDraft(settings.mlDelayS), [settings.mlDelayS]);
+
+  return (
+    <>
+      <Card>
+        <SliderRow id="vocal" icon={<Mic size={15} />} label="Vocal" valueText={`${settings.vocalPct}%`} value={settings.vocalPct} min={0} max={100} step={5} onValue={(v) => update({ vocalPct: clampPct(v) })} />
+        <SliderRow id="instrumental" icon={<Music size={15} />} label="Instrumental" valueText={`${settings.instrumentalPct}%`} value={settings.instrumentalPct} min={0} max={100} step={5} onValue={(v) => update({ instrumentalPct: clampPct(v) })} />
+        {settings.splitInstrumental && (
+          <div id="split-mix" className="flex flex-col gap-3.5 border-t border-well pt-3.5">
+            <SliderRow id="drums" icon={<Drum size={15} />} label="Drums" hint="in the instrumental" valueText={`${settings.drumsPct}%`} value={settings.drumsPct} min={0} max={100} step={5} onValue={(v) => update({ drumsPct: clampPct(v) })} />
+            <SliderRow id="others" icon={<AudioLines size={15} />} label="Others" hint="in the instrumental" valueText={`${settings.othersPct}%`} value={settings.othersPct} min={0} max={100} step={5} onValue={(v) => update({ othersPct: clampOthersPct(v) })} />
+          </div>
+        )}
+      </Card>
+      <div className="presets grid grid-cols-2 gap-2.5" role="group" aria-label="Presets">
+        {PRESETS.map((p) => (
+          <Btn key={p.id} id={p.id} aria-pressed={p.vocal === settings.vocalPct && p.instrumental === settings.instrumentalPct}
+            className="h-auto! py-2.5 text-[13px] aria-pressed:text-brand-dark aria-pressed:shadow-pressed"
+            onClick={() => update({ vocalPct: p.vocal, instrumentalPct: p.instrumental, ...(p.id === 'preset-reset' ? { drumsPct: 100, othersPct: 100 } : {}) })}>
+            {p.icon}
+            {p.label}
+          </Btn>
+        ))}
+      </div>
+      <Master settings={settings} update={update} compact />
+      <details id="advanced" open={advancedOpen} onToggle={(e) => persistAdvanced(e.currentTarget.open, setAdvancedOpen)} className="group rounded-[20px] bg-card">
+        <summary className="flex cursor-pointer list-none items-center justify-between p-4 text-[13px] font-bold [&::-webkit-details-marker]:hidden">
+          <span className="flex items-center gap-1.5"><Settings2 size={15} className="text-brand" aria-hidden />Advanced <span className="font-medium text-muted">(model, delay)</span></span>
+          <ChevronDown size={16} className="transition-transform group-open:rotate-180" aria-hidden />
+        </summary>
+        <div className="flex flex-col gap-3.5 px-4 pb-4">
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="ml-model" className="text-[13px] font-bold">Model</label>
+            <select id="ml-model" value={settings.mlModel} onChange={(e) => update({ mlModel: e.currentTarget.value as MlModel })} className="h-10 w-full rounded-xl border-0 bg-well px-3 text-[13px] text-ink shadow-pressed">
+              <option value="mdx">Default</option>
+              <option value="roformer">High quality (optional download)</option>
+              <option value="deux">Best quality (needs a good GPU, optional download)</option>
+            </select>
+          </div>
+          {models.model && <ModelRow idPrefix="model" line={models.model} />}
+          <div id="chunk-row" className="flex flex-col gap-3">
+            <SliderRow id="ml-delay" icon={<Timer size={15} />} label="Delay limit" valueText={`${delayDraft} s`} value={delayDraft} min={MIN_DELAY_S} max={MAX_DELAY_S} step={1} onValue={(v) => setDelayDraft(clampDelayS(v))} />
+            <div className="flex items-center justify-between gap-3">
+              <p className="m-0 text-xs leading-snug text-muted">More audio delay gives more quality but uses more GPU.</p>
+              <Btn id="ml-delay-apply" tone="small" disabled={delayDraft === settings.mlDelayS} onClick={() => update({ mlDelayS: clampDelayS(delayDraft) })}>Apply</Btn>
+            </div>
+          </div>
+          <details id="split" open={splitOpen} onToggle={(e) => setSplitOpen(e.currentTarget.open)} className="group/split rounded-2xl bg-white/70">
+            <summary className="flex cursor-pointer list-none items-center justify-between p-3 text-[13px] font-bold [&::-webkit-details-marker]:hidden">
+              <span className="flex items-center gap-1.5"><Drum size={15} className="text-brand" aria-hidden />Split instrumental</span>
+              <ChevronDown size={16} className="transition-transform group-open/split:rotate-180" aria-hidden />
+            </summary>
+            <div className="flex flex-col gap-3 px-3 pb-3">
+              <div className="flex items-center justify-between gap-3">
+                <label htmlFor="split-on" className="text-[13px] font-bold">Drums</label>
+                <Switch id="split-on" checked={settings.splitInstrumental} onChange={(on) => update({ splitInstrumental: on })} />
+              </div>
+              <p className="m-0 text-xs leading-snug text-muted">Splitting the instrumental adds more delay over the Delay limit.</p>
+              {models.drums && <ModelRow idPrefix="drums" line={models.drums} />}
+            </div>
+          </details>
+        </div>
+      </details>
+    </>
+  );
+}
+
+function persistAdvanced(open: boolean, set: (open: boolean) => void): void {
+  set(open);
+  try {
+    localStorage.setItem(ADVANCED_KEY, open ? '1' : '0');
+  } catch {
+    /* storage blocked */
+  }
+}
+
+function ModelRow({ idPrefix, line }: { idPrefix: 'model' | 'drums'; line: ModelLine }) {
+  return (
+    <p id={`${idPrefix}-row`} className="m-0 flex items-center justify-between gap-3 text-xs leading-snug text-muted">
+      <span id={`${idPrefix}-text`}>{line.text}</span>
+      {line.button && (
+        <Btn id={`${idPrefix}-btn`} tone="small" onClick={() => installModel(line.id)}>
+          {line.button === 'Update' ? <RefreshCw size={13} aria-hidden /> : <Download size={13} aria-hidden />}
+          {line.button}
+        </Btn>
+      )}
+    </p>
+  );
+}

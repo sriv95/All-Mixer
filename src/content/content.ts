@@ -1,4 +1,5 @@
-import type { ContentRequest, ContentStatus, GetMyTabSettings } from '../shared/messages';
+import type { ContentRequest, ContentStatus, GetMyTabSettings, SetBadge } from '../shared/messages';
+import { separationView } from '../shared/separation-view';
 import { DEFAULT_SETTINGS, masterGainFor, mlDelayMsFor, normalizeSettings, separationFor, type MixerSettings } from '../shared/settings';
 import { EngineSelector } from './audio/engine-select';
 import { MasterChain } from './audio/master-chain';
@@ -44,7 +45,19 @@ const warmupSpinner = (on: boolean) => {
   warmupTimer = setInterval(tick, 1000);
 };
 const warmupHold = new WarmupHold(() => video, () => warmupSpinner(false));
+// The toolbar badge follows Separate mode. Only a frame that owns the media reports: the others would clear it.
+let lastBadge = '';
+const reportBadge = () => {
+  if (!video) return;
+  const view = separationView(settings.mode, status());
+  const key = JSON.stringify(view);
+  if (key === lastBadge) return;
+  lastBadge = key;
+  const msg: SetBadge = { type: 'set-badge', view };
+  chrome.runtime.sendMessage(msg).catch(() => {});
+};
 selector.onChange = ({ state }) => {
+  reportBadge();
   if (state === 'warming') {
     warmupHold.hold();
     // A video the user had paused is not waiting for anything.
@@ -79,7 +92,10 @@ const syncDelay = (force = false, want = wantedDelayMs(), effectiveAt?: number) 
 
 // Fires when separation switches on/off (at the moment the new audio reaches
 // the speakers) and when device latency moves, e.g. a Bluetooth switch.
-chain.onLatencyChange((info, at) => syncDelay(false, wantedDelayMs(info.videoDelayMs), at));
+chain.onLatencyChange((info, at) => {
+  syncDelay(false, wantedDelayMs(info.videoDelayMs), at);
+  reportBadge();
+});
 
 let modeKnown = false; // the first settings load is not a toggle
 // Nothing starts (audio context, ML host) in a frame or page until it has media: most frames have none.
@@ -95,7 +111,10 @@ const apply = (raw: unknown) => {
   settings = normalizeSettings(raw);
   if (settings.mode !== prevMode && modeKnown) lyrics.modeChanged();
   modeKnown = true;
-  if (video) push();
+  if (video) {
+    push();
+    reportBadge();
+  }
 };
 
 // The content script lives for the whole tab session, so the settings survive
@@ -119,6 +138,19 @@ watchMainVideo(site, (v) => {
   push();
 });
 
+function status(): ContentStatus {
+  return {
+    site,
+    videoFound: video !== null,
+    audio: chain.state,
+    gain: chain.requestedGain,
+    videoDelay: { state: overlay?.state ?? 'off', delayMs: overlay?.delayMs ?? 0, stats: overlay?.stats },
+    separation: { state: chain.separationState, latency: chain.latency, choice: selector.status, error: chain.separationError },
+    error: chain.error,
+    avProbe: probe.on ? probe.status : undefined,
+  };
+}
+
 chrome.runtime.onMessage.addListener((msg: ContentRequest, _sender, sendResponse) => {
   if (msg.type === 'apply-settings') {
     apply(msg.settings);
@@ -131,17 +163,7 @@ chrome.runtime.onMessage.addListener((msg: ContentRequest, _sender, sendResponse
     syncDelay(true);
     sendResponse({ ok: true });
   } else if (msg.type === 'get-status') {
-    const status: ContentStatus = {
-      site,
-      videoFound: video !== null,
-      audio: chain.state,
-      gain: chain.requestedGain,
-      videoDelay: { state: overlay?.state ?? 'off', delayMs: overlay?.delayMs ?? 0, stats: overlay?.stats },
-      separation: { state: chain.separationState, latency: chain.latency, choice: selector.status, error: chain.separationError },
-      error: chain.error,
-      avProbe: probe.on ? probe.status : undefined,
-    };
-    sendResponse(status);
+    sendResponse(status());
   }
   return false;
 });
