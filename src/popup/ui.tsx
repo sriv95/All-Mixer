@@ -24,7 +24,7 @@ interface SliderProps {
  * The value a slider shows. A change the user made (a drag) shows at once; any other change (a preset, Reset)
  * glides there, and the thumb, the fill and the number move together.
  */
-function useGlide(value: number): { shown: number; gliding: boolean; mine: (v: number) => void } {
+export function useGlide(value: number): { shown: number; gliding: boolean; mine: (v: number) => void } {
   const [shown, setShown] = useState(value);
   const at = useRef(value);
   const mine = useRef<number | null>(null);
