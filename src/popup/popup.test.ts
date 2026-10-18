@@ -120,11 +120,11 @@ describe('popup', () => {
     slider.value = '-40';
     slider.dispatchEvent(new Event('input', { bubbles: true }));
     await settle();
-    expect(sent().at(-1).settings.masterPct).toBe(0);
-    expect(el<HTMLOutputElement>('master-value').value).toBe('0%');
+    expect(sent().at(-1).settings.masterPct).toBe(100); // a boost only
+    expect(el<HTMLOutputElement>('master-value').value).toBe('100%');
   });
 
-  it('Reset sends 100', async () => {
+  it('Global Volume Reset sends 100', async () => {
     await load({ stored: { masterPct: 400 } });
     el('master-reset').click();
     await settle();
@@ -387,6 +387,16 @@ describe('popup', () => {
       await settle();
       expect(sent().at(-1).settings).toMatchObject({ vocalPct: v, instrumentalPct: i });
       expect(pressed()).toEqual([id]);
+    });
+
+    it('the Reset preset also puts Drums and Others back to 100%', async () => {
+      await load({ stored: { mode: 'separate', splitInstrumental: true, drumsPct: 250, othersPct: 30, masterPct: 300 } });
+      el('preset-reset').click();
+      await settle();
+      expect(sent().at(-1).settings).toMatchObject({ drumsPct: 100, othersPct: 100, masterPct: 300 });
+      el('preset-karaoke').click();
+      await settle();
+      expect(sent().at(-1).settings).toMatchObject({ vocalPct: 0, drumsPct: 100 });
     });
 
     it('moving a slider clears the preset highlight', async () => {

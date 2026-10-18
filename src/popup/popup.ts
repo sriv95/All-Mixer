@@ -1,5 +1,5 @@
 import type { ContentStatus, GetStatus, GetTabSettings, SetTabSettings } from '../shared/messages';
-import { clampDelayS, clampPct, normalizeSettings, type MixerSettings, type Mode } from '../shared/settings';
+import { clampDelayS, clampMasterPct, clampOthersPct, clampPct, normalizeSettings, type MixerSettings, type Mode } from '../shared/settings';
 import type { MlModel } from '../worklet/protocol';
 import { MODEL_IDS, MODEL_LABEL, keyInstalled, keyProgress, keyRemote, mb, modelState, type InstalledModel, type ModelId, type ModelState, type Progress, type RemoteRecord } from '../shared/model-store';
 
@@ -271,7 +271,7 @@ for (const tab of tabs) {
 }
 
 master.addEventListener('input', () => {
-  settings = { ...settings, masterPct: clampPct(master.value) };
+  settings = { ...settings, masterPct: clampMasterPct(master.value) };
   save();
 });
 
@@ -291,7 +291,7 @@ drums.addEventListener('input', () => {
 });
 
 others.addEventListener('input', () => {
-  settings = { ...settings, othersPct: clampPct(others.value) };
+  settings = { ...settings, othersPct: clampOthersPct(others.value) };
   save();
 });
 
@@ -318,7 +318,8 @@ mlModel.addEventListener('change', () => {
 
 for (const b of presets) {
   b.addEventListener('click', () => {
-    settings = { ...settings, vocalPct: Number(b.dataset.vocal), instrumentalPct: Number(b.dataset.instrumental) };
+    const reset = b.id === 'preset-reset' ? { drumsPct: 100, othersPct: 100 } : {}; // Reset covers the whole instrumental
+    settings = { ...settings, vocalPct: Number(b.dataset.vocal), instrumentalPct: Number(b.dataset.instrumental), ...reset };
     save();
   });
 }

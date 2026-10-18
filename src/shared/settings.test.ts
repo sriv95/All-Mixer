@@ -55,7 +55,7 @@ describe('normalizeSettings', () => {
     expect(normalizeSettings({}).splitInstrumental).toBe(false);
     expect(normalizeSettings({ splitInstrumental: true }).splitInstrumental).toBe(true);
     for (const v of ['true', 1, null]) expect(normalizeSettings({ splitInstrumental: v }).splitInstrumental).toBe(false);
-    expect(normalizeSettings({ drumsPct: 0, othersPct: 900 })).toMatchObject({ drumsPct: 0, othersPct: 600 });
+    expect(normalizeSettings({ drumsPct: 0, othersPct: 900 })).toMatchObject({ drumsPct: 0, othersPct: 100 });
     expect(normalizeSettings({ drumsPct: 'x', othersPct: undefined })).toMatchObject({ drumsPct: 100, othersPct: 100 });
   });
   it.each(['light', 'auto', 'quality', 'ultra', 3])('drops a stored separationQuality (%s) from older versions', (q) => {
@@ -67,12 +67,12 @@ describe('normalizeSettings', () => {
 });
 
 describe('masterGainFor', () => {
-  it('maps percent to linear gain in default mode', () => {
+  it('maps percent to linear gain in both modes', () => {
     expect(masterGainFor({ ...DEFAULT_SETTINGS, masterPct: 600 })).toBe(6);
-    expect(masterGainFor({ ...DEFAULT_SETTINGS, masterPct: 0 })).toBe(0);
+    expect(masterGainFor({ ...DEFAULT_SETTINGS, mode: 'separate', masterPct: 250 })).toBe(2.5);
   });
-  it('is unity in separate mode until separation ships', () => {
-    expect(masterGainFor({ ...DEFAULT_SETTINGS, mode: 'separate', masterPct: 600 })).toBe(1);
+  it('never attenuates: stored values under 100 come back as 100', () => {
+    expect(normalizeSettings({ masterPct: 0 }).masterPct).toBe(100);
   });
 });
 
