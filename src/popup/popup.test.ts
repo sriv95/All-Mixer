@@ -282,13 +282,13 @@ describe('popup', () => {
     });
 
     it('opens by itself when the split is on, and shows the Drums and Others sliders with their values', async () => {
-      await load({ stored: sepSplit({ drumsPct: 150, othersPct: 40 }) });
+      await load({ stored: sepSplit({ drumsPct: 60, othersPct: 40 }) });
       expect(el<HTMLDetailsElement>('advanced').open).toBe(true);
       expect(el<HTMLDetailsElement>('split').open).toBe(true);
       expect(el<HTMLInputElement>('split-on').checked).toBe(true);
       expect(el('split-mix').hidden).toBe(false);
-      expect(el<HTMLInputElement>('drums').value).toBe('150');
-      expect(el<HTMLOutputElement>('drums-value').value).toBe('150%');
+      expect(el<HTMLInputElement>('drums').value).toBe('60');
+      expect(el<HTMLOutputElement>('drums-value').value).toBe('60%');
       expect(el<HTMLInputElement>('others').value).toBe('40');
     });
 
@@ -308,7 +308,7 @@ describe('popup', () => {
 
     it('the Drums and Others sliders send their gains', async () => {
       await load({ stored: sepSplit() });
-      for (const [id, key, v] of [['drums', 'drumsPct', '250'], ['others', 'othersPct', '30']] as const) {
+      for (const [id, key, v] of [['drums', 'drumsPct', '40'], ['others', 'othersPct', '30']] as const) {
         const slider = el<HTMLInputElement>(id);
         slider.value = v;
         slider.dispatchEvent(new Event('input', { bubbles: true }));
@@ -369,11 +369,11 @@ describe('popup', () => {
     it('sliders are enabled and send vocalPct / instrumentalPct', async () => {
       await load({ stored: { mode: 'separate' } });
       expect(el<HTMLInputElement>('vocal').disabled).toBe(false);
-      await drag('vocal', '250');
-      expect(sent().at(-1).settings.vocalPct).toBe(250);
-      expect(el<HTMLOutputElement>('vocal-value').value).toBe('250%');
+      await drag('vocal', '25');
+      expect(sent().at(-1).settings.vocalPct).toBe(25);
+      expect(el<HTMLOutputElement>('vocal-value').value).toBe('25%');
       await drag('instrumental', '9999');
-      expect(sent().at(-1).settings).toMatchObject({ vocalPct: 250, instrumentalPct: 600 });
+      expect(sent().at(-1).settings).toMatchObject({ vocalPct: 25, instrumentalPct: 100 });
     });
 
     it.each([
@@ -382,7 +382,7 @@ describe('popup', () => {
       ['preset-acappella', 100, 0],
       ['preset-reset', 100, 100],
     ])('%s sets %i / %i and is aria-pressed', async (id, v, i) => {
-      await load({ stored: { mode: 'separate', vocalPct: 300, instrumentalPct: 300 } });
+      await load({ stored: { mode: 'separate', vocalPct: 70, instrumentalPct: 70 } });
       expect(pressed()).toEqual([]);
       el(id).click();
       await settle();
@@ -391,7 +391,7 @@ describe('popup', () => {
     });
 
     it('the Reset preset also puts Drums and Others back to 100%', async () => {
-      await load({ stored: { mode: 'separate', splitInstrumental: true, drumsPct: 250, othersPct: 30, masterPct: 300 } });
+      await load({ stored: { mode: 'separate', splitInstrumental: true, drumsPct: 40, othersPct: 30, masterPct: 300 } });
       el('preset-reset').click();
       await settle();
       expect(sent().at(-1).settings).toMatchObject({ drumsPct: 100, othersPct: 100, masterPct: 300 });

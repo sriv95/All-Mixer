@@ -8,15 +8,15 @@ export interface MixerSettings {
   mode: Mode;
   /** Global volume (a boost on top of either mode), percent (0–600). */
   masterPct: number;
-  /** Separate mode vocal volume, percent (0–600). Used once separation lands. */
+  /** Separate mode vocal volume, percent (0–100). Used once separation lands. */
   vocalPct: number;
-  /** Separate mode instrumental volume, percent (0–600). Used once separation lands. */
+  /** Separate mode instrumental volume, percent (0–100). Used once separation lands. */
   instrumentalPct: number;
   /** Separate mode ML model: 'mdx' (MDX-Net 9482 + Spleeter, the default) or a downloaded Mel-Band RoFormer: 'roformer' (Kim fine-tune, High quality) or 'deux' (Best quality). */
   mlModel: MlModel;
   /** Split instrumental (Advanced): a second model takes the drums out of the instrumental, which then has a Drums and an Others gain. Costs GPU time and delay. */
   splitInstrumental: boolean;
-  /** Drums gain inside the instrumental, percent (0–600); the instrumental gain applies on top. Used when splitInstrumental is on. */
+  /** Drums gain inside the instrumental, percent (0–100); the instrumental gain applies on top. Used when splitInstrumental is on. */
   drumsPct: number;
   /** Gain of the rest of the instrumental (everything but the drums), percent (0–100). */
   othersPct: number;
@@ -25,7 +25,7 @@ export interface MixerSettings {
 }
 
 const GAIN_MIN_PCT = 0;
-const GAIN_MAX_PCT = 600;
+const GAIN_MAX_PCT = 100;
 
 export const DEFAULT_SETTINGS: Readonly<MixerSettings> = Object.freeze({
   mode: 'default',
@@ -45,7 +45,8 @@ export function clampPct(value: unknown, fallback = 100, min = GAIN_MIN_PCT, max
   return Math.min(max, Math.max(min, Math.round(n)));
 }
 
-export const clampMasterPct = (value: unknown): number => clampPct(value, DEFAULT_SETTINGS.masterPct);
+/** Only Global Volume boosts: 0–600 %. */
+export const clampMasterPct = (value: unknown): number => clampPct(value, DEFAULT_SETTINGS.masterPct, GAIN_MIN_PCT, 600);
 
 /** Global volume slider stops: 5 % steps to 50, 10 % to 100, 100 % to 600. */
 export const MASTER_STEPS: readonly number[] = [

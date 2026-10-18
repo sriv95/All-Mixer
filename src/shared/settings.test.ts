@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_SETTINGS, clampPct, masterGainFor, mlDelayMsFor, normalizeSettings, separationFor } from './settings';
 
 describe('clampPct', () => {
-  it('clamps to 0–600 and rounds', () => {
+  it('clamps to 0–100 and rounds', () => {
     expect(clampPct(-5)).toBe(0);
-    expect(clampPct(601)).toBe(600);
-    expect(clampPct(250.6)).toBe(251);
-    expect(clampPct('300')).toBe(300);
+    expect(clampPct(101)).toBe(100);
+    expect(clampPct(25.6)).toBe(26);
+    expect(clampPct('30')).toBe(30);
   });
   it('falls back on junk', () => {
     expect(clampPct(NaN)).toBe(100);
@@ -80,10 +80,10 @@ describe('masterGainFor', () => {
 describe('separationFor', () => {
   it('is off in Default mode and maps percent to linear gain in Separate mode', () => {
     expect(separationFor(DEFAULT_SETTINGS).on).toBe(false);
-    expect(separationFor({ ...DEFAULT_SETTINGS, mode: 'separate', vocalPct: 0, instrumentalPct: 600 })).toEqual({
+    expect(separationFor({ ...DEFAULT_SETTINGS, mode: 'separate', vocalPct: 0, instrumentalPct: 80 })).toEqual({
       on: true,
       vocal: 0,
-      instrumental: 6,
+      instrumental: 0.8,
       drums: 1,
       others: 1,
     });
