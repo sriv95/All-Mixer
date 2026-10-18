@@ -5,7 +5,6 @@
 // Mel-Band RoFormer core instead (src/ml/roformer.ts): the vocal block is both Vk and the A cappella.
 import {
   GEOMETRY,
-  ML_BLOCK,
   ML_HEADER_BYTES,
   ML_SAMPLE_RATE,
   ML_WARMUP_P90_MS,
@@ -16,7 +15,8 @@ import {
   type MlWorkerInit,
 } from '../worklet/protocol';
 import { CTX, BINS } from './stream';
-import { MDX_BINS, MDX_T } from './mdx';
+import { MDX_BINS } from './mdx';
+import { MDX_T_MIN, planMdx } from './mdx-plan';
 import { MlPipeline, type Models } from './pipeline';
 import { warmUp, warmUpGated, type WarmUpResult } from './warmup';
 import { makeStall, type StallOpts } from './stall';
@@ -50,7 +50,7 @@ async function start(init: MlWorkerInit): Promise<void> {
   if (init.model !== 'mdx') return startRoformer(init, adapterName);
 
   // 2. ORT + models.
-  let ort: Ort, session: Session, mdxSession: Session;
+  let ort: Ort, session: Session, mdxSession: Session, mdxBuf: ArrayBuffer;
   const t0 = performance.now();
   try {
     ort = await import('onnxruntime-web/webgpu');
@@ -59,7 +59,8 @@ async function start(init: MlWorkerInit): Promise<void> {
     ort.env.wasm.proxy = false;
     ort.env.logLevel = 'error'; // models declare a dynamic dim; ORT warns VerifyOutputSizes per run
     const opts = { executionProviders: ['webgpu'], graphOptimizationLevel: 'all', logSeverityLevel: 3 } as const;
-    const [mdxBuf, splBuf] = await Promise.all([init.mdxUrl, init.modelUrl].map(async (u) => (await fetch(u)).arrayBuffer()));
+    const [mdxModel, splBuf] = await Promise.all([init.mdxUrl, init.modelUrl].map(async (u) => (await fetch(u)).arrayBuffer()));
+    mdxBuf = mdxModel;
     mdxSession = await ort.InferenceSession.create(mdxBuf, opts);
     session = await ort.InferenceSession.create(splBuf, opts);
   } catch (e) {
@@ -67,8 +68,8 @@ async function start(init: MlWorkerInit): Promise<void> {
   }
   const createMs = performance.now() - t0;
 
-  const pipeline = new MlPipeline();
-  const mdxInput = new ort.Tensor('float32', pipeline.mdx.x, [1, 4, MDX_BINS, MDX_T]);
+  let pipeline = new MlPipeline();
+  const mdxInput = new ort.Tensor('float32', pipeline.mdx.x, [1, 4, MDX_BINS, MDX_T_MIN]);
   const splInput = new ort.Tensor('float32', pipeline.spl.x, [2, 1, CTX, BINS]);
   const run = (s: Session, input: unknown) => async (): Promise<Float32Array> => {
     // The input tensor owns the stream's buffer: refreshed in place, so one feed object is reused.
@@ -78,8 +79,8 @@ async function start(init: MlWorkerInit): Promise<void> {
     t.dispose();
     return data;
   };
-  const runMdx = run(mdxSession, mdxInput), runSpl = run(session, splInput);
-  const models: Models = { mdx: runMdx, spleeter: runSpl };
+  let runMdx = run(mdxSession, mdxInput);
+  const runSpl = run(session, splInput);
 
   // 3. Warm-up on noise: 3 untimed runs (shader compile, first upload; their time is added to
   // createMs), then 20 timed MDX block steps (analyze + model + synthesize), which is what has to
@@ -87,14 +88,11 @@ async function start(init: MlWorkerInit): Promise<void> {
   // If p90 is still over the gate, one more attempt (skip 0, n 20, caches are warm) runs here, before
   // `ready`, and the attempt with the lower p90 wins. Worst case ~2 x 23 steps (~2.8 s each at ~140 ms).
   // The Spleeter model gets 3 untimed runs (shader compile).
-  const nl = new Float32Array(ML_BLOCK), nr = new Float32Array(ML_BLOCK);
-  const ol = new Float32Array(ML_BLOCK), or = new Float32Array(ML_BLOCK);
+  const noise = (n: number): Float32Array => Float32Array.from({ length: n }, () => Math.random() * 2 - 1);
+  const nl = noise(pipeline.block), nr = noise(pipeline.block);
+  const ol = new Float32Array(pipeline.block), or = new Float32Array(pipeline.block);
   let wu: WarmUpResult & { attempts: number };
   try {
-    for (let i = 0; i < ML_BLOCK; i++) {
-      nl[i] = Math.random() * 2 - 1;
-      nr[i] = Math.random() * 2 - 1;
-    }
     const step = () => pipeline.mdx.process(nl, nr, runMdx, ol, or);
     wu = await warmUpGated((retry) => warmUp(step, retry ? { skip: 0, n: 20 } : { skip: 3, n: 20 }), ML_WARMUP_P90_MS);
     const s0 = performance.now();
@@ -104,15 +102,49 @@ async function start(init: MlWorkerInit): Promise<void> {
     return unavailable(`warm-up: ${String(e)}`);
   }
   pipeline.reset();
+
+  // 4. A longer segment for a delay limit above the default one: plan it from the speed measured above (linear in the
+  // frames), time it on a session of its own (fixed T is faster than a dynamic run), and keep the default segment
+  // when it is slower than predicted or does not fit the GPU.
+  let geometry: MlGeometry | undefined;
+  let baseMs = wu.p90;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const plan = planMdx(((init.delayMs ?? MIN_DELAY_S * 1000) / 1000) * ML_SAMPLE_RATE, baseMs);
+    if (!plan || plan.frames === MDX_T_MIN) break;
+    try {
+      const s = await ort.InferenceSession.create(mdxBuf, { executionProviders: ['webgpu'], graphOptimizationLevel: 'all', logSeverityLevel: 3, freeDimensionOverrides: { T: plan.frames } });
+      const p = new MlPipeline(undefined, undefined, true, plan.frames);
+      const r = run(s, new ort.Tensor('float32', p.mdx.x, [1, 4, MDX_BINS, plan.frames]));
+      const bl = noise(p.block), br = noise(p.block), bol = new Float32Array(p.block), bor = new Float32Array(p.block);
+      const w = await warmUp(() => p.mdx.process(bl, br, r, bol, bor), { skip: 2, n: 8 });
+      if (w.p90 <= plan.geometry.warmupP90Ms) {
+        void mdxSession.release();
+        mdxSession = s;
+        pipeline = p;
+        runMdx = r;
+        geometry = plan.geometry;
+        wu = { ...wu, p50: w.p50, p90: w.p90, p95: w.p95, firstMs: wu.firstMs + w.firstMs };
+        break;
+      }
+      baseMs *= w.p90 / (baseMs * (plan.frames / MDX_T_MIN)); // slower than predicted: correct the speed, plan again
+      void s.release();
+    } catch (e) {
+      if (init.timing) console.info(`[all-mixer ml] longer segment failed: ${String(e)}`);
+      break; // most likely out of GPU memory
+    }
+  }
+  const models: Models = { mdx: runMdx, spleeter: runSpl };
+  const block = pipeline.block;
+  if (init.timing && geometry) console.info(`[all-mixer ml] mdx segment ${pipeline.mdx.frames} frames, block ${(block / ML_SAMPLE_RATE).toFixed(2)} s, delay ${(geometry.latency / ML_SAMPLE_RATE).toFixed(2)} s (gate ${geometry.warmupP90Ms.toFixed(1)})`);
   if (init.timing) console.info(`[all-mixer ml] warm-up p50 ${wu.p50.toFixed(1)} p90 ${wu.p90.toFixed(1)} p95 ${wu.p95.toFixed(1)} (gate ${ML_WARMUP_P90_MS.toFixed(1)}), create ${(createMs + wu.firstMs).toFixed(0)} ms, ${adapterName}, ${wu.attempts > 1 ? 'retry' : 'first try'}`);
-  ctx.postMessage({ type: 'ready', p50: wu.p50, p90: wu.p90, p95: wu.p95, createMs: createMs + wu.firstMs, adapter: adapterName });
+  ctx.postMessage({ type: 'ready', p50: wu.p50, p90: wu.p90, p95: wu.p95, createMs: createMs + wu.firstMs, adapter: adapterName, geometry });
 
   const engine: BlockEngine = {
-    block: ML_BLOCK,
-    resultOffset: ML_RESULT_OFFSET,
+    block,
+    resultOffset: geometry?.resultOffset ?? ML_RESULT_OFFSET,
     reset: () => pipeline.reset(),
     // Vk in place over the input; the MDX vocal in the second half of the buffer
-    process: (d) => pipeline.process(d.subarray(0, ML_BLOCK), d.subarray(ML_BLOCK, 2 * ML_BLOCK), models, d.subarray(0, ML_BLOCK), d.subarray(ML_BLOCK, 2 * ML_BLOCK), d.subarray(2 * ML_BLOCK, 3 * ML_BLOCK), d.subarray(3 * ML_BLOCK)),
+    process: (d) => pipeline.process(d.subarray(0, block), d.subarray(block, 2 * block), models, d.subarray(0, block), d.subarray(block, 2 * block), d.subarray(2 * block, 3 * block), d.subarray(3 * block)),
     afterReply: () => pipeline.catchUp(models.spleeter),
     misses: () => pipeline.splMisses,
   };

@@ -43,6 +43,22 @@ describe('MdxStream', () => {
     expect(d).toBeLessThan(2e-5);
   });
 
+  it('a longer segment (96 frames, block = 49152) reproduces the input too', async () => {
+    const st = new MdxStream(96);
+    expect(st.segment).toBe(95 * 1024 + 4096);
+    const H = st.block, nb = 4;
+    const l = signal(nb * H, 31), r = signal(nb * H, 32);
+    const out = new Float32Array(nb * H);
+    const oL = new Float32Array(H), oR = new Float32Array(H);
+    for (let b = 0; b < nb; b++) {
+      await st.process(l.subarray(b * H, (b + 1) * H), r.subarray(b * H, (b + 1) * H), (x) => x.slice(), oL, oR);
+      if (b > 0) out.set(oL, (b - 1) * H);
+    }
+    let d = 0;
+    for (let n = 0; n < (nb - 1) * H; n++) d = Math.max(d, Math.abs(out[n] - l[n]));
+    expect(d).toBeLessThan(2e-5);
+  });
+
   it('impulse at P comes back at P (offset exactly 0 in the (b − 1)·H result frame)', async () => {
     for (const P of [5, ML_BLOCK - 1, ML_BLOCK, ML_BLOCK + 777, 2 * ML_BLOCK + 40000]) {
       const imp = new Float32Array(NB * ML_BLOCK);

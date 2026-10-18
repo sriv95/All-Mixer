@@ -62,6 +62,28 @@ describe('MlPipeline', () => {
     expect(maxDiff(v, L, 8192, END - 1024, 1) < 5e-5 && maxDiff(v.subarray(1024), L, 8192, END - 2048) > 1e-3).toBe(true);
   });
 
+  it('a longer segment (96 frames): the stems come back delayed by its own result offset, and the masks keep up', async () => {
+    const frames = 96;
+    const p = new MlPipeline(undefined, undefined, false, frames);
+    const H = p.block, off = H + 4096, nb = 6;
+    expect(H).toBe((frames + 3) * 512);
+    const n = nb * H;
+    const x = new Float32Array(n);
+    for (let i = 0; i < n; i++) x[i] = 0.1 * Math.sin(i * 0.05) + 0.05 * Math.sin(i * 0.31);
+    const v = new Float32Array(n);
+    const a = new Float32Array(H), b = new Float32Array(H), c = new Float32Array(H), d = new Float32Array(H);
+    for (let k = 0; k < nb; k++) {
+      a.set(x.subarray(k * H, (k + 1) * H));
+      b.set(x.subarray(k * H, (k + 1) * H));
+      await p.process(a, b, { mdx: identity, spleeter: zero }, a, b, c, d);
+      const start = k * H - off;
+      for (let i = 0; i < H; i++) if (start + i >= 0) v[start + i] = c[i];
+      await p.catchUp(zero);
+    }
+    expect(maxDiff(v, x, 0, n - off)).toBeLessThan(5e-5);
+    expect(p.splMisses).toBe(0);
+  });
+
   it('impulse in L at P is returned at P in the A cappella stem and at P in Vk (offset == ML_RESULT_OFFSET)', async () => {
     const P = 3 * ML_BLOCK + 1234;
     const imp = new Float32Array(N);
