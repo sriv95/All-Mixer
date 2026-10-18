@@ -41,3 +41,17 @@ export const pickStyle = (p: KaraokeStyle): KaraokeStyle => ({
   karaokeOutline: p.karaokeOutline,
   karaokeBackground: p.karaokeBackground,
 });
+
+/** Vertical places for the text, centered horizontally. `bottom` is the default position. */
+export const POSITION_PRESETS = [
+  { id: 'top', label: 'Top', y: 0.12 },
+  { id: 'middle', label: 'Middle', y: 0.5 },
+  { id: 'bottom', label: 'Bottom', y: 0.82 },
+] as const;
+
+const POSITION_TOLERANCE = 0.01;
+
+export function matchedPosition(prefs: LyricsPrefs): (typeof POSITION_PRESETS)[number] | undefined {
+  const { x, y } = prefs.karaokePosition;
+  return POSITION_PRESETS.find((p) => Math.abs(x - 0.5) < POSITION_TOLERANCE && Math.abs(y - p.y) < POSITION_TOLERANCE);
+}

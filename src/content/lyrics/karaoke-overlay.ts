@@ -3,6 +3,8 @@ import { selectKaraokeLines, type KaraokeSlot } from '../../lyrics/karaoke-lines
 import type { KaraokeFont, KaraokeOutline, LyricsPrefs } from '../../shared/lyrics-prefs';
 import { findControlBar, findKaraokeHost, findPlayer, KARAOKE_MOUNT, isAdShowing, type Site } from '../youtube-dom';
 import type { LyricsState, LyricsSurface } from './controller';
+import { openContextMenu, type ContextEntry } from './karaoke-menu';
+import { POSITION_PRESETS, matchedPosition, matchedStylePreset, stylePresets } from './karaoke-presets';
 
 export interface Size {
   w: number;
@@ -77,6 +79,8 @@ export interface KaraokeOptions {
   getPrefs(): LyricsPrefs;
   /** Called once when a drag ends, with the clamped position. */
   onPosition(pos: Pos): void;
+  /** The right-click menu changes prefs (position, style, lyrics-only view). */
+  setPrefs(patch: Partial<LyricsPrefs>): void;
 }
 
 /** Karaoke text on the video: one block inside the player, driven by the controller's clock. */
@@ -89,6 +93,7 @@ export class KaraokeSurface implements LyricsSurface {
   private key: string | null = null;
   private lastTime = 0;
   private pos: Pos;
+  private closeMenu: (() => void) | null = null;
   /** Text per row of the last build: only a row whose text changed animates in. */
   private prevRows: string[] = [];
   private dragging: { pointerId: number; dx: number; dy: number } | null = null;
@@ -106,9 +111,10 @@ export class KaraokeSurface implements LyricsSurface {
     this.block.className = 'am-k-block';
     this.block.style.display = 'none';
     this.root.append(style, this.block);
-    for (const ev of ['click', 'dblclick', 'mousedown', 'keydown', 'keyup'] as const) {
+    for (const ev of ['click', 'dblclick', 'mousedown', 'keydown', 'keyup', 'contextmenu'] as const) {
       this.block.addEventListener(ev, (e) => e.stopPropagation());
     }
+    this.block.addEventListener('contextmenu', this.onContextMenu);
     this.block.addEventListener('pointerdown', this.onDown);
     this.block.addEventListener('pointermove', this.onMove);
     this.block.addEventListener('pointerup', this.onUp);
@@ -145,6 +151,7 @@ export class KaraokeSurface implements LyricsSurface {
   sync(): boolean {
     const player = this.active ? findPlayer(this.opts.site, this.doc) : null;
     if (!player) {
+      this.closeMenu?.();
       this.root.remove();
       this.observe(null);
       return false;
@@ -169,6 +176,7 @@ export class KaraokeSurface implements LyricsSurface {
   }
 
   destroy(): void {
+    this.closeMenu?.();
     this.observe(null);
     this.root.remove();
     this.doc.removeEventListener('fullscreenchange', this.onFullscreen);
@@ -270,6 +278,26 @@ export class KaraokeSurface implements LyricsSurface {
     this.block.style.top = `${clamped.y * 100}%`;
     return clamped;
   }
+
+  /** Right-click on the text: position and style presets, and the lyrics-only view. */
+  private readonly onContextMenu = (e: MouseEvent): void => {
+    e.preventDefault();
+    const prefs = this.opts.getPrefs();
+    const set = (patch: Partial<LyricsPrefs>) => this.opts.setPrefs(patch);
+    const position = matchedPosition(prefs);
+    const style = matchedStylePreset(prefs);
+    const entries: ContextEntry[] = [
+      { label: 'Position', heading: true },
+      ...POSITION_PRESETS.map((p) => ({ label: p.label, checked: position?.id === p.id, run: () => set({ karaokePosition: { x: 0.5, y: p.y } }) })),
+      { label: 'Style', heading: true },
+      ...stylePresets(prefs).map((p) => ({ label: p.label, checked: style?.id === p.id, run: () => set(p.style) })),
+      { label: 'View', heading: true },
+      { label: 'Lyrics-only view', checked: prefs.karaokeFocus, run: () => set({ karaokeFocus: !prefs.karaokeFocus }) },
+    ];
+    const r = this.root.getBoundingClientRect();
+    this.closeMenu?.();
+    this.closeMenu = openContextMenu(this.root, { x: e.clientX - r.left, y: e.clientY - r.top }, entries);
+  };
 
   private readonly onDown = (e: PointerEvent): void => {
     if (e.button > 0 || !this.player || this.opts.getPrefs().karaokeFocus) return;

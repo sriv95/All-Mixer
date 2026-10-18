@@ -1,5 +1,5 @@
 import { DEFAULT_LYRICS_PREFS, KARAOKE_BACKGROUNDS, type KaraokeAnimation, type KaraokeBackground, type KaraokeFont, type KaraokeOutline, type LyricsDisplayMode, type LyricsPrefs } from '../../shared/lyrics-prefs';
-import { KARAOKE_SIZES, RESET_STYLE, matchedStylePreset, nearestSize, pickStyle, stylePresets } from './karaoke-presets';
+import { KARAOKE_SIZES, POSITION_PRESETS, RESET_STYLE, matchedPosition, matchedStylePreset, nearestSize, pickStyle, stylePresets } from './karaoke-presets';
 import { SETTINGS_SELECTORS, findSettingsMainMenu, findSettingsPopup, type Site } from '../youtube-dom';
 import type { CaptionPicker, SourceMenu, SourcePref } from './controller';
 import type { CaptionPick } from './track-info';
@@ -12,7 +12,7 @@ interface MenuOption {
 }
 
 export interface MenuRow {
-  id: 'source' | 'captionLanguage' | 'timing' | 'timingKeys' | 'display' | 'lines' | 'karaokeText' | 'size' | 'preset' | 'color' | 'font' | 'outline' | 'background' | 'animation' | 'focus';
+  id: 'source' | 'captionLanguage' | 'timing' | 'timingKeys' | 'display' | 'lines' | 'karaokeText' | 'size' | 'preset' | 'color' | 'font' | 'outline' | 'background' | 'animation' | 'position' | 'focus';
   label: string;
   options: MenuOption[];
   selected: string;
@@ -230,6 +230,20 @@ export function buildMenuRows(input: MenuInput, actions: MenuActions): MenuRow[]
           selected: prefs.karaokeAnimation,
           note: 'Off when your system asks to reduce motion.',
           select: (v) => actions.setPrefs({ karaokeAnimation: v as KaraokeAnimation }),
+        },
+        {
+          id: 'position',
+          label: 'Position',
+          options: [
+            ...POSITION_PRESETS.map((p) => ({ value: p.id, label: p.label })),
+            ...(matchedPosition(prefs) ? [] : [{ value: 'custom', label: 'Custom (dragged)', disabled: true }]),
+          ],
+          selected: matchedPosition(prefs)?.id ?? 'custom',
+          note: 'Drag the text to place it anywhere, or right-click it for these presets.',
+          select: (v) => {
+            const preset = POSITION_PRESETS.find((p) => p.id === v);
+            if (preset) actions.setPrefs({ karaokePosition: { x: 0.5, y: preset.y } });
+          },
         },
         {
           id: 'focus',

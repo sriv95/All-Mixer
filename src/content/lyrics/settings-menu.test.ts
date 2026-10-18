@@ -188,11 +188,18 @@ describe('buildMenuRows', () => {
     expect(a.setPrefs).toHaveBeenLastCalledWith({ karaokeColor: '#ffffff', karaokeFontSize: 100, karaokeFont: 'default', karaokeOutline: 'normal', karaokeBackground: 0, karaokeAnimation: 'none' });
   });
 
-  it('Lyrics-only view row', () => {
+  it('Position presets and Lyrics-only view rows', () => {
     const a = actions();
-    const focus = buildMenuRows({ prefs: prefs() }, a).find((r) => r.id === 'karaokeText')!.rows!.find((r) => r.id === 'focus')!;
-    expect(focus.selected).toBe('off');
-    focus.select('on');
+    const inner = (p = prefs()) => Object.fromEntries(buildMenuRows({ prefs: p }, a).find((r) => r.id === 'karaokeText')!.rows!.map((r) => [r.id, r]));
+    expect(inner().position.selected).toBe('bottom');
+    expect(inner().position.options.map((o) => o.label)).toEqual(['Top', 'Middle', 'Bottom']);
+    inner().position.select('top');
+    expect(a.setPrefs).toHaveBeenLastCalledWith({ karaokePosition: { x: 0.5, y: 0.12 } });
+    const dragged = inner(prefs({ karaokePosition: { x: 0.3, y: 0.4 } })).position;
+    expect(dragged.selected).toBe('custom');
+    expect(dragged.options.at(-1)).toMatchObject({ value: 'custom', disabled: true });
+    expect(inner().focus.selected).toBe('off');
+    inner().focus.select('on');
     expect(a.setPrefs).toHaveBeenLastCalledWith({ karaokeFocus: true });
   });
 
@@ -316,7 +323,7 @@ describe('YtSettingsMenu', () => {
     group().click();
     settingEl('karaokeText').click();
     expect(titles()).toEqual(['Custom Karaoke Text']);
-    expect([...sub().querySelectorAll('[data-am-row-setting]')].map((e) => e.getAttribute('data-am-row-setting'))).toEqual(['preset', 'color', 'size', 'font', 'outline', 'background', 'animation', 'focus']);
+    expect([...sub().querySelectorAll('[data-am-row-setting]')].map((e) => e.getAttribute('data-am-row-setting'))).toEqual(['preset', 'color', 'size', 'font', 'outline', 'background', 'animation', 'position', 'focus']);
     settingEl('color').click();
     expect(titles()).toEqual(['Color']);
     const checked = [...sub().querySelectorAll('.ytp-menuitem')].map((i) => i.getAttribute('aria-checked'));
@@ -488,7 +495,7 @@ describe('YtmSettingsPopover', () => {
     expect(pop.isOpen).toBe(true);
     expect(pop.button.getAttribute('aria-expanded')).toBe('true');
     const sels = root.querySelectorAll('select');
-    expect(sels).toHaveLength(12);
+    expect(sels).toHaveLength(13);
     const src = sels[0];
     expect([...src.options].map((o) => o.disabled)).toEqual([false, true, false]);
     src.value = 'captions';
@@ -518,7 +525,7 @@ describe('YtmSettingsPopover', () => {
     pop.setRows(buildMenuRows({ sources, prefs: prefs() }, actions()));
     pop.button.click();
     const root = document.querySelector<HTMLElement>('[data-allmixer-lyrics-popover]')!;
-    expect(root.querySelectorAll('select')).toHaveLength(11);
+    expect(root.querySelectorAll('select')).toHaveLength(12);
     pop.setRows(buildMenuRows({ sources, prefs: prefs({ lyricsDisplayMode: 'window' }) }, actions()));
     expect(root.querySelectorAll('select')).toHaveLength(2);
     pop.destroy();

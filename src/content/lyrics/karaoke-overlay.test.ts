@@ -13,6 +13,7 @@ const synced: LyricsState = { kind: 'ready', track, lyrics: { kind: 'synced', so
 const plain: LyricsState = { kind: 'ready', track, lyrics: { kind: 'plain', source: 'lrclib', text: 'hello' } };
 
 let prefs: LyricsPrefs;
+const setPrefs = vi.fn();
 let saved: { x: number; y: number }[];
 let player: HTMLElement;
 let size = { width: 800, height: 450 };
@@ -20,7 +21,7 @@ let size = { width: 800, height: 450 };
 const rect = (r: Partial<DOMRect>) => ({ left: 0, top: 0, width: 0, height: 0, right: 0, bottom: 0, x: 0, y: 0, toJSON() {}, ...r }) as DOMRect;
 
 function make(): KaraokeSurface {
-  return new KaraokeSurface({ site: 'youtube', getPrefs: () => prefs, onPosition: (p) => saved.push(p) });
+  return new KaraokeSurface({ site: 'youtube', getPrefs: () => prefs, onPosition: (p) => saved.push(p), setPrefs });
 }
 const root = () => document.getElementById('all-mixer-karaoke');
 const lineEls = () => [...document.querySelectorAll<HTMLElement>('.am-k-line')];
@@ -29,6 +30,7 @@ const block = () => document.querySelector<HTMLElement>('.am-k-block')!;
 
 beforeEach(() => {
   prefs = { ...DEFAULT_LYRICS_PREFS, karaokeLines: 2 };
+  setPrefs.mockClear();
   saved = [];
   size = { width: 800, height: 450 };
   document.body.innerHTML = '<div id="movie_player"><div class="ytp-chrome-bottom"></div></div>';
@@ -281,6 +283,27 @@ describe('KaraokeSurface layout and drag', () => {
     expect(root()!.classList.contains('am-focus')).toBe(false);
   });
 
+  it('right-click on the text opens the presets menu; a pick sets prefs and closes it', () => {
+    const s = make();
+    s.render(synced);
+    s.update(1.5);
+    const ctx = new MouseEvent('contextmenu', { clientX: 100, clientY: 100, bubbles: true, cancelable: true });
+    block().dispatchEvent(ctx);
+    expect(ctx.defaultPrevented).toBe(true);
+    const menu = () => document.querySelector('[data-allmixer-karaoke-menu]');
+    const item = (label: string) => [...menu()!.querySelectorAll('button')].find((b) => b.textContent?.replace('✓ ', '') === label)!;
+    expect([...menu()!.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Top', 'Middle', '✓ Bottom', '✓ Default', 'Big yellow', 'Clean box', 'Cyan glow', 'Lyrics-only view']);
+    item('Top').click();
+    expect(setPrefs).toHaveBeenLastCalledWith({ karaokePosition: { x: 0.5, y: 0.12 } });
+    expect(menu()).toBeNull();
+    block().dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    item('Big yellow').click();
+    expect(setPrefs).toHaveBeenLastCalledWith(expect.objectContaining({ karaokeColor: '#ffeb3b', karaokeFontSize: 150 }));
+    block().dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    item('Lyrics-only view').click();
+    expect(setPrefs).toHaveBeenLastCalledWith({ karaokeFocus: true });
+  });
+
   it('keeps clicks and keys on the text away from YouTube', () => {
     const s = make();
     s.render(synced);
@@ -324,7 +347,7 @@ describe('KaraokeSurface mount on YT Music', () => {
     document.body.innerHTML = '<ytmusic-player><div id="movie_player"></div><div id="song-media-window"></div></ytmusic-player>';
     const p = document.getElementById('movie_player')!;
     p.getBoundingClientRect = () => rect({ left: 10, top: 20, width: 800, height: 450, right: 810, bottom: 470 });
-    const s = new KaraokeSurface({ site: 'ytmusic', getPrefs: () => prefs, onPosition: () => {} });
+    const s = new KaraokeSurface({ site: 'ytmusic', getPrefs: () => prefs, onPosition: () => {}, setPrefs });
     s.render(synced);
     s.update(1.5);
     expect(root()!.parentElement!.tagName.toLowerCase()).toBe('ytmusic-player');
@@ -337,7 +360,7 @@ describe('KaraokeSurface mount on YT Music', () => {
     document.body.innerHTML = '<ytmusic-player><div id="movie_player"></div></ytmusic-player>';
     const p = document.getElementById('movie_player')!;
     p.getBoundingClientRect = () => rect({ left: 0, top: 0, width: 800, height: 450, right: 800, bottom: 450 });
-    const s = new KaraokeSurface({ site: 'ytmusic', getPrefs: () => prefs, onPosition: () => {} });
+    const s = new KaraokeSurface({ site: 'ytmusic', getPrefs: () => prefs, onPosition: () => {}, setPrefs });
     s.render(synced);
     s.update(1.5);
     const own = () => (s as unknown as { root: HTMLElement }).root.parentElement;

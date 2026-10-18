@@ -83,6 +83,7 @@ export function initLyrics(site: Site, presentedTime: () => number | null, prese
       prefs = { ...prefs, karaokePosition };
       if (storage) void saveLyricsPrefs(storage, { karaokePosition });
     },
+    setPrefs: (patch) => setPrefs(patch),
   });
   if (!tabOnly) controller.addSurface(karaoke);
 
