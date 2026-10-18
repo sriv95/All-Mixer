@@ -24,12 +24,19 @@ function memFiles() {
   return { m, files };
 }
 
+/** Building 16 MiB per request made this suite time out on a slow CI runner: build each file once. */
+const cache = new Map<string, Uint8Array>();
+const bytes = (len: number, v: number): Uint8Array => {
+  const k = `${len}/${v}`;
+  if (!cache.has(k)) cache.set(k, Uint8Array.from({ length: len }, (_, i) => (i + v) & 255));
+  return cache.get(k)!;
+};
+
 const ONNX = 2 * CHUNK + 100; // 3 chunks, the last one short
 const META = 50;
 /** A fake HF repo: the manifest (roformer at `version`, deux at v1 unless `over.noDeux`), and Range requests on v<version>/<file>. */
 function server(version: number, over: { format?: number; noDeux?: boolean; fail?: (url: string, from: number) => boolean } = {}) {
   const reqs: string[] = [];
-  const bytes = (len: number, v: number) => Uint8Array.from({ length: len }, (_, i) => (i + v) & 255);
   const fetchFn = (async (url: string, init?: RequestInit) => {
     reqs.push(url + ' ' + ((init?.headers as Record<string, string> | undefined)?.Range ?? ''));
     if (url.endsWith('/manifest.json')) {
