@@ -8,6 +8,7 @@ import { deferEnd } from './deferred-end';
 import { watchDelayGap } from './delay-gap';
 import { PlayerSpinner } from './spinner';
 import { TimeDisplay } from './time-display';
+import { WarmupHold } from './warmup-hold';
 import { initLyrics, type LyricsFeature } from './lyrics/init';
 import { DelayedVideo } from './video-delay/delayed-video';
 import { overlayDelayMs } from './video-delay/schedule';
@@ -29,8 +30,8 @@ const chain = new MasterChain(() => syncDelay(), undefined, probe);
 const selector = new EngineSelector(chain);
 const spinner = new PlayerSpinner();
 const spinnerFor = (reason: string, text: string) => (waiting: boolean) => spinner.set(reason, waiting ? text : null);
-// The warm-up takes 10 to 40 s: hold the video (sound and picture) behind the player's spinner until it is over, then resume what we paused.
-let pausedForWarmup: HTMLMediaElement | null = null;
+// The warm-up takes 10 to 40 s: hold the video (sound and picture) behind the player's spinner until it is over, then
+// resume what we paused. The player is not told: it keeps showing "playing".
 const WARMUP_LABEL = 'Preparing vocal separation';
 let warmupTimer: ReturnType<typeof setInterval> | undefined;
 /** The warm-up takes 10 to 40 s with no progress to report: count the seconds so it does not look stuck. */
@@ -42,21 +43,16 @@ const warmupSpinner = (on: boolean) => {
   tick();
   warmupTimer = setInterval(tick, 1000);
 };
+const warmupHold = new WarmupHold(() => video, () => warmupSpinner(false));
 selector.onChange = ({ state }) => {
   if (state === 'warming') {
-    if (video && !video.paused) {
-      video.pause();
-      pausedForWarmup = video;
-    }
+    warmupHold.hold();
     // A video the user had paused is not waiting for anything.
-    warmupSpinner(pausedForWarmup !== null);
+    warmupSpinner(warmupHold.active);
     return;
   }
   warmupSpinner(false);
-  if (pausedForWarmup) {
-    void pausedForWarmup.play().catch(() => {}); // autoplay rules can refuse; the user presses play then
-    pausedForWarmup = null;
-  }
+  warmupHold.release();
 };
 // A RoFormer model was downloaded or updated in the background: load it if it is the one in use.
 chrome.storage.onChanged.addListener((changes, area) => {
