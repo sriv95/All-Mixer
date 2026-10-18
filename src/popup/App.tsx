@@ -182,7 +182,7 @@ function Tabs({ mode, onMode }: { mode: Mode; onMode: (m: Mode) => void }) {
     </button>
   );
   return (
-    <div role="tablist" className="flex rounded-full bg-[#f4f0f0] p-1 shadow-[inset_2px_2px_5px_#e2dadb,inset_-2px_-2px_5px_#fff]">
+    <div role="tablist" className="flex rounded-full bg-tab p-1 shadow-tab">
       {tab('default', 'Default', <Volume2 size={15} aria-hidden />)}
       {tab('separate', 'Separate', <AudioLines size={15} aria-hidden />)}
     </div>
@@ -268,14 +268,14 @@ function Banner({ view, settings, update, retry }: { view: SepView; settings: Mi
   return (
     <motion.div {...fade} className="flex flex-col gap-3.5">
       {/* The banner stays while its state changes: the colour fades, the icon pops in, the text slides in. */}
-      <div id="separation-banner" role="status" data-kind={view.kind} className={`flex items-start gap-3 rounded-[20px] p-3.5 transition-colors duration-300 ${stopped ? 'bg-ink text-white' : 'bg-brand-tint'}`}>
+      <div id="separation-banner" role="status" data-kind={view.kind} className={`flex items-start gap-3 rounded-[20px] p-3.5 transition-colors duration-300 ${stopped ? 'bg-stop text-white' : 'bg-brand-tint'}`}>
         <motion.span key={`icon-${view.kind}`} initial={{ scale: 0.4, opacity: 0, rotate: -30 }} animate={{ scale: 1, opacity: 1, rotate: 0 }} transition={{ type: 'spring', stiffness: 500, damping: 22 }} className="shrink-0">{icon}</motion.span>
         <motion.div key={`text-${view.kind}`} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className="min-w-0 flex-1">
           <h2 className="m-0 text-sm font-extrabold">{title}</h2>
-          <p className={`m-0 mt-0.5 text-[12.5px] leading-snug ${stopped ? 'text-[#ddd0d2]' : 'text-[#4c4047]'}`}>{text}</p>
+          <p className={`m-0 mt-0.5 text-[12.5px] leading-snug ${stopped ? 'text-[#ddd0d2]' : 'text-banner'}`}>{text}</p>
           {/* No progress to report during the 10 to 40 s warm-up: a bar that sweeps shows it is alive. */}
           {view.kind === 'warming' && (
-            <span aria-hidden className="mt-2.5 block h-1.5 overflow-hidden rounded-full bg-white">
+            <span aria-hidden className="mt-2.5 block h-1.5 overflow-hidden rounded-full bg-surface">
               <motion.span animate={{ x: ['-100%', '300%'] }} transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }} className="block h-full w-1/3 rounded-full bg-brand" />
             </span>
           )}
@@ -400,7 +400,7 @@ function SeparateControls({ settings, update, ready, live, onHold, advancedOpen,
               <Btn id="ml-delay-apply" tone="small" disabled={delayDraft === settings.mlDelayS} onClick={() => update({ mlDelayS: clampDelayS(delayDraft) })}>Apply</Btn>
             </div>
           </div>
-          <Disclosure id="split" open={splitOpen} onOpen={setSplitOpen} className="rounded-2xl bg-white/70" buttonClassName="p-3"
+          <Disclosure id="split" open={splitOpen} onOpen={setSplitOpen} className="rounded-2xl bg-surface/70" buttonClassName="p-3"
             title={<span className="flex items-center gap-1.5"><Drum size={15} className="text-brand" aria-hidden />Split instrumental</span>}>
             <div className="flex flex-col gap-3 px-3 pb-3">
               <div className="flex items-center justify-between gap-3">
