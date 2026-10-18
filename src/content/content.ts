@@ -5,6 +5,7 @@ import { MasterChain } from './audio/master-chain';
 import { MODEL_IDS, keyInstalled } from '../shared/model-store';
 import { AvProbe } from './av-probe';
 import { deferEnd } from './deferred-end';
+import { watchDelayGap } from './delay-gap';
 import { TimeDisplay } from './time-display';
 import { initLyrics, type LyricsFeature } from './lyrics/init';
 import { DelayedVideo } from './video-delay/delayed-video';
@@ -43,11 +44,14 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return;
   for (const id of MODEL_IDS) if (keyInstalled(id) in changes) selector.reload(id);
 });
-// The end of the video (autoplay / queue) waits for the delayed tail to play out, behind the player's own spinner.
-deferEnd(() => video, () => overlay?.delayMs ?? 0, (waiting) => {
+// The player's own spinner covers the silences caused by the delay: the held end of a video, and the gap after a seek.
+const showSpinner = (waiting: boolean) => {
   const spinner = findSpinner();
   if (spinner) spinner.style.display = waiting ? 'block' : 'none';
-});
+};
+// The end of the video (autoplay / queue) waits for the delayed tail to play out.
+deferEnd(() => video, () => overlay?.delayMs ?? 0, showSpinner);
+watchDelayGap(() => video, () => overlay?.delayMs ?? 0, showSpinner);
 // Lyrics follow what the user sees and hears, which trails currentTime by the picture delay (D1).
 const lyrics: LyricsFeature = lyricsSite
   ? initLyrics(lyricsSite, () => overlay?.presentedTime() ?? null, () => overlay?.presentedBusy() ?? false)

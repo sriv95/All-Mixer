@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { PAUSE_REQUEST_EVENT } from '../shared/bridge';
 import { deferEnd } from './deferred-end';
 
 describe('deferEnd', () => {
@@ -51,6 +52,15 @@ describe('deferEnd', () => {
     vi.advanceTimersByTime(5000);
     expect(seen).toEqual([]);
     expect(waits).toEqual([true, false]);
+  });
+
+  it('fires pause at once on a pause click and drops the ended', () => {
+    end();
+    video.dispatchEvent(new Event(PAUSE_REQUEST_EVENT));
+    expect(seen).toEqual(['pause']);
+    expect(waits).toEqual([true, false]);
+    vi.advanceTimersByTime(5000);
+    expect(seen).toEqual(['pause']);
   });
 
   it('does not touch an ordinary pause', () => {
