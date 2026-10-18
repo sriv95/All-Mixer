@@ -11,11 +11,11 @@ const entry = {
 export default defineConfig({
   publicDir: false,
   build: {
-    outDir: resolve(__dirname, 'dist'),
+    outDir: resolve(import.meta.dirname, 'dist'),
     emptyOutDir: false,
     target: 'chrome120',
     lib: {
-      entry: resolve(__dirname, entry.src),
+      entry: resolve(import.meta.dirname, entry.src),
       formats: ['iife'],
       name: entry.name,
       fileName: () => entry.file,

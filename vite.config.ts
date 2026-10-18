@@ -10,12 +10,12 @@ function mlAssets(): Plugin {
     name: 'all-mixer-ml-assets',
     buildStart() {
       for (const f of ['vocals.onnx', 'mdx.onnx']) {
-        if (!existsSync(resolve(__dirname, 'public/ml', f))) this.error(`public/ml/${f} is missing: run bun run fetch-model (mdx.onnx needs PY=python with onnx + onnxconverter-common)`);
+        if (!existsSync(resolve(import.meta.dirname, 'public/ml', f))) this.error(`public/ml/${f} is missing: run bun run fetch-model (mdx.onnx needs PY=python with onnx + onnxconverter-common)`);
       }
     },
     closeBundle() {
-      const from = resolve(__dirname, 'node_modules/onnxruntime-web/dist');
-      const to = resolve(__dirname, 'dist/ml');
+      const from = resolve(import.meta.dirname, 'node_modules/onnxruntime-web/dist');
+      const to = resolve(import.meta.dirname, 'dist/ml');
       mkdirSync(to, { recursive: true });
       for (const f of ORT_FILES) copyFileSync(resolve(from, f), resolve(to, f));
     },
@@ -27,11 +27,11 @@ function manifestVersion(): Plugin {
   return {
     name: 'all-mixer-manifest-version',
     closeBundle() {
-      const { version } = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf8'));
+      const { version } = JSON.parse(readFileSync(resolve(import.meta.dirname, 'package.json'), 'utf8'));
       if (!/^\d+(\.\d+){0,3}$/.test(version)) {
         this.error(`package.json version "${version}" is not a valid Chrome manifest version (1-4 dot-separated integers)`);
       }
-      const file = resolve(__dirname, 'dist/manifest.json');
+      const file = resolve(import.meta.dirname, 'dist/manifest.json');
       const manifest = JSON.parse(readFileSync(file, 'utf8'));
       manifest.version = version;
       writeFileSync(file, JSON.stringify(manifest, null, 2) + '\n');
@@ -44,19 +44,19 @@ function manifestVersion(): Plugin {
 // content scripts cannot be ES modules and must be a single IIFE file.
 export default defineConfig({
   root: 'src',
-  publicDir: resolve(__dirname, 'public'),
+  publicDir: resolve(import.meta.dirname, 'public'),
   plugins: [mlAssets(), manifestVersion()],
   worker: { format: 'es', rollupOptions: { output: { entryFileNames: 'ml/[name].js', chunkFileNames: 'ml/[name]-[hash].js' } } },
   build: {
-    outDir: resolve(__dirname, 'dist'),
+    outDir: resolve(import.meta.dirname, 'dist'),
     emptyOutDir: true,
     target: 'chrome120',
     modulePreload: false,
     rollupOptions: {
       input: {
-        popup: resolve(__dirname, 'src/popup/popup.html'),
-        ml: resolve(__dirname, 'src/ml/ml.html'),
-        background: resolve(__dirname, 'src/background/background.ts'),
+        popup: resolve(import.meta.dirname, 'src/popup/popup.html'),
+        ml: resolve(import.meta.dirname, 'src/ml/ml.html'),
+        background: resolve(import.meta.dirname, 'src/background/background.ts'),
       },
       output: {
         entryFileNames: '[name].js',
