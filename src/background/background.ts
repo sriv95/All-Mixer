@@ -3,12 +3,13 @@ import { TabStore } from './tab-store';
 import { LyricsCache } from './lyrics-cache';
 import { findLyrics, searchLyrics } from '../lyrics/lrclib';
 import { ModelManager } from './model-manager';
-import { applyBadge } from './badge';
+import { Badges } from './badge';
 import type { ModelId } from '../shared/model-store';
 
 const store = new TabStore(chrome.storage.session);
 const lyricsCache = new LyricsCache(chrome.storage.local);
 const models = new ModelManager(chrome.storage.local);
+const badges = new Badges();
 
 // A stopped service worker would end the download: any extension API call resets its idle timer.
 function install(id: ModelId): void {
@@ -41,7 +42,7 @@ async function handle(msg: BackgroundRequest, sender: chrome.runtime.MessageSend
       return lyricsCache.unpin(msg.videoId);
     case 'set-badge': {
       const tabId = sender.tab?.id;
-      if (tabId !== undefined) await applyBadge(tabId, msg.view);
+      if (tabId !== undefined) await badges.set(tabId, msg.view);
       return null;
     }
     case 'model-check':
@@ -62,4 +63,10 @@ chrome.runtime.onMessage.addListener((msg: BackgroundRequest, sender, sendRespon
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   void store.remove(tabId);
+  badges.clear(tabId);
+});
+
+// A full page load drops the tab's badge: stop the warming dots with it.
+chrome.tabs.onUpdated.addListener((tabId, change) => {
+  if (change.status === 'loading') badges.clear(tabId);
 });
