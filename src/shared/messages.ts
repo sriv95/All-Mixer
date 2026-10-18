@@ -102,7 +102,17 @@ export interface FetchLyrics {
   track: TrackInfo;
 }
 
-export type BackgroundRequest = GetMyTabSettings | GetTabSettings | SetTabSettings | FetchLyrics;
+/** Popup → background: look for a newer "Best quality" model (the result lands in chrome.storage.local, see model-store.ts). */
+export interface ModelCheck {
+  type: 'model-check';
+}
+
+/** Popup → background: download the newest "Best quality" model (progress lands in chrome.storage.local). */
+export interface ModelInstall {
+  type: 'model-install';
+}
+
+export type BackgroundRequest = GetMyTabSettings | GetTabSettings | SetTabSettings | FetchLyrics | ModelCheck | ModelInstall;
 /**
  * QA only (sent via chrome.tabs.sendMessage from extension contexts): force the
  * picture delay, ignoring the graph latency. null clears it. `budgetBytes`

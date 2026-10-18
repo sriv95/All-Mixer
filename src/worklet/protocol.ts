@@ -1,3 +1,4 @@
+import type { InstalledModel } from '../shared/model-store';
 // Contract between the content-script audio engine and the separator AudioWorklet.
 // Imported by both sides, so it must not touch DOM or worklet globals.
 
@@ -144,4 +145,4 @@ export type FromMlWorker =
   | { type: 'unavailable'; reason: string };
 
 /** Page → worker init (iframe page forwards the ML port from the content script). */
-export type MlWorkerInit = { type: 'init'; model: MlModel; port: MessagePort; modelUrl: string; mdxUrl: string; roformerUrl: string; roformerMetaUrl: string; wasmBase: string; stallMs?: number; stallAfterMs?: number; timing?: boolean };
+export type MlWorkerInit = { type: 'init'; model: MlModel; port: MessagePort; modelUrl: string; mdxUrl: string; installed?: InstalledModel; wasmBase: string; stallMs?: number; stallAfterMs?: number; timing?: boolean };
