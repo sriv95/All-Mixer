@@ -466,6 +466,56 @@ describe('SeparatorCore, ML engine and bypass', () => {
   });
 });
 
+describe('SeparatorCore, audible (sound back after a seek)', () => {
+  const audible = (r: Rig) => r.msgs.filter((m) => m.type === 'audible').length;
+
+  it('reports after one ML delay of the input that follows expect-audio, not before', () => {
+    const r = rig(14);
+    r.core.setActive(true, 'ml');
+    r.run(blocks(5));
+    r.core.flush();
+    r.core.expectAudio();
+    const start = r.q;
+    r.run(Math.floor(ML_LATENCY_SAMPLES / QUANTUM) - 2);
+    expect(audible(r)).toBe(0);
+    r.run(4);
+    expect(audible(r)).toBe(1);
+    expect(r.q - start).toBeGreaterThanOrEqual(ML_LATENCY_SAMPLES / QUANTUM);
+    r.run(blocks(1));
+    expect(audible(r)).toBe(1); // once
+  });
+
+  it('does not count while held: a pause stops the clock', () => {
+    const r = rig(14);
+    r.core.setActive(true, 'ml');
+    r.run(blocks(5));
+    r.core.flush();
+    r.core.expectAudio();
+    r.run(100);
+    r.core.setHeld(true);
+    r.run(2000);
+    expect(audible(r)).toBe(0);
+    r.core.setHeld(false);
+    r.run(Math.ceil(ML_LATENCY_SAMPLES / QUANTUM) - 100 + 2);
+    expect(audible(r)).toBe(1);
+  });
+
+  it('is immediate on the original mix (no delay), and a flush cancels a pending one', () => {
+    const r = rig(4);
+    r.core.setActive(true);
+    r.run(4);
+    r.core.expectAudio();
+    expect(audible(r)).toBe(1);
+    const m = rig(14);
+    m.core.setActive(true, 'ml');
+    m.run(blocks(5));
+    m.core.expectAudio();
+    m.core.flush();
+    m.run(blocks(3));
+    expect(audible(m)).toBe(0);
+  });
+});
+
 describe('SeparatorCore, hold / release (pause)', () => {
   const Q0 = blocks(8); // hold here, ML steady
   const HELD = 600; // ≈ 1.7 s of paused quanta

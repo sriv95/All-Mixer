@@ -105,6 +105,8 @@ export class MasterChain {
   private runGeometry: MlGeometry = GEOMETRY.mdx;
   private pendingEngine: { engine: MlEngine; reason: MlReason } | null = null;
   private offTimer: ReturnType<typeof setTimeout> | undefined;
+  private audibleCb: (() => void) | null = null;
+  private audibleTimer: ReturnType<typeof setTimeout> | undefined;
   private separation: SeparationRequest = OFF;
   private readonly listeners = new Set<LatencyListener>();
   private lastDeviceMs = 0;
@@ -188,6 +190,27 @@ export class MasterChain {
   onLatencyChange(cb: LatencyListener): () => void {
     this.listeners.add(cb);
     return () => this.listeners.delete(cb);
+  }
+
+  /**
+   * After a seek or a new video: calls `cb` once the audio that starts playing now is out of the speakers (the
+   * delay line was emptied, so it is silent for the delay). One call at a time; returns the cancel function.
+   * Without a running separator there is no delay: `cb` runs at once.
+   */
+  whenAudible(cb: () => void): () => void {
+    this.cancelAudible();
+    if (!this.workletOn) {
+      this.audibleTimer = setTimeout(cb, 0);
+    } else {
+      this.audibleCb = cb;
+      this.post({ type: 'expect-audio' });
+    }
+    return () => this.cancelAudible();
+  }
+
+  private cancelAudible(): void {
+    this.audibleCb = null;
+    clearTimeout(this.audibleTimer);
   }
 
   /** Drop audio buffered in the separator (seeks call this automatically). */
@@ -399,7 +422,13 @@ export class MasterChain {
   }
 
   private onWorkletMessage(msg: FromWorklet): void {
-    if (msg.type !== 'engine') return;
+    if (msg.type === 'audible') {
+      // The sound leaves the speakers one device latency after the worklet outputs it.
+      const cb = this.audibleCb;
+      this.audibleCb = null;
+      if (cb) this.audibleTimer = setTimeout(cb, this.latency.deviceMs);
+      return;
+    }
     this.probe?.trace('engine', { engine: msg.engine, reason: msg.reason, at: msg.at });
     this.engine = msg.engine;
     this.engineReason = msg.reason;

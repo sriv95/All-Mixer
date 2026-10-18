@@ -51,6 +51,8 @@ export type ToWorklet =
   | { type: 'hold' }
   /** Play: fade back in and resume from the frozen position. */
   | { type: 'release' }
+  /** The real audio starts now (after a seek, or a new video): answer with `audible` once it comes out of the delay line. */
+  | { type: 'expect-audio' }
   /** Direct channel to the ML worker (blocks out, vocal blocks back). */
   | { type: 'ml-port'; port: MessagePort }
   /** Switch engine while running. The worklet answers with an `engine` message. */
@@ -66,7 +68,9 @@ export type FromWorklet =
    * `at` is the context time of the first input sample played with the new delay (input time:
    * that sample is heard `newDelay / sampleRate` later).
    */
-  | { type: 'engine'; engine: MlEngine; reason: MlReason; at: number };
+  | { type: 'engine'; engine: MlEngine; reason: MlReason; at: number }
+  /** The audio announced by `expect-audio` is now at the worklet's output (immediately without a delay). */
+  | { type: 'audible' };
 
 /**
  * Block buffers on the ML port: [epoch f64, start f64, then f32 × block × planes] (4 planes, 6 with the drum stage).

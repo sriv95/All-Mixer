@@ -16,7 +16,7 @@ CI builds the extension, creates tag `vx.y.z` and a GitHub release with this sec
 - Separate mode: while the model warms up (the video is held for 10 to 40 s), the player's loading spinner shows over the picture.
 - Separate mode: the time and the seek bar of YouTube and YouTube Music now show what you see and hear, not the video position that runs ahead by the delay.
 - Separate mode: when a video ends, the next one (autoplay / queue) starts only after the delayed last seconds have played, with the player's loading spinner shown meanwhile. Pausing during that wait pauses at once, and play continues the last seconds instead of restarting the video.
-- Separate mode: after a seek or a new video, the player's loading spinner shows for the delay, while the sound is not back yet. Pause and play during it keep the spinner for the time that is left.
+- Separate mode: after a seek or a new video, the player's loading spinner shows from the seek, over the loading, until the sound is really out of the speakers (it follows the audio, so a Bluetooth delay is covered too). Pause hides it and play brings it back while the sound is still missing.
 - Popup: the Vocal, Instrumental and Drums sliders now go from 0 to 100 %. Only Global Volume boosts.
 - Popup: the Default / Separate tabs are replaced by a **Separate mode** checkbox. Checked shows the Separate settings.
 - Separation: **Split instrumental** adds its delay on top of the Delay limit, so the limit no longer jumps to 8 s.

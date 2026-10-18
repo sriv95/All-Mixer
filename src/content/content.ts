@@ -70,7 +70,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 });
 // The end of the video (autoplay / queue) waits for the delayed tail to play out.
 deferEnd(() => video, () => overlay?.delayMs ?? 0, spinnerFor('end'));
-watchDelayGap(() => video, () => overlay?.delayMs ?? 0, spinnerFor('gap'));
+watchDelayGap(() => video, () => overlay?.delayMs ?? 0, (cb) => chain.whenAudible(cb), spinnerFor('gap'));
 // Lyrics follow what the user sees and hears, which trails currentTime by the picture delay (D1).
 const lyrics: LyricsFeature = lyricsSite
   ? initLyrics(lyricsSite, () => overlay?.presentedTime() ?? null, () => overlay?.presentedBusy() ?? false)
