@@ -6,7 +6,7 @@ import { linesToLrc, lyricsToText } from '../../lyrics/export';
 import { getPlayerInfo, getTimedText, onCaptionsAvailable } from './bridge-client';
 import { LyricsController, type LyricsState } from './controller';
 import { YtSettingsMenu, YtmSettingsPopover, buildMenuButtons, buildMenuRows, type LyricsMenu } from './settings-menu';
-import { openFindDialog } from './lyrics-dialog';
+import { openFindDialog, openOwnDialog } from './lyrics-dialog';
 import { PanelSurface, YtmTabSurface } from './surfaces';
 import { CaptionBoot } from './caption-boot';
 import { KaraokeSurface } from './karaoke-overlay';
@@ -173,6 +173,10 @@ export function initLyrics(site: Site, presentedTime: () => number | null, prese
         choose: (record) => void useLyrics(toFound(record)),
         reset: () => void useLyrics(null),
       });
+    },
+    myLyrics: () => {
+      const track = lastState.kind === 'ready' || lastState.kind === 'not-found' ? lastState.track : undefined;
+      openOwnDialog({ track, choose: (found) => void useLyrics(found), reset: () => void useLyrics(null) });
     },
     setOffset: (ms: number) => {
       if (!lastVideoId) return;

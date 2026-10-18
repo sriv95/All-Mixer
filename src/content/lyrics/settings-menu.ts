@@ -28,7 +28,7 @@ export interface MenuRow {
 
 /** A button inside the lyrics settings (not a choice): e.g. reset position, copy lyrics. */
 export interface MenuButton {
-  id: 'resetPosition' | 'copyLyrics' | 'saveLrc' | 'findLyrics';
+  id: 'resetPosition' | 'copyLyrics' | 'saveLrc' | 'findLyrics' | 'myLyrics';
   label: string;
   /** May return a short confirmation shown in place of the label for a moment. */
   run(): string | void;
@@ -44,6 +44,8 @@ export interface MenuActions {
   saveLrc(): string | void;
   /** Open the dialog to pick other lyrics for this video. */
   findLyrics(): void;
+  /** Open the dialog to paste or load lyrics for this video. */
+  myLyrics(): void;
 }
 
 export interface MenuInput {
@@ -54,7 +56,7 @@ export interface MenuInput {
   timing?: { offsetMs: number };
   /** Set while lyrics are shown: the copy button appears, and the .lrc one for synced lyrics. */
   lyrics?: { synced: boolean };
-  /** Lyrics are shown or missing for a known video: the "Find other lyrics" button appears. */
+  /** Lyrics are shown or missing for a known video: the "Find other lyrics" and "Use my own lyrics" buttons appear. */
   canEdit?: boolean;
   /** YT Music has no karaoke text or lyrics window (the Lyrics tab only), so it gets no display rows. Default: www. */
   site?: Site;
@@ -242,7 +244,10 @@ export function buildMenuButtons(input: MenuInput, actions: MenuActions): MenuBu
   }
   if (input.lyrics) buttons.push({ id: 'copyLyrics', label: 'Copy lyrics', run: () => actions.copyLyrics() });
   if (input.lyrics?.synced) buttons.push({ id: 'saveLrc', label: 'Save as .lrc', run: () => actions.saveLrc() });
-  if (input.canEdit) buttons.push({ id: 'findLyrics', label: 'Find other lyrics…', run: () => actions.findLyrics() });
+  if (input.canEdit) {
+    buttons.push({ id: 'findLyrics', label: 'Find other lyrics…', run: () => actions.findLyrics() });
+    buttons.push({ id: 'myLyrics', label: 'Use my own lyrics…', run: () => actions.myLyrics() });
+  }
   return buttons;
 }
 

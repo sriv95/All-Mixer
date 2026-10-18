@@ -1,4 +1,5 @@
-import type { LrclibRecord } from '../../lyrics/lrclib-types';
+import type { FoundLyrics, LrclibRecord } from '../../lyrics/lrclib-types';
+import { customFound } from '../../lyrics/custom';
 import type { TrackInfo } from '../../lyrics/types';
 import { cleanArtist, cleanTitle } from '../../lyrics/match';
 
@@ -138,5 +139,69 @@ export function openFindDialog(deps: FindDialogDeps, doc: Document = document): 
   panel.append(row, status, list, footer);
   input.focus();
   if (query) run();
+  return close;
+}
+
+/** Largest file the "Load file" button reads. */
+const MAX_FILE_BYTES = 1_000_000;
+
+export interface OwnDialogDeps {
+  track?: TrackInfo;
+  /** The user saved lyrics (already checked: usable). */
+  choose(found: FoundLyrics): void;
+  /** The user wants the automatic lyrics back. */
+  reset(): void;
+}
+
+/** "Use my own lyrics": paste text or load a .lrc / .txt file. Timestamped lines make synced lyrics, anything else plain text. */
+export function openOwnDialog(deps: OwnDialogDeps, doc: Document = document): () => void {
+  const { panel, close } = openDialogShell(doc, 'Use my own lyrics');
+  const area = doc.createElement('textarea');
+  area.rows = 10;
+  area.placeholder = 'Paste the lyrics here. Lines like [01:23.45] text make them synced.';
+  area.style.cssText = `${INPUT_CSS}flex:none;width:100%;box-sizing:border-box;resize:vertical;`;
+  const status = doc.createElement('div');
+  status.style.cssText = 'opacity:.7;font-size:12px;';
+  status.textContent = 'Kept for this video. This also sets Lyrics source to LRCLIB.';
+
+  const file = doc.createElement('input');
+  file.type = 'file';
+  file.accept = '.lrc,.txt,text/plain';
+  file.style.display = 'none';
+  file.addEventListener('change', () => {
+    const f = file.files?.[0];
+    if (!f) return;
+    if (f.size > MAX_FILE_BYTES) {
+      status.textContent = 'That file is too big for lyrics.';
+      return;
+    }
+    void f.text().then((t) => {
+      area.value = t;
+      status.textContent = `Loaded ${f.name}.`;
+    });
+  });
+
+  const save = () => {
+    const found = customFound(area.value, deps.track);
+    if (!found) {
+      status.textContent = 'Need at least 4 lines of lyrics.';
+      return;
+    }
+    deps.choose(found);
+    close();
+  };
+  const footer = doc.createElement('div');
+  footer.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;justify-content:space-between;';
+  footer.append(
+    dialogButton(doc, 'Load file…', () => file.click()),
+    dialogButton(doc, 'Back to automatic', () => {
+      deps.reset();
+      close();
+    }),
+    dialogButton(doc, 'Save', save),
+    dialogButton(doc, 'Close', close),
+  );
+  panel.append(area, status, footer, file);
+  area.focus();
   return close;
 }
