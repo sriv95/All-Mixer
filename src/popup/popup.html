@@ -50,7 +50,7 @@
         <button type="button" id="preset-reset" data-vocal="100" data-instrumental="100" aria-pressed="false">Reset</button>
       </div>
       <details id="advanced">
-        <summary>Advanced (model, chunk delay)</summary>
+        <summary>Advanced (model, delay)</summary>
         <label for="ml-model">Model</label>
         <select id="ml-model">
           <option value="mdx">Default</option>
@@ -68,12 +68,12 @@
             <output id="ml-delay-value" for="ml-delay">2 s</output>
             <button id="ml-delay-apply" type="button" disabled>Apply</button>
           </div>
-          <p class="note">The audio delay stays under the limit. A longer limit gives the model more of the song at once, which separates better but needs a faster GPU. The Default model stops growing at about 6.5 s.</p>
+          <p class="note">More audio delay gives more quality but uses more GPU.</p>
         </div>
         <details id="split">
-          <summary>Split instrumental (drums)</summary>
-          <label class="check"><input id="split-on" type="checkbox" /> Split the drums from the rest of the instrumental</label>
-          <p class="note">A second model takes the drums out of the instrumental, so Drums and Others get their own sliders (each one scales the Instrumental slider). It needs a one-time download, more GPU, and adds about 4 s of audio delay. With High or Best quality it also needs a fast GPU, and the delay limit goes up to at least 8 s.</p>
+          <summary>Split instrumental</summary>
+          <label class="check"><input id="split-on" type="checkbox" /> Drums</label>
+          <p class="note">Splitting the instrumental adds more delay over the Delay limit.</p>
           <p id="drums-row" class="note" hidden>
             <span id="drums-text"></span>
             <button id="drums-btn" type="button" hidden></button>

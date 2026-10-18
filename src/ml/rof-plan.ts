@@ -66,11 +66,11 @@ export const stepMs = (frames: number, baseMs: number): number => baseMs * (fram
 
 /**
  * The longest block whose delay fits `delaySamples` for a GPU with a base step of `baseMs` (and, with the drum stage,
- * `drumMs` per drum model run), or null when the GPU cannot keep up: the step (with MARGIN) must fit the block, or steps queue up. latency ≤ delaySamples always.
+ * `drumMs` per drum model run), or null when the GPU cannot keep up: the step (with MARGIN) must fit the block, or steps queue up. The drum stage's wait (`extra`) comes on top of the budget: latency ≤ delaySamples + extra always.
  */
 export function planRof(delaySamples: number, baseMs: number, drumMs = 0): RofGeometry | null {
   const extra = drumMs > 0 ? SC_LAG : 0;
-  const budget = delaySamples - OVERLAP - extra - ML_QUANTUM; // block + slack
+  const budget = delaySamples - OVERLAP - ML_QUANTUM; // block + slack
   const slackFor = (block: number): number => alignUp(MARGIN * (stepMs(framesFor(block, OVERLAP), baseMs) + (drumMs > 0 ? drumRuns(block) * drumMs : 0)) * SAMPLES_PER_MS);
   // Both limits (delay, and step ≤ block) get harder as the block grows, but not in a simple way past 400 frames: scan down.
   for (let block = alignDown(budget); block >= MIN_BLOCK; block -= ML_QUANTUM) {
