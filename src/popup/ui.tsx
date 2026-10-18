@@ -82,7 +82,7 @@ const TONE = {
   primary: 'h-11 w-full rounded-[14px] bg-linear-to-br from-[#ef3a45] to-[#cf1722] text-sm font-extrabold text-white shadow-raised',
   small: 'h-8 rounded-[11px] bg-card px-3 text-xs font-extrabold text-ink shadow-raised-sm',
   // The chosen preset goes bold, the one it replaces goes back to regular: the weight glides (variable font).
-  preset: 'w-full rounded-[14px] bg-card py-2.5 text-[13px] text-ink shadow-raised font-semibold transition-[font-weight,color,box-shadow] duration-300 aria-pressed:font-extrabold aria-pressed:text-brand-dark aria-pressed:shadow-pressed',
+  preset: 'relative w-full rounded-[14px] bg-card py-2.5 text-[13px] text-ink shadow-raised font-semibold transition-[font-weight,color,box-shadow] duration-300 aria-pressed:font-extrabold aria-pressed:text-brand-dark aria-pressed:shadow-pressed',
 };
 
 export function Btn({ tone = 'raised', className, disabled, type = 'button', ...rest }: BtnProps) {
