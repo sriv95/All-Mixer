@@ -21,9 +21,20 @@ interface Opts {
 }
 
 const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
-const modeBox = () => el<HTMLInputElement>('separate-mode');
-const toggleMode = () => modeBox().click();
+const has = (id: string) => document.getElementById(id) !== null;
 const settle = () => new Promise((r) => setTimeout(r, 50));
+const banner = () => document.getElementById('separation-banner');
+const tabSeparate = () => el('tab-separate').click();
+const tabDefault = () => el('tab-default').click();
+
+/** React tracks the value it last set: write through the prototype setter so the event counts as a user change. */
+function setNative(e: HTMLInputElement | HTMLSelectElement, value: string, event: 'input' | 'change'): void {
+  const proto = e instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
+  Object.getOwnPropertyDescriptor(proto, 'value')!.set!.call(e, value);
+  e.dispatchEvent(new Event(event, { bubbles: true }));
+}
+const input = (id: string, v: string) => setNative(el<HTMLInputElement>(id), v, 'input');
+const choose = (id: string, v: string) => setNative(el<HTMLSelectElement>(id), v, 'change');
 
 let sendMessage: ReturnType<typeof vi.fn>;
 
@@ -57,6 +68,7 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
+
 describe('popup', () => {
   it('disables everything on a non-web tab', async () => {
     await load({ tab: { id: 1, url: 'chrome://extensions/' } });
@@ -75,32 +87,32 @@ describe('popup', () => {
     await load({ stored: { mode: 'separate', masterPct: 250 } });
     expect(el<HTMLInputElement>('master').value).toBe('18'); // 250 % snaps to the 200 % stop (position 18)
     expect(el<HTMLOutputElement>('master-value').value).toBe('250%');
-    expect(modeBox().checked).toBe(true);
-    expect(el('panel-separate').hidden).toBe(false);
+    expect(el('tab-separate').getAttribute('aria-selected')).toBe('true');
+    expect(has('panel-separate')).toBe(true);
   });
 
-  it('checking Separate mode sends the mode and shows its settings, unchecking hides them', async () => {
+  it('the Separate tab and the Separate mode switch send the mode and show its settings, the Default tab hides them', async () => {
     await load({ stored: { mode: 'default', masterPct: 100 } });
-    expect(el('panel-separate').hidden).toBe(true);
-    toggleMode();
+    expect(has('panel-separate')).toBe(false);
+    el('separate-mode').click();
     await settle();
-    expect(el('panel-separate').hidden).toBe(false);
+    expect(has('panel-separate')).toBe(true);
     expect(sent().at(-1)).toMatchObject({ tabId: 7, settings: { mode: 'separate' } });
-    toggleMode();
+    tabDefault();
     await settle();
-    expect(el('panel-separate').hidden).toBe(true);
+    expect(has('panel-separate')).toBe(false);
     expect(sent().at(-1).settings.mode).toBe('default');
+    tabSeparate();
+    await settle();
+    expect(sent().at(-1).settings.mode).toBe('separate');
   });
 
   it('slider input sends a clamped masterPct', async () => {
     await load();
-    const slider = el<HTMLInputElement>('master');
-    slider.value = '9999';
-    slider.dispatchEvent(new Event('input', { bubbles: true }));
+    input('master', '9999');
     await settle();
     expect(sent().at(-1).settings.masterPct).toBe(600);
-    slider.value = '-40';
-    slider.dispatchEvent(new Event('input', { bubbles: true }));
+    input('master', '-40');
     await settle();
     expect(sent().at(-1).settings.masterPct).toBe(0);
     expect(el<HTMLOutputElement>('master-value').value).toBe('0%');
@@ -108,11 +120,9 @@ describe('popup', () => {
 
   it('slider has 100 % in the middle and uses 5/10/100 steps', async () => {
     await load();
-    const slider = el<HTMLInputElement>('master');
-    expect(slider.value).toBe('15');
+    expect(el<HTMLInputElement>('master').value).toBe('15');
     const at = async (pos: number) => {
-      slider.value = String(pos);
-      slider.dispatchEvent(new Event('input', { bubbles: true }));
+      input('master', String(pos));
       await settle();
       return sent().at(-1).settings.masterPct;
     };
@@ -133,9 +143,16 @@ describe('popup', () => {
     expect(el<HTMLOutputElement>('master-value').value).toBe('100%');
   });
 
+  it('Global Volume is on the Separate tab too', async () => {
+    await load({ stored: { mode: 'separate', masterPct: 400 } });
+    el('master-reset').click();
+    await settle();
+    expect(sent().at(-1).settings).toMatchObject({ mode: 'separate', masterPct: 100 });
+  });
+
   it('has no separation-quality selector, only the ML model one', async () => {
     await load({ stored: { mode: 'separate', separationQuality: 'light' } });
-    expect(document.getElementById('separation-quality')).toBeNull();
+    expect(has('separation-quality')).toBe(false);
     expect(document.querySelectorAll('select')).toHaveLength(1);
   });
 
@@ -144,8 +161,7 @@ describe('popup', () => {
     const select = el<HTMLSelectElement>('ml-model');
     expect(select.value).toBe('roformer');
     expect([...select.options].map((o) => o.value)).toEqual(['mdx', 'roformer', 'deux']);
-    select.value = 'mdx';
-    select.dispatchEvent(new Event('change', { bubbles: true }));
+    choose('ml-model', 'mdx');
     await settle();
     expect(sent().at(-1).settings.mlModel).toBe('mdx');
   });
@@ -154,7 +170,7 @@ describe('popup', () => {
     it('holds the model and delay controls and is closed by default', async () => {
       await load({ stored: { mode: 'separate' } });
       expect(adv().open).toBe(false);
-      for (const id of ['ml-model', 'model-row', 'chunk-row', 'ml-delay']) expect(adv().contains(el(id))).toBe(true);
+      for (const id of ['ml-model', 'chunk-row', 'ml-delay']) expect(adv().contains(el(id))).toBe(true);
       expect(adv().contains(el('vocal'))).toBe(false);
     });
     it('opens by itself when a non-default model is in use', async () => {
@@ -171,30 +187,23 @@ describe('popup', () => {
   });
 
   describe('chunk length', () => {
-    const select = (m: string) => {
-      const s = el<HTMLSelectElement>('ml-model');
-      s.value = m;
-      s.dispatchEvent(new Event('change', { bubbles: true }));
-    };
     it('is shown for every model, as a 2 to 15 s slider in 1 s steps starting at 2 s', async () => {
       await load({ stored: { mode: 'separate', mlModel: 'mdx' } });
-      expect(el('chunk-row').hidden).toBe(false);
-      select('roformer');
+      expect(has('chunk-row')).toBe(true);
+      choose('ml-model', 'roformer');
       await settle();
-      expect(el('chunk-row').hidden).toBe(false);
+      expect(has('chunk-row')).toBe(true);
       const slider = el<HTMLInputElement>('ml-delay');
       expect([slider.min, slider.max, slider.step, slider.value]).toEqual(['2', '15', '1', '2']);
       expect(slider.disabled).toBe(false);
       expect(el<HTMLOutputElement>('ml-delay-value').value).toBe('2 s');
-      expect(document.getElementById('ml-auto')).toBeNull();
+      expect(has('ml-auto')).toBe(false);
     });
 
     it('dragging only moves the label; Apply sends the delay limit once', async () => {
       await load({ stored: { mode: 'separate', mlModel: 'roformer', mlDelayS: 4 } });
-      const slider = el<HTMLInputElement>('ml-delay');
       const before = sent().length;
-      slider.value = '9';
-      slider.dispatchEvent(new Event('input', { bubbles: true }));
+      input('ml-delay', '9');
       await settle();
       expect(el<HTMLOutputElement>('ml-delay-value').value).toBe('9 s');
       expect(sent()).toHaveLength(before);
@@ -212,24 +221,19 @@ describe('popup', () => {
     const dfiles = { 'deux.onnx': 50 * 2 ** 20, 'deux-meta.json': 1000 };
     const remote = (version: number, f: Record<string, number> = files) => ({ format: MODEL_FORMAT, version, files: f, checkedAt: 0 });
     const installedV1 = { format: MODEL_FORMAT, version: 1, files };
-    const row = () => el('model-row');
 
     it('is hidden for the default model and shown for a downloadable one', async () => {
       await load({ stored: { mode: 'separate', mlModel: 'mdx' } });
-      expect(row().hidden).toBe(true);
-      const select = el<HTMLSelectElement>('ml-model');
-      select.value = 'roformer';
-      select.dispatchEvent(new Event('change', { bubbles: true }));
+      expect(has('model-row')).toBe(false);
+      choose('ml-model', 'roformer');
       await settle();
-      expect(row().hidden).toBe(false);
+      expect(has('model-row')).toBe(true);
     });
 
     it('offers a download when the model is missing and asks the background to install that model', async () => {
       await load({ stored: { mode: 'separate', mlModel: 'roformer' }, local: { 'modelRemote.roformer': remote(1) } });
       expect(el('model-text').textContent).toMatch(/High quality is a one-time download \(100 MB\)/);
-      const btn = el<HTMLButtonElement>('model-btn');
-      expect(btn.hidden).toBe(false);
-      btn.click();
+      el<HTMLButtonElement>('model-btn').click();
       expect(sendMessage).toHaveBeenCalledWith({ type: 'model-install', id: 'roformer' });
     });
 
@@ -251,12 +255,12 @@ describe('popup', () => {
         local: { 'modelRemote.roformer': remote(1), 'modelProgress.roformer': { phase: 'downloading', version: 1, done: 50 * 2 ** 20, total: 100 * 2 ** 20, at: Date.now() } },
       });
       expect(el('model-text').textContent).toMatch(/Downloading… 50% \(50 MB of 100 MB\)/);
-      expect(el<HTMLButtonElement>('model-btn').hidden).toBe(true);
+      expect(has('model-btn')).toBe(false);
     });
 
     it('shows an update button even when the default model is selected', async () => {
       await load({ stored: { mode: 'separate', mlModel: 'mdx' }, local: { 'modelInstalled.roformer': installedV1, 'modelRemote.roformer': remote(2) } });
-      expect(row().hidden).toBe(false);
+      expect(has('model-row')).toBe(true);
       expect(el('model-text').textContent).toMatch(/Update available: High quality model v2/);
       expect(el('model-btn').textContent).toBe('Update');
     });
@@ -264,7 +268,7 @@ describe('popup', () => {
     it('says installed when up to date', async () => {
       await load({ stored: { mode: 'separate', mlModel: 'roformer' }, local: { 'modelInstalled.roformer': installedV1, 'modelRemote.roformer': remote(1) } });
       expect(el('model-text').textContent).toBe('High quality model v1 installed.');
-      expect(el<HTMLButtonElement>('model-btn').hidden).toBe(true);
+      expect(has('model-btn')).toBe(false);
     });
   });
 
@@ -276,8 +280,8 @@ describe('popup', () => {
     it('is off by default: the Drums and Others sliders are hidden and the drum model row too', async () => {
       await load({ stored: { mode: 'separate' } });
       expect(el<HTMLInputElement>('split-on').checked).toBe(false);
-      expect(el('split-mix').hidden).toBe(true);
-      expect(el('drums-row').hidden).toBe(true);
+      expect(has('split-mix')).toBe(false);
+      expect(has('drums-row')).toBe(false);
       expect(el<HTMLDetailsElement>('split').open).toBe(false);
     });
 
@@ -286,22 +290,19 @@ describe('popup', () => {
       expect(el<HTMLDetailsElement>('advanced').open).toBe(true);
       expect(el<HTMLDetailsElement>('split').open).toBe(true);
       expect(el<HTMLInputElement>('split-on').checked).toBe(true);
-      expect(el('split-mix').hidden).toBe(false);
+      expect(has('split-mix')).toBe(true);
       expect(el<HTMLInputElement>('drums').value).toBe('60');
       expect(el<HTMLOutputElement>('drums-value').value).toBe('60%');
       expect(el<HTMLInputElement>('others').value).toBe('40');
     });
 
-    it('the checkbox sends the setting and leaves the delay limit alone', async () => {
+    it('the switch sends the setting and leaves the delay limit alone', async () => {
       await load({ stored: { mode: 'separate', mlModel: 'roformer', mlDelayS: 3 } });
-      const on = el<HTMLInputElement>('split-on');
-      on.checked = true;
-      on.dispatchEvent(new Event('change', { bubbles: true }));
+      el('split-on').click();
       await settle();
       expect(sent().at(-1).settings).toMatchObject({ splitInstrumental: true, mlDelayS: 3 });
-      expect(el('split-mix').hidden).toBe(false);
-      on.checked = false;
-      on.dispatchEvent(new Event('change', { bubbles: true }));
+      expect(has('split-mix')).toBe(true);
+      el('split-on').click();
       await settle();
       expect(sent().at(-1).settings.splitInstrumental).toBe(false);
     });
@@ -309,9 +310,7 @@ describe('popup', () => {
     it('the Drums and Others sliders send their gains', async () => {
       await load({ stored: sepSplit() });
       for (const [id, key, v] of [['drums', 'drumsPct', '40'], ['others', 'othersPct', '30']] as const) {
-        const slider = el<HTMLInputElement>(id);
-        slider.value = v;
-        slider.dispatchEvent(new Event('input', { bubbles: true }));
+        input(id, v);
         await settle();
         expect(sent().at(-1).settings[key]).toBe(Number(v));
       }
@@ -319,22 +318,22 @@ describe('popup', () => {
 
     it('offers the drum model download while the split is on, and asks the background for it', async () => {
       await load({ stored: sepSplit(), local: { 'modelRemote.drums': dremote } });
-      expect(el('drums-row').hidden).toBe(false);
+      expect(has('drums-row')).toBe(true);
       expect(el('drums-text').textContent).toMatch(/Drum split is a one-time download \(41 MB\)/);
       el<HTMLButtonElement>('drums-btn').click();
       expect(sendMessage).toHaveBeenCalledWith({ type: 'model-install', id: 'drums' });
-      expect(el('model-row').hidden).toBe(true); // the Model row is for the Model menu
+      expect(has('model-row')).toBe(false); // the Model row is for the Model menu
     });
 
     it('says installed, and stays hidden with the split off unless an update is on offer', async () => {
       const inst = { format: MODEL_FORMAT, version: 1, files: dfiles };
       await load({ stored: sepSplit(), local: { 'modelInstalled.drums': inst, 'modelRemote.drums': dremote } });
       expect(el('drums-text').textContent).toBe('Drum split model v1 installed.');
-      expect(el<HTMLButtonElement>('drums-btn').hidden).toBe(true);
+      expect(has('drums-btn')).toBe(false);
       await load({ stored: { mode: 'separate' }, local: { 'modelInstalled.drums': inst, 'modelRemote.drums': dremote } });
-      expect(el('drums-row').hidden).toBe(true);
+      expect(has('drums-row')).toBe(false);
       await load({ stored: { mode: 'separate' }, local: { 'modelInstalled.drums': inst, 'modelRemote.drums': { ...dremote, version: 2 } } });
-      expect(el('drums-row').hidden).toBe(false);
+      expect(has('drums-row')).toBe(true);
       expect(el('drums-btn').textContent).toBe('Update');
     });
   });
@@ -349,23 +348,24 @@ describe('popup', () => {
     expect(el('status').textContent).toBe('Audio error: boom');
   });
 
-  it('asks for a reload when there is no content script', async () => {
+  it('asks for a reload when there is no content script, and offers no Separate mode', async () => {
     await load({ status: 'reject' });
     expect(el('status').textContent).toMatch(/Reload this tab/);
-    expect(modeBox().parentElement!.hidden).toBe(true);
+    expect(has('separate-mode')).toBe(false);
+    expect(has('tab-separate')).toBe(false);
   });
 
   describe('Separate tab', () => {
     const sep = (state: 'loading' | 'on' | 'error', extra: object = {}, engine = 'ml', processingMs = 120.2) =>
       ({ ...okStatus, separation: { state, latency: { engine, processingMs }, ...extra } }) as unknown as ContentStatus;
     const drag = async (id: string, v: string) => {
-      const s = el<HTMLInputElement>(id);
-      s.value = v;
-      s.dispatchEvent(new Event('input', { bubbles: true }));
+      input(id, v);
       await settle();
     };
     const pressed = () =>
       [...document.querySelectorAll('.presets button')].filter((b) => b.getAttribute('aria-pressed') === 'true').map((b) => b.id);
+    const kind = () => banner()?.dataset.kind;
+    const live = (ms: number) => sep('on', { choice: { state: 'on' } }, 'ml', ms);
 
     it('sliders are enabled and send vocalPct / instrumentalPct', async () => {
       await load({ stored: { mode: 'separate' } });
@@ -408,60 +408,91 @@ describe('popup', () => {
       expect(pressed()).toEqual([]);
     });
 
-    it('loading status', async () => {
+    it('loading shows the warming banner', async () => {
       await load({ stored: { mode: 'separate' }, status: sep('loading') });
-      expect(el('status').textContent).toBe('Starting separation…');
+      expect(kind()).toBe('warming');
+      expect(banner()!.textContent).toMatch(/Warming up/);
     });
 
     it('polls while loading and shows the delay once ML is on', async () => {
       await load({ stored: { mode: 'separate' }, status: sep('loading') });
-      expect(el('status').textContent).toBe('Starting separation…');
-      (chrome.tabs.sendMessage as ReturnType<typeof vi.fn>).mockResolvedValue(sep('on', { choice: { state: 'on' } }));
+      expect(kind()).toBe('warming');
+      (chrome.tabs.sendMessage as ReturnType<typeof vi.fn>).mockResolvedValue(live(120.2));
       await new Promise((r) => setTimeout(r, 600));
-      expect(el('status').textContent).toBe('Separation on · 0.1 s delay');
+      expect(kind()).toBe('live');
+      expect(banner()!.textContent).toMatch(/0\.1 s audio delay/);
     });
 
     it('warming up: says the original mix plays, and keeps polling', async () => {
       await load({ stored: { mode: 'separate' }, status: sep('on', { choice: { state: 'warming' } }, 'bypass', 0) });
-      expect(el('status').textContent).toBe('Separation warming up… Playing the original mix.');
-      (chrome.tabs.sendMessage as ReturnType<typeof vi.fn>).mockResolvedValue(sep('on', { choice: { state: 'on' } }));
+      expect(banner()!.textContent).toMatch(/original mix keeps playing/);
+      (chrome.tabs.sendMessage as ReturnType<typeof vi.fn>).mockResolvedValue(live(120.2));
       await new Promise((r) => setTimeout(r, 600));
-      expect(el('status').textContent).toBe('Separation on · 0.1 s delay');
+      expect(kind()).toBe('live');
     });
 
-    it('unchecking Separate mode clears the separation status at once', async () => {
-      await load({ stored: { mode: 'separate' }, status: sep('on', { choice: { state: 'on' } }, 'ml', 305) });
-      expect(el('status').textContent).toBe('Separation on · 0.3 s delay');
-      toggleMode();
-      expect(el('status').textContent).toBe('');
-      await settle();
-      expect(el('status').textContent).toBe('');
+    it('leaving the Separate tab clears the separation banner', async () => {
+      await load({ stored: { mode: 'separate' }, status: live(305) });
+      expect(banner()!.textContent).toMatch(/0\.3 s audio delay/);
+      tabDefault();
+      await settle(); // the status read afterwards still says live: the banner follows the tab
+      expect(banner()).toBeNull();
     });
 
     it('on shows the delay in seconds with one decimal', async () => {
-      await load({ stored: { mode: 'separate' }, status: sep('on', { choice: { state: 'on' } }, 'ml', 303.4) });
-      expect(el('status').textContent).toBe('Separation on · 0.3 s delay');
+      await load({ stored: { mode: 'separate' }, status: live(303.4) });
+      expect(banner()!.textContent).toMatch(/Separating live.*0\.3 s audio delay/);
     });
 
-    it('unavailable shows the cause and that the original plays', async () => {
+    it('unavailable shows the cause and that the original plays, with no retry buttons', async () => {
       await load({ stored: { mode: 'separate' }, status: sep('on', { choice: { state: 'unavailable', cause: 'no webgpu' } }, 'bypass', 0) });
-      expect(el('status').textContent).toBe('Separation unavailable: no webgpu. Playing the original mix.');
+      expect(kind()).toBe('unavailable');
+      expect(banner()!.textContent).toMatch(/Separation unavailable.*no webgpu\. The original mix is playing\./);
+      expect(has('act-retry')).toBe(false);
     });
 
-    it('stopped says the device is too slow and how to retry', async () => {
-      await load({ stored: { mode: 'separate' }, status: sep('on', { choice: { state: 'stopped', cause: 'ML missed its deadline' } }, 'bypass', 0) });
-      expect(el('status').textContent).toBe(
-        'Separation stopped: this device is too slow (ML missed its deadline). Playing the original mix. Switch to Default and back to retry.',
-      );
+    describe('stopped (device too slow)', () => {
+      const stopped = sep('on', { choice: { state: 'stopped', cause: 'ML missed its deadline' } }, 'bypass', 0);
+
+      it('says the device is too slow and the original plays', async () => {
+        await load({ stored: { mode: 'separate' }, status: stopped });
+        expect(kind()).toBe('stopped');
+        expect(banner()!.textContent).toMatch(/too slow to separate in real time \(ML missed its deadline\)\. The original mix is playing\./);
+      });
+
+      it('on the Default model offers a longer delay limit and a retry, not a model switch', async () => {
+        await load({ stored: { mode: 'separate', mlDelayS: 2 }, status: stopped });
+        expect(has('act-default-model')).toBe(false);
+        expect(el('act-raise-delay').textContent).toBe('Raise delay limit to 6 s');
+        el('act-raise-delay').click();
+        await settle();
+        expect(sent().at(-1).settings.mlDelayS).toBe(6);
+      });
+
+      it('on another model offers to switch to the Default model', async () => {
+        await load({ stored: { mode: 'separate', mlModel: 'deux', mlDelayS: 15 }, status: stopped });
+        expect(has('act-raise-delay')).toBe(false); // already at the longest limit
+        el('act-default-model').click();
+        await settle();
+        expect(sent().at(-1).settings.mlModel).toBe('mdx');
+      });
+
+      it('Try again turns Separate off and on again', async () => {
+        await load({ stored: { mode: 'separate' }, status: stopped });
+        el('act-retry').click();
+        await settle();
+        expect(sent().map((m: { settings: { mode: string } }) => m.settings.mode)).toEqual(['default', 'separate']);
+      });
     });
 
     it('error status', async () => {
       await load({ stored: { mode: 'separate' }, status: sep('error', { error: 'no worklet' }) });
-      expect(el('status').textContent).toBe('Separation unavailable: no worklet. Playing the original mix.');
+      expect(banner()!.textContent).toMatch(/Separation unavailable.*no worklet\. The original mix is playing\./);
     });
 
     it('shows nothing without separation info', async () => {
       await load({ stored: { mode: 'separate' } });
+      expect(banner()).toBeNull();
       expect(el('status').textContent).toBe('');
     });
   });

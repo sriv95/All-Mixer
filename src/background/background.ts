@@ -3,6 +3,7 @@ import { TabStore } from './tab-store';
 import { LyricsCache } from './lyrics-cache';
 import { findLyrics, searchLyrics } from '../lyrics/lrclib';
 import { ModelManager } from './model-manager';
+import { applyBadge } from './badge';
 import type { ModelId } from '../shared/model-store';
 
 const store = new TabStore(chrome.storage.session);
@@ -38,6 +39,11 @@ async function handle(msg: BackgroundRequest, sender: chrome.runtime.MessageSend
       return lyricsCache.pin(msg.videoId, msg.found);
     case 'unpin-lyrics':
       return lyricsCache.unpin(msg.videoId);
+    case 'set-badge': {
+      const tabId = sender.tab?.id;
+      if (tabId !== undefined) await applyBadge(tabId, msg.view);
+      return null;
+    }
     case 'model-check':
       return models.check();
     case 'model-install':

@@ -1,5 +1,6 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import tailwindcss from '@tailwindcss/vite';
 import { defineConfig, type Plugin } from 'vite';
 
 // ML engine assets (SRI-24, SRI-117): the models are fetched at build time (public/ml/vocals.onnx + mdx.onnx, copied by
@@ -45,7 +46,7 @@ function manifestVersion(): Plugin {
 export default defineConfig({
   root: 'src',
   publicDir: resolve(import.meta.dirname, 'public'),
-  plugins: [mlAssets(), manifestVersion()],
+  plugins: [tailwindcss(), mlAssets(), manifestVersion()],
   worker: { format: 'es', rollupOptions: { output: { entryFileNames: 'ml/[name].js', chunkFileNames: 'ml/[name]-[hash].js' } } },
   build: {
     outDir: resolve(import.meta.dirname, 'dist'),

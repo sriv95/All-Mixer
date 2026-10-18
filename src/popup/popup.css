@@ -1,16 +1,56 @@
-body { font: 13px system-ui, sans-serif; width: 280px; margin: 0; padding: 10px; }
-label { display: block; margin-top: 6px; }
-select { width: 100%; margin-top: 2px; }
-.row { display: flex; align-items: center; gap: 8px; }
-.row input { flex: 1; }
-.check { display: flex; align-items: center; gap: 6px; margin: 10px 0; font-weight: 600; cursor: pointer; }
-output { min-width: 3.5em; text-align: right; font-variant-numeric: tabular-nums; }
-.note, .status { color: #555; }
-.status:empty { display: none; }
-.presets { display: flex; gap: 4px; margin: 8px 0; }
-.presets button { flex: 1; padding: 5px; border: 1px solid #999; background: #f2f2f2; cursor: pointer; }
-.presets button[aria-pressed='true'] { background: #dde8ff; border-color: #36c; font-weight: 600; }
-details { margin-top: 8px; }
-summary { cursor: pointer; font-weight: 600; }
-.sub { color: #777; font-size: 12px; }
-#split { margin-left: 6px; }
+@import 'tailwindcss' source('../');
+@import '@fontsource-variable/plus-jakarta-sans/wght.css';
+
+/* Soft studio × neumorphic: flat cards, pressed tracks, raised thumbs. Plus Jakarta Sans is bundled: an extension popup loads nothing remote. */
+@theme {
+  --font-sans: 'Plus Jakarta Sans Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --color-brand: #e11d2e;
+  --color-brand-dark: #b3121f;
+  --color-brand-tint: #fde8ea;
+  --color-ink: #1f1517;
+  --color-muted: #6a5c5f;
+  --color-well: #f1ecec;
+  --color-card: #faf7f7;
+  --shadow-raised: 4px 4px 9px #e2dadb, -4px -4px 9px #fff;
+  --shadow-raised-sm: 3px 3px 7px #e2dadb, -3px -3px 7px #fff;
+  --shadow-pressed: inset 3px 3px 6px #ddd4d5, inset -3px -3px 6px #fff;
+}
+
+body {
+  @apply m-0 w-[340px] bg-white p-4 font-sans text-sm text-ink;
+}
+
+/* Range inputs: the fill is --p (0 to 100) of the track, the thumb is a raised knob with a red dot. */
+.mx-range {
+  @apply h-3 w-full cursor-pointer appearance-none rounded-full bg-well shadow-pressed;
+  background-image: linear-gradient(90deg, #f2505a, #d3101c);
+  background-repeat: no-repeat;
+  background-size: calc(var(--p, 0) * 1%) 100%;
+}
+.mx-range:disabled {
+  @apply cursor-default;
+}
+.mx-range::-webkit-slider-thumb {
+  @apply size-7 cursor-pointer appearance-none rounded-full border-0;
+  background: radial-gradient(circle, #d3101c 0 28%, #f1ecec 30%);
+  box-shadow: 4px 4px 9px #d6cccd, -3px -3px 8px #fff;
+}
+.mx-range:focus-visible {
+  @apply outline-2 outline-offset-4 outline-brand;
+}
+
+@keyframes mx-pulse {
+  to {
+    box-shadow: 0 0 0 12px rgb(225 29 46 / 0);
+  }
+}
+.mx-pulse {
+  box-shadow: 0 0 0 0 rgb(225 29 46 / 0.5);
+  animation: mx-pulse 1.6s ease-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mx-pulse,
+  .animate-spin {
+    animation: none;
+  }
+}

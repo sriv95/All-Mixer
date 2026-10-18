@@ -7,6 +7,7 @@ import type { PageSite } from '../content/youtube-dom';
 import type { SeparationState } from '../content/audio/master-chain';
 import type { EngineChoice } from '../content/audio/engine-select';
 import type { LatencyInfo } from '../content/audio/latency';
+import type { SepView } from './separation-view';
 
 /** Content script → background: "what are my settings?" (tab id comes from sender). */
 export interface GetMyTabSettings {
@@ -134,6 +135,12 @@ export interface ModelInstall {
   id: ModelId;
 }
 
+/** Content script → background: what Separate mode is doing in this tab, for the toolbar badge. */
+export interface SetBadge {
+  type: 'set-badge';
+  view: SepView;
+}
+
 export type BackgroundRequest =
   | GetMyTabSettings
   | GetTabSettings
@@ -143,7 +150,8 @@ export type BackgroundRequest =
   | PinLyrics
   | UnpinLyrics
   | ModelCheck
-  | ModelInstall;
+  | ModelInstall
+  | SetBadge;
 /**
  * QA only (sent via chrome.tabs.sendMessage from extension contexts): force the
  * picture delay, ignoring the graph latency. null clears it. `budgetBytes`
