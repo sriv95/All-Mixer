@@ -1,4 +1,5 @@
 import type { InstalledModel } from '../shared/model-store';
+import type { SpeedCache } from '../ml/plan-cache';
 // Contract between the content-script audio engine and the separator AudioWorklet.
 // Imported by both sides, so it must not touch DOM or worklet globals.
 
@@ -158,9 +159,11 @@ export type FromMlWorker =
       adapter: string;
       /** RoFormer, or with the drum stage: the block geometry the worker planned and checked (the selector sends it to the worklet); plain MDX: absent. */
       geometry?: MlGeometry;
+      /** RoFormer: the GPU speed the plan came from, for the extension page to remember (src/ml/plan-cache.ts). */
+      speed?: { key: string; baseMs: number };
     }
   /** No usable WebGPU (none, fallback adapter, or the model failed to load). */
   | { type: 'unavailable'; reason: string };
 
 /** Page → worker init (iframe page forwards the ML port from the content script). */
-export type MlWorkerInit = { type: 'init'; model: MlModel; port: MessagePort; modelUrl: string; mdxUrl: string; installed?: InstalledModel; delayMs?: number | null; drums?: boolean; drumsInstalled?: InstalledModel; wasmBase: string; stallMs?: number; stallAfterMs?: number; timing?: boolean };
+export type MlWorkerInit = { type: 'init'; speeds?: SpeedCache; appVersion?: string; model: MlModel; port: MessagePort; modelUrl: string; mdxUrl: string; installed?: InstalledModel; delayMs?: number | null; drums?: boolean; drumsInstalled?: InstalledModel; wasmBase: string; stallMs?: number; stallAfterMs?: number; timing?: boolean };

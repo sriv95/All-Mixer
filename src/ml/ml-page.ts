@@ -5,6 +5,9 @@
 import { ML_INIT, ML_MODELS, type FromMlWorker, type MlModel, type MlWorkerInit, type ToMlWorker } from '../worklet/protocol';
 
 import { keyInstalled, type InstalledModel } from '../shared/model-store';
+import { rememberSpeed, type SpeedCache } from './plan-cache';
+
+const SPEEDS_KEY = 'mlSpeeds';
 
 const ALLOWED = ['https://www.youtube.com', 'https://music.youtube.com'];
 const parentOrigin = (): string | null => {
@@ -29,12 +32,23 @@ window.addEventListener('message', (e: MessageEvent) => {
     const drums = msg.drums === true;
     target = e.origin;
     worker = new Worker(new URL('./ml-worker.ts', import.meta.url), { type: 'module' });
-    worker.onmessage = (ev: MessageEvent<FromMlWorker>) => window.parent.postMessage(ev.data, target!);
+    worker.onmessage = (ev: MessageEvent<FromMlWorker>) => {
+      const m = ev.data;
+      // Remember the GPU speed of a RoFormer plan that passed (the worker has no chrome.storage).
+      if (m.type === 'ready' && m.speed) {
+        const { key, baseMs } = m.speed;
+        void chrome.storage.local
+          .get(SPEEDS_KEY)
+          .then((o) => chrome.storage.local.set({ [SPEEDS_KEY]: rememberSpeed(o[SPEEDS_KEY] as SpeedCache | undefined, key, baseMs) }))
+          .catch(() => {});
+      }
+      window.parent.postMessage(m, target!);
+    };
     worker.onerror = (ev) => window.parent.postMessage({ type: 'unavailable', reason: `worker: ${ev.message}` } satisfies FromMlWorker, target!);
     const w = worker;
     // Debug stall hook (off by default): see README, Debug.
     void chrome.storage.local
-      .get(['debug.mlStallMs', 'debug.mlStallAfterMs', 'debug.mlTiming', ...(model === 'mdx' ? [] : [keyInstalled(model)]), ...(drums ? [keyInstalled('drums')] : [])])
+      .get([SPEEDS_KEY, 'debug.mlStallMs', 'debug.mlStallAfterMs', 'debug.mlTiming', ...(model === 'mdx' ? [] : [keyInstalled(model)]), ...(drums ? [keyInstalled('drums')] : [])])
       .catch(() => ({}) as Record<string, unknown>)
       .then((o) => {
         const stallMs = Number(o['debug.mlStallMs']) > 0 ? Number(o['debug.mlStallMs']) : 0;
@@ -44,6 +58,8 @@ window.addEventListener('message', (e: MessageEvent) => {
         w.postMessage(
           {
             type: 'init',
+            speeds: o[SPEEDS_KEY] as SpeedCache | undefined,
+            appVersion: chrome.runtime.getManifest().version,
             model,
             delayMs,
             port,
