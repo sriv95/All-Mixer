@@ -16,4 +16,6 @@ __pycache__/
 scripts/qa-*.mjs*
 .DS_Store
 out/
-models-out/
+public/ml/roformer*
+public/ml/kim*
+public/ml/deux*
