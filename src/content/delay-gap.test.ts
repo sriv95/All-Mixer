@@ -43,12 +43,19 @@ describe('watchDelayGap', () => {
     expect(waits).toEqual([]);
   });
 
-  it('stops on pause', () => {
+  it('stops on pause and shows the rest of the gap on play', () => {
     fire('seeking');
     fire('playing');
+    vi.advanceTimersByTime(500);
     fire('pause');
     expect(waits).toEqual([true, false]);
     vi.advanceTimersByTime(5000);
     expect(waits).toEqual([true, false]);
+    fire('playing');
+    expect(waits).toEqual([true, false, true]);
+    vi.advanceTimersByTime(1499);
+    expect(waits).toEqual([true, false, true]);
+    vi.advanceTimersByTime(1);
+    expect(waits).toEqual([true, false, true, false]);
   });
 });

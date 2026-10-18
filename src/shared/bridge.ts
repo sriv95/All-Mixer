@@ -8,6 +8,8 @@ export const BRIDGE_TAG = '__allMixer';
 
 /** Fired on a media element (main world -> content script) when the page calls pause() on one that has ended. */
 export const PAUSE_REQUEST_EVENT = '__allMixerPauseRequest';
+/** Same for play(); cancelable: preventDefault() makes the page's play() do nothing. */
+export const PLAY_REQUEST_EVENT = '__allMixerPlayRequest';
 
 export interface CaptionTrack {
   baseUrl: string;

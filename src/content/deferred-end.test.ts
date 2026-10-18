@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { PAUSE_REQUEST_EVENT } from '../shared/bridge';
+import { PAUSE_REQUEST_EVENT, PLAY_REQUEST_EVENT } from '../shared/bridge';
 import { deferEnd } from './deferred-end';
 
 describe('deferEnd', () => {
@@ -17,7 +17,7 @@ describe('deferEnd', () => {
     seen = [];
     delay = 2000;
     waits = [];
-    for (const e of ['pause', 'ended']) video.addEventListener(e, () => seen.push(e));
+    for (const e of ['pause', 'ended', 'play', 'playing']) video.addEventListener(e, () => seen.push(e));
     off = deferEnd(() => video, () => delay, (w) => waits.push(w));
   });
   afterEach(() => {
@@ -61,6 +61,28 @@ describe('deferEnd', () => {
     expect(waits).toEqual([true, false]);
     vi.advanceTimersByTime(5000);
     expect(seen).toEqual(['pause']);
+  });
+
+  it('continues the tail on play after a pause click, without restarting', () => {
+    end();
+    vi.advanceTimersByTime(500);
+    video.dispatchEvent(new Event(PAUSE_REQUEST_EVENT));
+    vi.advanceTimersByTime(10000); // paused: the tail does not run out
+    expect(seen).toEqual(['pause']);
+    const play = new Event(PLAY_REQUEST_EVENT, { cancelable: true });
+    video.dispatchEvent(play);
+    expect(play.defaultPrevented).toBe(true);
+    expect(seen).toEqual(['pause', 'play', 'playing']);
+    vi.advanceTimersByTime(1499);
+    expect(seen).toEqual(['pause', 'play', 'playing']);
+    vi.advanceTimersByTime(1);
+    expect(seen).toEqual(['pause', 'play', 'playing', 'pause', 'ended']);
+  });
+
+  it('lets play through when nothing is held', () => {
+    const play = new Event(PLAY_REQUEST_EVENT, { cancelable: true });
+    video.dispatchEvent(play);
+    expect(play.defaultPrevented).toBe(false);
   });
 
   it('does not touch an ordinary pause', () => {
