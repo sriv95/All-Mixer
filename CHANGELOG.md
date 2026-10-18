@@ -13,6 +13,7 @@ CI builds the extension, creates tag `vx.y.z` and a GitHub release with this sec
 ### Changed
 
 - Popup: when the tab needs a reload (no All Mixer! running in it yet), the Separate mode checkbox is hidden and the popup says to reload the tab.
+- Separate mode: while the model warms up (the video is held for 10 to 40 s), the player's loading spinner shows over the picture.
 - Separate mode: the time and the seek bar of YouTube and YouTube Music now show what you see and hear, not the video position that runs ahead by the delay.
 - Separate mode: when a video ends, the next one (autoplay / queue) starts only after the delayed last seconds have played, with the player's loading spinner shown meanwhile. Pausing during that wait pauses at once, and play continues the last seconds instead of restarting the video.
 - Separate mode: after a seek or a new video, the player's loading spinner shows for the delay, while the sound is not back yet. Pause and play during it keep the spinner for the time that is left.

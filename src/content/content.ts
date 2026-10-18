@@ -26,15 +26,39 @@ let debugDelayMs: number | null = null; // QA override, see debug-video-delay
 const probe = new AvProbe();
 const chain = new MasterChain(() => syncDelay(), undefined, probe);
 const selector = new EngineSelector(chain);
-// The warm-up takes 10 to 40 s: hold the video (sound and picture) until it is over, then resume what we paused.
+// The player's own spinner covers what the user waits for: the ML warm-up, the held end of a video, and the silent
+// gap after a seek. Each reason switches it on and off on its own.
+// The player hides it again on its own state changes (it sets `display: none`), so keep it up while we wait.
+const spinnerReasons = new Set<string>();
+const spinnerGuard = new MutationObserver(() => paintSpinner());
+const paintSpinner = () => {
+  const spinner = findSpinner();
+  if (!spinner) return;
+  spinnerGuard.disconnect();
+  const on = spinnerReasons.size > 0;
+  spinner.style.display = on ? 'block' : 'none';
+  if (on) spinnerGuard.observe(spinner, { attributes: true, attributeFilter: ['style'] });
+};
+const spinnerFor = (reason: string) => (waiting: boolean) => {
+  if (waiting) spinnerReasons.add(reason);
+  else spinnerReasons.delete(reason);
+  paintSpinner();
+};
+// The warm-up takes 10 to 40 s: hold the video (sound and picture) behind the player's spinner until it is over, then resume what we paused.
 let pausedForWarmup: HTMLMediaElement | null = null;
+const warmupSpinner = spinnerFor('warmup');
 selector.onChange = ({ state }) => {
   if (state === 'warming') {
     if (video && !video.paused) {
       video.pause();
       pausedForWarmup = video;
     }
-  } else if (pausedForWarmup) {
+    // A video the user had paused is not waiting for anything.
+    warmupSpinner(pausedForWarmup !== null);
+    return;
+  }
+  warmupSpinner(false);
+  if (pausedForWarmup) {
     void pausedForWarmup.play().catch(() => {}); // autoplay rules can refuse; the user presses play then
     pausedForWarmup = null;
   }
@@ -44,21 +68,9 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return;
   for (const id of MODEL_IDS) if (keyInstalled(id) in changes) selector.reload(id);
 });
-// The player's own spinner covers the silences caused by the delay: the held end of a video, and the gap after a seek.
-// The player hides it again on its own state changes (it sets `display: none`), so keep it up while we wait.
-let spinnerOn = false;
-const spinnerGuard = new MutationObserver(() => showSpinner(spinnerOn));
-const showSpinner = (waiting: boolean) => {
-  spinnerOn = waiting;
-  const spinner = findSpinner();
-  if (!spinner) return;
-  spinnerGuard.disconnect();
-  spinner.style.display = waiting ? 'block' : 'none';
-  if (waiting) spinnerGuard.observe(spinner, { attributes: true, attributeFilter: ['style'] });
-};
 // The end of the video (autoplay / queue) waits for the delayed tail to play out.
-deferEnd(() => video, () => overlay?.delayMs ?? 0, showSpinner);
-watchDelayGap(() => video, () => overlay?.delayMs ?? 0, showSpinner);
+deferEnd(() => video, () => overlay?.delayMs ?? 0, spinnerFor('end'));
+watchDelayGap(() => video, () => overlay?.delayMs ?? 0, spinnerFor('gap'));
 // Lyrics follow what the user sees and hears, which trails currentTime by the picture delay (D1).
 const lyrics: LyricsFeature = lyricsSite
   ? initLyrics(lyricsSite, () => overlay?.presentedTime() ?? null, () => overlay?.presentedBusy() ?? false)
