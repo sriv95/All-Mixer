@@ -2,7 +2,7 @@ import type { ContentStatus, GetStatus, GetTabSettings, SetTabSettings } from '.
 import { clampPct, normalizeSettings, type MixerSettings, type Mode } from '../shared/settings';
 import type { MlModel } from '../worklet/protocol';
 import { detectSite } from '../content/youtube-dom';
-import { KEY_INSTALLED, KEY_PROGRESS, KEY_REMOTE, mb, modelState, type InstalledModel, type ModelState, type Progress, type RemoteRecord } from '../shared/model-store';
+import { MODEL_IDS, MODEL_LABEL, keyInstalled, keyProgress, keyRemote, mb, modelState, type InstalledModel, type ModelId, type ModelState, type Progress, type RemoteRecord } from '../shared/model-store';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -119,59 +119,72 @@ async function refreshStatus(): Promise<void> {
   }
 }
 
-// "Best quality" is a separate download (background/model-manager.ts); its state lives in chrome.storage.local.
-let installed: InstalledModel | undefined;
-let remote: RemoteRecord | undefined;
-let progress: Progress | undefined;
+// The RoFormer models are separate downloads (background/model-manager.ts); their state lives in chrome.storage.local.
+interface ModelRecords {
+  installed?: InstalledModel;
+  remote?: RemoteRecord;
+  progress?: Progress;
+}
+const records: Record<ModelId, ModelRecords> = { roformer: {}, deux: {} };
 let modelTimer: ReturnType<typeof setTimeout> | undefined;
 
-function modelLine(s: ModelState): { text: string; button?: string } {
+const isModelId = (m: string): m is ModelId => (MODEL_IDS as readonly string[]).includes(m);
+
+function modelLine(id: ModelId, s: ModelState): { text: string; button?: string } {
+  const label = MODEL_LABEL[id];
   switch (s.kind) {
     case 'missing':
-      return { text: `Best quality is a one-time download${s.size ? ` (${mb(s.size)})` : ''}.`, button: 'Download' };
+      return { text: `${label} is a one-time download${s.size ? ` (${mb(s.size)})` : ''}.`, button: 'Download' };
     case 'downloading':
       return { text: `Downloading… ${Math.floor((100 * s.done) / s.total)}% (${mb(s.done)} of ${mb(s.total)})` };
     case 'error':
       return { text: `Download failed: ${s.message}`, button: 'Try again' };
     case 'update':
-      return { text: `Update available: model v${s.version} (${mb(s.size)}).`, button: 'Update' };
+      return { text: `Update available: ${label} model v${s.version} (${mb(s.size)}).`, button: 'Update' };
     case 'incompatible':
-      return { text: 'The Best quality model needs a newer version of All Mixer!.' };
+      return { text: `The ${label} model needs a newer version of All Mixer!.` };
     case 'ready':
-      return { text: `Best quality model v${s.version} installed.` };
+      return { text: `${label} model v${s.version} installed.` };
   }
 }
 
 function renderModel(): void {
   clearTimeout(modelTimer);
-  const s = modelState(installed, remote, progress, Date.now());
-  const line = modelLine(s);
-  // Shown for Best quality, and whenever an update is on offer or a download runs.
-  modelRow.hidden = !(settings.mlModel === 'roformer' || s.kind === 'update' || s.kind === 'downloading');
-  modelText.textContent = line.text;
-  modelBtn.hidden = !line.button;
-  modelBtn.textContent = line.button ?? '';
+  const now = Date.now();
+  const states = Object.fromEntries(MODEL_IDS.map((id) => [id, modelState(records[id].installed, records[id].remote, records[id].progress, now)])) as Record<ModelId, ModelState>;
+  // Shown for the selected downloadable model, and for any model with an update on offer or a download running.
+  const id = isModelId(settings.mlModel) ? settings.mlModel : MODEL_IDS.find((m) => states[m].kind === 'update' || states[m].kind === 'downloading');
+  modelRow.hidden = !id;
+  if (id) {
+    const line = modelLine(id, states[id]);
+    modelText.textContent = line.text;
+    modelBtn.hidden = !line.button;
+    modelBtn.textContent = line.button ?? '';
+    modelBtn.dataset.id = id;
+  }
   // A download whose worker was stopped goes stale after STALL_MS: look again then.
-  if (s.kind === 'downloading') modelTimer = setTimeout(renderModel, 5000);
+  if (MODEL_IDS.some((m) => states[m].kind === 'downloading')) modelTimer = setTimeout(renderModel, 5000);
 }
 
 async function initModel(): Promise<void> {
-  const o = await chrome.storage.local.get([KEY_INSTALLED, KEY_REMOTE, KEY_PROGRESS]);
-  installed = o[KEY_INSTALLED] as InstalledModel | undefined;
-  remote = o[KEY_REMOTE] as RemoteRecord | undefined;
-  progress = o[KEY_PROGRESS] as Progress | undefined;
+  const o = await chrome.storage.local.get(MODEL_IDS.flatMap((id) => [keyInstalled(id), keyRemote(id), keyProgress(id)]));
+  for (const id of MODEL_IDS) {
+    records[id] = { installed: o[keyInstalled(id)] as InstalledModel | undefined, remote: o[keyRemote(id)] as RemoteRecord | undefined, progress: o[keyProgress(id)] as Progress | undefined };
+  }
   renderModel();
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
-    if (KEY_INSTALLED in changes) installed = changes[KEY_INSTALLED].newValue as InstalledModel | undefined;
-    if (KEY_REMOTE in changes) remote = changes[KEY_REMOTE].newValue as RemoteRecord | undefined;
-    if (KEY_PROGRESS in changes) progress = changes[KEY_PROGRESS].newValue as Progress | undefined;
+    for (const id of MODEL_IDS) {
+      if (keyInstalled(id) in changes) records[id].installed = changes[keyInstalled(id)].newValue as InstalledModel | undefined;
+      if (keyRemote(id) in changes) records[id].remote = changes[keyRemote(id)].newValue as RemoteRecord | undefined;
+      if (keyProgress(id) in changes) records[id].progress = changes[keyProgress(id)].newValue as Progress | undefined;
+    }
     renderModel();
   });
   void chrome.runtime.sendMessage({ type: 'model-check' }); // a newer model shows up through the storage change
 }
 
-modelBtn.addEventListener('click', () => void chrome.runtime.sendMessage({ type: 'model-install' }));
+modelBtn.addEventListener('click', () => void chrome.runtime.sendMessage({ type: 'model-install', id: modelBtn.dataset.id }));
 
 function disableAll(message: string): void {
   for (const el of document.querySelectorAll<HTMLInputElement | HTMLButtonElement | HTMLSelectElement>('input, button, select')) {

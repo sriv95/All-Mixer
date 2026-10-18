@@ -81,12 +81,13 @@ export const ML_INIT = 'all-mixer-ml-init';
 export const ML_WARMUP_P90_MS = (ML_SLACK_SAMPLES / ML_SAMPLE_RATE) * 1000 / 1.5;
 
 /**
- * ML models the engine can run. 'mdx' is the shipped MDX-Net 9482 + Spleeter pipeline. 'roformer' is the
- * Mel-Band RoFormer (fp16), unwa's mel_band_roformer_kim_ft_unwa: one big model, no Spleeter mask, short chunks so it
- * fits the delay. Its files are public/ml/roformer.onnx + roformer-meta.json.
+ * ML models the engine can run. 'mdx' is the shipped MDX-Net 9482 + Spleeter pipeline. The others are Mel-Band
+ * RoFormers (fp16), downloaded on request (src/shared/model-store.ts ModelId): one big model each, no Spleeter mask,
+ * short chunks so they fit the delay. 'roformer' = unwa's mel_band_roformer_kim_ft_unwa (menu: High quality),
+ * 'deux' = becruily's 2-stem model, vocal stem (menu: Best quality, needs a good GPU).
  */
-export type MlModel = 'mdx' | 'roformer';
-export const ML_MODELS: readonly MlModel[] = ['mdx', 'roformer'];
+export type MlModel = 'mdx' | 'roformer' | 'deux';
+export const ML_MODELS: readonly MlModel[] = ['mdx', 'roformer', 'deux'];
 
 /** Block geometry of one model: what the worklet, the worker and the delay math must agree on. */
 export interface MlGeometry {
@@ -125,6 +126,7 @@ const ROF_GEOMETRY: MlGeometry = {
 export const GEOMETRY: Readonly<Record<MlModel, MlGeometry>> = {
   mdx: { block: ML_BLOCK, resultOffset: ML_RESULT_OFFSET, latency: ML_LATENCY_SAMPLES, warmupP90Ms: ML_WARMUP_P90_MS },
   roformer: ROF_GEOMETRY,
+  deux: ROF_GEOMETRY,
 };
 
 export const bufferBytes = (g: MlGeometry): number => ML_HEADER_BYTES + 4 * g.block * 4;

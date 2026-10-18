@@ -1,19 +1,20 @@
-import { opfsFiles, pruneModels, type ModelFiles } from '../shared/model-files';
+import { opfsFiles, pruneModel, type ModelFiles } from '../shared/model-files';
 import {
-  CHUNK, KEY_INSTALLED, KEY_PROGRESS, KEY_REMOTE, MODEL_BASE_URL, MODEL_FORMAT,
-  chunkCount, chunkLength, chunkName, fileUrl, manifestUrl, parseManifest, totalBytes,
-  type InstalledModel, type Progress, type RemoteModel, type RemoteRecord,
+  CHUNK, MODEL_BASE_URL, MODEL_FORMAT, MODEL_IDS,
+  chunkCount, chunkLength, chunkName, fileUrl, keyInstalled, keyProgress, keyRemote, manifestUrl, parseManifest, totalBytes,
+  type InstalledModel, type ModelId, type Progress, type RemoteModel, type RemoteRecord,
 } from '../shared/model-store';
 
 type Area = Pick<chrome.storage.StorageArea, 'get' | 'set' | 'remove'>;
 
 /**
- * Looks for a newer "Best quality" model and downloads it into OPFS, 8 MiB per request with a Range header.
- * Progress, the installed version and the last manifest are kept in chrome.storage.local (the popup and the
- * content scripts watch it). Installed = every chunk of every file is on disk; only then is KEY_INSTALLED written.
+ * Looks for newer RoFormer models and downloads one into OPFS, 8 MiB per request with a Range header.
+ * Progress, the installed version and the last manifest entry of each model are kept in chrome.storage.local (the
+ * popup and the content scripts watch it). Installed = every chunk of every file is on disk; only then is the
+ * model's installed key written.
  */
 export class ModelManager {
-  private running: Promise<void> | null = null;
+  private readonly running = new Map<ModelId, Promise<void>>();
 
   constructor(
     private readonly area: Area,
@@ -28,30 +29,41 @@ export class ModelManager {
     return typeof o['debug.modelBaseUrl'] === 'string' ? (o['debug.modelBaseUrl'] as string) : MODEL_BASE_URL;
   }
 
-  /** Fetch the manifest and remember it. null: offline, or not a valid manifest (the old record stays). */
-  async check(): Promise<RemoteRecord | null> {
+  /** Fetch the manifest and remember each model's entry. null: offline, or not a valid manifest (the old records stay). */
+  async check(): Promise<Partial<Record<ModelId, RemoteRecord>> | null> {
     const remote = await this.fetchManifest().catch(() => null);
     if (!remote) return null;
-    const rec: RemoteRecord = { ...remote, checkedAt: this.now() };
-    await this.area.set({ [KEY_REMOTE]: rec });
-    return rec;
+    const recs: Partial<Record<ModelId, RemoteRecord>> = {};
+    for (const id of MODEL_IDS) {
+      const m = remote[id];
+      if (m) recs[id] = { ...m, checkedAt: this.now() };
+    }
+    await this.area.set(Object.fromEntries(Object.entries(recs).map(([id, rec]) => [keyRemote(id as ModelId), rec])));
+    return recs;
   }
 
-  private async fetchManifest(): Promise<RemoteModel | null> {
+  private async fetchManifest(): Promise<Partial<Record<ModelId, RemoteModel>> | null> {
     const res = await this.fetchFn(manifestUrl(await this.base()), { cache: 'no-store' });
     return res.ok ? parseManifest(await res.json()) : null;
   }
 
-  /** Download the newest model (resumes a partial download). Calls while one runs share it. */
-  install(): Promise<void> {
-    return (this.running ??= this.run().finally(() => (this.running = null)));
+  /** Download the newest version of model `id` (resumes a partial download). Calls for the same model while one runs share it. */
+  install(id: ModelId): Promise<void> {
+    let p = this.running.get(id);
+    if (!p) {
+      p = this.run(id).finally(() => this.running.delete(id));
+      this.running.set(id, p);
+    }
+    return p;
   }
 
-  private async run(): Promise<void> {
+  private async run(id: ModelId): Promise<void> {
     let version = 0, total = 0;
     try {
-      const remote = await this.fetchManifest();
-      if (!remote) throw new Error('could not read the model list (offline?)');
+      const manifest = await this.fetchManifest();
+      if (!manifest) throw new Error('could not read the model list (offline?)');
+      const remote = manifest[id];
+      if (!remote) throw new Error('this model is not published yet');
       if (remote.format !== MODEL_FORMAT) throw new Error('this model needs a newer version of the extension');
       version = remote.version;
       total = totalBytes(remote.files);
@@ -61,7 +73,7 @@ export class ModelManager {
         const t = this.now();
         if (!force && t - lastWrite < 500) return;
         lastWrite = t;
-        await this.area.set({ [KEY_PROGRESS]: { phase: 'downloading', version, done, total, at: t } satisfies Progress });
+        await this.area.set({ [keyProgress(id)]: { phase: 'downloading', version, done, total, at: t } satisfies Progress });
       };
       await progress(true);
       for (const [file, size] of Object.entries(remote.files).sort(([, a], [, b]) => a - b)) {
@@ -80,11 +92,11 @@ export class ModelManager {
         }
       }
       const installed: InstalledModel = { version, files: remote.files };
-      await this.area.set({ [KEY_INSTALLED]: installed, [KEY_REMOTE]: { ...remote, checkedAt: this.now() } satisfies RemoteRecord });
-      await this.area.remove(KEY_PROGRESS);
-      await pruneModels(this.files, installed);
+      await this.area.set({ [keyInstalled(id)]: installed, [keyRemote(id)]: { ...remote, checkedAt: this.now() } satisfies RemoteRecord });
+      await this.area.remove(keyProgress(id));
+      await pruneModel(this.files, id, installed);
     } catch (e) {
-      await this.area.set({ [KEY_PROGRESS]: { phase: 'error', version, done: 0, total, at: this.now(), error: e instanceof Error ? e.message : String(e) } satisfies Progress });
+      await this.area.set({ [keyProgress(id)]: { phase: 'error', version, done: 0, total, at: this.now(), error: e instanceof Error ? e.message : String(e) } satisfies Progress });
     }
   }
 }

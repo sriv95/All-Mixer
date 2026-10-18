@@ -6,16 +6,24 @@ const inst = (version: number): InstalledModel => ({ version, files });
 const remote = (version: number, format = MODEL_FORMAT): RemoteRecord => ({ format, version, files, checkedAt: 0 });
 const prog = (p: Partial<Progress>): Progress => ({ phase: 'downloading', version: 2, done: 5, total: 110, at: 1000, ...p });
 
+const dfiles = { 'deux.onnx': 200, 'deux-meta.json': 10 };
+
 describe('parseManifest', () => {
-  it('accepts a valid manifest', () => {
-    expect(parseManifest({ format: 1, version: 2, files })).toEqual({ format: 1, version: 2, files });
+  it('accepts a valid manifest with one or two models', () => {
+    const roformer = { format: 1, version: 2, files };
+    expect(parseManifest({ format: 1, models: { roformer: { version: 2, files } } })).toEqual({ roformer });
+    expect(parseManifest({ format: 1, models: { roformer: { version: 2, files }, deux: { version: 1, files: dfiles }, other: { version: 1, files } } })).toEqual({ roformer, deux: { format: 1, version: 1, files: dfiles } });
+  });
+  it('drops a bad model entry but keeps the good ones', () => {
+    expect(parseManifest({ format: 1, models: { roformer: { version: 0, files }, deux: { version: 1, files: dfiles } } })).toEqual({ deux: { format: 1, version: 1, files: dfiles } });
+    expect(parseManifest({ format: 1, models: { deux: { version: 1, files } } })).toBeNull(); // files of another model
   });
   it('rejects missing files, bad sizes and non-objects', () => {
     expect(parseManifest(null)).toBeNull();
-    expect(parseManifest({ format: 1, version: 0, files })).toBeNull();
-    expect(parseManifest({ format: 1, version: 1, files: { 'roformer.onnx': 1 } })).toBeNull();
-    expect(parseManifest({ format: 1, version: 1, files: { ...files, 'roformer.onnx': -1 } })).toBeNull();
-    expect(parseManifest({ version: 1, files })).toBeNull();
+    expect(parseManifest({ format: 1, models: { roformer: { version: 1, files: { 'roformer.onnx': 1 } } } })).toBeNull();
+    expect(parseManifest({ format: 1, models: { roformer: { version: 1, files: { ...files, 'roformer.onnx': -1 } } } })).toBeNull();
+    expect(parseManifest({ models: { roformer: { version: 1, files } } })).toBeNull();
+    expect(parseManifest({ format: 1, version: 1, files })).toBeNull(); // the old single-model shape
   });
 });
 

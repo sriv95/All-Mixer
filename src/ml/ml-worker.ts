@@ -20,6 +20,7 @@ import { warmUp, warmUpGated, type WarmUpResult } from './warmup';
 import { makeStall, type StallOpts } from './stall';
 import { MlTiming } from './timing';
 import { opfsFiles, readModelFile } from '../shared/model-files';
+import { MODEL_LABEL, modelFileNames, type ModelId } from '../shared/model-store';
 import { RoformerStream, ROF_FRAMES, type RoformerMeta } from './roformer';
 
 type Ort = typeof import('onnxruntime-web/webgpu');
@@ -127,11 +128,12 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
     ort.env.wasm.proxy = false;
     ort.env.logLevel = 'error';
     const inst = init.installed;
-    if (!inst) return unavailable('the Best quality model is not downloaded');
+    if (!inst) return unavailable(`the ${MODEL_LABEL[init.model as ModelId]} model is not downloaded`);
     const files = opfsFiles();
+    const [onnx, metaFile] = modelFileNames(init.model as ModelId);
     const [buf, m] = await Promise.all([
-      readModelFile(files, inst.version, 'roformer.onnx', inst.files['roformer.onnx']).then((b) => b.arrayBuffer()),
-      readModelFile(files, inst.version, 'roformer-meta.json', inst.files['roformer-meta.json']).then((b) => b.text()),
+      readModelFile(files, inst.version, onnx, inst.files[onnx]).then((b) => b.arrayBuffer()),
+      readModelFile(files, inst.version, metaFile, inst.files[metaFile]).then((b) => b.text()),
     ]);
     meta = JSON.parse(m) as RoformerMeta;
     session = await ort.InferenceSession.create(buf, { executionProviders: ['webgpu'], graphOptimizationLevel: 'all', logSeverityLevel: 3 });

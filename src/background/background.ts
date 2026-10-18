@@ -3,15 +3,16 @@ import { TabStore } from './tab-store';
 import { LyricsCache } from './lyrics-cache';
 import { findLyrics } from '../lyrics/lrclib';
 import { ModelManager } from './model-manager';
+import type { ModelId } from '../shared/model-store';
 
 const store = new TabStore(chrome.storage.session);
 const lyricsCache = new LyricsCache(chrome.storage.local);
 const models = new ModelManager(chrome.storage.local);
 
 // A stopped service worker would end the download: any extension API call resets its idle timer.
-function install(): void {
+function install(id: ModelId): void {
   const t = setInterval(() => void chrome.runtime.getPlatformInfo(), 20_000);
-  void models.install().finally(() => clearInterval(t));
+  void models.install(id).finally(() => clearInterval(t));
 }
 
 async function handle(msg: BackgroundRequest, sender: chrome.runtime.MessageSender): Promise<unknown> {
@@ -34,7 +35,7 @@ async function handle(msg: BackgroundRequest, sender: chrome.runtime.MessageSend
     case 'model-check':
       return models.check();
     case 'model-install':
-      install();
+      install(msg.id);
       return null;
   }
 }

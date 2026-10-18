@@ -305,9 +305,12 @@ SOFTWARE.
 
 ================================================================
 3. Mel-Band RoFormer vocal model (optional, experimental; downloaded on request, NOT shipped in the extension or the repository)
-   Weights: Unwa, "mel_band_roformer_kim_ft_unwa" (a fine-tune of Kimberley Jensen's Mel-Band RoFormer).
+   Weights (one Model menu entry each):
+     roformer (High quality)  Unwa, "mel_band_roformer_kim_ft_unwa" (a fine-tune of Kimberley Jensen's Mel-Band RoFormer).
+     deux (Best quality)      becruily, "mel-band-roformer-deux" (huggingface.co/becruily/mel-band-roformer-deux),
+                              CC BY-NC 4.0: non-commercial use only, with attribution. Only its vocal stem is used.
    Code: Mel-Band RoFormer architecture (Lucidrains, ZFTurbo / audio-separator implementations).
    The ONNX file (fp16, STFT removed, RMSNorm rewritten for fp16) is built by scripts/export-roformer.py and
-   downloaded by the user from a Hugging Face repo at run time (src/shared/model-store.ts), not packed in the extension. The licence of the weights was not verified when this was added (a secondary source says MIT):
+   downloaded by the user from a Hugging Face repo at run time (src/shared/model-store.ts), not packed in the extension. The licence of the unwa weights was not verified when this was added (a secondary source says MIT):
    read the LICENSE of the upstream repository before publishing the converted model file.
 ================================================================

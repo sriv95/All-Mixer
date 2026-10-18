@@ -1,4 +1,4 @@
-import { chunkCount, chunkName, type ModelFileSizes } from './model-store';
+import { chunkCount, chunkName, modelFileNames, type ModelFileSizes, type ModelId } from './model-store';
 
 /** Byte storage for the downloaded model: OPFS in the extension, a Map in tests. */
 export interface ModelFiles {
@@ -46,8 +46,12 @@ export function opfsFiles(): ModelFiles {
 export const readModelFile = (files: ModelFiles, version: number, file: string, size: number): Promise<Blob> =>
   files.blob(Array.from({ length: chunkCount(size) }, (_, i) => chunkName(version, file, i)));
 
-/** Delete every chunk that does not belong to `keep`. */
-export async function pruneModels(files: ModelFiles, keep: { version: number; files: ModelFileSizes }): Promise<void> {
+/** Delete the chunks of model `id` that do not belong to `keep` (the other model's chunks stay). */
+export async function pruneModel(files: ModelFiles, id: ModelId, keep: { version: number; files: ModelFileSizes }): Promise<void> {
   const wanted = new Set(Object.keys(keep.files).flatMap((f) => Array.from({ length: chunkCount(keep.files[f]) }, (_, i) => chunkName(keep.version, f, i))));
-  for (const n of await files.list()) if (!wanted.has(n)) await files.remove(n);
+  const own = modelFileNames(id);
+  for (const n of await files.list()) {
+    const file = /^v\d+-(.+)\.\d{4}$/.exec(n)?.[1];
+    if (file && own.includes(file) && !wanted.has(n)) await files.remove(n);
+  }
 }
