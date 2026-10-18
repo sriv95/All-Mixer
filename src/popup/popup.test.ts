@@ -21,7 +21,8 @@ interface Opts {
 }
 
 const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
-const tabBtn = (mode: string) => document.querySelector<HTMLButtonElement>(`[data-mode="${mode}"]`)!;
+const modeBox = () => el<HTMLInputElement>('separate-mode');
+const toggleMode = () => modeBox().click();
 const settle = () => new Promise((r) => setTimeout(r, 50));
 
 let sendMessage: ReturnType<typeof vi.fn>;
@@ -74,40 +75,21 @@ describe('popup', () => {
     await load({ stored: { mode: 'separate', masterPct: 250 } });
     expect(el<HTMLInputElement>('master').value).toBe('18'); // 250 % snaps to the 200 % stop (position 18)
     expect(el<HTMLOutputElement>('master-value').value).toBe('250%');
-    expect(tabBtn('separate').getAttribute('aria-selected')).toBe('true');
-    expect(tabBtn('default').getAttribute('aria-selected')).toBe('false');
+    expect(modeBox().checked).toBe(true);
     expect(el('panel-separate').hidden).toBe(false);
-    expect(el('panel-default').hidden).toBe(true);
   });
 
-  it('clicking a tab sends the new mode and shows its panel', async () => {
+  it('checking Separate mode sends the mode and shows its settings, unchecking hides them', async () => {
     await load({ stored: { mode: 'default', masterPct: 100 } });
-    tabBtn('separate').click();
+    expect(el('panel-separate').hidden).toBe(true);
+    toggleMode();
     await settle();
     expect(el('panel-separate').hidden).toBe(false);
-    expect(el('panel-default').hidden).toBe(true);
     expect(sent().at(-1)).toMatchObject({ tabId: 7, settings: { mode: 'separate' } });
-  });
-
-  it('ArrowRight / ArrowLeft switch tabs and wrap', async () => {
-    await load({ stored: { mode: 'default' } });
-    tabBtn('default').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    toggleMode();
     await settle();
-    expect(sent().at(-1).settings.mode).toBe('separate');
-    expect(document.activeElement).toBe(tabBtn('separate'));
-    tabBtn('separate').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
-    await settle();
+    expect(el('panel-separate').hidden).toBe(true);
     expect(sent().at(-1).settings.mode).toBe('default');
-    tabBtn('default').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
-    await settle();
-    expect(sent().at(-1).settings.mode).toBe('separate');
-  });
-
-  it('ignores other keys', async () => {
-    await load();
-    tabBtn('default').dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));
-    await settle();
-    expect(sent()).toHaveLength(0);
   });
 
   it('slider input sends a clamped masterPct', async () => {
@@ -446,10 +428,10 @@ describe('popup', () => {
       expect(el('status').textContent).toBe('Separation on · 120 ms delay');
     });
 
-    it('clicking Default clears the separation status at once', async () => {
+    it('unchecking Separate mode clears the separation status at once', async () => {
       await load({ stored: { mode: 'separate' }, status: sep('on', { choice: { state: 'on' } }, 'ml', 305) });
       expect(el('status').textContent).toBe('Separation on · 305 ms delay');
-      tabBtn('default').click();
+      toggleMode();
       expect(el('status').textContent).toBe('');
       await settle();
       expect(el('status').textContent).toBe('');

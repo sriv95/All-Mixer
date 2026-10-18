@@ -5,7 +5,7 @@ import { MODEL_IDS, MODEL_LABEL, keyInstalled, keyProgress, keyRemote, mb, model
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
-const tabs = [...document.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+const separateMode = $<HTMLInputElement>('separate-mode');
 const master = $<HTMLInputElement>('master');
 const masterValue = $<HTMLOutputElement>('master-value');
 const vocal = $<HTMLInputElement>('vocal');
@@ -37,12 +37,8 @@ let tabId: number | null = null;
 let settings: MixerSettings = normalizeSettings({});
 
 function render(): void {
-  for (const tab of tabs) {
-    const selected = tab.dataset.mode === settings.mode;
-    tab.setAttribute('aria-selected', String(selected));
-    tab.tabIndex = selected ? 0 : -1;
-    $(tab.getAttribute('aria-controls')!).hidden = !selected;
-  }
+  separateMode.checked = settings.mode === 'separate';
+  $('panel-separate').hidden = !separateMode.checked;
   master.value = String(masterPosOf(settings.masterPct));
   masterValue.value = `${settings.masterPct}%`;
   vocal.value = String(settings.vocalPct);
@@ -260,15 +256,7 @@ async function init(): Promise<void> {
   await refreshStatus();
 }
 
-for (const tab of tabs) {
-  tab.addEventListener('click', () => setMode(tab.dataset.mode as Mode));
-  tab.addEventListener('keydown', (e) => {
-    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-    const next = tabs[(tabs.indexOf(tab) + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
-    next.focus();
-    setMode(next.dataset.mode as Mode);
-  });
-}
+separateMode.addEventListener('change', () => setMode(separateMode.checked ? 'separate' : 'default'));
 
 master.addEventListener('input', () => {
   settings = { ...settings, masterPct: masterPctAt(Number(master.value), settings.masterPct) };
