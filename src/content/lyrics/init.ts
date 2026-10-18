@@ -1,6 +1,7 @@
 import type { FetchLyrics } from '../../shared/messages';
 import type { FoundLyrics } from '../../lyrics/lrclib-types';
 import { CC_BUTTON_SELECTOR, clickCaptionsButton, findLyricsControls, getCaptionsButtonState, findPlayer, getVideoId, onCaptionsButtonOn, onNavigate, setYtCaptionsHidden, type Site } from '../youtube-dom';
+import { linesToLrc, lyricsToText } from '../../lyrics/export';
 import { getPlayerInfo, getTimedText, onCaptionsAvailable } from './bridge-client';
 import { LyricsController, type LyricsState } from './controller';
 import { YtSettingsMenu, YtmSettingsPopover, buildMenuButtons, buildMenuRows, type LyricsMenu } from './settings-menu';
@@ -146,6 +147,22 @@ export function initLyrics(site: Site, presentedTime: () => number | null, prese
       setPrefs({ captionLang: controller.captionLang });
     },
     setPrefs,
+    copyLyrics: () => {
+      const lyrics = lastState.kind === 'ready' ? lastState.lyrics : null;
+      if (!lyrics) return;
+      void navigator.clipboard?.writeText(lyricsToText(lyrics)).catch(() => {});
+      return 'Copied';
+    },
+    saveLrc: () => {
+      if (lastState.kind !== 'ready' || lastState.lyrics.kind !== 'synced') return;
+      const { track, lyrics } = lastState;
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([linesToLrc(lyrics.lines, track)], { type: 'text/plain;charset=utf-8' }));
+      a.download = `${`${track.artist} - ${track.title}`.replace(/[\\/:*?"<>|]+/g, '_')}.lrc`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      return 'Saved';
+    },
     setOffset: (ms: number) => {
       if (!lastVideoId) return;
       // Delete first so a changed entry moves to the end (newest) of the stored map.
@@ -158,7 +175,7 @@ export function initLyrics(site: Site, presentedTime: () => number | null, prese
   const syncMenu = () => {
     const ready = lastState.kind === 'ready' ? lastState : null;
     const timing = ready?.lyrics.kind === 'synced' && lastVideoId ? { offsetMs: prefs.lyricsOffsets[lastVideoId] ?? 0 } : undefined;
-    const input = { sources: ready?.sources, captions: ready?.captions, prefs, site, timing };
+    const input = { sources: ready?.sources, captions: ready?.captions, prefs, site, timing, lyrics: ready ? { synced: ready.lyrics.kind === 'synced' } : undefined };
     const rows = buildMenuRows(input, actions);
     const buttons = buildMenuButtons(input, actions);
     for (const m of menus) m.setRows(rows, buttons);

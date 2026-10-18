@@ -13,7 +13,7 @@ const captions: CaptionPicker = {
 };
 
 function actions() {
-  return { selectSource: vi.fn(), selectCaptionTrack: vi.fn(), setPrefs: vi.fn(), setOffset: vi.fn() } satisfies MenuActions;
+  return { selectSource: vi.fn(), selectCaptionTrack: vi.fn(), setPrefs: vi.fn(), setOffset: vi.fn(), copyLyrics: vi.fn(() => 'Copied'), saveLrc: vi.fn(() => 'Saved') } satisfies MenuActions;
 }
 const prefs = (p: Partial<LyricsPrefs> = {}): LyricsPrefs => ({ ...DEFAULT_LYRICS_PREFS, ...p });
 
@@ -121,6 +121,18 @@ describe('buildMenuRows', () => {
     a.setPrefs.mockClear();
     custom.select('custom');
     expect(a.setPrefs).not.toHaveBeenCalled();
+  });
+
+  it('copy and save buttons: copy for any shown lyrics, .lrc only for synced, also on YT Music', () => {
+    const a = actions();
+    const ids = (lyrics?: { synced: boolean }, site?: 'ytmusic') => buildMenuButtons({ prefs: prefs(), lyrics, site }, a).map((b) => b.id);
+    expect(ids()).toEqual(['resetPosition']);
+    expect(ids({ synced: false })).toEqual(['resetPosition', 'copyLyrics']);
+    expect(ids({ synced: true })).toEqual(['resetPosition', 'copyLyrics', 'saveLrc']);
+    expect(ids({ synced: true }, 'ytmusic')).toEqual(['copyLyrics', 'saveLrc']);
+    const [copy, save] = buildMenuButtons({ prefs: prefs({ lyricsDisplayMode: 'window' }), lyrics: { synced: true } }, a);
+    expect(copy.run()).toBe('Copied');
+    expect(save.run()).toBe('Saved');
   });
 
   it('shows the nearest size step for an off-step stored size', () => {
@@ -259,6 +271,24 @@ describe('YtSettingsMenu', () => {
     expect(titles()).toEqual(['Custom Karaoke Text']);
     sub().querySelector<HTMLElement>('.ytp-panel-back-button')!.click();
     expect(titles()).toEqual(['Lyrics']);
+  });
+
+  it('a button that returns a message shows it for a moment', () => {
+    vi.useFakeTimers();
+    const a = actions();
+    const m = new YtSettingsMenu();
+    const input = { sources, captions, prefs: prefs(), lyrics: { synced: false } };
+    m.setRows(buildMenuRows(input, a), buildMenuButtons(input, a));
+    group().click();
+    const btn = sub().querySelector<HTMLElement>('[data-am-row-button="copyLyrics"]')!;
+    const text = () => btn.querySelector('.ytp-menuitem-label')!.textContent;
+    expect(text()).toBe('Copy lyrics');
+    btn.click();
+    expect(a.copyLyrics).toHaveBeenCalled();
+    expect(text()).toBe('Copied');
+    vi.advanceTimersByTime(1600);
+    expect(text()).toBe('Copy lyrics');
+    vi.useRealTimers();
   });
 
   it('Reset position runs the action and keeps the panel open', () => {

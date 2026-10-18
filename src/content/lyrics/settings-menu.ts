@@ -26,11 +26,12 @@ export interface MenuRow {
   select(value: string): void;
 }
 
-/** A button inside the lyrics settings (not a choice): e.g. reset position. */
+/** A button inside the lyrics settings (not a choice): e.g. reset position, copy lyrics. */
 export interface MenuButton {
-  id: 'resetPosition';
+  id: 'resetPosition' | 'copyLyrics' | 'saveLrc';
   label: string;
-  run(): void;
+  /** May return a short confirmation shown in place of the label for a moment. */
+  run(): string | void;
 }
 
 export interface MenuActions {
@@ -39,6 +40,8 @@ export interface MenuActions {
   setPrefs(patch: Partial<LyricsPrefs>): void;
   /** Timing offset of the current video's lyrics, in ms. */
   setOffset(ms: number): void;
+  copyLyrics(): string | void;
+  saveLrc(): string | void;
 }
 
 export interface MenuInput {
@@ -47,6 +50,8 @@ export interface MenuInput {
   prefs: LyricsPrefs;
   /** Set while synced lyrics of a known video are shown: the timing row appears. */
   timing?: { offsetMs: number };
+  /** Set while lyrics are shown: the copy button appears, and the .lrc one for synced lyrics. */
+  lyrics?: { synced: boolean };
   /** YT Music has no karaoke text or lyrics window (the Lyrics tab only), so it gets no display rows. Default: www. */
   site?: Site;
 }
@@ -225,10 +230,15 @@ export function buildMenuRows(input: MenuInput, actions: MenuActions): MenuRow[]
   return rows;
 }
 
-/** Buttons for the lyrics settings: reset position (karaoke text only; the window remembers its own place). */
+/** Buttons for the lyrics settings: reset position (karaoke text only; the window remembers its own place), copy and save of the shown lyrics. */
 export function buildMenuButtons(input: MenuInput, actions: MenuActions): MenuButton[] {
-  if (input.site === 'ytmusic' || input.prefs.lyricsDisplayMode !== 'karaoke') return [];
-  return [{ id: 'resetPosition', label: 'Reset position', run: () => actions.setPrefs({ karaokePosition: { ...DEFAULT_LYRICS_PREFS.karaokePosition } }) }];
+  const buttons: MenuButton[] = [];
+  if (input.site !== 'ytmusic' && input.prefs.lyricsDisplayMode === 'karaoke') {
+    buttons.push({ id: 'resetPosition', label: 'Reset position', run: () => actions.setPrefs({ karaokePosition: { ...DEFAULT_LYRICS_PREFS.karaokePosition } }) });
+  }
+  if (input.lyrics) buttons.push({ id: 'copyLyrics', label: 'Copy lyrics', run: () => actions.copyLyrics() });
+  if (input.lyrics?.synced) buttons.push({ id: 'saveLrc', label: 'Save as .lrc', run: () => actions.saveLrc() });
+  return buttons;
 }
 
 function nearestSize(size: number): number {
@@ -237,6 +247,16 @@ function nearestSize(size: number): number {
 
 const selectedLabel = (row: MenuRow): string =>
   row.rows ? (row.summary ?? row.rows.map(selectedLabel).join(' · ')) : (row.options.find((o) => o.value === row.selected)?.label ?? '');
+
+/** Shows `message` in place of the button's text for a moment (no-op without one). */
+function flash(el: HTMLElement, message: string | void): void {
+  if (!message) return;
+  const text = el.textContent;
+  el.textContent = message;
+  setTimeout(() => {
+    el.textContent = text;
+  }, 1500);
+}
 
 /** Both renderers take the new settings whenever the state or prefs change. */
 export interface LyricsMenu {
@@ -489,10 +509,10 @@ export class YtSettingsMenu implements LyricsMenu {
 
   private fillButtons(menu: HTMLElement): void {
     for (const b of this.buttons) {
-      const { item } = this.item('menuitem', b.label);
+      const { item, label } = this.item('menuitem', b.label);
       item.setAttribute(ROW_ATTR + '-button', b.id);
       item.tabIndex = 0;
-      this.activate(item, () => b.run());
+      this.activate(item, () => flash(label, b.run()));
       menu.append(item);
     }
   }
@@ -678,7 +698,7 @@ export class YtmSettingsPopover implements LyricsMenu {
       btn.textContent = b.label;
       btn.style.cssText = 'font:inherit;color:#fff;background:#333;border:1px solid rgba(255,255,255,.3);border-radius:4px;padding:4px 10px;margin:6px 0;cursor:pointer;width:100%;';
       btn.addEventListener('click', () => {
-        b.run();
+        flash(btn, b.run());
         btn.blur();
       });
       frag.append(btn);
