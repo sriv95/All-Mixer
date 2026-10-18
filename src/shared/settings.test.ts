@@ -27,7 +27,6 @@ describe('normalizeSettings', () => {
       vocalPct: 0,
       instrumentalPct: 100,
       mlModel: 'mdx',
-      mlGate: false,
     });
     expect(normalizeSettings({ mode: 'weird' }).mode).toBe('default');
   });
@@ -39,7 +38,7 @@ describe('normalizeSettings', () => {
   });
   it.each(['light', 'auto', 'quality', 'ultra', 3])('drops a stored separationQuality (%s) from older versions', (q) => {
     const out = normalizeSettings({ mode: 'separate', masterPct: 200, separationQuality: q });
-    expect(out).toEqual({ mode: 'separate', masterPct: 200, vocalPct: 100, instrumentalPct: 100, mlModel: 'mdx', mlGate: false });
+    expect(out).toEqual({ mode: 'separate', masterPct: 200, vocalPct: 100, instrumentalPct: 100, mlModel: 'mdx' });
     expect('separationQuality' in out).toBe(false);
     expect('separationQuality' in DEFAULT_SETTINGS).toBe(false);
   });
