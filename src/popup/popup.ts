@@ -20,6 +20,7 @@ const mlDelayValue = $<HTMLOutputElement>('ml-delay-value');
 const modelRow = $<HTMLParagraphElement>('model-row');
 const modelText = $<HTMLSpanElement>('model-text');
 const modelBtn = $<HTMLButtonElement>('model-btn');
+const advanced = $<HTMLDetailsElement>('advanced');
 const presets = [...document.querySelectorAll<HTMLButtonElement>('.presets button')];
 const status = $<HTMLParagraphElement>('status');
 
@@ -199,6 +200,21 @@ function disableAll(message: string): void {
   status.textContent = message;
 }
 
+// The Advanced section stays open between popup openings, and opens by itself when a non-default model is in use.
+const ADVANCED_KEY = 'advancedOpen';
+try {
+  advanced.open = localStorage.getItem(ADVANCED_KEY) === '1';
+} catch {
+  /* storage blocked: stays closed */
+}
+advanced.addEventListener('toggle', () => {
+  try {
+    localStorage.setItem(ADVANCED_KEY, advanced.open ? '1' : '0');
+  } catch {
+    /* storage blocked */
+  }
+});
+
 async function init(): Promise<void> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   // `tab.url` is only visible for our host permissions, i.e. YouTube / YT Music.
@@ -210,6 +226,7 @@ async function init(): Promise<void> {
   tabId = tab.id;
   const req: GetTabSettings = { type: 'get-tab-settings', tabId };
   settings = normalizeSettings(await chrome.runtime.sendMessage(req));
+  if (settings.mlModel !== 'mdx') advanced.open = true;
   render();
   void initModel();
   await refreshStatus();

@@ -31,30 +31,33 @@
         <input id="instrumental" type="range" min="0" max="600" step="5" value="100" />
         <output id="instrumental-value" for="instrumental">100%</output>
       </div>
-      <label for="ml-model">Model</label>
-      <select id="ml-model">
-        <option value="mdx">Default</option>
-        <option value="roformer">High quality (optional download)</option>
-        <option value="deux">Best quality (needs a good GPU, optional download)</option>
-      </select>
-      <p id="model-row" class="note" hidden>
-        <span id="model-text"></span>
-        <button id="model-btn" type="button" hidden></button>
-      </p>
-      <div id="chunk-row" hidden>
-        <label for="ml-delay">Delay limit</label>
-        <div class="row">
-          <input id="ml-delay" type="range" min="2" max="15" step="1" value="2" />
-          <output id="ml-delay-value" for="ml-delay">2 s</output>
-        </div>
-        <p class="note">The audio delay stays under the limit. A longer limit gives the model more of the song at once, which separates better but needs a faster GPU.</p>
-      </div>
       <div class="presets" role="group" aria-label="Presets">
         <button type="button" id="preset-karaoke" data-vocal="0" data-instrumental="100" aria-pressed="false">Karaoke</button>
         <button type="button" id="preset-half-karaoke" data-vocal="50" data-instrumental="100" aria-pressed="false">Half Karaoke</button>
         <button type="button" id="preset-acappella" data-vocal="100" data-instrumental="0" aria-pressed="false">A cappella</button>
         <button type="button" id="preset-reset" data-vocal="100" data-instrumental="100" aria-pressed="false">Reset</button>
       </div>
+      <details id="advanced">
+        <summary>Advanced (model, chunk delay)</summary>
+        <label for="ml-model">Model</label>
+        <select id="ml-model">
+          <option value="mdx">Default</option>
+          <option value="roformer">High quality (optional download)</option>
+          <option value="deux">Best quality (needs a good GPU, optional download)</option>
+        </select>
+        <p id="model-row" class="note" hidden>
+          <span id="model-text"></span>
+          <button id="model-btn" type="button" hidden></button>
+        </p>
+        <div id="chunk-row" hidden>
+          <label for="ml-delay">Delay limit</label>
+          <div class="row">
+            <input id="ml-delay" type="range" min="2" max="15" step="1" value="2" />
+            <output id="ml-delay-value" for="ml-delay">2 s</output>
+          </div>
+          <p class="note">The audio delay stays under the limit. A longer limit gives the model more of the song at once, which separates better but needs a faster GPU.</p>
+        </div>
+      </details>
     </section>
 
     <p id="status" class="status" role="status"></p>
