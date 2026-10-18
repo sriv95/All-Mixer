@@ -231,7 +231,7 @@ function Banner({ view, settings, update, retry }: { view: SepView; settings: Mi
 }
 
 const MODEL_CHOICES: readonly Choice<MlModel>[] = [
-  { value: 'mdx', label: 'Default', hint: 'MDX-Net + Spleeter' },
+  { value: 'mdx', label: 'Default' },
   { value: 'roformer', label: 'High quality', hint: 'Optional download' },
   { value: 'deux', label: 'Best quality', hint: 'Needs a good GPU, optional download' },
 ];

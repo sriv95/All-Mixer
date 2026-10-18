@@ -70,7 +70,7 @@ export function Switch({ id, checked, onChange, disabled }: { id: string; checke
 export interface Choice<T extends string> {
   value: T;
   label: string;
-  hint: string;
+  hint?: string;
 }
 
 /** A listbox dropdown: the options open inline under the button (no OS popup, nothing clipped) with a slide. */
@@ -121,7 +121,7 @@ export function Select<T extends string>({ id, value, options, onValue }: { id: 
         className="flex w-full cursor-pointer items-center justify-between gap-2 rounded-xl border-0 bg-well px-3 py-2.5 text-left text-ink shadow-pressed transition-[box-shadow,opacity] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-default disabled:opacity-45">
         <span className="min-w-0">
           <span className="block text-[13px] font-bold">{cur.label}</span>
-          <span className="block text-xs text-muted">{cur.hint}</span>
+          {cur.hint && <span className="block text-xs text-muted">{cur.hint}</span>}
         </span>
         <ChevronDown size={16} className={cx('shrink-0 transition-transform duration-200', open && 'rotate-180')} aria-hidden />
       </button>
@@ -132,7 +132,7 @@ export function Select<T extends string>({ id, value, options, onValue }: { id: 
               className="flex cursor-pointer items-center justify-between gap-2 px-3 py-2.5 transition-colors data-[active=true]:bg-brand-tint">
               <span className="min-w-0">
                 <span className={cx('block text-[13px]', o.value === value ? 'font-extrabold text-brand-dark' : 'font-semibold')}>{o.label}</span>
-                <span className="block text-xs text-muted">{o.hint}</span>
+                {o.hint && <span className="block text-xs text-muted">{o.hint}</span>}
               </span>
               <Check size={16} className={cx('shrink-0 text-brand transition-opacity', o.value === value ? 'opacity-100' : 'opacity-0')} aria-hidden />
             </li>
