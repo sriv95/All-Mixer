@@ -19,6 +19,7 @@ function setup(accept = true, canRun = true) {
   const hosts: FakeHost[] = [];
   const models: MlModel[] = [];
   const delays: (number | null)[] = [];
+  const drumFlags: boolean[] = [];
   let listener: LatencyListener = () => {};
   const chain = {
     setMlPort: vi.fn(),
@@ -30,18 +31,19 @@ function setup(accept = true, canRun = true) {
       return () => {};
     },
   };
-  const sel = new EngineSelector(chain, (model, delayMs) => {
+  const sel = new EngineSelector(chain, (model, delayMs, drums) => {
     const h = new FakeHost();
     hosts.push(h);
     models.push(model);
     delays.push(delayMs);
+    drumFlags.push(drums);
     return h;
   });
   const miss = () => listener({ engine: 'bypass', reason: 'deadline-miss' } as never, 0);
-  return { chain, sel, hosts, models, delays, miss };
+  return { chain, sel, hosts, models, delays, drumFlags, miss };
 }
 const ready = (p90: number, geometry?: MlGeometry): FromMlWorker => ({ type: 'ready', p50: p90 / 2, p90, p95: p90, createMs: 1, adapter: 'x', geometry });
-const req = (on = true, model?: MlModel, delayMs?: number | null) => ({ on, model, delayMs });
+const req = (on = true, model?: MlModel, delayMs?: number | null, drums?: boolean) => ({ on, model, delayMs, drums });
 /** A plan from the RoFormer worker: 3 s block, 0.5 s overlap, 3 s slack. */
 const planned: MlGeometry = { block: 132224, resultOffset: 22016, latency: 132224 + 22016 + 132224 + 128, warmupP90Ms: 2600 };
 
@@ -71,6 +73,35 @@ describe('EngineSelector', () => {
     sel.reload('roformer');
     expect(hosts).toHaveLength(3);
     expect(hosts[1].disposed).toBe(true);
+    expect(sel.status).toEqual({ state: 'warming' });
+  });
+
+  it('the drum split goes to the host; changing it restarts the probe; the default model takes the geometry its worker plans', () => {
+    const { sel, hosts, drumFlags, chain } = setup();
+    sel.update(req(true, 'mdx'));
+    expect(drumFlags).toEqual([false]);
+    sel.update(req(true, 'mdx', null, true));
+    expect(hosts).toHaveLength(2);
+    expect(drumFlags).toEqual([false, true]);
+    expect(hosts[0].disposed).toBe(true);
+    const g: MlGeometry = { ...GEOMETRY.mdx, resultOffset: GEOMETRY.mdx.resultOffset + 129792, latency: GEOMETRY.mdx.latency + 129792 + 20000, drums: true };
+    hosts[1].onStatus!(ready(900, g)); // far over the plain MDX gate: the worker has checked its own
+    expect(chain.setMlGeometry).toHaveBeenLastCalledWith(g);
+    expect(sel.status.state).toBe('on');
+    sel.update(req(true, 'mdx', null, true));
+    expect(hosts).toHaveLength(2); // unchanged request: no restart
+  });
+
+  it('reload of the drum model probes again only while the split is on', () => {
+    const { sel, hosts } = setup();
+    sel.update(req(true, 'roformer'));
+    sel.reload('drums');
+    expect(hosts).toHaveLength(1);
+    sel.update(req(true, 'roformer', 4000, true));
+    expect(hosts).toHaveLength(2);
+    hosts[1].onStatus!({ type: 'unavailable', reason: 'the Drum split model is not downloaded' });
+    sel.reload('drums');
+    expect(hosts).toHaveLength(3);
     expect(sel.status).toEqual({ state: 'warming' });
   });
 

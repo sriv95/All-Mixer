@@ -27,6 +27,9 @@ describe('normalizeSettings', () => {
       vocalPct: 0,
       instrumentalPct: 100,
       mlModel: 'mdx',
+      splitInstrumental: false,
+      drumsPct: 100,
+      othersPct: 100,
       mlDelayS: 2,
     });
     expect(normalizeSettings({ mode: 'weird' }).mode).toBe('default');
@@ -48,9 +51,16 @@ describe('normalizeSettings', () => {
     expect('mlAuto' in normalizeSettings({ mlAuto: true })).toBe(false); // the removed Auto setting is dropped
     expect(mlDelayMsFor(normalizeSettings({ mlDelayS: 6 }))).toBe(6000);
   });
+  it('keeps the split instrumental switch (off unless exactly true) and its two gains', () => {
+    expect(normalizeSettings({}).splitInstrumental).toBe(false);
+    expect(normalizeSettings({ splitInstrumental: true }).splitInstrumental).toBe(true);
+    for (const v of ['true', 1, null]) expect(normalizeSettings({ splitInstrumental: v }).splitInstrumental).toBe(false);
+    expect(normalizeSettings({ drumsPct: 0, othersPct: 900 })).toMatchObject({ drumsPct: 0, othersPct: 600 });
+    expect(normalizeSettings({ drumsPct: 'x', othersPct: undefined })).toMatchObject({ drumsPct: 100, othersPct: 100 });
+  });
   it.each(['light', 'auto', 'quality', 'ultra', 3])('drops a stored separationQuality (%s) from older versions', (q) => {
     const out = normalizeSettings({ mode: 'separate', masterPct: 200, separationQuality: q });
-    expect(out).toEqual({ mode: 'separate', masterPct: 200, vocalPct: 100, instrumentalPct: 100, mlModel: 'mdx', mlDelayS: 2 });
+    expect(out).toEqual({ ...DEFAULT_SETTINGS, mode: 'separate', masterPct: 200 });
     expect('separationQuality' in out).toBe(false);
     expect('separationQuality' in DEFAULT_SETTINGS).toBe(false);
   });
@@ -73,6 +83,13 @@ describe('separationFor', () => {
       on: true,
       vocal: 0,
       instrumental: 6,
+      drums: 1,
+      others: 1,
     });
+  });
+  it('the drums and others gains apply only with the split on (the instrumental gain stays separate)', () => {
+    const base = { ...DEFAULT_SETTINGS, mode: 'separate' as const, instrumentalPct: 50, drumsPct: 200, othersPct: 25 };
+    expect(separationFor(base)).toMatchObject({ instrumental: 0.5, drums: 1, others: 1 });
+    expect(separationFor({ ...base, splitInstrumental: true })).toMatchObject({ instrumental: 0.5, drums: 2, others: 0.25 });
   });
 });

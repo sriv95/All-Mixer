@@ -6,6 +6,7 @@ import {
   type MlModel,
   type MlReason,
 } from '../../worklet/protocol';
+import type { ModelId } from '../../shared/model-store';
 import type { LatencyListener } from './latency';
 import { MlHost } from './ml-host';
 
@@ -48,6 +49,8 @@ export interface SelectorRequest {
   model?: MlModel;
   /** RoFormer delay budget in ms (the audio delay stays below it); null or absent = automatic. Changing it while on restarts the probe. */
   delayMs?: number | null;
+  /** Split the instrumental (drum stage, needs the drum model); changing it while on restarts the probe. */
+  drums?: boolean;
 }
 
 const RATE_CAUSE = 'the audio context is not at 44.1 kHz';
@@ -64,11 +67,12 @@ export class EngineSelector {
   private on = false;
   private model: MlModel = 'mdx';
   private delayMs: number | null = null;
+  private drums = false;
   private choice: EngineChoice = { state: 'off' };
 
   constructor(
     private readonly chain: EngineChain,
-    private readonly createHost: (model: MlModel, delayMs: number | null) => MlHostLike = (model, delayMs) => new MlHost(undefined, undefined, model, delayMs),
+    private readonly createHost: (model: MlModel, delayMs: number | null, drums: boolean) => MlHostLike = (model, delayMs, drums) => new MlHost(undefined, undefined, model, delayMs, drums),
   ) {
     chain.onLatencyChange((info) => {
       if (this.mlActive && info.engine === 'bypass' && info.reason === 'deadline-miss') {
@@ -95,9 +99,11 @@ export class EngineSelector {
     const turnedOn = req.on && !this.on;
     const model = req.model ?? 'mdx';
     const delayMs = model === 'mdx' ? null : (req.delayMs ?? null); // the default model has a fixed delay
-    const restart = req.on && this.on && (model !== this.model || delayMs !== this.delayMs);
+    const drums = req.drums === true;
+    const restart = req.on && this.on && (model !== this.model || delayMs !== this.delayMs || drums !== this.drums);
     this.model = model;
     this.delayMs = delayMs;
+    this.drums = drums;
     this.on = req.on;
     if (!req.on) {
       if (this.mlActive) this.chain.setEngine('bypass', 'auto');
@@ -107,7 +113,7 @@ export class EngineSelector {
       return;
     }
     if (restart) {
-      // A new model or delay budget: back to the original mix, drop the old host, probe again.
+      // A new model, delay budget or drum split: back to the original mix, drop the old host, probe again.
       if (this.mlActive) this.chain.setEngine('bypass', 'auto');
       this.disposeHost();
       this.mlActive = false;
@@ -119,7 +125,7 @@ export class EngineSelector {
   private probe(): void {
     if (!this.chain.canRunMl()) return this.giveUp(RATE_CAUSE);
     const model = this.model;
-    const host = this.createHost(model, this.delayMs);
+    const host = this.createHost(model, this.delayMs, this.drums);
     this.host = host;
     this.probing = true;
     this.setChoice({ state: 'warming' });
@@ -127,7 +133,7 @@ export class EngineSelector {
       if (this.host !== host || !this.probing) return;
       this.probing = false;
       if (m.type === 'unavailable') return this.giveUp(m.reason);
-      // A RoFormer worker plans the chunk and checks the speed itself; the MDX gate is fixed.
+      // A RoFormer worker, or any worker with the drum stage, plans the geometry and checks the speed itself; the plain MDX gate is fixed.
       if (m.geometry) this.chain.setMlGeometry(m.geometry);
       else if (m.p90 >= GEOMETRY[model].warmupP90Ms) return this.giveUp(`too slow on this device (p90 ${m.p90.toFixed(1)} ms)`);
       if (!this.chain.setEngine('ml', 'auto')) return this.giveUp(RATE_CAUSE);
@@ -140,9 +146,9 @@ export class EngineSelector {
     }
   }
 
-  /** The downloaded files of model `id` changed (first download, update): probe again if it is the model in use. */
-  reload(id: MlModel): void {
-    if (!this.on || this.model !== id) return;
+  /** The downloaded files of model `id` changed (first download, update): probe again if it is in use. */
+  reload(id: ModelId): void {
+    if (!this.on || (id === 'drums' ? !this.drums : this.model !== id)) return;
     if (this.mlActive) this.chain.setEngine('bypass', 'auto');
     this.disposeHost();
     this.mlActive = false;

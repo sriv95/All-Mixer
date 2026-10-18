@@ -2,7 +2,9 @@
 // buffers from the separator worklet on a MessagePort, runs MDX-Net 9482 (vocal) and the Spleeter vocals
 // model (Karaoke mask) with onnxruntime-web (webgpu EP only, one run in flight at a time) and sends the
 // same buffers back with the Vk and vocal blocks (src/ml/pipeline.ts). With model 'roformer' it runs the
-// Mel-Band RoFormer core instead (src/ml/roformer.ts): the vocal block is both Vk and the A cappella.
+// Mel-Band RoFormer core instead (src/ml/roformer.ts): the vocal block is both Vk and the A cappella. With `drums`
+// either engine is wrapped by the drum stage (src/ml/drum-engine.ts): SCNet Tran Small takes the drums out of the
+// instrumental and the reply carries them as two more planes.
 import {
   GEOMETRY,
   ML_BLOCK,
@@ -24,7 +26,9 @@ import { MlTiming } from './timing';
 import { opfsFiles, readModelFile } from '../shared/model-files';
 import { MODEL_FORMAT, MODEL_LABEL, modelFileNames, type ModelId } from '../shared/model-store';
 import { RoformerStream, DEFAULT_ROF_GEOMETRY, type RoformerMeta } from './roformer';
-import { MAX_DELAY_S, MIN_DELAY_S, gateMs, planRof, stepMs, type RofGeometry } from './rof-plan';
+import { MAX_DELAY_S, MIN_DELAY_S, drumRuns, gateMs, planMdxDrums, planRof, stepMs, type RofGeometry } from './rof-plan';
+import { withDrums, type BlockEngine } from './drum-engine';
+import { SC_BINS, SC_FRAMES, SC_INPUT, type ScnetModelFn } from './scnet';
 
 type Ort = typeof import('onnxruntime-web/webgpu');
 type Session = Awaited<ReturnType<Ort['InferenceSession']['create']>>;
@@ -104,10 +108,21 @@ async function start(init: MlWorkerInit): Promise<void> {
     return unavailable(`warm-up: ${String(e)}`);
   }
   pipeline.reset();
+  // Split instrumental: the drum model joins the engine, and the plan (delay, speed check) is the worker's own.
+  let drums: { run: ScnetModelFn; ms: number } | null = null;
+  let geometry: MlGeometry | undefined;
+  if (init.drums) {
+    if (wu.p90 >= ML_WARMUP_P90_MS) return unavailable(`too slow on this device (p90 ${wu.p90.toFixed(1)} ms)`);
+    const d = await loadDrums(ort, init);
+    if (typeof d === 'string') return unavailable(d);
+    drums = d;
+    geometry = planMdxDrums(wu.p90, d.ms) ?? undefined;
+    if (!geometry) return unavailable(`too slow for the drum split (the vocal model takes ${wu.p90.toFixed(0)} ms per block, the drum model ${d.ms.toFixed(0)} ms per run)`);
+  }
   if (init.timing) console.info(`[all-mixer ml] warm-up p50 ${wu.p50.toFixed(1)} p90 ${wu.p90.toFixed(1)} p95 ${wu.p95.toFixed(1)} (gate ${ML_WARMUP_P90_MS.toFixed(1)}), create ${(createMs + wu.firstMs).toFixed(0)} ms, ${adapterName}, ${wu.attempts > 1 ? 'retry' : 'first try'}`);
-  ctx.postMessage({ type: 'ready', p50: wu.p50, p90: wu.p90, p95: wu.p95, createMs: createMs + wu.firstMs, adapter: adapterName });
+  ctx.postMessage({ type: 'ready', p50: wu.p50, p90: wu.p90, p95: wu.p95, createMs: createMs + wu.firstMs, adapter: adapterName, geometry });
 
-  const engine: BlockEngine = {
+  const mdxEngine: BlockEngine = {
     block: ML_BLOCK,
     resultOffset: ML_RESULT_OFFSET,
     reset: () => pipeline.reset(),
@@ -116,6 +131,7 @@ async function start(init: MlWorkerInit): Promise<void> {
     afterReply: () => pipeline.catchUp(models.spleeter),
     misses: () => pipeline.splMisses,
   };
+  const engine = drums ? withDrums(mdxEngine, drums.run) : mdxEngine;
   serve(init.port, engine, { stallMs: init.stallMs ?? 0, stallAfterMs: init.stallAfterMs ?? 5000 }, init.timing ? new MlTiming() : null);
 }
 
@@ -184,20 +200,26 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
   // 1. Speed of this GPU: a step at the 2 s geometry. 2. Plan a chunk for the delay budget. 3. Time the plan itself; when it is slower than predicted, correct the speed and plan again.
   const wantMs = init.delayMs ?? MIN_DELAY_S * 1000;
   let chosen: Run | null = null;
+  let drums: { run: ScnetModelFn; ms: number } | null = null;
   let note = '';
   try {
+    if (init.drums) {
+      const d = await loadDrums(ort, init);
+      if (typeof d === 'string') return unavailable(d);
+      drums = d;
+    }
     const first = await measure(DEFAULT_ROF_GEOMETRY, { skip: 2, n: 6 });
     let baseMs = first.wu.p90;
     void first.session.release();
     for (let attempt = 0; attempt < 3 && !chosen; attempt++) {
-      const g = planRof((wantMs / 1000) * ML_SAMPLE_RATE, baseMs);
+      const g = planRof((wantMs / 1000) * ML_SAMPLE_RATE, baseMs, drums?.ms);
       if (!g) {
-        note = `too slow for a ${Math.round(wantMs / 1000)} s delay (a step takes ${baseMs.toFixed(0)} ms for 1.1 s of audio)${wantMs < MAX_DELAY_S * 1000 ? ': try a longer delay limit' : ''}`;
+        note = `too slow for a ${Math.round(wantMs / 1000)} s delay (a step takes ${baseMs.toFixed(0)} ms for 1.1 s of audio${drums ? `, a drum run ${drums.ms.toFixed(0)} ms` : ''})${wantMs < MAX_DELAY_S * 1000 ? ': try a longer delay limit' : ''}`;
         break;
       }
       try {
         const r = await measure(g, { skip: 1, n: 4 });
-        if (r.wu.p90 <= gateMs(g)) chosen = r;
+        if (r.wu.p90 + (drums ? drumRuns(g.block) * drums.ms : 0) <= gateMs(g)) chosen = r;
         else {
           baseMs *= r.wu.p90 / stepMs(g.frames, baseMs);
           void r.session.release();
@@ -212,12 +234,12 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
   }
   if (!chosen) return unavailable(note || 'too slow on this device');
   const { g, wu } = chosen;
-  const geometry: MlGeometry = { block: g.block, resultOffset: g.overlap, latency: g.latency, warmupP90Ms: gateMs(g) };
+  const geometry: MlGeometry = { block: g.block, resultOffset: g.overlap + g.extra, latency: g.latency, warmupP90Ms: gateMs(g), ...(drums ? { drums: true } : {}) };
   const createMs = performance.now() - t0;
   if (init.timing) console.info(`[all-mixer ml] ${id} chunk ${g.frames} frames (${((g.chunk / ML_SAMPLE_RATE)).toFixed(2)} s), block ${(g.block / ML_SAMPLE_RATE).toFixed(2)} s, overlap ${(g.overlap / ML_SAMPLE_RATE).toFixed(2)} s, delay ${(g.latency / ML_SAMPLE_RATE).toFixed(2)} s; warm-up p50 ${wu.p50.toFixed(1)} p90 ${wu.p90.toFixed(1)} p95 ${wu.p95.toFixed(1)} (gate ${geometry.warmupP90Ms.toFixed(1)}), ready after ${createMs.toFixed(0)} ms, ${adapterName}`);
   ctx.postMessage({ type: 'ready', p50: wu.p50, p90: wu.p90, p95: wu.p95, createMs, adapter: adapterName, geometry });
 
-  const engine: BlockEngine = {
+  const vocalEngine: BlockEngine = {
     block: g.block,
     resultOffset: g.overlap,
     reset: () => chosen!.stream.reset(),
@@ -229,6 +251,7 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
       d.copyWithin(2 * g.block, 0, 2 * g.block); // the vocal is both Vk and the A cappella
     },
   };
+  const engine = drums ? withDrums(vocalEngine, drums.run) : vocalEngine;
   serve(init.port, engine, { stallMs: init.stallMs ?? 0, stallAfterMs: init.stallAfterMs ?? 5000 }, init.timing ? new MlTiming() : null);
 }
 
@@ -238,22 +261,38 @@ const rms = (x: Float32Array): number => {
   return Math.sqrt(e / x.length);
 };
 
-/** What the block loop needs from a model pipeline. */
-interface BlockEngine {
-  block: number;
-  resultOffset: number;
-  reset(): void;
-  /** Block buffer data ([in L, in R, …] → [Vk L, R, vocal L, R]) in place. */
-  process(data: Float32Array): Promise<void>;
-  /** Work that can wait until the block has been sent back. */
-  afterReply?(): Promise<void>;
-  misses?(): number;
+/**
+ * SCNet Tran Small (the drum split model, one fp32 graph of a fixed shape) from OPFS, and the p90 of one run (ms).
+ * A string is the reason it cannot be used.
+ */
+async function loadDrums(ort: Ort, init: MlWorkerInit): Promise<{ run: ScnetModelFn; ms: number } | string> {
+  const inst = init.drumsInstalled;
+  if (!inst) return `the ${MODEL_LABEL.drums} model is not downloaded`;
+  if (inst.format !== MODEL_FORMAT) return `the ${MODEL_LABEL.drums} model is out of date: download it again`;
+  try {
+    const [onnx] = modelFileNames('drums');
+    const buf = await readModelFile(opfsFiles(), inst.version, onnx, inst.files[onnx]).then((x) => x.arrayBuffer());
+    const session = await ort.InferenceSession.create(buf, { executionProviders: ['webgpu'], graphOptimizationLevel: 'all', logSeverityLevel: 3 });
+    const run: ScnetModelFn = async (x) => {
+      const out = await session.run({ [session.inputNames[0]]: new ort.Tensor('float32', x, [1, 4, SC_BINS, SC_FRAMES]) });
+      const t = out[session.outputNames[0]];
+      const data = (await t.getData()) as Float32Array;
+      t.dispose();
+      return data;
+    };
+    const noise = Float32Array.from({ length: SC_INPUT }, () => (Math.random() * 2 - 1) * 0.1);
+    const wu = await warmUp(async () => void (await run(noise)), { skip: 2, n: 5 });
+    return { run, ms: wu.p90 };
+  } catch (e) {
+    return `drum model: ${String(e)}`;
+  }
 }
 
 /** Block loop. Blocks are handled one at a time, in order; stale ones are returned unprocessed. */
 function serve(port: MessagePort, engine: BlockEngine, dbg: StallOpts, timing: MlTiming | null): void {
   const { block } = engine;
-  const bytes = bufferBytes({ ...GEOMETRY.mdx, block });
+  const planes = engine.planes ?? 4;
+  const bytes = bufferBytes({ ...GEOMETRY.mdx, block, drums: planes === 6 });
   const stall = makeStall(dbg); // debug flag; null when off
   let latestEpoch = -1; // newest epoch seen on the port
   let epoch = -1; // epoch the stream state belongs to
@@ -271,7 +310,7 @@ function serve(port: MessagePort, engine: BlockEngine, dbg: StallOpts, timing: M
     busy = true;
     for (let buf = queue.shift(); buf; buf = queue.shift()) {
       const head = new Float64Array(buf, 0, 2);
-      const data = new Float32Array(buf, ML_HEADER_BYTES, 4 * block);
+      const data = new Float32Array(buf, ML_HEADER_BYTES, planes * block);
       const e = head[0], start = head[1];
       if (e < latestEpoch) {
         back(buf, head, -1); // stale: not worth an inference

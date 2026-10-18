@@ -34,6 +34,9 @@ export const ML_LATENCY_SAMPLES = ML_ALGO_SAMPLES + ML_SLACK_SAMPLES + ML_QUANTU
 /** Gain AudioParams (linear, 0–6 = 0–600 %). */
 export const PARAM_VOCAL = 'vocalGain';
 export const PARAM_INSTRUMENTAL = 'instrumentalGain';
+/** Split instrumental: the drums and the rest of the instrumental, each a gain on top of the instrumental one. */
+export const PARAM_DRUMS = 'drumsGain';
+export const PARAM_OTHERS = 'othersGain';
 
 /** bypass = the original mix, unprocessed, no added delay. */
 export type MlEngine = 'bypass' | 'ml';
@@ -66,10 +69,11 @@ export type FromWorklet =
   | { type: 'engine'; engine: MlEngine; reason: MlReason; at: number };
 
 /**
- * Block buffers on the ML port: [epoch f64, start f64, then f32 × ML_BLOCK ×4].
+ * Block buffers on the ML port: [epoch f64, start f64, then f32 × block × planes] (4 planes, 6 with the drum stage).
  * The worklet sends input L, R at `start`. The worker sends the same buffer back with
  * "vocal for the instrumental" L, R (the Karaoke instrumental is x − this) followed by the MDX vocal
- * L, R (A cappella), and `start` moved back by ML_RESULT_OFFSET, or `start` = −1 when it has no result.
+ * L, R (A cappella) and, with the drum stage, the drums L, R (a part of the instrumental), and `start` moved back by
+ * the geometry's resultOffset, or `start` = −1 when it has no result.
  * Buffers are transferred both ways, so the pool is reused without allocation.
  */
 export const ML_HEADER_BYTES = 16;
@@ -78,7 +82,7 @@ export const ML_BUFFER_BYTES = ML_HEADER_BYTES + 4 * ML_BLOCK * 4;
 /** Control messages between the content script and the ML worker (via the ml.html iframe). */
 export const ML_PAGE_PATH = 'ml/ml.html';
 export const ML_INIT = 'all-mixer-ml-init';
-/** The ML_INIT message also carries `model: MlModel` and `delayMs` (RoFormer delay budget; null = automatic). */
+/** The ML_INIT message also carries `model: MlModel`, `delayMs` (RoFormer delay budget; null = automatic) and `drums` (split the instrumental). */
 /** Warm-up gate: p90 of 20 timed runs (ignores the two slowest) of one MDX block step (analyze + model + synthesize) must leave ≥ 1.5× in the 319 ms compute slack (~213 ms). The runtime deadline-miss fallback is the final guard. */
 export const ML_WARMUP_P90_MS = (ML_SLACK_SAMPLES / ML_SAMPLE_RATE) * 1000 / 1.5;
 
@@ -101,6 +105,8 @@ export interface MlGeometry {
   latency: number;
   /** Warm-up gate: the p90 of one block step must stay under this (ms). */
   warmupP90Ms: number;
+  /** Drum stage on (src/ml/scnet.ts): the block buffer carries a drums plane pair too (6 planes instead of 4). */
+  drums?: boolean;
 }
 
 /**
@@ -131,7 +137,9 @@ export const GEOMETRY: Readonly<Record<MlModel, MlGeometry>> = {
   deux: ROF_GEOMETRY,
 };
 
-export const bufferBytes = (g: MlGeometry): number => ML_HEADER_BYTES + 4 * g.block * 4;
+/** Planes of a block buffer: input / Vk L, R, vocal L, R, and with drums, drums L, R. */
+export const planesFor = (g: Pick<MlGeometry, 'drums'>): number => (g.drums ? 6 : 4);
+export const bufferBytes = (g: MlGeometry): number => ML_HEADER_BYTES + planesFor(g) * g.block * 4;
 
 export type ToMlWorker = { type: 'dispose' };
 
@@ -144,11 +152,11 @@ export type FromMlWorker =
       p95: number;
       createMs: number;
       adapter: string;
-      /** RoFormer: the block geometry the worker planned and checked (the selector sends it to the worklet); MDX: absent. */
+      /** RoFormer, or with the drum stage: the block geometry the worker planned and checked (the selector sends it to the worklet); plain MDX: absent. */
       geometry?: MlGeometry;
     }
   /** No usable WebGPU (none, fallback adapter, or the model failed to load). */
   | { type: 'unavailable'; reason: string };
 
 /** Page → worker init (iframe page forwards the ML port from the content script). */
-export type MlWorkerInit = { type: 'init'; model: MlModel; port: MessagePort; modelUrl: string; mdxUrl: string; installed?: InstalledModel; delayMs?: number | null; wasmBase: string; stallMs?: number; stallAfterMs?: number; timing?: boolean };
+export type MlWorkerInit = { type: 'init'; model: MlModel; port: MessagePort; modelUrl: string; mdxUrl: string; installed?: InstalledModel; delayMs?: number | null; drums?: boolean; drumsInstalled?: InstalledModel; wasmBase: string; stallMs?: number; stallAfterMs?: number; timing?: boolean };

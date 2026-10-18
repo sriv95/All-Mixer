@@ -1,0 +1,12 @@
+{"model": "kuielab_b", "input": "inst", "clips": 10, "params_m": 0.0, "sdr_drums": 6.68, "sdr_drums_mean": 7.14, "sdr_others": 9.5, "sec_per_7s_clip": 2.41}
+{"model": "htdemucs", "input": "inst", "clips": 10, "params_m": 0.0, "sdr_drums": 8.34, "sdr_drums_mean": 8.23, "sdr_others": 11.39, "sec_per_7s_clip": 6.97}
+{"model": "htdemucs_ft", "input": "inst", "clips": 10, "params_m": 0.0, "sdr_drums": 8.32, "sdr_drums_mean": 8.34, "sdr_others": 11.51, "sec_per_7s_clip": 21.44}
+{"model": "dttnet", "input": "inst", "clips": 10, "params_m": 5.0, "sdr_drums": 7.58, "sdr_drums_mean": 7.13, "sdr_others": 10.47, "sec_per_7s_clip": 42.15}
+{"model": "scnet-large", "input": "inst", "clips": 10, "params_m": 42.2, "sdr_drums": 10.78, "sdr_drums_mean": 10.26, "sdr_others": 12.39, "sec_per_7s_clip": 53.71}
+{"model": "scnet-xl", "input": "inst", "clips": 10, "params_m": 53.5, "sdr_drums": 10.15, "sdr_drums_mean": 10.39, "sdr_others": 13.1, "sec_per_7s_clip": 138.43}
+{"model": "bs-roformer", "input": "inst", "clips": 10, "params_m": 131.7, "sdr_drums": 9.8, "sdr_drums_mean": 10.36, "sdr_others": 13.2, "sec_per_7s_clip": 29.82}
+{"model": "scnet-tran", "input": "inst", "clips": 10, "params_m": 10.4, "sdr_drums": 9.26, "sdr_drums_mean": 9.52, "sdr_others": 12.29, "sec_per_7s_clip": 8.91}
+{"model": "scnet-masked-small", "input": "inst", "clips": 10, "params_m": 10.6, "sdr_drums": 9.21, "sdr_drums_mean": 9.42, "sdr_others": 12.04, "sec_per_7s_clip": 16.01}
+{"model": "scnet-tran@64236/", "input": "inst", "clips": 10, "params_m": 10.4, "sdr_drums": 7.49, "sdr_drums_mean": 7.73, "sdr_others": 11.02, "sec_per_7s_clip": 6.07}
+{"model": "scnet-tran@129772/", "input": "inst", "clips": 10, "params_m": 10.4, "sdr_drums": 8.31, "sdr_drums_mean": 9.3, "sdr_others": 12.02, "sec_per_7s_clip": 7.45}
+{"model": "scnet-tran@244460/", "input": "inst", "clips": 10, "params_m": 10.4, "sdr_drums": 8.89, "sdr_drums_mean": 9.52, "sdr_others": 12.39, "sec_per_7s_clip": 10.15}

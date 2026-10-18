@@ -2,7 +2,9 @@ import type { AudioState } from '../../shared/messages';
 import {
   GEOMETRY,
   ML_SAMPLE_RATE,
+  PARAM_DRUMS,
   PARAM_INSTRUMENTAL,
+  PARAM_OTHERS,
   PARAM_VOCAL,
   SEPARATOR_MODULE_PATH,
   SEPARATOR_PROCESSOR,
@@ -41,6 +43,9 @@ export interface SeparationRequest {
   /** Linear gains, 0–6. */
   vocal: number;
   instrumental: number;
+  /** Split instrumental: gains of the drums and of the rest of the instrumental, on top of `instrumental` (default 1). */
+  drums?: number;
+  others?: number;
 }
 
 export type SeparationState = 'off' | 'loading' | 'on' | 'error';
@@ -298,6 +303,8 @@ export class MasterChain {
     if (want) {
       sep.parameters.get(PARAM_VOCAL)?.setTargetAtTime(this.separation.vocal, now, GAIN_TAU);
       sep.parameters.get(PARAM_INSTRUMENTAL)?.setTargetAtTime(this.separation.instrumental, now, GAIN_TAU);
+      sep.parameters.get(PARAM_DRUMS)?.setTargetAtTime(this.separation.drums ?? 1, now, GAIN_TAU);
+      sep.parameters.get(PARAM_OTHERS)?.setTargetAtTime(this.separation.others ?? 1, now, GAIN_TAU);
       if (this.separating) return;
       clearTimeout(this.offTimer);
       const start = now + PRE_ROLL;

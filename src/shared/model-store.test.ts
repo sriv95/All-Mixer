@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MODEL_FORMAT, modelState, parseManifest, STALL_MS, type InstalledModel, type Progress, type RemoteRecord } from './model-store';
+import { MODEL_FORMAT, modelFileNames, modelState, parseManifest, STALL_MS, type InstalledModel, type Progress, type RemoteRecord } from './model-store';
 
 const files = { 'roformer.onnx': 100, 'roformer-meta.json': 10 };
 const inst = (version: number, format = MODEL_FORMAT): InstalledModel => ({ format, version, files });
@@ -13,6 +13,13 @@ describe('parseManifest', () => {
     const roformer = { format: 1, version: 2, files };
     expect(parseManifest({ format: 1, models: { roformer: { version: 2, files } } })).toEqual({ roformer });
     expect(parseManifest({ format: 1, models: { roformer: { version: 2, files }, deux: { version: 1, files: dfiles }, other: { version: 1, files } } })).toEqual({ roformer, deux: { format: 1, version: 1, files: dfiles } });
+  });
+  it('the drum model is a single file, with no STFT metadata', () => {
+    expect(modelFileNames('drums')).toEqual(['drums.onnx']);
+    expect(modelFileNames('deux')).toEqual(['deux.onnx', 'deux-meta.json']);
+    const drums = { 'drums.onnx': 43 };
+    expect(parseManifest({ format: 2, models: { drums: { version: 1, files: drums } } })).toEqual({ drums: { format: 2, version: 1, files: drums } });
+    expect(parseManifest({ format: 2, models: { drums: { version: 1, files: { 'other.onnx': 1 } } } })).toBeNull();
   });
   it('drops a bad model entry but keeps the good ones', () => {
     expect(parseManifest({ format: 1, models: { roformer: { version: 0, files }, deux: { version: 1, files: dfiles } } })).toEqual({ deux: { format: 1, version: 1, files: dfiles } });
