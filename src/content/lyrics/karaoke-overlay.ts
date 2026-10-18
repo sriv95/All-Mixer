@@ -131,7 +131,7 @@ export class KaraokeSurface implements LyricsSurface {
     return true;
   }
 
-  /** Prefs changed (font size, line count, position, mode). */
+  /** Prefs changed (font size, color, line count, position, mode). */
   refreshPrefs(): void {
     this.pos = this.opts.getPrefs().karaokePosition;
     this.key = null;
@@ -190,6 +190,7 @@ export class KaraokeSurface implements LyricsSurface {
     const player = this.playerSize();
     if (player.w <= 0 || player.h <= 0) return;
     this.fitRoot();
+    this.block.style.color = this.opts.getPrefs().karaokeColor;
     this.block.style.fontSize = `${karaokeFontPx(player.h, this.opts.getPrefs().karaokeFontSize)}px`;
     this.place(this.pos);
   };

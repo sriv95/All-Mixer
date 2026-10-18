@@ -170,6 +170,16 @@ describe('KaraokeSurface layout and drag', () => {
     expect(block().style.left).toBe('50%');
   });
 
+  it('applies the color from prefs and follows changes', () => {
+    const s = make();
+    s.render(synced);
+    s.update(1.5);
+    expect(block().style.color).toBe('#ffffff');
+    prefs = { ...prefs, karaokeColor: '#ffeb3b' };
+    s.refreshPrefs();
+    expect(block().style.color).toBe('#ffeb3b');
+  });
+
   it('recomputes the font size when the player resizes', () => {
     let fire = () => {};
     vi.stubGlobal('ResizeObserver', class { constructor(cb: () => void) { fire = cb; } observe() {} disconnect() {} });

@@ -21,6 +21,12 @@ describe('normalizeLyricsPrefs', () => {
   it('keeps window and fills the rest', () => {
     expect(normalizeLyricsPrefs({ lyricsDisplayMode: 'window' })).toEqual({ ...DEFAULT_LYRICS_PREFS, lyricsDisplayMode: 'window' });
   });
+  it('karaokeColor: white by default, #rrggbb kept lowercase, anything else falls back', () => {
+    expect(DEFAULT_LYRICS_PREFS.karaokeColor).toBe('#ffffff');
+    expect(normalizeLyricsPrefs({ karaokeColor: '#AABBCC' }).karaokeColor).toBe('#aabbcc');
+    for (const bad of ['red', '#fff', '#12345g', 5, null]) expect(normalizeLyricsPrefs({ karaokeColor: bad }).karaokeColor).toBe('#ffffff');
+  });
+
   it('defaults to one karaoke line, auto source and no caption language', () => {
     expect(DEFAULT_LYRICS_PREFS).toMatchObject({ karaokeLines: 1, lyricsSource: 'auto', captionLang: null });
   });

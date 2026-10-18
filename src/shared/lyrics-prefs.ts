@@ -13,6 +13,8 @@ export interface LyricsPrefs {
   karaokeLines: 1 | 2;
   /** Percent of the base size, integer 50-200. */
   karaokeFontSize: number;
+  /** Karaoke text color, #rrggbb lowercase. */
+  karaokeColor: string;
   /** Fractions 0..1 of the player width/height: x = horizontal center, y = vertical center of the text block. */
   karaokePosition: { x: number; y: number };
 }
@@ -26,6 +28,7 @@ export const DEFAULT_LYRICS_PREFS: LyricsPrefs = {
   captionLang: null,
   karaokeLines: 1,
   karaokeFontSize: 100,
+  karaokeColor: '#ffffff',
   karaokePosition: { x: 0.5, y: 0.82 },
 };
 
@@ -44,6 +47,7 @@ export function normalizeLyricsPrefs(raw: unknown): LyricsPrefs {
     captionLang: typeof r.captionLang === 'string' && /^[A-Za-z0-9-]{1,35}$/.test(r.captionLang) ? r.captionLang : d.captionLang,
     karaokeLines: r.karaokeLines === 1 || r.karaokeLines === 2 ? r.karaokeLines : d.karaokeLines,
     karaokeFontSize: Math.round(num(r.karaokeFontSize, d.karaokeFontSize, 50, 200)),
+    karaokeColor: typeof r.karaokeColor === 'string' && /^#[0-9a-f]{6}$/i.test(r.karaokeColor) ? r.karaokeColor.toLowerCase() : d.karaokeColor,
     karaokePosition: { x: num(pos.x, d.karaokePosition.x, 0, 1), y: num(pos.y, d.karaokePosition.y, 0, 1) },
   };
 }

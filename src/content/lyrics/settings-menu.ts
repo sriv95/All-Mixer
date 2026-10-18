@@ -11,12 +11,16 @@ interface MenuOption {
 }
 
 export interface MenuRow {
-  id: 'source' | 'captionLanguage' | 'display' | 'lines' | 'size';
+  id: 'source' | 'captionLanguage' | 'display' | 'lines' | 'karaokeText' | 'size' | 'color';
   label: string;
   options: MenuOption[];
   selected: string;
   /** Extra explanation shown under the choices. */
   note?: string;
+  /** A group: opens a panel with these settings instead of choices (www only). */
+  rows?: MenuRow[];
+  /** Also offer a native color picker under the choices; the values are #rrggbb. */
+  picker?: 'color';
   select(value: string): void;
 }
 
@@ -44,6 +48,15 @@ export interface MenuInput {
 const SHOWN_LABELS = { lrclib: 'LRCLIB', 'youtube-captions': 'YouTube captions', 'youtube-auto-captions': 'YouTube auto captions' } as const;
 
 const KARAOKE_SIZES = [50, 75, 100, 125, 150, 200] as const;
+
+const COLOR_PRESETS: readonly [string, string][] = [
+  ['#ffffff', 'White'],
+  ['#ffeb3b', 'Yellow'],
+  ['#4dd0e1', 'Cyan'],
+  ['#69f0ae', 'Green'],
+  ['#ff80ab', 'Pink'],
+  ['#ffab40', 'Orange'],
+];
 
 const FALLBACK_NOTES = {
   lrclib: 'LRCLIB has no lyrics for this video, so the automatic order is used.',
@@ -102,11 +115,31 @@ export function buildMenuRows(input: MenuInput, actions: MenuActions): MenuRow[]
         select: (v) => actions.setPrefs({ karaokeLines: v === '1' ? 1 : 2 }),
       },
       {
-        id: 'size',
-        label: 'Karaoke size',
-        options: KARAOKE_SIZES.map((n) => ({ value: String(n), label: `${n}%` })),
-        selected: String(nearestSize(prefs.karaokeFontSize)),
-        select: (v) => actions.setPrefs({ karaokeFontSize: Number(v) }),
+        id: 'karaokeText',
+        label: 'Custom Karaoke Text',
+        options: [],
+        selected: '',
+        rows: [
+          {
+            id: 'color',
+            label: 'Color',
+            options: [
+              ...COLOR_PRESETS.map(([value, label]) => ({ value, label })),
+              ...(COLOR_PRESETS.some(([c]) => c === prefs.karaokeColor) ? [] : [{ value: prefs.karaokeColor, label: `Custom (${prefs.karaokeColor})` }]),
+            ],
+            selected: prefs.karaokeColor,
+            picker: 'color',
+            select: (v) => actions.setPrefs({ karaokeColor: v }),
+          },
+          {
+            id: 'size',
+            label: 'Size',
+            options: KARAOKE_SIZES.map((n) => ({ value: String(n), label: `${n}%` })),
+            selected: String(nearestSize(prefs.karaokeFontSize)),
+            select: (v) => actions.setPrefs({ karaokeFontSize: Number(v) }),
+          },
+        ],
+        select: () => {},
       },
     );
   }
@@ -123,7 +156,8 @@ function nearestSize(size: number): number {
   return KARAOKE_SIZES.reduce((best, n) => (Math.abs(n - size) < Math.abs(best - size) ? n : best));
 }
 
-const selectedLabel = (row: MenuRow): string => row.options.find((o) => o.value === row.selected)?.label ?? '';
+const selectedLabel = (row: MenuRow): string =>
+  row.rows ? row.rows.map(selectedLabel).join(' · ') : (row.options.find((o) => o.value === row.selected)?.label ?? '');
 
 /** Both renderers take the new settings whenever the state or prefs change. */
 export interface LyricsMenu {
@@ -138,7 +172,7 @@ const GROUP_LABEL = 'Lyrics';
 const GROUP_ICON = '♪';
 
 const rowKey = (row: MenuRow): string =>
-  JSON.stringify([row.id, row.label, row.selected, row.options.map((o) => [o.value, o.label, !!o.disabled]), row.note]);
+  JSON.stringify([row.id, row.label, row.selected, row.options.map((o) => [o.value, o.label, !!o.disabled]), row.note, row.rows?.map(rowKey)]);
 
 /**
  * www: one "Lyrics" row (with the ♪ icon) at the end of YouTube's settings panel. It opens our own panel with
@@ -148,7 +182,7 @@ const rowKey = (row: MenuRow): string =>
 export class YtSettingsMenu implements LyricsMenu {
   private rows: MenuRow[] = [];
   private buttons: MenuButton[] = [];
-  /** Open panels: [] closed, [GROUP_ID] the lyrics settings, [GROUP_ID, rowId] the choices of one setting. */
+  /** Open panels: [] closed, [GROUP_ID] the lyrics settings, [GROUP_ID, rowId, ...] one setting (a group's settings, or the choices). */
   private path: string[] = [];
   private subKey = '';
   private sub: HTMLElement | null = null;
@@ -163,7 +197,7 @@ export class YtSettingsMenu implements LyricsMenu {
   setRows(rows: MenuRow[], buttons: MenuButton[] = []): void {
     this.rows = rows;
     this.buttons = buttons;
-    if (this.path.length > 1 && !rows.some((r) => r.id === this.path[1])) this.path = [GROUP_ID];
+    if (this.path.length > 1 && !this.rowAt(this.path)) this.path = [GROUP_ID];
     this.ensure();
   }
 
@@ -231,8 +265,20 @@ export class YtSettingsMenu implements LyricsMenu {
     }
   }
 
+  /** The setting an open path points at (undefined: the top panel, or a setting that is gone). */
+  private rowAt(path: string[]): MenuRow | undefined {
+    let rows = this.rows;
+    let row: MenuRow | undefined;
+    for (const id of path.slice(1)) {
+      row = rows.find((r) => r.id === id);
+      if (!row) return undefined;
+      rows = row.rows ?? [];
+    }
+    return row;
+  }
+
   private panelKey(): string {
-    const row = this.path[1] ? this.rows.find((r) => r.id === this.path[1]) : undefined;
+    const row = this.rowAt(this.path);
     return JSON.stringify([this.path, row ? rowKey(row) : this.groupKey()]);
   }
 
@@ -279,7 +325,7 @@ export class YtSettingsMenu implements LyricsMenu {
   }
 
   private back(): void {
-    if (this.path.length > 1) this.open([GROUP_ID]);
+    if (this.path.length > 1) this.open(this.path.slice(0, -1));
     else this.closeSub();
   }
 
@@ -295,8 +341,8 @@ export class YtSettingsMenu implements LyricsMenu {
   }
 
   private renderSub(popup: HTMLElement): void {
-    const row = this.path[1] ? this.rows.find((r) => r.id === this.path[1]) : undefined;
-    if (!this.path.length || (this.path[1] && !row)) {
+    const row = this.rowAt(this.path);
+    if (!this.path.length || (this.path.length > 1 && !row)) {
       this.closeSub();
       return;
     }
@@ -326,8 +372,12 @@ export class YtSettingsMenu implements LyricsMenu {
     header.append(back, title);
     const menu = this.doc.createElement('div');
     menu.className = SETTINGS_SELECTORS.panelMenu.slice(1);
-    if (row) this.fillChoices(menu, row);
-    else this.fillGroup(menu);
+    if (row?.rows) this.fillRows(menu, row.rows);
+    else if (row) this.fillChoices(menu, row);
+    else {
+      this.fillRows(menu, this.rows);
+      this.fillButtons(menu);
+    }
     panel.append(header, menu);
     this.subKey = this.panelKey();
     this.sub?.remove();
@@ -342,9 +392,9 @@ export class YtSettingsMenu implements LyricsMenu {
     }
   }
 
-  /** The lyrics settings: one row per setting (opens its choices), then the buttons. */
-  private fillGroup(menu: HTMLElement): void {
-    for (const row of this.rows) {
+  /** One row per setting (opens its choices or, for a group, its settings). */
+  private fillRows(menu: HTMLElement, rows: MenuRow[]): void {
+    for (const row of rows) {
       const { item, label } = this.item('menuitem', row.label);
       item.setAttribute('aria-haspopup', 'true');
       item.setAttribute(ROW_ATTR + '-setting', row.id);
@@ -353,9 +403,12 @@ export class YtSettingsMenu implements LyricsMenu {
       content.className = SETTINGS_SELECTORS.menuItemContent.slice(1);
       content.textContent = selectedLabel(row);
       label.after(content);
-      this.activate(item, () => this.open([GROUP_ID, row.id]));
+      this.activate(item, () => this.open([...this.path, row.id]));
       menu.append(item);
     }
+  }
+
+  private fillButtons(menu: HTMLElement): void {
     for (const b of this.buttons) {
       const { item } = this.item('menuitem', b.label);
       item.setAttribute(ROW_ATTR + '-button', b.id);
@@ -376,10 +429,22 @@ export class YtSettingsMenu implements LyricsMenu {
       item.tabIndex = o.disabled ? -1 : 0;
       this.activate(item, () => {
         if (o.disabled) return;
-        // Back to the lyrics settings, so several can be changed in one visit.
-        this.open([GROUP_ID]);
+        // Back to the parent panel, so several can be changed in one visit.
+        this.open(this.path.slice(0, -1));
         row.select(o.value);
       });
+      menu.append(item);
+    }
+    if (row.picker) {
+      const { item, label } = this.item('menuitem', 'Pick a color');
+      const input = this.doc.createElement('input');
+      input.type = 'color';
+      input.value = row.selected;
+      input.style.cssText = 'margin-left:auto;width:36px;height:24px;padding:0;border:0;background:none;cursor:pointer;';
+      // `change` (picker closed), not `input`: a pick re-renders this panel and would drop the open picker.
+      input.addEventListener('change', () => row.select(input.value));
+      input.addEventListener('click', (e) => e.stopPropagation());
+      label.after(input);
       menu.append(item);
     }
     if (row.note) {
@@ -496,7 +561,8 @@ export class YtmSettingsPopover implements LyricsMenu {
 
   private render(): void {
     const frag = this.doc.createDocumentFragment();
-    for (const row of this.rows) {
+    // The popover is flat: a group's settings are listed as its own rows.
+    for (const row of this.rows.flatMap((r) => r.rows ?? [r])) {
       const wrap = this.doc.createElement('label');
       wrap.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:12px;margin:6px 0;';
       wrap.setAttribute(ROW_ATTR, row.id);
