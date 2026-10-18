@@ -119,6 +119,45 @@ export function watchMainVideo(
   };
 }
 
+/** Player time readout and seek bar, which the overlay shifts to the presented time. */
+const TIME_SELECTORS = {
+  youtube: {
+    text: '#movie_player .ytp-time-current',
+    /** One per chapter when the video has chapters. */
+    fills: '#movie_player .ytp-play-progress',
+    knob: '#movie_player .ytp-scrubber-container',
+    bar: '#movie_player .ytp-progress-bar',
+  },
+  ytmusic: {
+    text: 'ytmusic-player-bar .time-info',
+    fills: 'ytmusic-player-bar #primaryProgress',
+    knob: 'ytmusic-player-bar #sliderKnob',
+    bar: 'ytmusic-player-bar #progress-bar',
+  },
+} as const satisfies Record<Site, Record<string, string>>;
+
+export interface TimeElements {
+  text: HTMLElement | null;
+  fills: HTMLElement[];
+  knob: HTMLElement | null;
+  bar: HTMLElement | null;
+}
+
+export function findTimeElements(site: Site, doc: ParentNode = document): TimeElements {
+  const s = TIME_SELECTORS[site];
+  return {
+    text: doc.querySelector<HTMLElement>(s.text),
+    fills: [...doc.querySelectorAll<HTMLElement>(s.fills)],
+    knob: doc.querySelector<HTMLElement>(s.knob),
+    bar: doc.querySelector<HTMLElement>(s.bar),
+  };
+}
+
+/** The player's own buffering spinner (both sites): hidden by an inline `display: none`, shown by setting `display: block`. */
+export function findSpinner(doc: ParentNode = document): HTMLElement | null {
+  return doc.querySelector<HTMLElement>('#movie_player .ytp-spinner');
+}
+
 /** Lyrics hooks (F1 / F2). */
 const LYRICS_SELECTORS = {
   /** Player control bars that get the lyrics toggle button. */

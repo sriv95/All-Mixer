@@ -4,10 +4,12 @@ import { EngineSelector } from './audio/engine-select';
 import { MasterChain } from './audio/master-chain';
 import { MODEL_IDS, keyInstalled } from '../shared/model-store';
 import { AvProbe } from './av-probe';
+import { deferEnd } from './deferred-end';
+import { TimeDisplay } from './time-display';
 import { initLyrics, type LyricsFeature } from './lyrics/init';
 import { DelayedVideo } from './video-delay/delayed-video';
 import { overlayDelayMs } from './video-delay/schedule';
-import { detectSite, watchMainVideo, type PageSite } from './youtube-dom';
+import { detectSite, findSpinner, watchMainVideo, type PageSite } from './youtube-dom';
 
 // Lyrics exist for YouTube / YT Music only; every other site gets the mixer without them.
 // Frames (embeds, ads) run the mixer too, but a YouTube embed gets no lyrics UI.
@@ -17,6 +19,7 @@ const site: PageSite = lyricsSite ?? 'generic';
 let settings: MixerSettings = { ...DEFAULT_SETTINGS };
 let video: HTMLMediaElement | null = null;
 let overlay: DelayedVideo | null = null;
+let timeDisplay: TimeDisplay | null = null;
 let debugBudget: number | null = null;
 let debugDelayMs: number | null = null; // QA override, see debug-video-delay
 const probe = new AvProbe();
@@ -39,6 +42,11 @@ selector.onChange = ({ state }) => {
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return;
   for (const id of MODEL_IDS) if (keyInstalled(id) in changes) selector.reload(id);
+});
+// The end of the video (autoplay / queue) waits for the delayed tail to play out, behind the player's own spinner.
+deferEnd(() => video, () => overlay?.delayMs ?? 0, (waiting) => {
+  const spinner = findSpinner();
+  if (spinner) spinner.style.display = waiting ? 'block' : 'none';
 });
 // Lyrics follow what the user sees and hears, which trails currentTime by the picture delay (D1).
 const lyrics: LyricsFeature = lyricsSite
@@ -84,11 +92,14 @@ watchMainVideo(site, (v) => {
   chain.setVideo(v);
   overlay?.destroy();
   overlay = null;
+  timeDisplay?.destroy();
+  timeDisplay = null;
   // An <audio> has no picture to delay.
   if (v instanceof HTMLVideoElement) {
     probe.attachVideo(v);
     lyrics.setVideo(v);
     overlay = new DelayedVideo(v, undefined, probe);
+    if (lyricsSite) timeDisplay = new TimeDisplay(lyricsSite, v, () => overlay?.presentedTime() ?? null);
     syncDelay(true);
   }
   push();
