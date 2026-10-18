@@ -262,6 +262,12 @@ export class LyricsController {
     if (id) void this.realign(id, true);
   }
 
+  /** The video's lyrics changed behind our back (the user picked others): load them again. */
+  reload(): void {
+    this.loadedFor = null;
+    this.refresh();
+  }
+
   seek(time: number): void {
     const v = this.video;
     if (!v) return;

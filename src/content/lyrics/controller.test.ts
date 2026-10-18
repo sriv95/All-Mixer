@@ -157,6 +157,18 @@ describe('LyricsController', () => {
     expect(d.fetchLyrics).toHaveBeenCalledTimes(1);
   });
 
+  it('reload() fetches the video’s lyrics again', async () => {
+    const d = deps();
+    const c = new LyricsController('ytmusic', d);
+    c.addSurface(Object.assign(new FakeSurface(), { active: true }));
+    c.setVideoId('v1');
+    await flush();
+    expect(d.fetchLyrics).toHaveBeenCalledTimes(1);
+    c.reload();
+    await flush();
+    expect(d.fetchLyrics).toHaveBeenCalledTimes(2);
+  });
+
   it('aligns with ASR captions when available', async () => {
     const asrTrack = { baseUrl: 'u', languageCode: 'en', kind: 'asr' };
     const words = [

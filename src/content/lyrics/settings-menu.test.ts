@@ -13,7 +13,7 @@ const captions: CaptionPicker = {
 };
 
 function actions() {
-  return { selectSource: vi.fn(), selectCaptionTrack: vi.fn(), setPrefs: vi.fn(), setOffset: vi.fn(), copyLyrics: vi.fn(() => 'Copied'), saveLrc: vi.fn(() => 'Saved') } satisfies MenuActions;
+  return { selectSource: vi.fn(), selectCaptionTrack: vi.fn(), setPrefs: vi.fn(), setOffset: vi.fn(), copyLyrics: vi.fn(() => 'Copied'), saveLrc: vi.fn(() => 'Saved'), findLyrics: vi.fn() } satisfies MenuActions;
 }
 const prefs = (p: Partial<LyricsPrefs> = {}): LyricsPrefs => ({ ...DEFAULT_LYRICS_PREFS, ...p });
 
@@ -133,6 +133,16 @@ describe('buildMenuRows', () => {
     const [copy, save] = buildMenuButtons({ prefs: prefs({ lyricsDisplayMode: 'window' }), lyrics: { synced: true } }, a);
     expect(copy.run()).toBe('Copied');
     expect(save.run()).toBe('Saved');
+  });
+
+  it('Find other lyrics: offered when lyrics are shown or missing, also on YT Music', () => {
+    const a = actions();
+    const ids = (canEdit?: boolean, site?: 'ytmusic') => buildMenuButtons({ prefs: prefs(), canEdit, site }, a).map((b) => b.id);
+    expect(ids()).toEqual(['resetPosition']);
+    expect(ids(true)).toEqual(['resetPosition', 'findLyrics']);
+    expect(ids(true, 'ytmusic')).toEqual(['findLyrics']);
+    buildMenuButtons({ prefs: prefs(), canEdit: true, site: 'ytmusic' }, a)[0].run();
+    expect(a.findLyrics).toHaveBeenCalled();
   });
 
   it('shows the nearest size step for an off-step stored size', () => {

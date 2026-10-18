@@ -9,6 +9,8 @@ interface Entry {
   at: number;
   /** null = negative result. */
   found: FoundLyrics | null;
+  /** The user chose these lyrics for the video: never evicted, never expires. */
+  pinned?: boolean;
 }
 
 type Area = Pick<chrome.storage.StorageArea, 'get' | 'set' | 'remove'>;
@@ -30,10 +32,20 @@ export class LyricsCache {
     return { hit: true, found: e.found };
   }
 
+  /** Keep `found` for this video whatever the automatic lookup says. */
+  async pin(videoId: string, found: FoundLyrics): Promise<void> {
+    await this.area.set({ [PREFIX + videoId]: { at: this.now(), found, pinned: true } satisfies Entry });
+  }
+
+  /** Forget this video's entry (a pin, or a cached result), so the next lookup is automatic again. */
+  async unpin(videoId: string): Promise<void> {
+    await this.area.remove([PREFIX + videoId]);
+  }
+
   async store(videoId: string, found: FoundLyrics | null): Promise<void> {
     await this.area.set({ [PREFIX + videoId]: { at: this.now(), found } satisfies Entry });
     const all = (await this.area.get(null)) as Record<string, unknown>;
-    const keys = Object.keys(all).filter((k) => k.startsWith(PREFIX));
+    const keys = Object.keys(all).filter((k) => k.startsWith(PREFIX) && !(all[k] as Entry).pinned);
     if (keys.length <= MAX_ENTRIES) return;
     keys.sort((a, b) => (all[a] as Entry).at - (all[b] as Entry).at);
     await this.area.remove(keys.slice(0, keys.length - MAX_ENTRIES));

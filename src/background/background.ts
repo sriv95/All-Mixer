@@ -1,7 +1,7 @@
 import type { ApplySettings, BackgroundRequest } from '../shared/messages';
 import { TabStore } from './tab-store';
 import { LyricsCache } from './lyrics-cache';
-import { findLyrics } from '../lyrics/lrclib';
+import { findLyrics, searchLyrics } from '../lyrics/lrclib';
 
 const store = new TabStore(chrome.storage.session);
 const lyricsCache = new LyricsCache(chrome.storage.local);
@@ -23,6 +23,12 @@ async function handle(msg: BackgroundRequest, sender: chrome.runtime.MessageSend
     }
     case 'fetch-lyrics':
       return lyricsCache.getOrFetch(msg.track, (t) => findLyrics(t));
+    case 'search-lyrics':
+      return searchLyrics(msg.q);
+    case 'pin-lyrics':
+      return lyricsCache.pin(msg.videoId, msg.found);
+    case 'unpin-lyrics':
+      return lyricsCache.unpin(msg.videoId);
   }
 }
 
