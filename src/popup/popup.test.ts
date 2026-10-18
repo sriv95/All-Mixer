@@ -569,6 +569,46 @@ describe('popup', () => {
       expect(banner()!.textContent).toMatch(/Separation unavailable.*no worklet\. The original mix is playing\./);
     });
 
+    describe('hold to hear the original', () => {
+      const msgs = () => (chrome.tabs.sendMessage as ReturnType<typeof vi.fn>).mock.calls.filter((c) => c[1]?.type === 'hold-original');
+      it('is disabled until separation is live', async () => {
+        await load({ stored: { mode: 'separate' }, status: sep('on', { choice: { state: 'warming' } }, 'bypass', 0) });
+        expect(el<HTMLButtonElement>('compare').disabled).toBe(true);
+      });
+
+      it('tells the page while pressed and lets go on release', async () => {
+        await load({ stored: { mode: 'separate' }, status: live(1949) });
+        const b = el<HTMLButtonElement>('compare');
+        expect(b.disabled).toBe(false);
+        b.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+        await settle();
+        expect(msgs().at(-1)).toEqual([7, { type: 'hold-original', on: true }]);
+        expect(b.textContent).toMatch(/Playing the original/);
+        b.dispatchEvent(new Event('pointerup', { bubbles: true }));
+        await settle();
+        expect(msgs().at(-1)).toEqual([7, { type: 'hold-original', on: false }]);
+        expect(b.textContent).toMatch(/Hold to hear/);
+      });
+
+      it('repeats while held, so the page knows the popup is still there', async () => {
+        await load({ stored: { mode: 'separate' }, status: live(1949) });
+        el('compare').dispatchEvent(new Event('pointerdown', { bubbles: true }));
+        await new Promise((r) => setTimeout(r, 700));
+        expect(msgs().filter((c) => c[1].on).length).toBeGreaterThanOrEqual(3);
+        el('compare').dispatchEvent(new Event('pointerup', { bubbles: true }));
+      });
+
+      it('works from the keyboard', async () => {
+        await load({ stored: { mode: 'separate' }, status: live(1949) });
+        el('compare').dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+        await settle();
+        expect(msgs().at(-1)![1].on).toBe(true);
+        el('compare').dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true }));
+        await settle();
+        expect(msgs().at(-1)![1].on).toBe(false);
+      });
+    });
+
     it('shows nothing without separation info', async () => {
       await load({ stored: { mode: 'separate' } });
       expect(banner()).toBeNull();
