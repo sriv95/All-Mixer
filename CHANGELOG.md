@@ -12,13 +12,16 @@ CI builds the extension, creates tag `vx.y.z` and a GitHub release with this sec
 
 ### Added
 
+- Popup: "Hold to hear the original" on the Separate tab. While you hold it, every stem plays at 100 % (the original mix) with no change to the delay, so the picture stays in sync. Let go and the separation is back. It lets go by itself if the popup closes.
+- Popup: "Undo" for five seconds after a preset, to bring back the levels it replaced.
+- Popup: dark mode (follows the system), hints on the tabs, the presets, Reset and the original-mix button, and a compact view (button in the header) that hides the presets and the banner detail. The compact view is remembered.
 - Toolbar badge: the extension icon shows what Separate mode is doing without opening the popup. Gray dots while it warms up, black "ON" while it separates, a red "!" on white when it stops (for example the device is too slow). The tooltip says the same in words. The extension now has an icon.
 - Popup: when Separate mode stops because the device is too slow, buttons offer the fix: switch to the Default model, raise the delay limit, or try again.
 
 ### Changed
 
 - Popup: new look (soft cards, pressed tracks, icons) and a clearer state banner for Separate mode: warming up, separating with the delay, stopped. Default and Separate are now tabs.
-- Popup: motion. The tab highlight slides, panels slide toward the tab you pick and fill in block by block, sliders and numbers glide when a preset or Reset changes them, the chosen preset goes bold with a ring, the Model list, Advanced and Split instrumental slide open, a bar fills while a model downloads, and the Separate banner shows moving sound bars (live) or a sweeping bar (warming up). Motion follows the system "Reduce motion" setting. The warming-up toolbar badge cycles its dots.
+- Popup: motion. The tab highlight slides, panels slide toward the tab you pick and fill in block by block, sliders and numbers glide when a preset or Reset changes them, the chosen preset goes bold with a ring, the Model list, Advanced and Split instrumental slide open, a bar fills while a model downloads, and the Separate banner shows moving sound bars (live) or a sweeping bar (warming up). Digits roll when you drag, the switch thumb squeezes when pressed, the row you hold grows its number and dims the others, and a placeholder shows while the popup reads the tab's settings (no more flash of the Default tab). Motion follows the system "Reduce motion" setting. The warming-up toolbar badge cycles its dots.
 - High / Best quality: the warm-up remembers the speed of your GPU, so the next one skips the speed test and is about 40 % shorter (on an M-series Mac at an 8 s limit: 24 s, then 14 s). The chunk it plans is still timed and checked, and a speed that no longer holds is measured again.
 - Separate mode: turning it off and on again within 3 minutes starts at once, with no warm-up (the model stays loaded in the tab meanwhile, up to about 0.5 GB of GPU memory). Other settings or a longer wait warm up again.
 - Popup: when the tab needs a reload (no All Mixer! running in it yet), the Separate mode checkbox is hidden and the popup says to reload the tab.
