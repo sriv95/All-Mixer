@@ -17,15 +17,17 @@ export interface ModelLine {
   id: ModelId;
   text: string;
   button?: string;
+  /** 0 to 100 while a download runs. */
+  progress?: number;
 }
 
-function modelLine(id: ModelId, s: ModelState): { text: string; button?: string } {
+function modelLine(id: ModelId, s: ModelState): Omit<ModelLine, 'id'> {
   const label = MODEL_LABEL[id];
   switch (s.kind) {
     case 'missing':
       return { text: `${label} is a one-time download${s.size ? ` (${mb(s.size)})` : ''}.`, button: 'Download' };
     case 'downloading':
-      return { text: `Downloading… ${Math.floor((100 * s.done) / s.total)}% (${mb(s.done)} of ${mb(s.total)})` };
+      return { text: `Downloading… ${Math.floor((100 * s.done) / s.total)}% (${mb(s.done)} of ${mb(s.total)})`, progress: (100 * s.done) / s.total };
     case 'error':
       return { text: `Download failed: ${s.message}`, button: 'Try again' };
     case 'update':

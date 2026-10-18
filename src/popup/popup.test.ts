@@ -307,6 +307,13 @@ describe('popup', () => {
       });
       expect(el('model-text').textContent).toMatch(/Downloading… 50% \(50 MB of 100 MB\)/);
       expect(has('model-btn')).toBe(false);
+      const bar = el('model-row').querySelector('[role=progressbar]')!;
+      expect(bar.getAttribute('aria-valuenow')).toBe('50');
+    });
+
+    it('shows no progress bar when nothing is downloading', async () => {
+      await load({ stored: { mode: 'separate', mlModel: 'roformer' }, local: { 'modelRemote.roformer': remote(1) } });
+      expect(el('model-row').querySelector('[role=progressbar]')).toBeNull();
     });
 
     it('shows an update button even when the default model is selected', async () => {
