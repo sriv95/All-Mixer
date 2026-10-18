@@ -17,7 +17,7 @@
 }
 
 body {
-  @apply m-0 w-[340px] bg-white p-4 font-sans text-sm text-ink;
+  @apply m-0 w-[340px] bg-white p-4 font-sans text-sm text-ink select-none;
 }
 
 /* Range inputs: the fill is --p (0 to 100) of the track, the thumb is a raised knob with a red dot. */
