@@ -8,6 +8,11 @@ export const Blocked = createContext(false);
 /** The enter / exit of a panel or banner: a short fade with a small slide. */
 export const fade = { initial: { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -8 }, transition: { duration: 0.18 } } as const;
 
+/** A block that rises into place `i` beats after the one before it: a panel fills in one block at a time. */
+export function Rise({ i, children }: { i: number; children: ReactNode }) {
+  return <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25, delay: 0.05 * i, ease: 'easeOut' }}>{children}</motion.div>;
+}
+
 const cx = (...c: (string | false | undefined)[]) => c.filter(Boolean).join(' ');
 
 interface SliderProps {

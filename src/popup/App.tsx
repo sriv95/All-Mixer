@@ -7,7 +7,7 @@ import { MAX_DELAY_S, MIN_DELAY_S } from '../ml/rof-plan';
 import type { MlModel } from '../worklet/protocol';
 import { installModel, useModels, type ModelLine } from './models';
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
-import { Blocked, Btn, Card, Disclosure, Select, Slider, SliderRow, Switch, fade, useGlide, type Choice } from './ui';
+import { Blocked, Btn, Card, Disclosure, Rise, Select, Slider, SliderRow, Switch, fade, useGlide, type Choice } from './ui';
 
 type Update = (patch: Partial<MixerSettings>) => void;
 
@@ -126,17 +126,19 @@ export function App() {
           </motion.div>
         ) : (
           <motion.div key="default" {...fade} className="flex flex-col gap-3.5">
-            <Master settings={settings} update={update} />
+            <Rise i={0}><Master settings={settings} update={update} /></Rise>
             {!noContent && (
-              <Card>
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <label htmlFor="separate-mode" className="text-sm font-bold">Separate mode</label>
-                    <p className="mt-0.5 text-xs leading-snug text-muted">Split vocals and music live and mix them yourself.</p>
+              <Rise i={1}>
+                <Card>
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <label htmlFor="separate-mode" className="text-sm font-bold">Separate mode</label>
+                      <p className="mt-0.5 text-xs leading-snug text-muted">Split vocals and music live and mix them yourself.</p>
+                    </div>
+                    <Switch id="separate-mode" checked={false} onChange={() => update({ mode: 'separate' })} />
                   </div>
-                  <Switch id="separate-mode" checked={false} onChange={() => update({ mode: 'separate' })} />
-                </div>
-              </Card>
+                </Card>
+              </Rise>
             )}
           </motion.div>
         )}
@@ -301,7 +303,8 @@ function SeparateControls({ settings, update, ready, advancedOpen, setAdvancedOp
 
   return (
     <>
-      <Master settings={settings} update={update} compact />
+      <Rise i={0}><Master settings={settings} update={update} compact /></Rise>
+      <Rise i={1}>
       <Card>
         <SliderRow id="vocal" icon={<Mic size={15} />} label="Vocal" unit="%" value={settings.vocalPct} min={0} max={100} step={5} onValue={(v) => update({ vocalPct: clampPct(v) })} />
         <SliderRow id="instrumental" icon={<Music size={15} />} label="Instrumental" unit="%" value={settings.instrumentalPct} min={0} max={100} step={5} onValue={(v) => update({ instrumentalPct: clampPct(v) })} />
@@ -312,6 +315,8 @@ function SeparateControls({ settings, update, ready, advancedOpen, setAdvancedOp
           </div>
         )}
       </Card>
+      </Rise>
+      <Rise i={2}>
       <div className="presets grid grid-cols-2 gap-2.5" role="group" aria-label="Presets">
         {PRESETS.map((p) => {
           const pressed = p.vocal === settings.vocalPct && p.instrumental === settings.instrumentalPct;
@@ -329,6 +334,8 @@ function SeparateControls({ settings, update, ready, advancedOpen, setAdvancedOp
           );
         })}
       </div>
+      </Rise>
+      <Rise i={3}>
       <Disclosure id="advanced" open={advancedOpen} onOpen={(open) => persistAdvanced(open, setAdvancedOpen)} className="rounded-[20px] bg-card" buttonClassName="p-4"
         title={<span className="flex items-center gap-1.5"><Settings2 size={15} className="text-brand" aria-hidden />Advanced <span className="font-medium text-muted">(model, delay)</span></span>}>
         <div className="flex flex-col gap-3.5 px-4 pb-4">
@@ -357,6 +364,7 @@ function SeparateControls({ settings, update, ready, advancedOpen, setAdvancedOp
           </Disclosure>
         </div>
       </Disclosure>
+      </Rise>
     </>
   );
 }
