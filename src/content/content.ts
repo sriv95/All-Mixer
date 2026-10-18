@@ -1,5 +1,5 @@
 import type { ContentRequest, ContentStatus, GetMyTabSettings } from '../shared/messages';
-import { DEFAULT_SETTINGS, masterGainFor, normalizeSettings, separationFor, type MixerSettings } from '../shared/settings';
+import { DEFAULT_SETTINGS, masterGainFor, mlDelayMsFor, normalizeSettings, separationFor, type MixerSettings } from '../shared/settings';
 import { EngineSelector } from './audio/engine-select';
 import { MasterChain } from './audio/master-chain';
 import { MODEL_IDS, keyInstalled } from '../shared/model-store';
@@ -51,7 +51,7 @@ if (site) {
     chain.setGain(masterGainFor(settings));
     const sep = separationFor(settings);
     chain.setSeparation(sep);
-    selector.update({ ...sep, model: settings.mlModel });
+    selector.update({ ...sep, model: settings.mlModel, delayMs: mlDelayMsFor(settings) });
     syncDelay();
   };
 

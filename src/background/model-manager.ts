@@ -91,7 +91,7 @@ export class ModelManager {
           await progress();
         }
       }
-      const installed: InstalledModel = { version, files: remote.files };
+      const installed: InstalledModel = { format: remote.format, version, files: remote.files };
       await this.area.set({ [keyInstalled(id)]: installed, [keyRemote(id)]: { ...remote, checkedAt: this.now() } satisfies RemoteRecord });
       await this.area.remove(keyProgress(id));
       await pruneModel(this.files, id, installed);

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { MODEL_FORMAT, modelState, parseManifest, STALL_MS, type InstalledModel, type Progress, type RemoteRecord } from './model-store';
 
 const files = { 'roformer.onnx': 100, 'roformer-meta.json': 10 };
-const inst = (version: number): InstalledModel => ({ version, files });
+const inst = (version: number, format = MODEL_FORMAT): InstalledModel => ({ format, version, files });
 const remote = (version: number, format = MODEL_FORMAT): RemoteRecord => ({ format, version, files, checkedAt: 0 });
 const prog = (p: Partial<Progress>): Progress => ({ phase: 'downloading', version: 2, done: 5, total: 110, at: 1000, ...p });
 
@@ -28,6 +28,10 @@ describe('parseManifest', () => {
 });
 
 describe('modelState', () => {
+  it('files from an older extension format count as not installed (download again)', () => {
+    expect(modelState(inst(1, MODEL_FORMAT - 1), remote(2), undefined, 0)).toEqual({ kind: 'missing', size: 110 });
+    expect(modelState({ version: 1, files }, remote(2), undefined, 0)).toEqual({ kind: 'missing', size: 110 });
+  });
   it('missing, with the size when the manifest is known', () => {
     expect(modelState(undefined, undefined, undefined, 0)).toEqual({ kind: 'missing', size: null });
     expect(modelState(undefined, remote(1), undefined, 0)).toEqual({ kind: 'missing', size: 110 });

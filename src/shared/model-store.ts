@@ -13,8 +13,8 @@
 /** Public repo with the model files. `chrome.storage.local['debug.modelBaseUrl']` overrides it (QA). */
 export const MODEL_BASE_URL = 'https://huggingface.co/sriv95/all-mixer-models/resolve/main';
 
-/** Version of the file contract with src/ml/roformer.ts (chunk length, mel bands, graph I/O). A repo manifest with another format needs another extension version. */
-export const MODEL_FORMAT = 1;
+/** Version of the file contract with src/ml/roformer.ts (mel bands, graph I/O; 2: the frames axis is dynamic). A repo manifest with another format needs another extension version. */
+export const MODEL_FORMAT = 2;
 
 export const CHUNK = 8 * 2 ** 20;
 
@@ -42,6 +42,8 @@ export const keyProgress = (id: ModelId): string => `modelProgress.${id}`;
 
 /** What is on disk: the version that was downloaded completely. */
 export interface InstalledModel {
+  /** MODEL_FORMAT of the files; a missing or other value means they are from an older extension and must be downloaded again. */
+  format?: number;
   version: number;
   files: ModelFileSizes;
 }
@@ -97,7 +99,8 @@ export type ModelState =
   | { kind: 'incompatible' };
 
 /** What the popup shows, from the three storage records. */
-export function modelState(installed: InstalledModel | undefined, remote: RemoteRecord | undefined, progress: Progress | undefined, now: number): ModelState {
+export function modelState(installedRec: InstalledModel | undefined, remote: RemoteRecord | undefined, progress: Progress | undefined, now: number): ModelState {
+  const installed = installedRec?.format === MODEL_FORMAT ? installedRec : undefined;
   if (progress?.phase === 'downloading' && now - progress.at < STALL_MS) return { kind: 'downloading', done: progress.done, total: progress.total };
   const usable = remote && remote.format === MODEL_FORMAT ? remote : undefined;
   if (progress?.phase === 'error' && (!installed || (usable && usable.version > installed.version))) return { kind: 'error', message: progress.error ?? 'download failed' };

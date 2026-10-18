@@ -20,11 +20,12 @@ window.addEventListener('message', (e: MessageEvent) => {
   if (e.source !== window.parent || !ALLOWED.includes(e.origin)) return;
   const origin = parentOrigin();
   if (origin !== null && origin !== e.origin) return;
-  const msg = e.data as { type?: string; model?: unknown } | null;
+  const msg = e.data as { type?: string; model?: unknown; delayMs?: unknown } | null;
   if (msg?.type === ML_INIT) {
     const port = e.ports[0];
     if (!port || worker) return;
     const model: MlModel = ML_MODELS.includes(msg.model as MlModel) ? (msg.model as MlModel) : 'mdx';
+    const delayMs = typeof msg.delayMs === 'number' && msg.delayMs > 0 ? msg.delayMs : null;
     target = e.origin;
     worker = new Worker(new URL('./ml-worker.ts', import.meta.url), { type: 'module' });
     worker.onmessage = (ev: MessageEvent<FromMlWorker>) => window.parent.postMessage(ev.data, target!);
@@ -43,6 +44,7 @@ window.addEventListener('message', (e: MessageEvent) => {
           {
             type: 'init',
             model,
+            delayMs,
             port,
             modelUrl: chrome.runtime.getURL('ml/vocals.onnx'),
             mdxUrl: chrome.runtime.getURL('ml/mdx.onnx'),
