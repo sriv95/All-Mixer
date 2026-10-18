@@ -30,7 +30,7 @@ describe('MlHost', () => {
     const post = vi.spyOn(win, 'postMessage').mockImplementation(() => {});
     f.dispatchEvent(new Event('load'));
     expect(post).toHaveBeenCalledTimes(1);
-    expect(post.mock.calls[0][0]).toEqual({ type: ML_INIT, model: 'mdx' });
+    expect(post.mock.calls[0][0]).toEqual({ type: ML_INIT, model: 'mdx', gate: false });
     expect(post.mock.calls[0][1]).toBe('https://ext.test');
     const ready = { type: 'ready', p50: 1, p90: 2, p95: 2, createMs: 3, adapter: 'x' };
     window.dispatchEvent(new MessageEvent('message', { data: ready, origin: 'https://ext.test', source: win }));
@@ -38,6 +38,19 @@ describe('MlHost', () => {
     window.dispatchEvent(new MessageEvent('message', { data: ready, origin: 'https://evil.example', source: win }));
     window.dispatchEvent(new MessageEvent('message', { data: ready, origin: 'https://ext.test', source: window }));
     expect(status).toHaveBeenCalledTimes(1);
+    host.dispose();
+  });
+
+  it('the gate goes with ML_INIT before the frame loads and as a message after', () => {
+    const host = new MlHost(URL_, document, 'roformer');
+    host.start(() => {});
+    host.setGate(true);
+    const f = document.querySelector('iframe')!;
+    const post = vi.spyOn(f.contentWindow!, 'postMessage').mockImplementation(() => {});
+    f.dispatchEvent(new Event('load'));
+    expect(post.mock.calls[0][0]).toEqual({ type: ML_INIT, model: 'roformer', gate: true });
+    host.setGate(false);
+    expect(post.mock.calls[1][0]).toEqual({ type: 'gate', on: false });
     host.dispose();
   });
 });

@@ -1,20 +1,18 @@
-"""Export a Mel-Band RoFormer model for the extension.
+"""Export a Mel-Band RoFormer vocal model for the extension.
 
-  --variant vocals (default)  Kimberley Jensen `vocals_mel_band_roformer`: the model outputs the vocal.
-                              Writes public/ml/roformer.onnx + roformer-meta.json.
-  --variant inst2             Unwa `melband_roformer_inst_v2`: 12 layers, 1.57 GB checkpoint, ~2x the compute. Writes
-                              public/ml/roformer-inst2.onnx + roformer-inst2-meta.json.
-  --variant inst              Unwa `melband_roformer_inst_v1` (same architecture and size): the model outputs the
-                              instrumental, for Karaoke. Writes public/ml/roformer-inst.onnx + roformer-inst-meta.json.
+  --variant vocals (default)  Kimberley Jensen `vocals_mel_band_roformer`. Writes public/ml/roformer.onnx +
+                              roformer-meta.json.
+  --variant kim               Unwa's `mel_band_roformer_kim_ft_unwa` (a fine-tune with the same network and cost).
+                              Writes public/ml/roformer-kim.onnx + roformer-kim-meta.json.
 
-The ONNX file is fp16 weights, fp32 input/output, fixed 112-frame chunk.
-The graph is the transformer core only: band split, 6 x (time + frequency transformer), mask estimator. The STFT, the
-gather of the mel-band bins, the mask scatter and the iSTFT run in JS (src/ml/roformer.ts), because ORT Web's WebGPU
-EP has no STFT op. Two rewrites keep the graph inside WebGPU limits: the 60 per-band slices/concats are done in groups
-of 8 (a kernel may bind at most 10 storage buffers).
+The ONNX file is fp16 weights, fp32 input/output, fixed 112-frame chunk. The graph is the transformer core only: band
+split, 6 x (time + frequency transformer), mask estimator. The STFT, the gather of the mel-band bins, the mask
+scatter and the iSTFT run in JS (src/ml/roformer.ts), because ORT Web's WebGPU EP has no STFT op. Two rewrites keep
+the graph inside WebGPU limits: the 60 per-band slices/concats are done in groups of 8 (a kernel may bind at most 10
+storage buffers), and RMSNorm is rewritten so fp16 cannot produce NaN.
 
 Needs python with: torch einops rotary-embedding-torch librosa pyyaml beartype onnx onnxruntime audio-separator
-  python scripts/export-roformer.py [--variant vocals|inst] [--ckpt path] [--config path]
+  python scripts/export-roformer.py [--variant vocals|kim] [--ckpt path] [--config path]
 Without --ckpt/--config the files are downloaded into .cache/models (SHA-256 checked).
 """
 import argparse, hashlib, json, pathlib, sys, urllib.request
@@ -29,9 +27,7 @@ BASE = 'https://github.com/nomadkaraoke/python-audio-separator/releases/download
 # variant -> (checkpoint, SHA-256, config, output name)
 VARIANTS = {
     'vocals': ('vocals_mel_band_roformer.ckpt', '87201f4d31afb5bc79993230fc49446918425574db48c01c405e44f365c7559e', 'vocals_mel_band_roformer.yaml', 'roformer'),
-    'inst': ('melband_roformer_inst_v1.ckpt', '6f88d96958b2b7dec32286b0ced00bbcbd37e28741cad9038758b1eaf9b5c057', 'config_melbandroformer_inst.yaml', 'roformer-inst'),
-    # 12 layers + a 3-layer mask network: twice the compute of the others
-    'inst2': ('melband_roformer_inst_v2.ckpt', 'bd19766620f7d6f58fdf7aaada7e89907fe41bc64490ce3faa9a6dab15d6e1f2', 'config_melbandroformer_inst_v2.yaml', 'roformer-inst2'),
+    'kim': ('mel_band_roformer_kim_ft_unwa.ckpt', 'e6bd8d333880191254a6ef6be3cb0ffa4dda9d3282e36b0cce2e88a660e00d39', 'config_mel_band_roformer_kim_ft_unwa.yaml', 'roformer-kim'),
 }
 HOP = 441
 CHUNK = 111 * HOP  # 48951 samples (src/worklet/protocol.ts ROF_CHUNK); centre padding gives 112 frames
