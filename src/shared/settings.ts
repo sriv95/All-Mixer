@@ -14,9 +14,7 @@ export interface MixerSettings {
   instrumentalPct: number;
   /** Separate mode ML model: 'mdx' (MDX-Net 9482 + Spleeter, the default) or a downloaded Mel-Band RoFormer: 'roformer' (Kim fine-tune, High quality) or 'deux' (Best quality). */
   mlModel: MlModel;
-  /** RoFormer chunk length: true = chosen automatically from the speed of the GPU (smallest delay that works), false = `mlDelayS`. */
-  mlAuto: boolean;
-  /** Manual RoFormer delay budget, seconds (MIN_DELAY_S to MAX_DELAY_S): the audio delay stays below it. */
+  /** RoFormer delay limit, seconds (MIN_DELAY_S to MAX_DELAY_S): the audio delay stays below it; a longer limit gives the model a longer chunk. */
   mlDelayS: number;
 }
 
@@ -29,8 +27,7 @@ export const DEFAULT_SETTINGS: Readonly<MixerSettings> = Object.freeze({
   vocalPct: 100,
   instrumentalPct: 100,
   mlModel: 'mdx',
-  mlAuto: true,
-  mlDelayS: 4,
+  mlDelayS: MIN_DELAY_S,
 });
 
 export function clampPct(value: unknown, fallback = 100): number {
@@ -48,7 +45,6 @@ export function normalizeSettings(raw: unknown): MixerSettings {
     vocalPct: clampPct(r.vocalPct, DEFAULT_SETTINGS.vocalPct),
     instrumentalPct: clampPct(r.instrumentalPct, DEFAULT_SETTINGS.instrumentalPct),
     mlModel: ML_MODELS.includes(r.mlModel as MlModel) ? (r.mlModel as MlModel) : DEFAULT_SETTINGS.mlModel,
-    mlAuto: r.mlAuto !== false,
     mlDelayS: clampDelayS(r.mlDelayS),
   };
 }
@@ -59,8 +55,8 @@ export function clampDelayS(value: unknown): number {
   return Math.min(MAX_DELAY_S, Math.max(MIN_DELAY_S, Math.round(n)));
 }
 
-/** RoFormer delay budget for the engine selector, ms; null = automatic. */
-export const mlDelayMsFor = (settings: MixerSettings): number | null => (settings.mlAuto ? null : settings.mlDelayS * 1000);
+/** RoFormer delay limit for the engine selector, ms. */
+export const mlDelayMsFor = (settings: MixerSettings): number => settings.mlDelayS * 1000;
 
 /** Linear gain for the master stage. Separate mode uses the per-stem gains instead. */
 export function masterGainFor(settings: MixerSettings): number {

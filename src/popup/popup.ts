@@ -15,7 +15,6 @@ const instrumental = $<HTMLInputElement>('instrumental');
 const instrumentalValue = $<HTMLOutputElement>('instrumental-value');
 const mlModel = $<HTMLSelectElement>('ml-model');
 const chunkRow = $<HTMLDivElement>('chunk-row');
-const mlAuto = $<HTMLInputElement>('ml-auto');
 const mlDelay = $<HTMLInputElement>('ml-delay');
 const mlDelayValue = $<HTMLOutputElement>('ml-delay-value');
 const modelRow = $<HTMLParagraphElement>('model-row');
@@ -42,10 +41,8 @@ function render(): void {
   instrumentalValue.value = `${settings.instrumentalPct}%`;
   mlModel.value = settings.mlModel;
   chunkRow.hidden = !isModelId(settings.mlModel); // the default model has a fixed delay
-  mlAuto.checked = settings.mlAuto;
-  mlDelay.disabled = settings.mlAuto;
   mlDelay.value = String(settings.mlDelayS);
-  mlDelayValue.value = settings.mlAuto ? 'Auto' : `${settings.mlDelayS} s`;
+  mlDelayValue.value = `${settings.mlDelayS} s`;
   renderModel();
   for (const b of presets) {
     const on = Number(b.dataset.vocal) === settings.vocalPct && Number(b.dataset.instrumental) === settings.instrumentalPct;
@@ -240,11 +237,6 @@ vocal.addEventListener('input', () => {
 
 instrumental.addEventListener('input', () => {
   settings = { ...settings, instrumentalPct: clampPct(instrumental.value) };
-  save();
-});
-
-mlAuto.addEventListener('change', () => {
-  settings = { ...settings, mlAuto: mlAuto.checked };
   save();
 });
 

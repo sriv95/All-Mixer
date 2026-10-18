@@ -153,31 +153,21 @@ describe('popup', () => {
       s.value = m;
       s.dispatchEvent(new Event('change', { bubbles: true }));
     };
-    it('is hidden for the default model and shown, in Auto, for a RoFormer', async () => {
+    it('is hidden for the default model and shown for a RoFormer, as a 2 to 15 s slider in 1 s steps starting at 2 s', async () => {
       await load({ stored: { mode: 'separate', mlModel: 'mdx' } });
       expect(el('chunk-row').hidden).toBe(true);
       select('roformer');
       await settle();
       expect(el('chunk-row').hidden).toBe(false);
-      expect(el<HTMLInputElement>('ml-auto').checked).toBe(true);
-      expect(el<HTMLInputElement>('ml-delay').disabled).toBe(true);
-      expect(el<HTMLOutputElement>('ml-delay-value').value).toBe('Auto');
-    });
-
-    it('Auto off enables the slider (2 to 15 s, 1 s steps) and sends the setting', async () => {
-      await load({ stored: { mode: 'separate', mlModel: 'deux', mlAuto: true } });
-      const auto = el<HTMLInputElement>('ml-auto');
-      auto.checked = false;
-      auto.dispatchEvent(new Event('change', { bubbles: true }));
-      await settle();
       const slider = el<HTMLInputElement>('ml-delay');
-      expect([slider.min, slider.max, slider.step]).toEqual(['2', '15', '1']);
+      expect([slider.min, slider.max, slider.step, slider.value]).toEqual(['2', '15', '1', '2']);
       expect(slider.disabled).toBe(false);
-      expect(sent().at(-1).settings).toMatchObject({ mlAuto: false, mlDelayS: 4 });
+      expect(el<HTMLOutputElement>('ml-delay-value').value).toBe('2 s');
+      expect(document.getElementById('ml-auto')).toBeNull();
     });
 
     it('dragging only moves the label; releasing sends the delay limit once', async () => {
-      await load({ stored: { mode: 'separate', mlModel: 'roformer', mlAuto: false, mlDelayS: 4 } });
+      await load({ stored: { mode: 'separate', mlModel: 'roformer', mlDelayS: 4 } });
       const slider = el<HTMLInputElement>('ml-delay');
       const before = sent().length;
       slider.value = '9';

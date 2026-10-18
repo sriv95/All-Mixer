@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { ML_QUANTUM, ML_SAMPLE_RATE, ROF_BLOCK, ROF_CHUNK, ROF_LATENCY_SAMPLES, ROF_OVERLAP } from '../worklet/protocol';
-import { BASE_FRAMES, HOP, MARGIN, MAX_FRAMES, OVERLAP, gateMs, makeGeometry, planAuto, planRof, stepMs, type RofGeometry } from './rof-plan';
+import { BASE_FRAMES, HOP, MARGIN, MAX_FRAMES, OVERLAP, gateMs, makeGeometry, planRof, stepMs } from './rof-plan';
 
 const S = ML_SAMPLE_RATE;
-const secs = (g: RofGeometry) => g.latency / S;
 
 describe('makeGeometry', () => {
   it('reproduces the 2 s geometry of protocol.ts', () => {
@@ -67,22 +66,5 @@ describe('planRof', () => {
   it('null when the GPU cannot keep up at any block length of that budget', () => {
     expect(planRof(2 * S, 1000)).toBeNull(); // step is longer than the audio it covers
     expect(planRof(15 * S, 2000)).toBeNull();
-  });
-});
-
-describe('planAuto', () => {
-  it('picks the smallest whole-second budget that works', () => {
-    const fast = planAuto(717)!;
-    expect(secs(fast)).toBeLessThanOrEqual(2);
-    const slow = planAuto(884)!; // Deux on an M1
-    expect(slow).not.toBeNull();
-    expect(secs(slow)).toBeGreaterThan(2);
-    // one second less would not have worked
-    const budget = Math.ceil(secs(slow));
-    expect(planRof((budget - 1) * S, 884)).toBeNull();
-    expect(slow.latency).toBeLessThanOrEqual(budget * S);
-  });
-  it('null when even 15 s is not enough', () => {
-    expect(planAuto(3000)).toBeNull();
   });
 });
