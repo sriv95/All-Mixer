@@ -480,6 +480,33 @@ describe('popup', () => {
       expect(sent().at(-1).settings).toMatchObject({ vocalPct: 0, drumsPct: 100 });
     });
 
+    describe('undo after a preset', () => {
+      it('offers Undo that restores the levels the preset replaced', async () => {
+        await load({ stored: { mode: 'separate', vocalPct: 70, instrumentalPct: 40, drumsPct: 100, othersPct: 100 } });
+        expect(has('preset-undo')).toBe(false);
+        el('preset-karaoke').click();
+        await settle();
+        expect(sent().at(-1).settings).toMatchObject({ vocalPct: 0, instrumentalPct: 100 });
+        el('preset-undo').click();
+        await settle();
+        expect(sent().at(-1).settings).toMatchObject({ vocalPct: 70, instrumentalPct: 40 });
+        expect(has('preset-undo')).toBe(false);
+      });
+
+      it('is not offered when the preset changes nothing, and goes away when a slider moves', async () => {
+        await load({ stored: { mode: 'separate' } }); // already 100 / 100
+        el('preset-reset').click();
+        await settle();
+        expect(has('preset-undo')).toBe(false);
+        el('preset-karaoke').click();
+        await settle();
+        expect(has('preset-undo')).toBe(true);
+        input('vocal', '40');
+        await settle();
+        expect(has('preset-undo')).toBe(false);
+      });
+    });
+
     it('moving a slider clears the preset highlight', async () => {
       await load({ stored: { mode: 'separate' } });
       expect(pressed()).toEqual(['preset-reset']);

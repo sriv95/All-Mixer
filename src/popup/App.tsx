@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { AudioLines, Cpu, Download, Drum, Headphones, LoaderCircle, Mic, MicOff, Music, RefreshCw, RotateCcw, Settings2, SlidersVertical, Timer, TriangleAlert, Volume2 } from 'lucide-react';
+import { AudioLines, Cpu, Download, Drum, Headphones, LoaderCircle, Mic, MicOff, Music, RefreshCw, RotateCcw, Settings2, SlidersVertical, Timer, TriangleAlert, Undo2, Volume2 } from 'lucide-react';
 import type { ContentStatus, GetStatus, GetTabSettings, HoldOriginal, SetTabSettings } from '../shared/messages';
 import { clampDelayS, clampOthersPct, clampPct, masterPctAt, masterPosOf, MASTER_POS_MAX, normalizeSettings, type MixerSettings, type Mode } from '../shared/settings';
 import { separationView, type SepView } from '../shared/separation-view';
@@ -298,6 +298,12 @@ const MODEL_CHOICES: readonly Choice<MlModel>[] = [
   { value: 'deux', label: 'Best quality', hint: 'Needs a good GPU, optional download' },
 ];
 
+type Levels = Pick<MixerSettings, 'vocalPct' | 'instrumentalPct' | 'drumsPct' | 'othersPct'>;
+const levelsOf = (s: MixerSettings): Levels => ({ vocalPct: s.vocalPct, instrumentalPct: s.instrumentalPct, drumsPct: s.drumsPct, othersPct: s.othersPct });
+const sameLevels = (a: Levels, b: Levels) => a.vocalPct === b.vocalPct && a.instrumentalPct === b.instrumentalPct && a.drumsPct === b.drumsPct && a.othersPct === b.othersPct;
+/** How long "Undo" stays after a preset. */
+const UNDO_MS = 5000;
+
 const PRESETS = [
   { id: 'preset-karaoke', label: 'Karaoke', vocal: 0, instrumental: 100, icon: <MicOff size={15} aria-hidden /> },
   { id: 'preset-half-karaoke', label: 'Half karaoke', vocal: 50, instrumental: 100, icon: <AudioLines size={15} aria-hidden /> },
@@ -322,6 +328,14 @@ function SeparateControls({ settings, update, ready, live, onHold, advancedOpen,
   // The preset that was pressed last (n counts presses, so pressing it again replays the ring).
   const [ripple, setRipple] = useState<{ id: string; n: number } | null>(null);
   useEffect(() => setDelayDraft(settings.mlDelayS), [settings.mlDelayS]);
+  // After a preset: the levels it replaced, for a few seconds, until something else moves them.
+  const [undo, setUndo] = useState<{ before: Levels; after: Levels } | null>(null);
+  useEffect(() => {
+    if (!undo) return;
+    if (!sameLevels(levelsOf(settings), undo.after)) return setUndo(null);
+    const t = setTimeout(() => setUndo(null), UNDO_MS);
+    return () => clearTimeout(t);
+  }, [undo, settings]);
 
   return (
     <>
@@ -346,7 +360,11 @@ function SeparateControls({ settings, update, ready, live, onHold, advancedOpen,
             <Btn key={p.id} id={p.id} tone="preset" aria-pressed={pressed}
               onClick={() => {
                 setRipple((r) => ({ id: p.id, n: (r?.n ?? 0) + 1 }));
-                update({ vocalPct: p.vocal, instrumentalPct: p.instrumental, ...(p.id === 'preset-reset' ? { drumsPct: 100, othersPct: 100 } : {}) });
+                const patch = { vocalPct: p.vocal, instrumentalPct: p.instrumental, ...(p.id === 'preset-reset' ? { drumsPct: 100, othersPct: 100 } : {}) };
+                const before = levelsOf(settings);
+                const after = levelsOf({ ...settings, ...patch });
+                if (!sameLevels(before, after)) setUndo({ before, after });
+                update(patch);
               }}>
               {/* A ring spreads from the preset that was just chosen (not on opening the popup). */}
               {pressed && ripple?.id === p.id && <motion.span key={ripple.n} aria-hidden initial={{ opacity: 0.55, scale: 0.92 }} animate={{ opacity: 0, scale: 1.18 }} transition={{ duration: 0.55, ease: 'easeOut' }} className="pointer-events-none absolute inset-0 rounded-[14px] ring-2 ring-brand" />}
@@ -357,6 +375,12 @@ function SeparateControls({ settings, update, ready, live, onHold, advancedOpen,
         })}
       </div>
       </Rise>
+      <Collapse show={!!undo}>
+        <div className="flex items-center justify-between gap-3 px-1 text-xs text-muted">
+          <span>Levels changed.</span>
+          <Btn id="preset-undo" tone="small" onClick={() => { if (undo) update(undo.before); setUndo(null); }}><Undo2 size={13} aria-hidden />Undo</Btn>
+        </div>
+      </Collapse>
       <Rise i={3}>
         <HoldToCompare enabled={live} onHold={onHold} />
       </Rise>
