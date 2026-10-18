@@ -389,6 +389,16 @@ describe('popup', () => {
       expect(pressed()).toEqual([id]);
     });
 
+    it('the Reset preset also puts Drums and Others back to 100%', async () => {
+      await load({ stored: { mode: 'separate', splitInstrumental: true, drumsPct: 250, othersPct: 30 } });
+      el('preset-reset').click();
+      await settle();
+      expect(sent().at(-1).settings).toMatchObject({ drumsPct: 100, othersPct: 100 });
+      el('preset-karaoke').click();
+      await settle();
+      expect(sent().at(-1).settings).toMatchObject({ vocalPct: 0, drumsPct: 100 });
+    });
+
     it('moving a slider clears the preset highlight', async () => {
       await load({ stored: { mode: 'separate' } });
       expect(pressed()).toEqual(['preset-reset']);

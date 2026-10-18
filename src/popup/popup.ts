@@ -318,7 +318,8 @@ mlModel.addEventListener('change', () => {
 
 for (const b of presets) {
   b.addEventListener('click', () => {
-    settings = { ...settings, vocalPct: Number(b.dataset.vocal), instrumentalPct: Number(b.dataset.instrumental) };
+    const reset = b.id === 'preset-reset' ? { drumsPct: 100, othersPct: 100 } : {}; // Reset covers the whole instrumental
+    settings = { ...settings, vocalPct: Number(b.dataset.vocal), instrumentalPct: Number(b.dataset.instrumental), ...reset };
     save();
   });
 }
