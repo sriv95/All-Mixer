@@ -1,10 +1,12 @@
 """Export the Mel-Band RoFormer vocal models for the extension (the Model menu in the popup):
-  roformer  Unwa's Kim fine-tune `mel_band_roformer_kim_ft_unwa`
-  kim       Kimberley Jensen's original `MelBandRoformer.ckpt` (MIT)
-  deux      becruily's 2-stem `mel-band-roformer-deux` (CC BY-NC 4.0); only its vocal stem is exported
-Writes public/ml/<name>.onnx + <name>-meta.json (gitignored, packed into dist/ by the build).
+  roformer  Unwa's Kim fine-tune `mel_band_roformer_kim_ft_unwa` (menu: High quality)
+  deux      becruily's 2-stem `mel-band-roformer-deux` (CC BY-NC 4.0); only its vocal stem is exported (menu: Best quality)
+Writes models-out/<name>.onnx + <name>-meta.json. They are not part of the extension build: `bun run model-manifest`
+prepares them for upload to the Hugging Face repo that the extension downloads from (src/shared/model-store.ts).
 
-The ONNX file is fp16 weights, fp32 input/output, fixed 112-frame chunk. The graph is the transformer core only: band
+The ONNX file is fp16 weights, fp32 input/output, any number of STFT frames (the `frames` axis is dynamic: the extension
+picks the chunk length at run time, src/ml/rof-plan.ts, and sets the axis with a session option). The graph is the
+transformer core only: band
 split, 6 x (time + frequency transformer), mask estimator. The STFT, the gather of the mel-band bins, the mask
 scatter and the iSTFT run in JS (src/ml/roformer.ts), because ORT Web's WebGPU EP has no STFT op. Two rewrites keep
 the graph inside WebGPU limits: the 60 per-band slices/concats are done in groups of 8 (a kernel may bind at most 10
@@ -17,6 +19,7 @@ into .cache/models (SHA-256 checked where known).
 """
 import argparse, hashlib, json, pathlib, sys, urllib.request
 import numpy as np, torch, yaml, onnx, onnxruntime as ort
+from torch.export import Dim
 from einops import rearrange
 from onnxruntime.transformers.float16 import convert_float_to_float16
 from audio_separator.separator.uvr_lib_v5.roformer import mel_band_roformer as mbr
@@ -28,13 +31,12 @@ DEUX = 'https://huggingface.co/becruily/mel-band-roformer-deux/resolve/main'
 # name -> (checkpoint url, SHA-256 or None, config url, index of the vocal stem in the model output)
 MODELS = {
     'roformer': (f'{BASE}/mel_band_roformer_kim_ft_unwa.ckpt', 'e6bd8d333880191254a6ef6be3cb0ffa4dda9d3282e36b0cce2e88a660e00d39', f'{BASE}/config_mel_band_roformer_kim_ft_unwa.yaml', 0),
-    'kim': (f'{BASE}/vocals_mel_band_roformer.ckpt', '87201f4d31afb5bc79993230fc49446918425574db48c01c405e44f365c7559e', f'{BASE}/vocals_mel_band_roformer.yaml', 0),
     # stems are [Vocals, Instrumental]; stem 0 has ~0 % of its energy below 150 Hz, stem 1 about 65 %
     'deux': (f'{DEUX}/becruily_deux.ckpt', '10255c02295bf3e3865d4ee50ff752d7b19b124ed5fd93b147babc4333eda3aa', f'{DEUX}/config.yaml', 0),
 }
 HOP = 441
-CHUNK = 111 * HOP  # 48951 samples (src/worklet/protocol.ts ROF_CHUNK); centre padding gives 112 frames
-FRAMES = CHUNK // HOP + 1
+FRAMES = 112  # example length for the trace; the exported axis is dynamic (16 to MAX_FRAMES)
+MAX_FRAMES = 1700
 
 
 def fetch(url, dst, sha=None):
@@ -89,7 +91,7 @@ class Core(torch.nn.Module):
 
 
 def export(name, force):
-    out = ROOT / 'public/ml'
+    out = ROOT / 'models-out'
     if not force and (out / f'{name}.onnx').exists() and (out / f'{name}-meta.json').exists():
         print(name, 'already exported (--force to redo)')
         return
@@ -109,14 +111,20 @@ def export(name, force):
     tmp = ROOT / f'.cache/models/{name}_fp32.onnx'
     tmp.parent.mkdir(parents=True, exist_ok=True)
     with torch.no_grad():
-        ref = core(x).numpy()
-        torch.onnx.export(core, (x,), str(tmp), input_names=['x'], output_names=['masks'], opset_version=17, dynamo=False)
+        # dynamo export: the tracing exporter bakes the frame count into the reshapes
+        torch.onnx.export(core, (x,), input_names=['x'], output_names=['masks'], opset_version=18, dynamo=True,
+                          dynamic_shapes={'x': {1: Dim('frames', min=16, max=MAX_FRAMES)}}).save(str(tmp))
     onnx.save(convert_float_to_float16(onnx.load(tmp), keep_io_types=True), out / f'{name}.onnx')
-    got = ort.InferenceSession(str(out / f'{name}.onnx'), providers=['CPUExecutionProvider']).run(None, {'x': x.numpy()})[0]
-    print('fp16 vs torch fp32: max abs diff', float(np.abs(got - ref).max()), 'mean |ref|', float(np.abs(ref).mean()))
+    g = onnx.load(out / f'{name}.onnx').graph
+    assert g.input[0].type.tensor_type.shape.dim[1].dim_param == 'frames', 'the frame axis must be named "frames" (session freeDimensionOverrides)'
+    sess = ort.InferenceSession(str(out / f'{name}.onnx'), providers=['CPUExecutionProvider'])
+    for t in (FRAMES, 200, 449):
+        xt = torch.randn(1, t, fin) * 0.5
+        with torch.no_grad():
+            ref = core(xt).numpy()
+        got = sess.run(None, {'x': xt.numpy()})[0]
+        print(f'{t} frames, fp16 vs torch fp32: max abs diff', float(np.abs(got - ref).max()), 'mean |ref|', float(np.abs(ref).mean()))
     meta = {
-        'frames': FRAMES,
-        'chunk': CHUNK,
         'nFft': cfg['model']['stft_n_fft'],
         'hop': cfg['model']['stft_hop_length'],
         # index into the interleaved (bin * 2 + channel) axis of every selected STFT value, in model order

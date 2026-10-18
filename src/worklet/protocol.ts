@@ -1,3 +1,4 @@
+import type { InstalledModel } from '../shared/model-store';
 // Contract between the content-script audio engine and the separator AudioWorklet.
 // Imported by both sides, so it must not touch DOM or worklet globals.
 
@@ -26,7 +27,7 @@ export const ML_ALGO_SAMPLES = MDX_SEGMENT + KARAOKE_TAIL;
 /** Compute slack: 319 ms, ≥ 2× the MDX response p95 (152 ms WebGPU compute, SRI-100/116). */
 const ML_SLACK_SAMPLES = 14080;
 /** One render quantum, so the worklet can decide ML vs the original mix for a block one quantum before it starts. */
-const ML_QUANTUM = 128;
+export const ML_QUANTUM = 128;
 /** ML output delay: 72704 + 14080 + 128 = 86912 samples = 1970.9 ms at 44.1 kHz. */
 export const ML_LATENCY_SAMPLES = ML_ALGO_SAMPLES + ML_SLACK_SAMPLES + ML_QUANTUM;
 
@@ -52,7 +53,9 @@ export type ToWorklet =
   /** Switch engine while running. The worklet answers with an `engine` message. */
   | { type: 'engine'; engine: MlEngine; reason: MlReason }
   /** Block geometry of the ML model that will use the port. Only valid on the original mix; resets the ML stream. */
-  | { type: 'model'; model: MlModel };
+  | { type: 'model'; model: MlModel }
+  /** The same, for a geometry the ML worker chose at run time (RoFormer chunk planning). */
+  | { type: 'geometry'; geometry: MlGeometry };
 
 export type FromWorklet =
   /**
@@ -75,18 +78,18 @@ export const ML_BUFFER_BYTES = ML_HEADER_BYTES + 4 * ML_BLOCK * 4;
 /** Control messages between the content script and the ML worker (via the ml.html iframe). */
 export const ML_PAGE_PATH = 'ml/ml.html';
 export const ML_INIT = 'all-mixer-ml-init';
-/** The ML_INIT message also carries `model: MlModel`. */
+/** The ML_INIT message also carries `model: MlModel` and `delayMs` (RoFormer delay budget; null = automatic). */
 /** Warm-up gate: p90 of 20 timed runs (ignores the two slowest) of one MDX block step (analyze + model + synthesize) must leave ≥ 1.5× in the 319 ms compute slack (~213 ms). The runtime deadline-miss fallback is the final guard. */
 export const ML_WARMUP_P90_MS = (ML_SLACK_SAMPLES / ML_SAMPLE_RATE) * 1000 / 1.5;
 
 /**
  * ML models the engine can run. 'mdx' is the shipped MDX-Net 9482 + Spleeter pipeline. The others are Mel-Band
- * RoFormers (fp16), one big model each, no Spleeter mask, short chunks so they fit the delay: 'roformer' = unwa's
- * mel_band_roformer_kim_ft_unwa, 'kim' = Kimberley Jensen's original, 'deux' = becruily's 2-stem model (vocal stem).
- * The files of each are public/ml/<id>.onnx + <id>-meta.json (scripts/export-roformer.py).
+ * RoFormers (fp16), downloaded on request (src/shared/model-store.ts ModelId): one big model each, no Spleeter mask,
+ * short chunks so they fit the delay. 'roformer' = unwa's mel_band_roformer_kim_ft_unwa (menu: High quality),
+ * 'deux' = becruily's 2-stem model, vocal stem (menu: Best quality, needs a good GPU).
  */
-export type MlModel = 'mdx' | 'roformer' | 'kim' | 'deux';
-export const ML_MODELS: readonly MlModel[] = ['mdx', 'roformer', 'kim', 'deux'];
+export type MlModel = 'mdx' | 'roformer' | 'deux';
+export const ML_MODELS: readonly MlModel[] = ['mdx', 'roformer', 'deux'];
 
 /** Block geometry of one model: what the worklet, the worker and the delay math must agree on. */
 export interface MlGeometry {
@@ -125,7 +128,6 @@ const ROF_GEOMETRY: MlGeometry = {
 export const GEOMETRY: Readonly<Record<MlModel, MlGeometry>> = {
   mdx: { block: ML_BLOCK, resultOffset: ML_RESULT_OFFSET, latency: ML_LATENCY_SAMPLES, warmupP90Ms: ML_WARMUP_P90_MS },
   roformer: ROF_GEOMETRY,
-  kim: ROF_GEOMETRY,
   deux: ROF_GEOMETRY,
 };
 
@@ -142,9 +144,11 @@ export type FromMlWorker =
       p95: number;
       createMs: number;
       adapter: string;
+      /** RoFormer: the block geometry the worker planned and checked (the selector sends it to the worklet); MDX: absent. */
+      geometry?: MlGeometry;
     }
   /** No usable WebGPU (none, fallback adapter, or the model failed to load). */
   | { type: 'unavailable'; reason: string };
 
 /** Page → worker init (iframe page forwards the ML port from the content script). */
-export type MlWorkerInit = { type: 'init'; model: MlModel; port: MessagePort; modelUrl: string; mdxUrl: string; roformerUrl: string; roformerMetaUrl: string; wasmBase: string; stallMs?: number; stallAfterMs?: number; timing?: boolean };
+export type MlWorkerInit = { type: 'init'; model: MlModel; port: MessagePort; modelUrl: string; mdxUrl: string; installed?: InstalledModel; delayMs?: number | null; wasmBase: string; stallMs?: number; stallAfterMs?: number; timing?: boolean };

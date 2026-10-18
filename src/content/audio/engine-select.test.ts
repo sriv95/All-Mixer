@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { GEOMETRY, ML_WARMUP_P90_MS, type FromMlWorker, type MlModel } from '../../worklet/protocol';
+import { GEOMETRY, ML_WARMUP_P90_MS, type FromMlWorker, type MlGeometry, type MlModel } from '../../worklet/protocol';
 import { EngineSelector, type MlHostLike } from './engine-select';
 import type { LatencyListener } from './latency';
 
@@ -18,10 +18,11 @@ class FakeHost implements MlHostLike {
 function setup(accept = true, canRun = true) {
   const hosts: FakeHost[] = [];
   const models: MlModel[] = [];
+  const delays: (number | null)[] = [];
   let listener: LatencyListener = () => {};
   const chain = {
     setMlPort: vi.fn(),
-    setMlModel: vi.fn(),
+    setMlGeometry: vi.fn(),
     setEngine: vi.fn(() => accept),
     canRunMl: vi.fn(() => canRun),
     onLatencyChange: (cb: LatencyListener) => {
@@ -29,19 +30,40 @@ function setup(accept = true, canRun = true) {
       return () => {};
     },
   };
-  const sel = new EngineSelector(chain, (model) => {
+  const sel = new EngineSelector(chain, (model, delayMs) => {
     const h = new FakeHost();
     hosts.push(h);
     models.push(model);
+    delays.push(delayMs);
     return h;
   });
   const miss = () => listener({ engine: 'bypass', reason: 'deadline-miss' } as never, 0);
-  return { chain, sel, hosts, models, miss };
+  return { chain, sel, hosts, models, delays, miss };
 }
-const ready = (p90: number): FromMlWorker => ({ type: 'ready', p50: p90 / 2, p90, p95: p90, createMs: 1, adapter: 'x' });
-const req = (on = true, model?: MlModel) => ({ on, model });
+const ready = (p90: number, geometry?: MlGeometry): FromMlWorker => ({ type: 'ready', p50: p90 / 2, p90, p95: p90, createMs: 1, adapter: 'x', geometry });
+const req = (on = true, model?: MlModel, delayMs?: number | null) => ({ on, model, delayMs });
+/** A plan from the RoFormer worker: 3 s block, 0.5 s overlap, 3 s slack. */
+const planned: MlGeometry = { block: 132224, resultOffset: 22016, latency: 132224 + 22016 + 132224 + 128, warmupP90Ms: 2600 };
 
 describe('EngineSelector', () => {
+  it('reload probes the model in use again (new model files), and does nothing for another model, the default or when off', () => {
+    const { sel, hosts } = setup();
+    sel.reload('roformer');
+    expect(hosts).toHaveLength(0);
+    sel.update(req(true, 'mdx'));
+    sel.reload('roformer');
+    expect(hosts).toHaveLength(1);
+    sel.update(req(true, 'roformer'));
+    hosts[1].onStatus!({ type: 'unavailable', reason: 'the High quality model is not downloaded' });
+    expect(sel.status.state).toBe('unavailable');
+    sel.reload('deux');
+    expect(hosts).toHaveLength(2);
+    sel.reload('roformer');
+    expect(hosts).toHaveLength(3);
+    expect(hosts[1].disposed).toBe(true);
+    expect(sel.status).toEqual({ state: 'warming' });
+  });
+
   it('is off until Separate turns on, and never probes while off', () => {
     const { sel, hosts } = setup();
     sel.update(req(false));
@@ -147,22 +169,40 @@ describe('EngineSelector', () => {
     expect(sel.status).toEqual({ state: 'off' });
   });
 
-  it('hands the model to the host and the chain before the port', () => {
+  it('hands the model to the host, and the default geometry to the chain before the port', () => {
     const { sel, chain, models } = setup();
     sel.update(req(true, 'roformer'));
     expect(models).toEqual(['roformer']);
-    expect(chain.setMlModel).toHaveBeenCalledWith('roformer');
-    expect(chain.setMlModel.mock.invocationCallOrder[0]).toBeLessThan(chain.setMlPort.mock.invocationCallOrder[0]);
+    expect(chain.setMlGeometry).toHaveBeenCalledWith(GEOMETRY.roformer);
+    expect(chain.setMlGeometry.mock.invocationCallOrder[0]).toBeLessThan(chain.setMlPort.mock.invocationCallOrder[0]);
   });
 
-  it('uses the warm-up gate of the model', () => {
+  it('a RoFormer worker plans the chunk: its geometry reaches the chain before ML starts, and the selector adds no gate', () => {
     const { sel, hosts, chain } = setup();
     sel.update(req(true, 'roformer'));
-    const gate = GEOMETRY.roformer.warmupP90Ms;
-    expect(gate).toBeGreaterThan(ML_WARMUP_P90_MS); // the RoFormer step is far longer, with a bigger slack
-    hosts[0].onStatus!(ready(gate - 20));
+    hosts[0].onStatus!(ready(5000, planned)); // far over any fixed gate: the worker already checked it
+    expect(chain.setMlGeometry).toHaveBeenLastCalledWith(planned);
+    expect(chain.setMlGeometry.mock.invocationCallOrder.at(-1)).toBeLessThan(chain.setEngine.mock.invocationCallOrder[0]);
     expect(chain.setEngine).toHaveBeenCalledWith('ml', 'auto');
     expect(sel.status).toEqual({ state: 'on' });
+  });
+
+  it('the delay budget goes to the host; a change restarts the probe, the default model ignores it', () => {
+    const { sel, hosts, delays, chain } = setup();
+    sel.update(req(true, 'roformer', null));
+    sel.update(req(true, 'roformer', null));
+    expect(hosts).toHaveLength(1);
+    sel.update(req(true, 'roformer', 6000));
+    expect(hosts).toHaveLength(2);
+    expect(hosts[0].disposed).toBe(true);
+    expect(delays).toEqual([null, 6000]);
+    hosts[1].onStatus!(ready(100, planned));
+    chain.setEngine.mockClear();
+    sel.update(req(true, 'mdx', 6000));
+    expect(chain.setEngine).toHaveBeenCalledWith('bypass', 'auto');
+    expect(delays.at(-1)).toBeNull();
+    sel.update(req(true, 'mdx', 9000));
+    expect(hosts).toHaveLength(3);
   });
 
   it('a model change while on goes back to the original mix and probes the new model', () => {
@@ -176,7 +216,7 @@ describe('EngineSelector', () => {
     expect(hosts[0].disposed).toBe(true);
     expect(models).toEqual(['mdx', 'roformer']);
     expect(sel.status).toEqual({ state: 'warming' });
-    hosts[1].onStatus!(ready(GEOMETRY.roformer.warmupP90Ms - 20));
+    hosts[1].onStatus!(ready(100, planned));
     expect(sel.status).toEqual({ state: 'on' });
   });
 
@@ -190,7 +230,7 @@ describe('EngineSelector', () => {
   it('a model change after the runtime stop retries', () => {
     const { sel, hosts, miss } = setup();
     sel.update(req(true, 'roformer'));
-    hosts[0].onStatus!(ready(100));
+    hosts[0].onStatus!(ready(100, planned));
     miss();
     expect(sel.status.state).toBe('stopped');
     sel.update(req(true, 'mdx'));

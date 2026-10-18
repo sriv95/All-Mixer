@@ -4,6 +4,8 @@
 // worker's ready/unavailable → parent. Blocks then flow worklet ↔ worker without touching this page.
 import { ML_INIT, ML_MODELS, type FromMlWorker, type MlModel, type MlWorkerInit, type ToMlWorker } from '../worklet/protocol';
 
+import { keyInstalled, type InstalledModel } from '../shared/model-store';
+
 const ALLOWED = ['https://www.youtube.com', 'https://music.youtube.com'];
 const parentOrigin = (): string | null => {
   const o = location.ancestorOrigins?.[0];
@@ -18,11 +20,12 @@ window.addEventListener('message', (e: MessageEvent) => {
   if (e.source !== window.parent || !ALLOWED.includes(e.origin)) return;
   const origin = parentOrigin();
   if (origin !== null && origin !== e.origin) return;
-  const msg = e.data as { type?: string; model?: unknown } | null;
+  const msg = e.data as { type?: string; model?: unknown; delayMs?: unknown } | null;
   if (msg?.type === ML_INIT) {
     const port = e.ports[0];
     if (!port || worker) return;
     const model: MlModel = ML_MODELS.includes(msg.model as MlModel) ? (msg.model as MlModel) : 'mdx';
+    const delayMs = typeof msg.delayMs === 'number' && msg.delayMs > 0 ? msg.delayMs : null;
     target = e.origin;
     worker = new Worker(new URL('./ml-worker.ts', import.meta.url), { type: 'module' });
     worker.onmessage = (ev: MessageEvent<FromMlWorker>) => window.parent.postMessage(ev.data, target!);
@@ -30,7 +33,7 @@ window.addEventListener('message', (e: MessageEvent) => {
     const w = worker;
     // Debug stall hook (off by default): see README, Debug.
     void chrome.storage.local
-      .get(['debug.mlStallMs', 'debug.mlStallAfterMs', 'debug.mlTiming'])
+      .get(['debug.mlStallMs', 'debug.mlStallAfterMs', 'debug.mlTiming', ...(model === 'mdx' ? [] : [keyInstalled(model)])])
       .catch(() => ({}) as Record<string, unknown>)
       .then((o) => {
         const stallMs = Number(o['debug.mlStallMs']) > 0 ? Number(o['debug.mlStallMs']) : 0;
@@ -41,11 +44,11 @@ window.addEventListener('message', (e: MessageEvent) => {
           {
             type: 'init',
             model,
+            delayMs,
             port,
             modelUrl: chrome.runtime.getURL('ml/vocals.onnx'),
             mdxUrl: chrome.runtime.getURL('ml/mdx.onnx'),
-            roformerUrl: chrome.runtime.getURL(`ml/${model}.onnx`),
-            roformerMetaUrl: chrome.runtime.getURL(`ml/${model}-meta.json`),
+            installed: model === 'mdx' ? undefined : (o[keyInstalled(model)] as InstalledModel | undefined),
             wasmBase: chrome.runtime.getURL('ml/'),
             stallMs,
             stallAfterMs,

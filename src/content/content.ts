@@ -1,7 +1,8 @@
 import type { ContentRequest, ContentStatus, GetMyTabSettings } from '../shared/messages';
-import { DEFAULT_SETTINGS, masterGainFor, normalizeSettings, separationFor, type MixerSettings } from '../shared/settings';
+import { DEFAULT_SETTINGS, masterGainFor, mlDelayMsFor, normalizeSettings, separationFor, type MixerSettings } from '../shared/settings';
 import { EngineSelector } from './audio/engine-select';
 import { MasterChain } from './audio/master-chain';
+import { MODEL_IDS, keyInstalled } from '../shared/model-store';
 import { AvProbe } from './av-probe';
 import { initLyrics } from './lyrics/init';
 import { DelayedVideo } from './video-delay/delayed-video';
@@ -19,6 +20,11 @@ if (site) {
   const probe = new AvProbe();
   const chain = new MasterChain(() => syncDelay(), undefined, probe);
   const selector = new EngineSelector(chain);
+  // A RoFormer model was downloaded or updated in the background: load it if it is the one in use.
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'local') return;
+    for (const id of MODEL_IDS) if (keyInstalled(id) in changes) selector.reload(id);
+  });
   // Lyrics follow what the user sees and hears, which trails currentTime by the picture delay (D1).
   const lyrics = initLyrics(site, () => overlay?.presentedTime() ?? null, () => overlay?.presentedBusy() ?? false);
 
@@ -45,7 +51,7 @@ if (site) {
     chain.setGain(masterGainFor(settings));
     const sep = separationFor(settings);
     chain.setSeparation(sep);
-    selector.update({ ...sep, model: settings.mlModel });
+    selector.update({ ...sep, model: settings.mlModel, delayMs: mlDelayMsFor(settings) });
     syncDelay();
   };
 

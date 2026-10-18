@@ -2,6 +2,7 @@ import {
   GEOMETRY,
   type FromMlWorker,
   type MlEngine,
+  type MlGeometry,
   type MlModel,
   type MlReason,
 } from '../../worklet/protocol';
@@ -11,8 +12,8 @@ import { MlHost } from './ml-host';
 /** What the selector needs from MasterChain. */
 export interface EngineChain {
   setMlPort(port: MessagePort): void;
-  /** Block geometry for the next ML stream; call before `setMlPort`. */
-  setMlModel(model: MlModel): void;
+  /** Block geometry for the next ML stream; call before `setEngine('ml')`. */
+  setMlGeometry(geometry: MlGeometry): void;
   /** @returns false when ML cannot run on this graph (e.g. context not at the model rate). */
   setEngine(engine: MlEngine, reason: MlReason): boolean;
   /** False when ML can never run on this graph; checked before any host is created. */
@@ -45,6 +46,8 @@ export interface SelectorRequest {
   on: boolean;
   /** ML model to run; changing it while on restarts the probe. Default 'mdx'. */
   model?: MlModel;
+  /** RoFormer delay budget in ms (the audio delay stays below it); null or absent = automatic. Changing it while on restarts the probe. */
+  delayMs?: number | null;
 }
 
 const RATE_CAUSE = 'the audio context is not at 44.1 kHz';
@@ -60,11 +63,12 @@ export class EngineSelector {
   private mlActive = false;
   private on = false;
   private model: MlModel = 'mdx';
+  private delayMs: number | null = null;
   private choice: EngineChoice = { state: 'off' };
 
   constructor(
     private readonly chain: EngineChain,
-    private readonly createHost: (model: MlModel) => MlHostLike = (model) => new MlHost(undefined, undefined, model),
+    private readonly createHost: (model: MlModel, delayMs: number | null) => MlHostLike = (model, delayMs) => new MlHost(undefined, undefined, model, delayMs),
   ) {
     chain.onLatencyChange((info) => {
       if (this.mlActive && info.engine === 'bypass' && info.reason === 'deadline-miss') {
@@ -82,8 +86,10 @@ export class EngineSelector {
   update(req: SelectorRequest): void {
     const turnedOn = req.on && !this.on;
     const model = req.model ?? 'mdx';
-    const restart = req.on && this.on && model !== this.model;
+    const delayMs = model === 'mdx' ? null : (req.delayMs ?? null); // the default model has a fixed delay
+    const restart = req.on && this.on && (model !== this.model || delayMs !== this.delayMs);
     this.model = model;
+    this.delayMs = delayMs;
     this.on = req.on;
     if (!req.on) {
       if (this.mlActive) this.chain.setEngine('bypass', 'auto');
@@ -93,7 +99,7 @@ export class EngineSelector {
       return;
     }
     if (restart) {
-      // A new model: back to the original mix, drop the old host, probe the new one.
+      // A new model or delay budget: back to the original mix, drop the old host, probe again.
       if (this.mlActive) this.chain.setEngine('bypass', 'auto');
       this.disposeHost();
       this.mlActive = false;
@@ -105,7 +111,7 @@ export class EngineSelector {
   private probe(): void {
     if (!this.chain.canRunMl()) return this.giveUp(RATE_CAUSE);
     const model = this.model;
-    const host = this.createHost(model);
+    const host = this.createHost(model, this.delayMs);
     this.host = host;
     this.probing = true;
     this.choice = { state: 'warming' };
@@ -113,15 +119,26 @@ export class EngineSelector {
       if (this.host !== host || !this.probing) return;
       this.probing = false;
       if (m.type === 'unavailable') return this.giveUp(m.reason);
-      if (m.p90 >= GEOMETRY[model].warmupP90Ms) return this.giveUp(`too slow on this device (p90 ${m.p90.toFixed(1)} ms)`);
+      // A RoFormer worker plans the chunk and checks the speed itself; the MDX gate is fixed.
+      if (m.geometry) this.chain.setMlGeometry(m.geometry);
+      else if (m.p90 >= GEOMETRY[model].warmupP90Ms) return this.giveUp(`too slow on this device (p90 ${m.p90.toFixed(1)} ms)`);
       if (!this.chain.setEngine('ml', 'auto')) return this.giveUp(RATE_CAUSE);
       this.mlActive = true;
       this.choice = { state: 'on' };
     });
     if (port) {
-      this.chain.setMlModel(model);
+      this.chain.setMlGeometry(GEOMETRY[model]); // the default; a RoFormer plan replaces it once the worker is ready
       this.chain.setMlPort(port);
     }
+  }
+
+  /** The downloaded files of model `id` changed (first download, update): probe again if it is the model in use. */
+  reload(id: MlModel): void {
+    if (!this.on || this.model !== id) return;
+    if (this.mlActive) this.chain.setEngine('bypass', 'auto');
+    this.disposeHost();
+    this.mlActive = false;
+    this.probe();
   }
 
   /** Stay on the original mix. */

@@ -1,7 +1,8 @@
 import type { ContentStatus, GetStatus, GetTabSettings, SetTabSettings } from '../shared/messages';
-import { clampPct, normalizeSettings, type MixerSettings, type Mode } from '../shared/settings';
+import { clampDelayS, clampPct, normalizeSettings, type MixerSettings, type Mode } from '../shared/settings';
 import type { MlModel } from '../worklet/protocol';
 import { detectSite } from '../content/youtube-dom';
+import { MODEL_IDS, MODEL_LABEL, keyInstalled, keyProgress, keyRemote, mb, modelState, type InstalledModel, type ModelId, type ModelState, type Progress, type RemoteRecord } from '../shared/model-store';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -13,6 +14,13 @@ const vocalValue = $<HTMLOutputElement>('vocal-value');
 const instrumental = $<HTMLInputElement>('instrumental');
 const instrumentalValue = $<HTMLOutputElement>('instrumental-value');
 const mlModel = $<HTMLSelectElement>('ml-model');
+const chunkRow = $<HTMLDivElement>('chunk-row');
+const mlAuto = $<HTMLInputElement>('ml-auto');
+const mlDelay = $<HTMLInputElement>('ml-delay');
+const mlDelayValue = $<HTMLOutputElement>('ml-delay-value');
+const modelRow = $<HTMLParagraphElement>('model-row');
+const modelText = $<HTMLSpanElement>('model-text');
+const modelBtn = $<HTMLButtonElement>('model-btn');
 const presets = [...document.querySelectorAll<HTMLButtonElement>('.presets button')];
 const status = $<HTMLParagraphElement>('status');
 
@@ -33,6 +41,12 @@ function render(): void {
   instrumental.value = String(settings.instrumentalPct);
   instrumentalValue.value = `${settings.instrumentalPct}%`;
   mlModel.value = settings.mlModel;
+  chunkRow.hidden = !isModelId(settings.mlModel); // the default model has a fixed delay
+  mlAuto.checked = settings.mlAuto;
+  mlDelay.disabled = settings.mlAuto;
+  mlDelay.value = String(settings.mlDelayS);
+  mlDelayValue.value = settings.mlAuto ? 'Auto' : `${settings.mlDelayS} s`;
+  renderModel();
   for (const b of presets) {
     const on = Number(b.dataset.vocal) === settings.vocalPct && Number(b.dataset.instrumental) === settings.instrumentalPct;
     b.setAttribute('aria-pressed', String(on));
@@ -114,6 +128,73 @@ async function refreshStatus(): Promise<void> {
   }
 }
 
+// The RoFormer models are separate downloads (background/model-manager.ts); their state lives in chrome.storage.local.
+interface ModelRecords {
+  installed?: InstalledModel;
+  remote?: RemoteRecord;
+  progress?: Progress;
+}
+const records: Record<ModelId, ModelRecords> = { roformer: {}, deux: {} };
+let modelTimer: ReturnType<typeof setTimeout> | undefined;
+
+const isModelId = (m: string): m is ModelId => (MODEL_IDS as readonly string[]).includes(m);
+
+function modelLine(id: ModelId, s: ModelState): { text: string; button?: string } {
+  const label = MODEL_LABEL[id];
+  switch (s.kind) {
+    case 'missing':
+      return { text: `${label} is a one-time download${s.size ? ` (${mb(s.size)})` : ''}.`, button: 'Download' };
+    case 'downloading':
+      return { text: `Downloading… ${Math.floor((100 * s.done) / s.total)}% (${mb(s.done)} of ${mb(s.total)})` };
+    case 'error':
+      return { text: `Download failed: ${s.message}`, button: 'Try again' };
+    case 'update':
+      return { text: `Update available: ${label} model v${s.version} (${mb(s.size)}).`, button: 'Update' };
+    case 'incompatible':
+      return { text: `The ${label} model needs a newer version of All Mixer!.` };
+    case 'ready':
+      return { text: `${label} model v${s.version} installed.` };
+  }
+}
+
+function renderModel(): void {
+  clearTimeout(modelTimer);
+  const now = Date.now();
+  const states = Object.fromEntries(MODEL_IDS.map((id) => [id, modelState(records[id].installed, records[id].remote, records[id].progress, now)])) as Record<ModelId, ModelState>;
+  // Shown for the selected downloadable model, and for any model with an update on offer or a download running.
+  const id = isModelId(settings.mlModel) ? settings.mlModel : MODEL_IDS.find((m) => states[m].kind === 'update' || states[m].kind === 'downloading');
+  modelRow.hidden = !id;
+  if (id) {
+    const line = modelLine(id, states[id]);
+    modelText.textContent = line.text;
+    modelBtn.hidden = !line.button;
+    modelBtn.textContent = line.button ?? '';
+    modelBtn.dataset.id = id;
+  }
+  // A download whose worker was stopped goes stale after STALL_MS: look again then.
+  if (MODEL_IDS.some((m) => states[m].kind === 'downloading')) modelTimer = setTimeout(renderModel, 5000);
+}
+
+async function initModel(): Promise<void> {
+  const o = await chrome.storage.local.get(MODEL_IDS.flatMap((id) => [keyInstalled(id), keyRemote(id), keyProgress(id)]));
+  for (const id of MODEL_IDS) {
+    records[id] = { installed: o[keyInstalled(id)] as InstalledModel | undefined, remote: o[keyRemote(id)] as RemoteRecord | undefined, progress: o[keyProgress(id)] as Progress | undefined };
+  }
+  renderModel();
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'local') return;
+    for (const id of MODEL_IDS) {
+      if (keyInstalled(id) in changes) records[id].installed = changes[keyInstalled(id)].newValue as InstalledModel | undefined;
+      if (keyRemote(id) in changes) records[id].remote = changes[keyRemote(id)].newValue as RemoteRecord | undefined;
+      if (keyProgress(id) in changes) records[id].progress = changes[keyProgress(id)].newValue as Progress | undefined;
+    }
+    renderModel();
+  });
+  void chrome.runtime.sendMessage({ type: 'model-check' }); // a newer model shows up through the storage change
+}
+
+modelBtn.addEventListener('click', () => void chrome.runtime.sendMessage({ type: 'model-install', id: modelBtn.dataset.id }));
+
 function disableAll(message: string): void {
   for (const el of document.querySelectorAll<HTMLInputElement | HTMLButtonElement | HTMLSelectElement>('input, button, select')) {
     el.disabled = true;
@@ -133,6 +214,7 @@ async function init(): Promise<void> {
   const req: GetTabSettings = { type: 'get-tab-settings', tabId };
   settings = normalizeSettings(await chrome.runtime.sendMessage(req));
   render();
+  void initModel();
   await refreshStatus();
 }
 
@@ -158,6 +240,18 @@ vocal.addEventListener('input', () => {
 
 instrumental.addEventListener('input', () => {
   settings = { ...settings, instrumentalPct: clampPct(instrumental.value) };
+  save();
+});
+
+mlAuto.addEventListener('change', () => {
+  settings = { ...settings, mlAuto: mlAuto.checked };
+  save();
+});
+
+// While dragging only the label moves; the chunk is re-planned (a new warm-up) when the slider is released.
+mlDelay.addEventListener('input', () => (mlDelayValue.value = `${clampDelayS(mlDelay.value)} s`));
+mlDelay.addEventListener('change', () => {
+  settings = { ...settings, mlDelayS: clampDelayS(mlDelay.value) };
   save();
 });
 

@@ -16,6 +16,7 @@ export class MlHost {
     private readonly pageUrl: string = chrome.runtime.getURL(ML_PAGE_PATH),
     private readonly doc: Document = document,
     private readonly model: MlModel = 'mdx',
+    private readonly delayMs: number | null = null,
   ) {
     this.origin = /^[a-z-]+:\/\/[^/]+/.exec(pageUrl)?.[0] ?? '';
   }
@@ -44,7 +45,7 @@ export class MlHost {
     window.addEventListener('message', this.onMessage);
     frame.addEventListener('load', () => {
       if (this.frame !== frame) return;
-      frame.contentWindow?.postMessage({ type: ML_INIT, model: this.model }, origin, [channel.port2]);
+      frame.contentWindow?.postMessage({ type: ML_INIT, model: this.model, delayMs: this.delayMs }, origin, [channel.port2]);
     });
     (this.doc.body ?? this.doc.documentElement).appendChild(frame);
     return channel.port1;
