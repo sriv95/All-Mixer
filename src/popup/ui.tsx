@@ -1,12 +1,19 @@
 import { createContext, useContext, useEffect, useRef, useState, type ComponentProps, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import { Check, ChevronDown } from 'lucide-react';
-import { AnimatePresence, animate, motion } from 'motion/react';
+import { AnimatePresence, animate, motion, type Variants } from 'motion/react';
 
 /** True on a page the extension cannot run on: every control below is disabled. */
 export const Blocked = createContext(false);
 
 /** The enter / exit of a panel or banner: a short fade with a small slide. */
 export const fade = { initial: { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -8 }, transition: { duration: 0.18 } } as const;
+
+/** A tab panel: it enters from the side of its tab and leaves toward the other (custom = 1 for the right tab, -1 for the left). */
+export const slide: Variants = {
+  enter: (d: number) => ({ opacity: 0, x: d * 28 }),
+  center: { opacity: 1, x: 0 },
+  exit: (d: number) => ({ opacity: 0, x: -d * 28 }),
+};
 
 /** A block that rises into place `i` beats after the one before it: a panel fills in one block at a time. */
 export function Rise({ i, children }: { i: number; children: ReactNode }) {

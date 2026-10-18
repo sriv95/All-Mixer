@@ -7,7 +7,7 @@ import { MAX_DELAY_S, MIN_DELAY_S } from '../ml/rof-plan';
 import type { MlModel } from '../worklet/protocol';
 import { installModel, useModels, type ModelLine } from './models';
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
-import { Blocked, Btn, Card, Collapse, Disclosure, Rise, Select, Slider, SliderRow, Switch, fade, useGlide, type Choice } from './ui';
+import { Blocked, Btn, Card, Collapse, Disclosure, Rise, Select, Slider, SliderRow, Switch, fade, slide, useGlide, type Choice } from './ui';
 
 type Update = (patch: Partial<MixerSettings>) => void;
 
@@ -116,16 +116,16 @@ export function App() {
           All Mixer!
         </header>
         {!noContent && <Tabs mode={separate ? 'separate' : 'default'} onMode={(mode) => update({ mode })} />}
-        <AnimatePresence mode="wait">
+        <AnimatePresence mode="wait" custom={separate ? 1 : -1}>
         {separate ? (
-          <motion.div key="separate" id="panel-separate" {...fade} className="flex flex-col gap-3.5">
+          <motion.div key="separate" id="panel-separate" custom={1} variants={slide} initial="enter" animate="center" exit="exit" transition={{ duration: 0.2 }} className="flex flex-col gap-3.5">
             <AnimatePresence mode="wait" initial={false}>
               {view.kind !== 'off' && <Banner key="banner" view={view} settings={settings} update={update} retry={retry} />}
             </AnimatePresence>
             <SeparateControls settings={settings} update={update} ready={ready} advancedOpen={advancedOpen} setAdvancedOpen={setAdvancedOpen} splitOpen={splitOpen} setSplitOpen={setSplitOpen} />
           </motion.div>
         ) : (
-          <motion.div key="default" {...fade} className="flex flex-col gap-3.5">
+          <motion.div key="default" custom={-1} variants={slide} initial="enter" animate="center" exit="exit" transition={{ duration: 0.2 }} className="flex flex-col gap-3.5">
             <Rise i={0}><Master settings={settings} update={update} /></Rise>
             {!noContent && (
               <Rise i={1}>
