@@ -87,6 +87,27 @@ describe('popup', () => {
     expect(el('status').textContent).toMatch(/web page/);
   });
 
+  it('shows a placeholder until the tab settings are read, not the defaults', async () => {
+    vi.resetModules();
+    document.body.innerHTML = body;
+    let release!: (v: unknown) => void;
+    const send = vi.fn((msg: { type: string }) => (msg.type === 'get-tab-settings' ? new Promise((r) => (release = r)) : Promise.resolve(undefined)));
+    vi.stubGlobal('chrome', {
+      tabs: { query: vi.fn().mockResolvedValue([YT]), sendMessage: vi.fn().mockResolvedValue(okStatus) },
+      runtime: { sendMessage: send },
+      storage: { local: { get: vi.fn().mockResolvedValue({}) }, onChanged: { addListener: vi.fn() } },
+    });
+    (await import('motion/react')).MotionGlobalConfig.skipAnimations = true;
+    await import('./popup');
+    await settle();
+    expect(document.querySelector('[aria-busy=true]')).not.toBeNull();
+    expect(has('master')).toBe(false);
+    release({ mode: 'separate' });
+    await new Promise((r) => setTimeout(r, 150));
+    expect(document.querySelector('[aria-busy=true]')).toBeNull();
+    expect(has('panel-separate')).toBe(true); // straight to the stored tab, no flash of Default
+  });
+
   it('disables everything when the tab url is hidden', async () => {
     await load({ tab: { id: 1 } });
     expect(el<HTMLInputElement>('master').disabled).toBe(true);
