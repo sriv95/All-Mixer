@@ -75,18 +75,17 @@ export const ML_BUFFER_BYTES = ML_HEADER_BYTES + 4 * ML_BLOCK * 4;
 /** Control messages between the content script and the ML worker (via the ml.html iframe). */
 export const ML_PAGE_PATH = 'ml/ml.html';
 export const ML_INIT = 'all-mixer-ml-init';
-/** The ML_INIT message also carries `model: MlModel` and `gate: boolean`. */
+/** The ML_INIT message also carries `model: MlModel`. */
 /** Warm-up gate: p90 of 20 timed runs (ignores the two slowest) of one MDX block step (analyze + model + synthesize) must leave ≥ 1.5× in the 319 ms compute slack (~213 ms). The runtime deadline-miss fallback is the final guard. */
 export const ML_WARMUP_P90_MS = (ML_SLACK_SAMPLES / ML_SAMPLE_RATE) * 1000 / 1.5;
 
 /**
  * ML models the engine can run. 'mdx' is the shipped MDX-Net 9482 + Spleeter pipeline. 'roformer' is the
- * Mel-Band RoFormer (fp16) vocal model: one big model, no Spleeter mask, short chunks so it fits the delay.
- * 'roformer-kim' is a fine-tune of the same network (unwa's mel_band_roformer_kim_ft_unwa): same geometry and cost.
- * For the RoFormers the model id is also the file name: public/ml/<id>.onnx + <id>-meta.json.
+ * Mel-Band RoFormer (fp16), unwa's mel_band_roformer_kim_ft_unwa: one big model, no Spleeter mask, short chunks so it
+ * fits the delay. Its files are public/ml/roformer.onnx + roformer-meta.json.
  */
-export type MlModel = 'mdx' | 'roformer' | 'roformer-kim';
-export const ML_MODELS: readonly MlModel[] = ['mdx', 'roformer', 'roformer-kim'];
+export type MlModel = 'mdx' | 'roformer';
+export const ML_MODELS: readonly MlModel[] = ['mdx', 'roformer'];
 
 /** Block geometry of one model: what the worklet, the worker and the delay math must agree on. */
 export interface MlGeometry {
@@ -125,13 +124,11 @@ const ROF_GEOMETRY: MlGeometry = {
 export const GEOMETRY: Readonly<Record<MlModel, MlGeometry>> = {
   mdx: { block: ML_BLOCK, resultOffset: ML_RESULT_OFFSET, latency: ML_LATENCY_SAMPLES, warmupP90Ms: ML_WARMUP_P90_MS },
   roformer: ROF_GEOMETRY,
-  'roformer-kim': ROF_GEOMETRY,
 };
 
 export const bufferBytes = (g: MlGeometry): number => ML_HEADER_BYTES + 4 * g.block * 4;
 
-/** Content script → ml.html page. `gate` reaches the worker (RoFormer A cappella gate on/off). */
-export type ToMlWorker = { type: 'dispose' } | { type: 'gate'; on: boolean };
+export type ToMlWorker = { type: 'dispose' };
 
 export type FromMlWorker =
   | {
@@ -147,4 +144,4 @@ export type FromMlWorker =
   | { type: 'unavailable'; reason: string };
 
 /** Page → worker init (iframe page forwards the ML port from the content script). */
-export type MlWorkerInit = { type: 'init'; model: MlModel; port: MessagePort; modelUrl: string; mdxUrl: string; roformerUrl: string; roformerMetaUrl: string; wasmBase: string; stallMs?: number; stallAfterMs?: number; timing?: boolean; gate?: boolean };
+export type MlWorkerInit = { type: 'init'; model: MlModel; port: MessagePort; modelUrl: string; mdxUrl: string; roformerUrl: string; roformerMetaUrl: string; wasmBase: string; stallMs?: number; stallAfterMs?: number; timing?: boolean };

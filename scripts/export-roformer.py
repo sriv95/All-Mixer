@@ -1,9 +1,5 @@
-"""Export a Mel-Band RoFormer vocal model for the extension.
-
-  --variant vocals (default)  Kimberley Jensen `vocals_mel_band_roformer`. Writes public/ml/roformer.onnx +
-                              roformer-meta.json.
-  --variant kim               Unwa's `mel_band_roformer_kim_ft_unwa` (a fine-tune with the same network and cost).
-                              Writes public/ml/roformer-kim.onnx + roformer-kim-meta.json.
+"""Export the Mel-Band RoFormer vocal model for the extension: Unwa's `mel_band_roformer_kim_ft_unwa`.
+Writes public/ml/roformer.onnx + roformer-meta.json.
 
 The ONNX file is fp16 weights, fp32 input/output, fixed 112-frame chunk. The graph is the transformer core only: band
 split, 6 x (time + frequency transformer), mask estimator. The STFT, the gather of the mel-band bins, the mask
@@ -12,7 +8,7 @@ the graph inside WebGPU limits: the 60 per-band slices/concats are done in group
 storage buffers), and RMSNorm is rewritten so fp16 cannot produce NaN.
 
 Needs python with: torch einops rotary-embedding-torch librosa pyyaml beartype onnx onnxruntime audio-separator
-  python scripts/export-roformer.py [--variant vocals|kim] [--ckpt path] [--config path]
+  python scripts/export-roformer.py [--ckpt path] [--config path]
 Without --ckpt/--config the files are downloaded into .cache/models (SHA-256 checked).
 """
 import argparse, hashlib, json, pathlib, sys, urllib.request
@@ -24,11 +20,7 @@ from audio_separator.separator.uvr_lib_v5.roformer.mel_band_roformer import MelB
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 BASE = 'https://github.com/nomadkaraoke/python-audio-separator/releases/download/model-configs'
-# variant -> (checkpoint, SHA-256, config, output name)
-VARIANTS = {
-    'vocals': ('vocals_mel_band_roformer.ckpt', '87201f4d31afb5bc79993230fc49446918425574db48c01c405e44f365c7559e', 'vocals_mel_band_roformer.yaml', 'roformer'),
-    'kim': ('mel_band_roformer_kim_ft_unwa.ckpt', 'e6bd8d333880191254a6ef6be3cb0ffa4dda9d3282e36b0cce2e88a660e00d39', 'config_mel_band_roformer_kim_ft_unwa.yaml', 'roformer-kim'),
-}
+CKPT, CKPT_SHA, CONFIG, NAME = 'mel_band_roformer_kim_ft_unwa.ckpt', 'e6bd8d333880191254a6ef6be3cb0ffa4dda9d3282e36b0cce2e88a660e00d39', 'config_mel_band_roformer_kim_ft_unwa.yaml', 'roformer'
 HOP = 441
 CHUNK = 111 * HOP  # 48951 samples (src/worklet/protocol.ts ROF_CHUNK); centre padding gives 112 frames
 FRAMES = CHUNK // HOP + 1
@@ -87,10 +79,9 @@ class Core(torch.nn.Module):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--variant', choices=sorted(VARIANTS), default='vocals')
     ap.add_argument('--ckpt'); ap.add_argument('--config')
     a = ap.parse_args()
-    ckpt_name, ckpt_sha, config_name, name = VARIANTS[a.variant]
+    ckpt_name, ckpt_sha, config_name, name = CKPT, CKPT_SHA, CONFIG, NAME
     cache = ROOT / '.cache/models'
     ckpt = pathlib.Path(a.ckpt) if a.ckpt else fetch(f'{BASE}/{ckpt_name}', cache / ckpt_name, ckpt_sha)
     config = pathlib.Path(a.config) if a.config else fetch(f'{BASE}/{config_name}', cache / config_name)

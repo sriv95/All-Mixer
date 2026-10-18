@@ -11,10 +11,8 @@ export interface MixerSettings {
   vocalPct: number;
   /** Separate mode instrumental volume, percent (0–600). Used once separation lands. */
   instrumentalPct: number;
-  /** Separate mode ML model: 'mdx' (MDX-Net 9482 + Spleeter, the default) or 'roformer' (Mel-Band RoFormer, experimental). */
+  /** Separate mode ML model: 'mdx' (MDX-Net 9482 + Spleeter, the default) or 'roformer' (Mel-Band RoFormer, Kim fine-tune, experimental). */
   mlModel: MlModel;
-  /** Separate mode, RoFormer models: gate weak-vocal bins out of the A cappella (Karaoke is unchanged). */
-  mlGate: boolean;
 }
 
 const GAIN_MIN_PCT = 0;
@@ -26,7 +24,6 @@ export const DEFAULT_SETTINGS: Readonly<MixerSettings> = Object.freeze({
   vocalPct: 100,
   instrumentalPct: 100,
   mlModel: 'mdx',
-  mlGate: false,
 });
 
 export function clampPct(value: unknown, fallback = 100): number {
@@ -44,7 +41,6 @@ export function normalizeSettings(raw: unknown): MixerSettings {
     vocalPct: clampPct(r.vocalPct, DEFAULT_SETTINGS.vocalPct),
     instrumentalPct: clampPct(r.instrumentalPct, DEFAULT_SETTINGS.instrumentalPct),
     mlModel: ML_MODELS.includes(r.mlModel as MlModel) ? (r.mlModel as MlModel) : DEFAULT_SETTINGS.mlModel,
-    mlGate: r.mlGate === true,
   };
 }
 
