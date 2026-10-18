@@ -6,11 +6,11 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   publicDir: false,
   build: {
-    outDir: resolve(__dirname, 'dist/worklet'),
+    outDir: resolve(import.meta.dirname, 'dist/worklet'),
     emptyOutDir: false,
     target: 'chrome120',
     lib: {
-      entry: resolve(__dirname, 'src/worklet/separator-processor.ts'),
+      entry: resolve(import.meta.dirname, 'src/worklet/separator-processor.ts'),
       formats: ['es'],
       fileName: () => 'separator-worklet.js',
     },
