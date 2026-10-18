@@ -12,6 +12,7 @@ CI builds the extension, creates tag `vx.y.z` and a GitHub release with this sec
 
 ### Changed
 
+- Separate mode: turning it off and on again within 3 minutes starts at once, with no warm-up (the model stays loaded in the tab meanwhile, up to about 0.5 GB of GPU memory). Other settings or a longer wait warm up again.
 - Popup: when the tab needs a reload (no All Mixer! running in it yet), the Separate mode checkbox is hidden and the popup says to reload the tab.
 - Separate mode: while the model warms up (the video is held for 10 to 40 s), the player's loading spinner shows over the picture, with "Preparing vocal separation… 12 s" under it. The player keeps showing "playing" meanwhile (no paused look), and pressing pause during the wait pauses for real and the video stays paused after it. The other waits say what they are for too.
 - Separate mode: the time and the seek bar of YouTube and YouTube Music now show what you see and hear, not the video position that runs ahead by the delay. This holds across chapter boundaries and for screen readers (English labels), and the bar is left alone while you drag it.
