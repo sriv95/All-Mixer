@@ -24,6 +24,7 @@ CI builds the extension, creates tag `vx.y.z` and a GitHub release with this sec
 - Lyrics: "Use my own lyrics…" in the lyrics settings lets you paste lyrics or load a `.lrc` / `.txt` file for the current video (lines with `[mm:ss.xx]` timestamps become synced lyrics). They are kept for that video, set Lyrics source to LRCLIB, and "Back to automatic" removes them.
 - Lyrics: timing keys. While synced lyrics are shown, `]` shows them 0.1 s later and `[` 0.1 s earlier, with a short on-screen message. Keys typed in a text field are ignored. "Timing keys" in the lyrics settings turns this off. A timing between the menu steps (e.g. +0.3 s) now shows in the Lyrics timing list.
 - Karaoke text: "My style". "Save the current look as My style" in the Style preset setting keeps your color, size, font, outline and background as one more preset (one slot; saving again replaces it).
+- Karaoke text: "Reset style" in the Style preset setting restores the stock look and no line transition.
 - Lyrics: the caption language menu lists every caption track, including auto-generated ones, which are labelled (e.g. "English (auto-generated)").
 - Karaoke text: the current line turns blue from left to right while it is sung, over the line's own time (by word timing when known). A "Reset position" button in the lyrics settings puts the text back at its default place.
 

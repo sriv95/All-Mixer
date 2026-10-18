@@ -1,4 +1,5 @@
-import { DEFAULT_LYRICS_PREFS, KARAOKE_BACKGROUNDS, type KaraokeAnimation, type KaraokeBackground, type KaraokeFont, type KaraokeOutline, type KaraokeStyle, type LyricsDisplayMode, type LyricsPrefs } from '../../shared/lyrics-prefs';
+import { DEFAULT_LYRICS_PREFS, KARAOKE_BACKGROUNDS, type KaraokeAnimation, type KaraokeBackground, type KaraokeFont, type KaraokeOutline, type LyricsDisplayMode, type LyricsPrefs } from '../../shared/lyrics-prefs';
+import { KARAOKE_SIZES, RESET_STYLE, matchedStylePreset, nearestSize, pickStyle, stylePresets } from './karaoke-presets';
 import { SETTINGS_SELECTORS, findSettingsMainMenu, findSettingsPopup, type Site } from '../youtube-dom';
 import type { CaptionPicker, SourceMenu, SourcePref } from './controller';
 import type { CaptionPick } from './track-info';
@@ -68,8 +69,6 @@ const TIMING_STEPS_MS = [-2000, -1000, -500, -250, 0, 250, 500, 1000, 2000] as c
 
 export const timingLabel = (ms: number): string => `${ms > 0 ? '+' : ''}${ms / 1000} s`;
 
-const KARAOKE_SIZES = [50, 75, 100, 125, 150, 200] as const;
-
 const COLOR_PRESETS: readonly [string, string][] = [
   ['#ffffff', 'White'],
   ['#ffeb3b', 'Yellow'],
@@ -80,27 +79,6 @@ const COLOR_PRESETS: readonly [string, string][] = [
 ];
 
 /** One-tap looks for the karaoke text. The first is the stock look. */
-interface StylePreset {
-  id: string;
-  label: string;
-  style: KaraokeStyle;
-}
-
-const STYLE_PRESETS: readonly StylePreset[] = [
-  { id: 'default', label: 'Default', style: { karaokeColor: '#ffffff', karaokeFontSize: 100, karaokeFont: 'default', karaokeOutline: 'normal', karaokeBackground: 0 } },
-  { id: 'bigYellow', label: 'Big yellow', style: { karaokeColor: '#ffeb3b', karaokeFontSize: 150, karaokeFont: 'default', karaokeOutline: 'thick', karaokeBackground: 0 } },
-  { id: 'cleanBox', label: 'Clean box', style: { karaokeColor: '#ffffff', karaokeFontSize: 100, karaokeFont: 'sans', karaokeOutline: 'none', karaokeBackground: 50 } },
-  { id: 'cyanGlow', label: 'Cyan glow', style: { karaokeColor: '#4dd0e1', karaokeFontSize: 125, karaokeFont: 'sans', karaokeOutline: 'thick', karaokeBackground: 0 } },
-];
-
-const pickStyle = (p: KaraokeStyle): KaraokeStyle => ({
-  karaokeColor: p.karaokeColor,
-  karaokeFontSize: p.karaokeFontSize,
-  karaokeFont: p.karaokeFont,
-  karaokeOutline: p.karaokeOutline,
-  karaokeBackground: p.karaokeBackground,
-});
-
 const FONT_LABELS: Record<KaraokeFont, string> = { default: 'YouTube', sans: 'Sans-serif', serif: 'Serif', mono: 'Monospace' };
 const OUTLINE_LABELS: Record<KaraokeOutline, string> = { none: 'None', thin: 'Thin', normal: 'Normal', thick: 'Thick' };
 
@@ -171,8 +149,8 @@ export function buildMenuRows(input: MenuInput, actions: MenuActions): MenuRow[]
     select: (v) => actions.setPrefs({ lyricsDisplayMode: v as LyricsDisplayMode }),
   });
   if (prefs.lyricsDisplayMode === 'karaoke') {
-    const presets: StylePreset[] = [...STYLE_PRESETS, ...(prefs.karaokeMyStyle ? [{ id: 'mine', label: 'My style', style: prefs.karaokeMyStyle }] : [])];
-    const matched = presets.find((p) => (Object.keys(p.style) as (keyof KaraokeStyle)[]).every((k) => p.style[k] === (k === 'karaokeFontSize' ? nearestSize(prefs[k]) : prefs[k])));
+    const presets = stylePresets(prefs);
+    const matched = matchedStylePreset(prefs);
     const group: MenuRow = {
       id: 'karaokeText',
       label: 'Custom Karaoke Text',
@@ -185,10 +163,15 @@ export function buildMenuRows(input: MenuInput, actions: MenuActions): MenuRow[]
           options: [
             ...presets.map((p) => ({ value: p.id, label: p.label })),
             ...(matched ? [] : [{ value: 'custom', label: 'Custom', disabled: true }]),
+            { value: 'reset', label: 'Reset style' },
             { value: 'save', label: prefs.karaokeMyStyle ? 'Replace My style with the current look' : 'Save the current look as My style', disabled: !!matched },
           ],
           selected: matched?.id ?? 'custom',
           select: (v) => {
+            if (v === 'reset') {
+              actions.setPrefs(RESET_STYLE);
+              return;
+            }
             if (v === 'save') {
               actions.setPrefs({ karaokeMyStyle: pickStyle(prefs) });
               return;
@@ -282,10 +265,6 @@ export function buildMenuButtons(input: MenuInput, actions: MenuActions): MenuBu
     buttons.push({ id: 'myLyrics', label: 'Use my own lyrics…', run: () => actions.myLyrics() });
   }
   return buttons;
-}
-
-function nearestSize(size: number): number {
-  return KARAOKE_SIZES.reduce((best, n) => (Math.abs(n - size) < Math.abs(best - size) ? n : best));
 }
 
 const selectedLabel = (row: MenuRow): string =>
