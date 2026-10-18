@@ -7,7 +7,7 @@ import { MAX_DELAY_S, MIN_DELAY_S } from '../ml/rof-plan';
 import type { MlModel } from '../worklet/protocol';
 import { installModel, useModels, type ModelLine } from './models';
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
-import { Blocked, Btn, Card, Collapse, Disclosure, Rise, Select, Slider, SliderRow, Switch, fade, slide, useGlide, type Choice } from './ui';
+import { Blocked, Btn, Card, Collapse, Disclosure, Rise, Roll, Select, Slider, SliderRow, Switch, fade, slide, useGlide, type Choice } from './ui';
 
 type Update = (patch: Partial<MixerSettings>) => void;
 
@@ -175,7 +175,7 @@ function Master({ settings, update, compact }: { settings: MixerSettings; update
   // Reset and the other non-drag changes glide: the number and the thumb together.
   const num = useGlide(settings.masterPct);
   const pos = useGlide(masterPosOf(settings.masterPct));
-  const pct = `${Math.round(num.shown)}%`;
+  const pct = <Roll text={`${Math.round(num.shown)}%`} still={num.gliding} />;
   return (
     <Card>
       <div className="flex items-center justify-between gap-2">
