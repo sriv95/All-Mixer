@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { AudioLines, AudioWaveform, Cpu, Download, Drum, LoaderCircle, Mic, MicOff, Music, RefreshCw, RotateCcw, Settings2, SlidersVertical, Timer, TriangleAlert, Volume2 } from 'lucide-react';
+import { AudioLines, Cpu, Download, Drum, LoaderCircle, Mic, MicOff, Music, RefreshCw, RotateCcw, Settings2, SlidersVertical, Timer, TriangleAlert, Volume2 } from 'lucide-react';
 import type { ContentStatus, GetStatus, GetTabSettings, SetTabSettings } from '../shared/messages';
 import { clampDelayS, clampOthersPct, clampPct, masterPctAt, masterPosOf, MASTER_POS_MAX, normalizeSettings, type MixerSettings, type Mode } from '../shared/settings';
 import { separationView, type SepView } from '../shared/separation-view';
@@ -198,6 +198,17 @@ function Master({ settings, update, compact }: { settings: MixerSettings; update
   );
 }
 
+/** Five bars that rise and fall out of step: the sound being split. */
+function WaveBars() {
+  return (
+    <span aria-hidden className="flex h-5 items-center gap-[3px]">
+      {[0, 1, 2, 3, 4].map((i) => (
+        <motion.span key={i} animate={{ scaleY: [0.3, 1, 0.45, 0.85, 0.3] }} transition={{ duration: 1.3, repeat: Infinity, ease: 'easeInOut', delay: i * 0.13 }} className="h-full w-[3px] rounded-full bg-white" />
+      ))}
+    </span>
+  );
+}
+
 const bannerIcon = 'grid size-9 shrink-0 place-items-center rounded-full';
 
 function Banner({ view, settings, update, retry }: { view: SepView; settings: MixerSettings; update: Update; retry: () => Promise<void> }) {
@@ -215,7 +226,11 @@ function Banner({ view, settings, update, retry }: { view: SepView; settings: Mi
       text = 'Testing your GPU speed. The original mix keeps playing until it is ready.';
       break;
     case 'live':
-      icon = <span className={`${bannerIcon} mx-pulse bg-brand text-white`}><AudioWaveform size={20} aria-hidden /></span>;
+      icon = (
+        <motion.span animate={{ scale: [1, 1.06, 1], boxShadow: ['0 0 0 0 rgb(225 29 46 / 0.5)', '0 0 0 12px rgb(225 29 46 / 0)', '0 0 0 0 rgb(225 29 46 / 0)'] }} transition={{ duration: 1.8, repeat: Infinity, ease: 'easeOut' }} className={`${bannerIcon} bg-brand text-white`}>
+          <WaveBars />
+        </motion.span>
+      );
       title = 'Separating live';
       text = `${view.delayS} s audio delay.`;
       break;
