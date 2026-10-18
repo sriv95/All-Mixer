@@ -7,7 +7,7 @@ import { MAX_DELAY_S, MIN_DELAY_S } from '../ml/rof-plan';
 import type { MlModel } from '../worklet/protocol';
 import { installModel, useModels, type ModelLine } from './models';
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
-import { Blocked, Btn, Card, Disclosure, Rise, Select, Slider, SliderRow, Switch, fade, useGlide, type Choice } from './ui';
+import { Blocked, Btn, Card, Collapse, Disclosure, Rise, Select, Slider, SliderRow, Switch, fade, useGlide, type Choice } from './ui';
 
 type Update = (patch: Partial<MixerSettings>) => void;
 
@@ -262,13 +262,13 @@ function Banner({ view, settings, update, retry }: { view: SepView; settings: Mi
           )}
         </motion.div>
       </div>
-      {tooSlow && (
-        <div className="flex flex-col gap-2.5">
+      <Collapse show={tooSlow}>
+        <div className="flex flex-col gap-2.5 pt-0.5">
           {settings.mlModel !== 'mdx' && <Btn tone="primary" id="act-default-model" onClick={() => update({ mlModel: 'mdx' as MlModel })}><Cpu size={16} aria-hidden />Switch to Default model</Btn>}
           {settings.mlDelayS < MAX_DELAY_S && <Btn id="act-raise-delay" onClick={() => update({ mlDelayS: nextDelay })}><Timer size={16} aria-hidden />Raise delay limit to {nextDelay} s</Btn>}
           <Btn id="act-retry" onClick={() => void retry()}><RefreshCw size={16} aria-hidden />Try again</Btn>
         </div>
-      )}
+      </Collapse>
     </motion.div>
   );
 }
@@ -308,12 +308,12 @@ function SeparateControls({ settings, update, ready, advancedOpen, setAdvancedOp
       <Card>
         <SliderRow id="vocal" icon={<Mic size={15} />} label="Vocal" unit="%" value={settings.vocalPct} min={0} max={100} step={5} onValue={(v) => update({ vocalPct: clampPct(v) })} />
         <SliderRow id="instrumental" icon={<Music size={15} />} label="Instrumental" unit="%" value={settings.instrumentalPct} min={0} max={100} step={5} onValue={(v) => update({ instrumentalPct: clampPct(v) })} />
-        {settings.splitInstrumental && (
+        <Collapse show={settings.splitInstrumental}>
           <div id="split-mix" className="flex flex-col gap-3.5 border-t border-well pt-3.5">
             <SliderRow id="drums" icon={<Drum size={15} />} label="Drums" hint="in the instrumental" unit="%" value={settings.drumsPct} min={0} max={100} step={5} onValue={(v) => update({ drumsPct: clampPct(v) })} />
             <SliderRow id="others" icon={<AudioLines size={15} />} label="Others" hint="in the instrumental" unit="%" value={settings.othersPct} min={0} max={100} step={5} onValue={(v) => update({ othersPct: clampOthersPct(v) })} />
           </div>
-        )}
+        </Collapse>
       </Card>
       </Rise>
       <Rise i={2}>
@@ -343,7 +343,7 @@ function SeparateControls({ settings, update, ready, advancedOpen, setAdvancedOp
             <label htmlFor="ml-model" className="text-[13px] font-bold">Model</label>
             <Select id="ml-model" value={settings.mlModel} options={MODEL_CHOICES} onValue={(mlModel) => update({ mlModel })} />
           </div>
-          {models.model && <ModelRow idPrefix="model" line={models.model} />}
+          <Collapse show={!!models.model}>{models.model && <ModelRow idPrefix="model" line={models.model} />}</Collapse>
           <div id="chunk-row" className="flex flex-col gap-3">
             <SliderRow id="ml-delay" icon={<Timer size={15} />} label="Delay limit" unit=" s" value={delayDraft} min={MIN_DELAY_S} max={MAX_DELAY_S} step={1} onValue={(v) => setDelayDraft(clampDelayS(v))} />
             <div className="flex items-center justify-between gap-3">
@@ -359,7 +359,7 @@ function SeparateControls({ settings, update, ready, advancedOpen, setAdvancedOp
                 <Switch id="split-on" checked={settings.splitInstrumental} onChange={(on) => update({ splitInstrumental: on })} />
               </div>
               <p className="m-0 text-xs leading-snug text-muted">Splitting the instrumental adds more delay over the Delay limit.</p>
-              {models.drums && <ModelRow idPrefix="drums" line={models.drums} />}
+              <Collapse show={!!models.drums}>{models.drums && <ModelRow idPrefix="drums" line={models.drums} />}</Collapse>
             </div>
           </Disclosure>
         </div>
