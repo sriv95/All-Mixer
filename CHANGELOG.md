@@ -13,7 +13,7 @@ CI builds the extension, creates tag `vx.y.z` and a GitHub release with this sec
 ### Changed
 
 - Separation: **Split instrumental** adds its delay on top of the Delay limit, so the limit no longer jumps to 8 s.
-- Popup: **Global Volume** (100 to 600 %) sits at the top and boosts both modes, with its own Reset. It replaces Master volume, which was Default mode only. The Reset preset leaves it alone.
+- Popup: **Global Volume** (0 to 600 %, 100 % in the middle of the slider) sits at the top and boosts both modes, with its own Reset. It replaces Master volume, which was Default mode only. The Reset preset leaves it alone.
 - Popup: the **Others** slider now goes from 0 to 100 %.
 
 ## [0.3.0] - 2026-10-18

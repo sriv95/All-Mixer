@@ -71,8 +71,9 @@ describe('masterGainFor', () => {
     expect(masterGainFor({ ...DEFAULT_SETTINGS, masterPct: 600 })).toBe(6);
     expect(masterGainFor({ ...DEFAULT_SETTINGS, mode: 'separate', masterPct: 250 })).toBe(2.5);
   });
-  it('never attenuates: stored values under 100 come back as 100', () => {
-    expect(normalizeSettings({ masterPct: 0 }).masterPct).toBe(100);
+  it('can attenuate down to 0', () => {
+    expect(normalizeSettings({ masterPct: 0 }).masterPct).toBe(0);
+    expect(normalizeSettings({ masterPct: -5 }).masterPct).toBe(0);
   });
 });
 

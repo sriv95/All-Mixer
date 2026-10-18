@@ -72,7 +72,7 @@ describe('popup', () => {
 
   it('renders stored settings', async () => {
     await load({ stored: { mode: 'separate', masterPct: 250 } });
-    expect(el<HTMLInputElement>('master').value).toBe('250');
+    expect(el<HTMLInputElement>('master').value).toBe('18'); // 250 % snaps to the 200 % stop (position 18)
     expect(el<HTMLOutputElement>('master-value').value).toBe('250%');
     expect(tabBtn('separate').getAttribute('aria-selected')).toBe('true');
     expect(tabBtn('default').getAttribute('aria-selected')).toBe('false');
@@ -120,8 +120,27 @@ describe('popup', () => {
     slider.value = '-40';
     slider.dispatchEvent(new Event('input', { bubbles: true }));
     await settle();
-    expect(sent().at(-1).settings.masterPct).toBe(100); // a boost only
-    expect(el<HTMLOutputElement>('master-value').value).toBe('100%');
+    expect(sent().at(-1).settings.masterPct).toBe(0);
+    expect(el<HTMLOutputElement>('master-value').value).toBe('0%');
+  });
+
+  it('slider has 100 % in the middle and uses 5/10/100 steps', async () => {
+    await load();
+    const slider = el<HTMLInputElement>('master');
+    expect(slider.value).toBe('15');
+    const at = async (pos: number) => {
+      slider.value = String(pos);
+      slider.dispatchEvent(new Event('input', { bubbles: true }));
+      await settle();
+      return sent().at(-1).settings.masterPct;
+    };
+    expect(await at(1)).toBe(5);
+    expect(await at(10)).toBe(50);
+    expect(await at(11)).toBe(60);
+    expect(await at(15)).toBe(100);
+    expect(await at(16)).toBe(200); // one arrow key above 100 % takes one stop
+    expect(await at(17)).toBe(100); // and one back
+    expect(await at(30)).toBe(600);
   });
 
   it('Global Volume Reset sends 100', async () => {

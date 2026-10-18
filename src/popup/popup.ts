@@ -1,5 +1,5 @@
 import type { ContentStatus, GetStatus, GetTabSettings, SetTabSettings } from '../shared/messages';
-import { clampDelayS, clampMasterPct, clampOthersPct, clampPct, normalizeSettings, type MixerSettings, type Mode } from '../shared/settings';
+import { clampDelayS, clampOthersPct, masterPctAt, masterPosOf, clampPct, normalizeSettings, type MixerSettings, type Mode } from '../shared/settings';
 import type { MlModel } from '../worklet/protocol';
 import { MODEL_IDS, MODEL_LABEL, keyInstalled, keyProgress, keyRemote, mb, modelState, type InstalledModel, type ModelId, type ModelState, type Progress, type RemoteRecord } from '../shared/model-store';
 
@@ -43,7 +43,7 @@ function render(): void {
     tab.tabIndex = selected ? 0 : -1;
     $(tab.getAttribute('aria-controls')!).hidden = !selected;
   }
-  master.value = String(settings.masterPct);
+  master.value = String(masterPosOf(settings.masterPct));
   masterValue.value = `${settings.masterPct}%`;
   vocal.value = String(settings.vocalPct);
   vocalValue.value = `${settings.vocalPct}%`;
@@ -271,7 +271,7 @@ for (const tab of tabs) {
 }
 
 master.addEventListener('input', () => {
-  settings = { ...settings, masterPct: clampMasterPct(master.value) };
+  settings = { ...settings, masterPct: masterPctAt(Number(master.value), settings.masterPct) };
   save();
 });
 

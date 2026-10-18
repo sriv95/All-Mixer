@@ -6,7 +6,7 @@ export type Mode = 'default' | 'separate';
 export interface MixerSettings {
   /** Which popup tab / audio mode is active. */
   mode: Mode;
-  /** Global volume (a boost on top of either mode), percent (100–600). */
+  /** Global volume (a boost on top of either mode), percent (0–600). */
   masterPct: number;
   /** Separate mode vocal volume, percent (0–600). Used once separation lands. */
   vocalPct: number;
@@ -45,8 +45,32 @@ export function clampPct(value: unknown, fallback = 100, min = GAIN_MIN_PCT, max
   return Math.min(max, Math.max(min, Math.round(n)));
 }
 
-/** Global volume only boosts: 100–600 %. */
-export const clampMasterPct = (value: unknown): number => clampPct(value, DEFAULT_SETTINGS.masterPct, 100);
+export const clampMasterPct = (value: unknown): number => clampPct(value, DEFAULT_SETTINGS.masterPct);
+
+/** Global volume slider stops: 5 % steps to 50, 10 % to 100, 100 % to 600. */
+export const MASTER_STEPS: readonly number[] = [
+  ...Array.from({ length: 11 }, (_, i) => i * 5),
+  60, 70, 80, 90, 100, 200, 300, 400, 500, 600,
+];
+const MASTER_UNITY = MASTER_STEPS.indexOf(100);
+/** The slider spends 3 positions per step above 100 %, so 100 % sits in the middle (position 15 of 30). */
+const ABOVE_UNITY_POS = 3;
+export const MASTER_POS_MAX = MASTER_UNITY * 2;
+
+export function masterPosOf(pct: number): number {
+  const nearest = MASTER_STEPS.reduce((best, s, i) => (Math.abs(s - pct) < Math.abs(MASTER_STEPS[best] - pct) ? i : best), 0);
+  return nearest <= MASTER_UNITY ? nearest : MASTER_UNITY + (nearest - MASTER_UNITY) * ABOVE_UNITY_POS;
+}
+
+/** Slider position to a stop. A move too small to leave the current stop still steps once, so arrow keys work above 100 %. */
+export function masterPctAt(pos: number, current: number): number {
+  const p = Math.min(MASTER_POS_MAX, Math.max(0, Math.round(pos)));
+  let i = p <= MASTER_UNITY ? p : MASTER_UNITY + Math.round((p - MASTER_UNITY) / ABOVE_UNITY_POS);
+  if (MASTER_STEPS[i] === current && p !== masterPosOf(current)) {
+    i += p > masterPosOf(current) ? 1 : -1;
+  }
+  return MASTER_STEPS[Math.min(MASTER_STEPS.length - 1, Math.max(0, i))];
+}
 
 /** Others can only be turned down: 0–100 %. */
 export const clampOthersPct = (value: unknown): number => clampPct(value, DEFAULT_SETTINGS.othersPct, GAIN_MIN_PCT, 100);
