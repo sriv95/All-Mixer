@@ -11,13 +11,60 @@
   --color-muted: #6a5c5f;
   --color-well: #f1ecec;
   --color-card: #faf7f7;
-  --shadow-raised: 4px 4px 9px #e2dadb, -4px -4px 9px #fff;
-  --shadow-raised-sm: 3px 3px 7px #e2dadb, -3px -3px 7px #fff;
-  --shadow-pressed: inset 3px 3px 6px #ddd4d5, inset -3px -3px 6px #fff;
+  --color-surface: #fff;
+  --color-tab: #f4f0f0;
+  --color-stop: #1f1517;
+  --color-banner: #4c4047;
+}
+
+/* Shadows are plain variables, not theme ones: Tailwind writes a theme shadow's colours into the utility, and dark mode could not change them. */
+:root {
+  --mx-raised: 4px 4px 9px #e2dadb, -4px -4px 9px #fff;
+  --mx-raised-sm: 3px 3px 7px #e2dadb, -3px -3px 7px #fff;
+  --mx-pressed: inset 3px 3px 6px #ddd4d5, inset -3px -3px 6px #fff;
+  --mx-tab: inset 2px 2px 5px #e2dadb, inset -2px -2px 5px #fff;
+  --mx-thumb: 4px 4px 9px #d6cccd, -3px -3px 8px #fff;
+}
+@utility shadow-raised {
+  box-shadow: var(--mx-raised);
+}
+@utility shadow-raised-sm {
+  box-shadow: var(--mx-raised-sm);
+}
+@utility shadow-pressed {
+  box-shadow: var(--mx-pressed);
+}
+@utility shadow-tab {
+  box-shadow: var(--mx-tab);
+}
+@utility shadow-thumb {
+  box-shadow: var(--mx-thumb);
+}
+
+/* Dark: the same tokens, a warm near-black. Every colour and shadow in the popup comes from them. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --color-brand-dark: #ff7a84;
+    --color-brand-tint: #3b1c21;
+    --color-ink: #f5eeee;
+    --color-muted: #a99a9e;
+    --color-well: #2a2224;
+    --color-card: #211a1c;
+    --color-surface: #161112;
+    --color-tab: #1d1719;
+    --color-stop: #34161b;
+    --color-banner: #d9c9cc;
+    --mx-raised: 4px 4px 9px #0c0809, -4px -4px 9px #2d2326;
+    --mx-raised-sm: 3px 3px 7px #0c0809, -3px -3px 7px #2d2326;
+    --mx-pressed: inset 3px 3px 6px #0c0809, inset -3px -3px 6px #2d2326;
+    --mx-tab: inset 2px 2px 5px #0c0809, inset -2px -2px 5px #2a2124;
+    --mx-thumb: 4px 4px 9px #0c0809, -3px -3px 8px #2d2326;
+  }
 }
 
 body {
-  @apply m-0 w-[340px] bg-white p-4 font-sans text-sm text-ink select-none;
+  @apply m-0 w-[340px] bg-surface p-4 font-sans text-sm text-ink select-none;
 }
 
 /* Range inputs: the fill is --p (0 to 100) of the track, the thumb is a raised knob with a red dot. */
@@ -32,8 +79,8 @@ body {
 }
 .mx-range::-webkit-slider-thumb {
   @apply size-7 cursor-pointer appearance-none rounded-full border-0;
-  background: radial-gradient(circle, #d3101c 0 28%, #f1ecec 30%);
-  box-shadow: 4px 4px 9px #d6cccd, -3px -3px 8px #fff;
+  background: radial-gradient(circle, #d3101c 0 28%, var(--color-well) 30%);
+  box-shadow: var(--mx-thumb);
 }
 .mx-range:focus-visible {
   @apply outline-2 outline-offset-4 outline-brand;

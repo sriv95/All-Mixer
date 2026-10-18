@@ -144,7 +144,7 @@ export function Switch({ id, checked, onChange, disabled }: { id: string; checke
     <span className="relative inline-flex shrink-0">
       <input id={id} type="checkbox" role="switch" className="peer absolute inset-0 z-10 m-0 size-full cursor-pointer opacity-0 disabled:cursor-default" checked={checked} disabled={blocked || disabled} onChange={(e) => onChange(e.currentTarget.checked)} onPointerDown={() => setDown(true)} onPointerUp={release} onPointerLeave={release} onPointerCancel={release} onBlur={release} />
       <span aria-hidden className={cx('flex h-8 w-[54px] items-center rounded-full p-1 shadow-pressed transition-colors peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand peer-disabled:opacity-45', checked ? 'justify-end bg-brand-tint' : 'justify-start bg-well')}>
-        <motion.span layout animate={{ scaleX: down ? 1.28 : 1, scaleY: down ? 0.92 : 1 }} transition={{ type: 'spring', stiffness: 700, damping: 22 }} style={{ originX: checked ? 1 : 0 }} className={cx('size-6 rounded-full shadow-[3px_3px_6px_#d0c6c7,-2px_-2px_5px_#fff] transition-colors', checked ? 'bg-brand' : 'bg-well')} />
+        <motion.span layout animate={{ scaleX: down ? 1.28 : 1, scaleY: down ? 0.92 : 1 }} transition={{ type: 'spring', stiffness: 700, damping: 22 }} style={{ originX: checked ? 1 : 0 }} className={cx('size-6 rounded-full shadow-thumb transition-colors', checked ? 'bg-brand' : 'bg-well')} />
       </span>
     </span>
   );
@@ -209,7 +209,7 @@ export function Select<T extends string>({ id, value, options, onValue }: { id: 
         <motion.span animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.2 }} className="grid shrink-0"><ChevronDown size={16} aria-hidden /></motion.span>
       </button>
       <motion.div initial={false} inert={!open} animate={open ? { height: 'auto', opacity: 1, marginTop: 8 } : { height: 0, opacity: 0, marginTop: 0 }} transition={{ duration: 0.22, ease: 'easeOut' }} className="overflow-hidden">
-        <ul id={`${id}-list`} role="listbox" aria-labelledby={id} className="m-0 flex list-none flex-col overflow-hidden rounded-xl bg-white p-0">
+        <ul id={`${id}-list`} role="listbox" aria-labelledby={id} className="m-0 flex list-none flex-col overflow-hidden rounded-xl bg-surface p-0">
           {options.map((o, i) => (
             <li key={o.value} id={optionId(o.value)} role="option" aria-selected={o.value === value} data-value={o.value} data-active={open && i === active} onClick={() => pick(o.value)} onPointerMove={() => setActive(i)}
               className="flex cursor-pointer items-center justify-between gap-2 px-3 py-2.5 transition-colors data-[active=true]:bg-brand-tint">
