@@ -20,6 +20,6 @@ page.on('console', (m) => { if (m.type() === 'error') console.log('[page error]'
 await page.goto(`http://127.0.0.1:${server.address().port}/ml/bench.html`);
 await page.waitForFunction('window.ready === true');
 console.log('gpu', JSON.stringify(await page.evaluate(() => window.gpuInfo())));
-const r = await page.evaluate((a) => window.bench(a), { url: '/ml/models/' + name, ep: 'webgpu', threads: 1, shape: [1, +T, +Fin], runs: +runs });
+const r = await page.evaluate((a) => window.bench(a), { url: '/ml/models/' + name, ep: 'webgpu', threads: 1, shape: process.env.SHAPE ? JSON.parse(process.env.SHAPE) : [1, +T, +Fin], runs: +runs });
 console.log(JSON.stringify(r));
 await browser.close(); server.close();

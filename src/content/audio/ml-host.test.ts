@@ -21,6 +21,16 @@ describe('MlHost', () => {
     expect(host.running).toBe(false);
   });
 
+  it('tells the iframe to run the drum stage when asked', () => {
+    const host = new MlHost(URL_, document, 'roformer', 6000, true);
+    host.start(() => {});
+    const f = document.querySelector('iframe')!;
+    const post = vi.spyOn(f.contentWindow!, 'postMessage').mockImplementation(() => {});
+    f.dispatchEvent(new Event('load'));
+    expect(post.mock.calls[0][0]).toEqual({ type: ML_INIT, model: 'roformer', delayMs: 6000, drums: true });
+    host.dispose();
+  });
+
   it('sends ML_INIT with the other port on load and reports worker status only from the iframe', () => {
     const host = new MlHost(URL_);
     const status = vi.fn();
@@ -30,7 +40,7 @@ describe('MlHost', () => {
     const post = vi.spyOn(win, 'postMessage').mockImplementation(() => {});
     f.dispatchEvent(new Event('load'));
     expect(post).toHaveBeenCalledTimes(1);
-    expect(post.mock.calls[0][0]).toEqual({ type: ML_INIT, model: 'mdx', delayMs: null });
+    expect(post.mock.calls[0][0]).toEqual({ type: ML_INIT, model: 'mdx', delayMs: null, drums: false });
     expect(post.mock.calls[0][1]).toBe('https://ext.test');
     const ready = { type: 'ready', p50: 1, p90: 2, p95: 2, createMs: 3, adapter: 'x' };
     window.dispatchEvent(new MessageEvent('message', { data: ready, origin: 'https://ext.test', source: win }));

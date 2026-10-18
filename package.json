@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "fetch-model": "node scripts/fetch-model.mjs && PY=${PY:-.venv/bin/python} node scripts/fetch-mdx-model.mjs",
     "export-roformer": "uv run python scripts/export-roformer.py",
+    "export-scnet": "uv run python scripts/export-scnet.py",
     "model-manifest": "node scripts/model-manifest.mjs",
     "lint": "eslint .",
     "test": "vitest run"

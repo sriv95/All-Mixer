@@ -37,6 +37,7 @@ import {
   ML_HEADER_BYTES,
   ML_SAMPLE_RATE,
   bufferBytes,
+  planesFor,
   type FromWorklet,
   type MlEngine,
   type MlGeometry,
@@ -95,6 +96,9 @@ export class SeparatorCore {
   /** MDX vocal (A cappella); the instrumental uses mlL/mlR (Vk = x − Karaoke instrumental). */
   private mlSL = new Float32Array(RING);
   private mlSR = new Float32Array(RING);
+  /** Drums, a part of the instrumental (only filled when the geometry has the drum stage). */
+  private mlDL = new Float32Array(RING);
+  private mlDR = new Float32Array(RING);
   /** Absolute start of the ML block held in each slot (NaN = empty). */
   private slotStart = new Float64Array(SLOTS).fill(NaN);
 
@@ -140,7 +144,7 @@ export class SeparatorCore {
     private readonly sampleRate: number,
     private readonly onEngine: (msg: FromWorklet) => void,
   ) {
-    for (let i = 0; i < POOL; i++) this.pool.push(entry(new ArrayBuffer(ML_BUFFER_BYTES), ML_BLOCK));
+    for (let i = 0; i < POOL; i++) this.pool.push(entry(new ArrayBuffer(ML_BUFFER_BYTES), ML_BLOCK, 4));
   }
 
   get latencySamples(): number {
@@ -180,9 +184,11 @@ export class SeparatorCore {
     this.mlR = new Float32Array(ring);
     this.mlSL = new Float32Array(ring);
     this.mlSR = new Float32Array(ring);
+    this.mlDL = new Float32Array(g.drums ? ring : 0);
+    this.mlDR = new Float32Array(g.drums ? ring : 0);
     this.slotStart = new Float64Array(this.slots).fill(NaN);
     this.pool = [];
-    for (let i = 0; i < POOL; i++) this.pool.push(entry(new ArrayBuffer(bufferBytes(g)), g.block));
+    for (let i = 0; i < POOL; i++) this.pool.push(entry(new ArrayBuffer(bufferBytes(g)), g.block, planesFor(g)));
   }
 
   setPort(port: MessagePort): void {
@@ -241,7 +247,8 @@ export class SeparatorCore {
   /**
    * One render quantum (QUANTUM frames); `time` is the context time of its first frame.
    * Writes the delayed vocal and instrumental stems and the bypass weight per sample
-   * (0 = ML stems, 1 = original mix).
+   * (0 = ML stems, 1 = original mix). `drL` / `drR` (optional) get the drums, the part of the instrumental that the
+   * drum stage took out (zero without it); the instrumental stays whole.
    */
   process(
     inL: Float32Array,
@@ -252,6 +259,8 @@ export class SeparatorCore {
     insR: Float32Array,
     byp: Float32Array,
     time: number,
+    drL?: Float32Array,
+    drR?: Float32Array,
   ): void {
     if (!this.active) {
       vocL.fill(0);
@@ -259,6 +268,8 @@ export class SeparatorCore {
       insL.fill(0);
       insR.fill(0);
       byp.fill(0);
+      drL?.fill(0);
+      drR?.fill(0);
       return;
     }
     const pos = this.pos;
@@ -274,6 +285,8 @@ export class SeparatorCore {
       insL.fill(0);
       insR.fill(0);
       byp.fill(0);
+      drL?.fill(0);
+      drR?.fill(0);
       return;
     }
     // Fade-out quantum with audio pending in the ring: read it, consume nothing.
@@ -311,7 +324,8 @@ export class SeparatorCore {
     const dE = (target - env0) / QUANTUM;
     const w0 = this.w0;
     const dW = (this.w1 - w0) / QUANTUM;
-    const { dryL, dryR, mlL, mlR, mlSL, mlSR, mask } = this;
+    const { dryL, dryR, mlL, mlR, mlSL, mlSR, mlDL, mlDR, mask } = this;
+    const drums = this.g.drums === true && drL !== undefined && drR !== undefined;
     for (let i = 0; i < QUANTUM; i++) {
       const j = (r0 + i) & mask;
       const e = env0 + dE * (i + 1);
@@ -321,6 +335,14 @@ export class SeparatorCore {
       insL[i] = e * (dryL[j] - w * mlL[j]);
       insR[i] = e * (dryR[j] - w * mlR[j]);
       byp[i] = 1 - w;
+      if (drums) {
+        drL[i] = e * w * mlDL[j];
+        drR[i] = e * w * mlDR[j];
+      }
+    }
+    if (!drums) {
+      drL?.fill(0);
+      drR?.fill(0);
     }
     this.env = target;
 
@@ -456,7 +478,7 @@ export class SeparatorCore {
     // A buggy worker must not grow the pool.
     const block = this.g.block;
     if (buf.byteLength !== bufferBytes(this.g) || this.pool.length >= POOL) return;
-    const e = entry(buf, block);
+    const e = entry(buf, block, planesFor(this.g));
     const start = e.head[1];
     const rel = start - (this.streamStart + this.base);
     if (this.streaming && e.head[0] === this.epoch && rel >= 0 && rel % block === 0) {
@@ -468,6 +490,10 @@ export class SeparatorCore {
         this.mlR[j] = live ? e.data[block + i] : 0;
         this.mlSL[j] = live ? e.data[2 * block + i] : 0;
         this.mlSR[j] = live ? e.data[3 * block + i] : 0;
+        if (this.g.drums) {
+          this.mlDL[j] = live ? e.data[4 * block + i] : 0;
+          this.mlDR[j] = live ? e.data[5 * block + i] : 0;
+        }
       }
       this.slotStart[(rel / block) & (this.slots - 1)] = start;
       this.stats.returned++;
@@ -505,10 +531,12 @@ export class SeparatorCore {
     this.mlR.fill(0);
     this.mlSL.fill(0);
     this.mlSR.fill(0);
+    this.mlDL.fill(0);
+    this.mlDR.fill(0);
     this.env = this.held ? 0 : 1;
   }
 }
 
-function entry(buf: ArrayBuffer, block: number): PoolEntry {
-  return { buf, head: new Float64Array(buf, 0, 2), data: new Float32Array(buf, ML_HEADER_BYTES, 4 * block) };
+function entry(buf: ArrayBuffer, block: number, planes: number): PoolEntry {
+  return { buf, head: new Float64Array(buf, 0, 2), data: new Float32Array(buf, ML_HEADER_BYTES, planes * block) };
 }

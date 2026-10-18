@@ -14,3 +14,5 @@ output { min-width: 3.5em; text-align: right; font-variant-numeric: tabular-nums
 .presets button[aria-pressed='true'] { background: #dde8ff; border-color: #36c; font-weight: 600; }
 details { margin-top: 8px; }
 summary { cursor: pointer; font-weight: 600; }
+.sub { color: #777; font-size: 12px; }
+#split { margin-left: 6px; }

@@ -267,6 +267,94 @@ describe('popup', () => {
     });
   });
 
+  describe('split instrumental', () => {
+    const dfiles = { 'drums.onnx': 41 * 2 ** 20 };
+    const dremote = { format: MODEL_FORMAT, version: 1, files: dfiles, checkedAt: 0 };
+    const sepSplit = (extra: Record<string, unknown> = {}) => ({ mode: 'separate', splitInstrumental: true, ...extra });
+
+    it('is off by default: the Drums and Others sliders are hidden and the drum model row too', async () => {
+      await load({ stored: { mode: 'separate' } });
+      expect(el<HTMLInputElement>('split-on').checked).toBe(false);
+      expect(el('split-mix').hidden).toBe(true);
+      expect(el('drums-row').hidden).toBe(true);
+      expect(el<HTMLDetailsElement>('split').open).toBe(false);
+    });
+
+    it('opens by itself when the split is on, and shows the Drums and Others sliders with their values', async () => {
+      await load({ stored: sepSplit({ drumsPct: 150, othersPct: 40 }) });
+      expect(el<HTMLDetailsElement>('advanced').open).toBe(true);
+      expect(el<HTMLDetailsElement>('split').open).toBe(true);
+      expect(el<HTMLInputElement>('split-on').checked).toBe(true);
+      expect(el('split-mix').hidden).toBe(false);
+      expect(el<HTMLInputElement>('drums').value).toBe('150');
+      expect(el<HTMLOutputElement>('drums-value').value).toBe('150%');
+      expect(el<HTMLInputElement>('others').value).toBe('40');
+    });
+
+    it('the checkbox sends the setting; with a RoFormer it also raises the delay limit to 8 s', async () => {
+      await load({ stored: { mode: 'separate', mlModel: 'mdx' } });
+      const on = el<HTMLInputElement>('split-on');
+      on.checked = true;
+      on.dispatchEvent(new Event('change', { bubbles: true }));
+      await settle();
+      expect(sent().at(-1).settings).toMatchObject({ splitInstrumental: true, mlDelayS: 2 }); // the default model has a fixed delay
+      expect(el('split-mix').hidden).toBe(false);
+      on.checked = false;
+      on.dispatchEvent(new Event('change', { bubbles: true }));
+      await settle();
+      expect(sent().at(-1).settings.splitInstrumental).toBe(false);
+
+      await load({ stored: { mode: 'separate', mlModel: 'roformer', mlDelayS: 3 } });
+      const on2 = el<HTMLInputElement>('split-on');
+      on2.checked = true;
+      on2.dispatchEvent(new Event('change', { bubbles: true }));
+      await settle();
+      expect(sent().at(-1).settings).toMatchObject({ splitInstrumental: true, mlDelayS: 8 });
+      expect(el<HTMLInputElement>('ml-delay').value).toBe('8');
+    });
+
+    it('does not shorten a longer delay limit', async () => {
+      await load({ stored: { mode: 'separate', mlModel: 'deux', mlDelayS: 12 } });
+      const on = el<HTMLInputElement>('split-on');
+      on.checked = true;
+      on.dispatchEvent(new Event('change', { bubbles: true }));
+      await settle();
+      expect(sent().at(-1).settings.mlDelayS).toBe(12);
+    });
+
+    it('the Drums and Others sliders send their gains', async () => {
+      await load({ stored: sepSplit() });
+      for (const [id, key, v] of [['drums', 'drumsPct', '250'], ['others', 'othersPct', '30']] as const) {
+        const slider = el<HTMLInputElement>(id);
+        slider.value = v;
+        slider.dispatchEvent(new Event('input', { bubbles: true }));
+        await settle();
+        expect(sent().at(-1).settings[key]).toBe(Number(v));
+      }
+    });
+
+    it('offers the drum model download while the split is on, and asks the background for it', async () => {
+      await load({ stored: sepSplit(), local: { 'modelRemote.drums': dremote } });
+      expect(el('drums-row').hidden).toBe(false);
+      expect(el('drums-text').textContent).toMatch(/Drum split is a one-time download \(41 MB\)/);
+      el<HTMLButtonElement>('drums-btn').click();
+      expect(sendMessage).toHaveBeenCalledWith({ type: 'model-install', id: 'drums' });
+      expect(el('model-row').hidden).toBe(true); // the Model row is for the Model menu
+    });
+
+    it('says installed, and stays hidden with the split off unless an update is on offer', async () => {
+      const inst = { format: MODEL_FORMAT, version: 1, files: dfiles };
+      await load({ stored: sepSplit(), local: { 'modelInstalled.drums': inst, 'modelRemote.drums': dremote } });
+      expect(el('drums-text').textContent).toBe('Drum split model v1 installed.');
+      expect(el<HTMLButtonElement>('drums-btn').hidden).toBe(true);
+      await load({ stored: { mode: 'separate' }, local: { 'modelInstalled.drums': inst, 'modelRemote.drums': dremote } });
+      expect(el('drums-row').hidden).toBe(true);
+      await load({ stored: { mode: 'separate' }, local: { 'modelInstalled.drums': inst, 'modelRemote.drums': { ...dremote, version: 2 } } });
+      expect(el('drums-row').hidden).toBe(false);
+      expect(el('drums-btn').textContent).toBe('Update');
+    });
+  });
+
   it('shows the waiting-for-gesture hint', async () => {
     await load({ status: { ...okStatus, audio: 'waiting-for-gesture' } });
     expect(el('status').textContent).toMatch(/Click anywhere/);
