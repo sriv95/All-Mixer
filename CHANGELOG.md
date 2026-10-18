@@ -13,6 +13,8 @@ CI builds the extension, creates tag `vx.y.z` and a GitHub release with this sec
 ### Changed
 
 - Popup: when the tab needs a reload (no All Mixer! running in it yet), the Separate mode checkbox is hidden and the popup says to reload the tab.
+- Separate mode: the time and the seek bar of YouTube and YouTube Music now show what you see and hear, not the video position that runs ahead by the delay.
+- Separate mode: when a video ends, the next one (autoplay / queue) starts only after the delayed last seconds have played, with the player's loading spinner shown meanwhile.
 - Popup: the Vocal, Instrumental and Drums sliders now go from 0 to 100 %. Only Global Volume boosts.
 - Popup: the Default / Separate tabs are replaced by a **Separate mode** checkbox. Checked shows the Separate settings.
 - Separation: **Split instrumental** adds its delay on top of the Delay limit, so the limit no longer jumps to 8 s.
