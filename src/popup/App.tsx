@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { AudioLines, Cpu, Download, Drum, Headphones, LoaderCircle, Mic, MicOff, Music, RefreshCw, RotateCcw, Settings2, SlidersVertical, Timer, TriangleAlert, Undo2, Volume2 } from 'lucide-react';
+import { AudioLines, Cpu, Download, Drum, Headphones, LoaderCircle, Maximize2, Mic, Minimize2, MicOff, Music, RefreshCw, RotateCcw, Settings2, SlidersVertical, Timer, TriangleAlert, Undo2, Volume2 } from 'lucide-react';
 import type { ContentStatus, GetStatus, GetTabSettings, HoldOriginal, SetTabSettings } from '../shared/messages';
 import { clampDelayS, clampOthersPct, clampPct, masterPctAt, masterPosOf, MASTER_POS_MAX, normalizeSettings, type MixerSettings, type Mode } from '../shared/settings';
 import { separationView, type SepView } from '../shared/separation-view';
@@ -16,6 +16,17 @@ const LOADING_POLL_MS = 500;
 const DELAY_STEP_S = 4;
 // The Advanced section stays open between popup openings, and opens by itself when a non-default model is in use.
 const ADVANCED_KEY = 'advancedOpen';
+
+// The compact view (no presets, no banner text) is remembered too.
+const COMPACT_KEY = 'compact';
+
+function readCompact(): boolean {
+  try {
+    return localStorage.getItem(COMPACT_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
 
 function readAdvanced(): boolean {
   try {
@@ -42,6 +53,7 @@ export function App() {
   const [settings, setSettings] = useState<MixerSettings>(() => normalizeSettings({}));
   const [loaded, setLoaded] = useState<{ s: ContentStatus | undefined } | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(readAdvanced);
+  const [compact, setCompact] = useState(readCompact);
   const [splitOpen, setSplitOpen] = useState(false);
   const tabId = useRef<number | null>(null);
   const latest = useRef(settings);
@@ -120,9 +132,27 @@ export function App() {
     <MotionConfig reducedMotion="user">
     <Blocked.Provider value={blocked}>
       <main className="flex flex-col gap-3.5">
-        <header className="flex items-center gap-2.5 text-[17px] font-extrabold tracking-tight">
-          <span className="grid size-8 place-items-center rounded-[10px] bg-brand text-white"><SlidersVertical size={18} aria-hidden /></span>
-          All Mixer!
+        <header className="flex items-center justify-between gap-2.5">
+          <span className="flex items-center gap-2.5 text-[17px] font-extrabold tracking-tight">
+            <span className="grid size-8 place-items-center rounded-[10px] bg-brand text-white"><SlidersVertical size={18} aria-hidden /></span>
+            All Mixer!
+          </span>
+          {!noContent && (
+            <Tip text={compact ? 'Show everything' : 'Compact view'} side="bottom" align="end">
+              <Btn id="compact-toggle" tone="small" aria-label="Compact view" aria-pressed={compact} className="aria-pressed:text-brand-dark aria-pressed:shadow-pressed"
+                onClick={() => {
+                  const next = !compact;
+                  setCompact(next);
+                  try {
+                    localStorage.setItem(COMPACT_KEY, next ? '1' : '0');
+                  } catch {
+                    /* storage blocked */
+                  }
+                }}>
+                {compact ? <Maximize2 size={14} aria-hidden /> : <Minimize2 size={14} aria-hidden />}
+              </Btn>
+            </Tip>
+          )}
         </header>
         {loading ? (
           <div aria-busy="true" className="flex flex-col gap-3.5">
@@ -137,9 +167,9 @@ export function App() {
         {separate ? (
           <motion.div key="separate" id="panel-separate" custom={1} variants={slide} initial="enter" animate="center" exit="exit" transition={{ duration: 0.2 }} className="flex flex-col gap-3.5">
             <AnimatePresence mode="wait" initial={false}>
-              {view.kind !== 'off' && <Banner key="banner" view={view} settings={settings} update={update} retry={retry} />}
+              {view.kind !== 'off' && <Banner key="banner" compact={compact} view={view} settings={settings} update={update} retry={retry} />}
             </AnimatePresence>
-            <SeparateControls settings={settings} update={update} ready={ready} live={view.kind === 'live'} onHold={holdOriginal} advancedOpen={advancedOpen} setAdvancedOpen={setAdvancedOpen} splitOpen={splitOpen} setSplitOpen={setSplitOpen} />
+            <SeparateControls settings={settings} update={update} ready={ready} compact={compact} live={view.kind === 'live'} onHold={holdOriginal} advancedOpen={advancedOpen} setAdvancedOpen={setAdvancedOpen} splitOpen={splitOpen} setSplitOpen={setSplitOpen} />
           </motion.div>
         ) : (
           <motion.div key="default" custom={-1} variants={slide} initial="enter" animate="center" exit="exit" transition={{ duration: 0.2 }} className="flex flex-col gap-3.5">
@@ -234,7 +264,7 @@ function WaveBars() {
 
 const bannerIcon = 'grid size-9 shrink-0 place-items-center rounded-full';
 
-function Banner({ view, settings, update, retry }: { view: SepView; settings: MixerSettings; update: Update; retry: () => Promise<void> }) {
+function Banner({ view, settings, update, retry, compact }: { compact: boolean; view: SepView; settings: MixerSettings; update: Update; retry: () => Promise<void> }) {
   if (view.kind === 'off') return null;
   const stopped = view.kind === 'stopped' || view.kind === 'error' || view.kind === 'unavailable';
   const tooSlow = view.kind === 'stopped' || (view.kind === 'unavailable' && /too slow/.test(view.cause));
@@ -274,7 +304,7 @@ function Banner({ view, settings, update, retry }: { view: SepView; settings: Mi
         <motion.span key={`icon-${view.kind}`} initial={{ scale: 0.4, opacity: 0, rotate: -30 }} animate={{ scale: 1, opacity: 1, rotate: 0 }} transition={{ type: 'spring', stiffness: 500, damping: 22 }} className="shrink-0">{icon}</motion.span>
         <motion.div key={`text-${view.kind}`} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className="min-w-0 flex-1">
           <h2 className="m-0 text-sm font-extrabold">{title}</h2>
-          <p className={`m-0 mt-0.5 text-[12.5px] leading-snug ${stopped ? 'text-[#ddd0d2]' : 'text-banner'}`}>{text}</p>
+          <Collapse show={!compact}><p className={`m-0 mt-0.5 text-[12.5px] leading-snug ${stopped ? 'text-[#ddd0d2]' : 'text-banner'}`}>{text}</p></Collapse>
           {/* No progress to report during the 10 to 40 s warm-up: a bar that sweeps shows it is alive. */}
           {view.kind === 'warming' && (
             <span aria-hidden className="mt-2.5 block h-1.5 overflow-hidden rounded-full bg-surface">
@@ -313,10 +343,11 @@ const PRESETS = [
   { id: 'preset-reset', label: 'Reset', tip: 'Vocal, instrumental, drums and others back to 100%', vocal: 100, instrumental: 100, icon: <RotateCcw size={15} aria-hidden /> },
 ];
 
-function SeparateControls({ settings, update, ready, live, onHold, advancedOpen, setAdvancedOpen, splitOpen, setSplitOpen }: {
+function SeparateControls({ settings, update, ready, compact, live, onHold, advancedOpen, setAdvancedOpen, splitOpen, setSplitOpen }: {
   settings: MixerSettings;
   update: Update;
   ready: boolean;
+  compact: boolean;
   /** Separation is running: there is something to compare with. */
   live: boolean;
   onHold: (on: boolean) => void;
@@ -354,6 +385,7 @@ function SeparateControls({ settings, update, ready, live, onHold, advancedOpen,
         </Collapse>
       </Card>
       </Rise>
+      <Collapse show={!compact}>
       <Rise i={2}>
       <div className="presets grid grid-cols-2 gap-2.5" role="group" aria-label="Presets">
         {PRESETS.map((p, i) => {
@@ -379,6 +411,7 @@ function SeparateControls({ settings, update, ready, live, onHold, advancedOpen,
         })}
       </div>
       </Rise>
+      </Collapse>
       <Collapse show={!!undo}>
         <div className="flex items-center justify-between gap-3 px-1 text-xs text-muted">
           <span>Levels changed.</span>

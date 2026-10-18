@@ -173,6 +173,30 @@ describe('popup', () => {
     expect(el<HTMLOutputElement>('master-value').value).toBe('100%');
   });
 
+  describe('compact view', () => {
+    it('hides the presets and the banner text, and is remembered', async () => {
+      await load({ stored: { mode: 'separate' }, status: { ...okStatus, separation: { state: 'on', latency: { engine: 'ml', processingMs: 1949 }, choice: { state: 'on' } } } as unknown as ContentStatus });
+      expect(has('preset-karaoke')).toBe(true);
+      expect(banner()!.textContent).toMatch(/audio delay/);
+      el('compact-toggle').click();
+      await settle();
+      expect(el('compact-toggle').getAttribute('aria-pressed')).toBe('true');
+      expect(has('preset-karaoke')).toBe(false);
+      expect(banner()!.textContent).toBe('Separating live'); // the title stays, the detail goes
+      expect(has('vocal')).toBe(true); // the controls stay
+      await load({ stored: { mode: 'separate' } });
+      expect(has('preset-karaoke')).toBe(false);
+      el('compact-toggle').click();
+      await settle();
+      expect(has('preset-karaoke')).toBe(true);
+    });
+
+    it('is not offered when the page has no All Mixer!', async () => {
+      await load({ status: 'reject' });
+      expect(has('compact-toggle')).toBe(false);
+    });
+  });
+
   it('Global Volume is on the Separate tab too', async () => {
     await load({ stored: { mode: 'separate', masterPct: 400 } });
     el('master-reset').click();
