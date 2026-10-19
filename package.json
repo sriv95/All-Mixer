@@ -12,6 +12,7 @@
     "export-roformer": "uv run python scripts/export-roformer.py",
     "export-scnet": "uv run python scripts/export-scnet.py",
     "model-manifest": "node scripts/model-manifest.mjs",
+    "fetch-guitar": "node scripts/fetch-guitar.mjs",
     "lint": "eslint .",
     "test": "vitest run"
   },
