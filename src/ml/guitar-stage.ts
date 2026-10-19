@@ -13,9 +13,10 @@ import type { ScnetModelFn } from './scnet';
 
 // The guitar model is trained on 11 s chunks and falls apart on short ones: at 1 s it hands over much of the other
 // instruments (spike/bench/guitar_stage_eval.mjs: against the one-pass estimate, 5 dB SDR at 0.9 s, 9 dB at 5.9 s, 11 dB at
-// 9.9 s), so the block follows the Delay limit and the stage adds its whole block to the delay on top of it.
-/** Shortest block: 0.9 s per model run. */
-export const GUITAR_BLOCK = 39680;
+// 9.9 s), so the block is 5.5 s at the least, longer with a longer Delay limit, and the stage adds its whole block to the
+// delay on top of it.
+/** Shortest block: 5.5 s per model run. */
+export const GUITAR_BLOCK = 242432;
 /** 0.5 s overlap between chunks. */
 export const GUITAR_OVERLAP = 22016;
 /** Longest block: 10 s (about 1000 frames; the exported graph holds up to 1700). */

@@ -7,8 +7,8 @@
 //    full publish folder is never overwritten,
 // 3. serves it on localhost with CORS and Range (the downloader asks for 8 MiB ranges) until Ctrl-C.
 // Then, in the extension service-worker console:
-//   chrome.storage.local.set({'debug.modelBaseUrl': 'http://localhost:8765', 'debug.guitar': true})
-// and press Download in the popup (Advanced > Split instrumental), pick the Split model, turn the split on. The URL
+//   chrome.storage.local.set({'debug.modelBaseUrl': 'http://localhost:8765'})
+// and press Download in the popup (Advanced > Split instrumental), choose Guitar in "Split out", turn the split on. The URL
 // replaces the base of every model download.
 import { execFileSync } from 'node:child_process';
 import { copyFileSync, createReadStream, existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
@@ -54,5 +54,5 @@ createServer((req, res) => {
   createReadStream(p, { start, end }).pipe(res);
 }).listen(port, () => {
   console.log(`serving ${repo} on http://localhost:${port} (Ctrl-C to stop)`);
-  console.log(`extension service-worker console:\n  chrome.storage.local.set({'debug.modelBaseUrl': 'http://localhost:${port}', 'debug.guitar': true})`);
+  console.log(`extension service-worker console:\n  chrome.storage.local.set({'debug.modelBaseUrl': 'http://localhost:${port}'})`);
 });
