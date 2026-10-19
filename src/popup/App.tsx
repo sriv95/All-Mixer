@@ -243,9 +243,7 @@ function Master({ settings, update, compact }: { settings: MixerSettings; update
       {/* The stems have their own pitch while "Change pitch separately" is on (Separate tab). */}
       <div className="flex items-center justify-between gap-2">
         <span id="pitch-label" className="flex items-center gap-1.5 text-[13px] font-bold"><AudioWaveform size={15} className="text-brand" aria-hidden />Pitch</span>
-        <Tip text={compact && settings.pitchSplit ? 'Off while the pitch is set separately' : 'Semitones, the speed stays the same'} align="end">
-          <PitchStepper id="pitch" label="Pitch" value={settings.pitch} min={-PITCH_MAX} max={PITCH_MAX} disabled={compact && settings.pitchSplit} onValue={(v) => update({ pitch: clampPitch(v) })} />
-        </Tip>
+        <PitchStepper id="pitch" label="Pitch" value={settings.pitch} min={-PITCH_MAX} max={PITCH_MAX} disabled={compact && settings.pitchSplit} onValue={(v) => update({ pitch: clampPitch(v) })} />
       </div>
     </Card>
   );
