@@ -163,10 +163,4 @@ interface DebugVideoDelay {
   budgetBytes?: number | null;
 }
 
-/** Popup → content script, repeated while its button is held: play every stem at 100 % (the original mix). */
-export interface HoldOriginal {
-  type: 'hold-original';
-  on: boolean;
-}
-
-export type ContentRequest = ApplySettings | GetStatus | HoldOriginal | DebugVideoDelay;
+export type ContentRequest = ApplySettings | GetStatus | DebugVideoDelay;

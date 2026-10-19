@@ -12,9 +12,8 @@ CI builds the extension, creates tag `vx.y.z` and a GitHub release with this sec
 
 ### Added
 
-- Popup: "Hold to hear the original" on the Separate tab. While you hold it, every stem plays at 100 % (the original mix) with no change to the delay, so the picture stays in sync. Let go and the separation is back. It lets go by itself if the popup closes.
 - Popup: "Undo" for five seconds after a preset, to bring back the levels it replaced.
-- Popup: dark mode (follows the system), hints on the tabs, the presets, Reset and the original-mix button, and a compact view (button in the header) that hides the presets and the banner detail. The compact view is remembered.
+- Popup: dark mode (follows the system), hints on the tabs, the presets and Reset, and a compact view (button in the header) that hides the presets and the banner detail. The compact view is remembered.
 - Toolbar badge: the extension icon shows what Separate mode is doing without opening the popup. Gray dots while it warms up, black "ON" while it separates, a red "!" on white when it stops (for example the device is too slow). The tooltip says the same in words. The extension now has an icon.
 - Popup: when Separate mode stops because the device is too slow, buttons offer the fix: switch to the Default model, raise the delay limit, or try again.
 

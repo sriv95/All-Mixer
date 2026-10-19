@@ -1,6 +1,6 @@
 import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { AudioLines, Cpu, Download, Drum, Headphones, LoaderCircle, Maximize2, Mic, Minimize2, MicOff, Music, RefreshCw, RotateCcw, Settings2, SlidersVertical, Timer, TriangleAlert, Undo2, Volume2 } from 'lucide-react';
-import type { ContentStatus, GetStatus, GetTabSettings, HoldOriginal, SetTabSettings } from '../shared/messages';
+import { AudioLines, Cpu, Download, Drum, LoaderCircle, Maximize2, Mic, Minimize2, MicOff, Music, RefreshCw, RotateCcw, Settings2, SlidersVertical, Timer, TriangleAlert, Undo2, Volume2 } from 'lucide-react';
+import type { ContentStatus, GetStatus, GetTabSettings, SetTabSettings } from '../shared/messages';
 import { clampDelayS, clampOthersPct, clampPct, masterPctAt, masterPosOf, MASTER_POS_MAX, normalizeSettings, type MixerSettings, type Mode } from '../shared/settings';
 import { separationView, type SepView } from '../shared/separation-view';
 import { MAX_DELAY_S, MIN_DELAY_S } from '../ml/rof-plan';
@@ -117,13 +117,6 @@ export function App() {
 
   // Until the tab's settings are read the popup would show the defaults, then jump to the real ones.
   const loading = !blocked && !ready;
-  // The original mix while a button is held (the content script lets go by itself if the popup closes).
-  const holdOriginal = useCallback((on: boolean) => {
-    if (tabId.current === null) return;
-    const msg: HoldOriginal = { type: 'hold-original', on };
-    void chrome.tabs.sendMessage(tabId.current, msg).catch(() => undefined);
-  }, []);
-
   const noContent = loaded !== null && !loaded.s;
   const separate = settings.mode === 'separate' && !noContent;
   const note = noteText(blocked, settings, loaded);
@@ -169,7 +162,7 @@ export function App() {
             <AnimatePresence mode="wait" initial={false}>
               {view.kind !== 'off' && <Banner key="banner" compact={compact} view={view} settings={settings} update={update} retry={retry} />}
             </AnimatePresence>
-            <SeparateControls settings={settings} update={update} ready={ready} compact={compact} live={view.kind === 'live'} onHold={holdOriginal} advancedOpen={advancedOpen} setAdvancedOpen={setAdvancedOpen} splitOpen={splitOpen} setSplitOpen={setSplitOpen} />
+            <SeparateControls settings={settings} update={update} ready={ready} compact={compact} advancedOpen={advancedOpen} setAdvancedOpen={setAdvancedOpen} splitOpen={splitOpen} setSplitOpen={setSplitOpen} />
           </motion.div>
         ) : (
           <motion.div key="default" custom={-1} variants={slide} initial="enter" animate="center" exit="exit" transition={{ duration: 0.2 }} className="flex flex-col gap-3.5">
@@ -343,14 +336,11 @@ const PRESETS = [
   { id: 'preset-reset', label: 'Reset', tip: 'Vocal, instrumental, drums and others back to 100%', vocal: 100, instrumental: 100, icon: <RotateCcw size={15} aria-hidden /> },
 ];
 
-function SeparateControls({ settings, update, ready, compact, live, onHold, advancedOpen, setAdvancedOpen, splitOpen, setSplitOpen }: {
+function SeparateControls({ settings, update, ready, compact, advancedOpen, setAdvancedOpen, splitOpen, setSplitOpen }: {
   settings: MixerSettings;
   update: Update;
   ready: boolean;
   compact: boolean;
-  /** Separation is running: there is something to compare with. */
-  live: boolean;
-  onHold: (on: boolean) => void;
   advancedOpen: boolean;
   setAdvancedOpen: (open: boolean) => void;
   splitOpen: boolean;
@@ -419,9 +409,6 @@ function SeparateControls({ settings, update, ready, compact, live, onHold, adva
         </div>
       </Collapse>
       <Rise i={3}>
-        <HoldToCompare enabled={live} onHold={onHold} />
-      </Rise>
-      <Rise i={4}>
       <Disclosure id="advanced" open={advancedOpen} onOpen={(open) => persistAdvanced(open, setAdvancedOpen)} className="rounded-[20px] bg-card" buttonClassName="p-4"
         title={<span className="flex items-center gap-1.5"><Settings2 size={15} className="text-brand" aria-hidden />Advanced <span className="font-medium text-muted">(model, delay)</span></span>}>
         <div className="flex flex-col gap-3.5 px-4 pb-4">
@@ -452,38 +439,6 @@ function SeparateControls({ settings, update, ready, compact, live, onHold, adva
       </Disclosure>
       </Rise>
     </>
-  );
-}
-
-/** Hold it to hear the original mix, let go to hear the separation again. Works from the keyboard (Space or Enter held). */
-function HoldToCompare({ enabled, onHold }: { enabled: boolean; onHold: (on: boolean) => void }) {
-  const [held, setHeld] = useState(false);
-  useEffect(() => {
-    if (!held) return;
-    onHold(true);
-    const again = setInterval(() => onHold(true), 300);
-    return () => {
-      clearInterval(again);
-      onHold(false);
-    };
-  }, [held, onHold]);
-  const press = () => setHeld(true);
-  const release = () => setHeld(false);
-  return (
-    <Tip text="Plays every stem at 100%, the original mix, while held">
-    <Btn id="compare" disabled={!enabled} aria-pressed={held} onPointerDown={press} onPointerUp={release} onPointerLeave={release} onPointerCancel={release} onBlur={release}
-      onKeyDown={(e) => {
-        if (e.key === ' ' || e.key === 'Enter') {
-          e.preventDefault();
-          if (!e.repeat) press();
-        }
-      }}
-      onKeyUp={release}
-      className="aria-pressed:bg-brand-tint aria-pressed:text-brand-dark">
-      <Headphones size={16} aria-hidden />
-      {held ? 'Playing the original…' : 'Hold to hear the original'}
-    </Btn>
-    </Tip>
   );
 }
 
