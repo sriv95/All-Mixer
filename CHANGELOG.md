@@ -8,8 +8,6 @@ CI builds the extension, creates tag `vx.y.z` and a GitHub release with this sec
 
 ## [Unreleased]
 
-## [Unreleased]
-
 ### Added
 
 - Popup: "Undo" for five seconds after a preset, to bring back the levels it replaced.
@@ -33,6 +31,10 @@ CI builds the extension, creates tag `vx.y.z` and a GitHub release with this sec
 - Separation: **Split instrumental** adds its delay on top of the Delay limit, so the limit no longer jumps to 8 s.
 - Popup: **Global Volume** (0 to 600 %, 100 % in the middle of the slider) sits at the top and boosts both modes, with its own Reset. It replaces Master volume, which was Default mode only. The Reset preset leaves it alone.
 - Popup: the **Others** slider now goes from 0 to 100 %.
+
+### Fixed
+
+- Lyrics: a brief server error (HTTP 5xx) from LRCLIB is retried once before the lyrics search gives up.
 
 ## [0.3.0] - 2026-10-18
 

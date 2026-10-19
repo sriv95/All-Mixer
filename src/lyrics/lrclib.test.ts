@@ -10,6 +10,15 @@ const record = { id: 7, trackName: 'Yellow', artistName: 'Coldplay', duration: 2
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 
 describe('findLyrics', () => {
+  it('retries once on a 5xx, then gives up with the status', async () => {
+    const f = vi.fn().mockResolvedValueOnce(json({}, 502)).mockResolvedValueOnce(json(record));
+    expect((await findLyrics(track, f as unknown as typeof fetch))?.record.id).toBe(7);
+    expect(f).toHaveBeenCalledTimes(2);
+    const down = vi.fn().mockResolvedValue(json({}, 502));
+    await expect(searchLyrics('yellow', down as unknown as typeof fetch)).rejects.toThrow('HTTP 502');
+    expect(down).toHaveBeenCalledTimes(2);
+  });
+
   it('uses /get with cleaned names and rounded duration', async () => {
     const f = vi.fn().mockResolvedValue(json(record));
     const res = await findLyrics(track, f as unknown as typeof fetch);

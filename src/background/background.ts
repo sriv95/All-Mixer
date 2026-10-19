@@ -55,7 +55,9 @@ async function handle(msg: BackgroundRequest, sender: chrome.runtime.MessageSend
 
 chrome.runtime.onMessage.addListener((msg: BackgroundRequest, sender, sendResponse) => {
   handle(msg, sender).then(sendResponse, (e) => {
-    console.error('[All Mixer!]', e);
+    // LRCLIB being down is not a bug here: warn, so it stays out of the extension's Errors list.
+    const lyrics = msg.type === 'fetch-lyrics' || msg.type === 'search-lyrics';
+    (lyrics ? console.warn : console.error)('[All Mixer!]', e);
     sendResponse(null);
   });
   return true; // async response
