@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState, type ComponentProps, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
-import { Check, ChevronDown } from 'lucide-react';
+import { Check, ChevronDown, Minus, Plus } from 'lucide-react';
 import { AnimatePresence, animate, motion, type Variants } from 'motion/react';
 
 /** True on a page the extension cannot run on: every control below is disabled. */
@@ -125,18 +125,37 @@ export function Slider({ id, value, shown = value, min, max, step, onValue, disa
   return <input id={id} type="range" className="mx-range" min={min} max={max} step={shown !== value ? 'any' : step} value={shown} style={style} disabled={blocked || disabled} onChange={(e) => onValue(Number(e.currentTarget.value))} />;
 }
 
-/** A labelled slider with its value (and `unit`) on the right. */
-export function SliderRow({ id, label, icon, unit, hint, onValue, ...slider }: SliderProps & { label: ReactNode; icon: ReactNode; unit: string; hint?: ReactNode }) {
+const signed = (n: number) => (n > 0 ? `+${n}` : n < 0 ? `−${-n}` : '0');
+
+/** A − / + pair around the pitch in semitones: `id`-down, `id`-value and `id`-up. */
+export function PitchStepper({ id, label, value, min, max, onValue, disabled }: { id: string; label: string; value: number; min: number; max: number; onValue: (v: number) => void; disabled?: boolean }) {
+  const blocked = useContext(Blocked);
+  const off = blocked || disabled;
+  const btn = 'grid size-6 cursor-pointer place-items-center rounded-full border-0 bg-card text-ink shadow-raised-sm disabled:cursor-default disabled:opacity-45';
+  return (
+    <div role="group" aria-label={label} className={cx('inline-flex items-center gap-0.5 rounded-full bg-well p-0.5 shadow-pressed transition-opacity', disabled && 'opacity-60')}>
+      <button id={`${id}-down`} type="button" className={btn} aria-label={`${label} down`} disabled={off || value <= min} onClick={() => onValue(value - 1)}><Minus size={12} aria-hidden /></button>
+      <output id={`${id}-value`} className="min-w-7 text-center text-xs font-extrabold tabular-nums">{signed(value)}</output>
+      <button id={`${id}-up`} type="button" className={btn} aria-label={`${label} up`} disabled={off || value >= max} onClick={() => onValue(value + 1)}><Plus size={12} aria-hidden /></button>
+    </div>
+  );
+}
+
+/** A labelled slider with its value (and `unit`) on the right; `pitch` (a PitchStepper) goes before the value. */
+export function SliderRow({ id, label, icon, unit, hint, pitch, onValue, ...slider }: SliderProps & { label: ReactNode; icon: ReactNode; unit: string; hint?: ReactNode; pitch?: ReactNode }) {
   const { shown, gliding, mine } = useGlide(slider.value);
   return (
     <div className="mx-row flex flex-col gap-3">
-      <div className="flex items-baseline justify-between gap-2">
+      <div className={cx('flex justify-between gap-2', pitch ? 'items-center' : 'items-baseline')}>
         <label htmlFor={id} className="flex items-center gap-1.5 text-[13px] font-bold">
           <span className="text-brand" aria-hidden>{icon}</span>
           {label}
           {hint && <span className="text-xs font-medium text-muted">{hint}</span>}
         </label>
-        <output id={`${id}-value`} htmlFor={id} className="min-w-12 text-right text-[15px] font-extrabold tabular-nums"><Roll text={`${Math.round(shown)}${unit}`} still={gliding} /></output>
+        <div className="flex items-center gap-2">
+          {pitch}
+          <output id={`${id}-value`} htmlFor={id} className="min-w-12 text-right text-[15px] font-extrabold tabular-nums"><Roll text={`${Math.round(shown)}${unit}`} still={gliding} /></output>
+        </div>
       </div>
       <Slider id={id} {...slider} shown={shown} onValue={(v) => { mine(v); onValue(v); }} />
     </div>

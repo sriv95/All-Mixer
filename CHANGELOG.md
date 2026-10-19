@@ -8,6 +8,14 @@ CI builds the extension, creates tag `vx.y.z` and a GitHub release with this sec
 
 ## [Unreleased]
 
+### Added
+
+- Pitch: a − / + control under Global volume shifts the pitch by up to 6 semitones either way, in Default and Separate mode. The speed stays the same. In Separate mode, Advanced has "Change pitch separately": the vocal and the instrumental get their own − / + next to their levels.
+
+### Changed
+
+- Separate mode: the audio and picture are about 23 ms later than before (the pitch stage). A pitch shift in Default mode adds the same delay.
+
 ## [0.4.0] - 2026-10-19
 
 ### Added

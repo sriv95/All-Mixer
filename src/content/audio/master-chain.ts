@@ -4,8 +4,11 @@ import {
   ML_SAMPLE_RATE,
   PARAM_DRUMS,
   PARAM_INSTRUMENTAL,
+  PARAM_INSTRUMENTAL_PITCH,
   PARAM_OTHERS,
   PARAM_VOCAL,
+  PARAM_VOCAL_PITCH,
+  PITCH_LATENCY_SAMPLES,
   SEPARATOR_MODULE_PATH,
   SEPARATOR_PROCESSOR,
   type FromWorklet,
@@ -24,7 +27,8 @@ import { createLimiter } from './limiter';
  *   <video> → MediaElementSource ─┬─ direct (gain) ───────────────────────┬→ master (0–6×) → limiter → destination
  *                                 └─ separator worklet (vocal/inst 0–6×) ─ sepOut (gain) ┘
  *
- * Default mode plays through `direct` with no added delay. Separate mode
+ * Default mode plays through `direct` with no added delay, until a pitch shift is asked for: then it runs through the
+ * separator on the original mix (the worklet's pitch stage adds PITCH_LATENCY_SAMPLES, also in Separate mode). Separate mode
  * crossfades to the separator, which starts on the original mix (no delay) and
  * is ML_LATENCY_SAMPLES late once the ML engine runs (the worklet reports that
  * with an `engine` message). The worklet module is only loaded the first time Separate mode is used.
@@ -46,7 +50,12 @@ export interface SeparationRequest {
   /** Split instrumental: gains of the drums and of the rest of the instrumental, on top of `instrumental` (default 1). */
   drums?: number;
   others?: number;
+  /** Pitch shift of the vocal and of the instrumental, semitones (default 0). Any shift routes the audio through the worklet, also with `on` false (then the gains above are ignored). */
+  pitchVocal?: number;
+  pitchInstrumental?: number;
 }
+
+const pitched = (r: SeparationRequest): boolean => !!r.pitchVocal || !!r.pitchInstrumental;
 
 export type SeparationState = 'off' | 'loading' | 'on' | 'error';
 
@@ -61,6 +70,8 @@ const FADE_TAU = 0.006;
 const PRE_ROLL = 0.01;
 /** Gain slider smoothing (s). */
 const GAIN_TAU = 0.015;
+/** Pitch steps glide (s). */
+const PITCH_TAU = 0.04;
 const DEVICE_POLL_MS = 2000;
 /** Device latency moves smaller than this are jitter, not a change. */
 const DEVICE_STEP_MS = 2;
@@ -172,7 +183,7 @@ export class MasterChain {
   /** Current total audio delay (D1). */
   get latency(): LatencyInfo {
     const sampleRate = this.ctx?.sampleRate ?? 48000;
-    const processingSamples = !this.separating ? 0 : this.engine === 'ml' ? this.runGeometry.latency : 0;
+    const processingSamples = !this.separating ? 0 : (this.engine === 'ml' ? this.runGeometry.latency : 0) + PITCH_LATENCY_SAMPLES;
     const processingMs = (processingSamples / sampleRate) * 1000;
     const deviceMs = this.deviceLatencyMs;
     return {
@@ -288,7 +299,7 @@ export class MasterChain {
       this.pendingMlPort?.close();
       this.pendingMlPort = null;
     }
-    if (!this.engaged && req.on) this.engage();
+    if (!this.engaged && (req.on || pitched(req))) this.engage();
     this.route();
   }
 
@@ -325,7 +336,8 @@ export class MasterChain {
   private route(): void {
     const { ctx, sep, direct, sepOut } = this;
     if (!ctx || !direct || !sepOut) return;
-    const want = this.separation.on && !this.sepError;
+    const { on } = this.separation;
+    const want = (on || pitched(this.separation)) && !this.sepError;
     if (want && !sep) {
       this.loadSeparator(); // keeps playing through `direct` meanwhile
       return;
@@ -333,10 +345,14 @@ export class MasterChain {
     if (!sep) return;
     const now = ctx.currentTime;
     if (want) {
-      sep.parameters.get(PARAM_VOCAL)?.setTargetAtTime(this.separation.vocal, now, GAIN_TAU);
-      sep.parameters.get(PARAM_INSTRUMENTAL)?.setTargetAtTime(this.separation.instrumental, now, GAIN_TAU);
-      sep.parameters.get(PARAM_DRUMS)?.setTargetAtTime(this.separation.drums ?? 1, now, GAIN_TAU);
-      sep.parameters.get(PARAM_OTHERS)?.setTargetAtTime(this.separation.others ?? 1, now, GAIN_TAU);
+      // Only pitching (Default mode): the stem gains of the last Separate session do not apply.
+      const gain = (v: number | undefined) => (on ? v ?? 1 : 1);
+      sep.parameters.get(PARAM_VOCAL)?.setTargetAtTime(gain(this.separation.vocal), now, GAIN_TAU);
+      sep.parameters.get(PARAM_INSTRUMENTAL)?.setTargetAtTime(gain(this.separation.instrumental), now, GAIN_TAU);
+      sep.parameters.get(PARAM_DRUMS)?.setTargetAtTime(gain(this.separation.drums), now, GAIN_TAU);
+      sep.parameters.get(PARAM_OTHERS)?.setTargetAtTime(gain(this.separation.others), now, GAIN_TAU);
+      sep.parameters.get(PARAM_VOCAL_PITCH)?.setTargetAtTime(this.separation.pitchVocal ?? 0, now, PITCH_TAU);
+      sep.parameters.get(PARAM_INSTRUMENTAL_PITCH)?.setTargetAtTime(this.separation.pitchInstrumental ?? 0, now, PITCH_TAU);
       if (this.separating) return;
       clearTimeout(this.offTimer);
       const start = now + PRE_ROLL;
@@ -426,7 +442,7 @@ export class MasterChain {
       // The sound leaves the speakers one device latency after the worklet outputs it.
       const cb = this.audibleCb;
       this.audibleCb = null;
-      if (cb) this.audibleTimer = setTimeout(cb, this.latency.deviceMs);
+      if (cb) this.audibleTimer = setTimeout(cb, this.latency.deviceMs + (PITCH_LATENCY_SAMPLES / (this.ctx?.sampleRate ?? ML_SAMPLE_RATE)) * 1000);
       return;
     }
     this.probe?.trace('engine', { engine: msg.engine, reason: msg.reason, at: msg.at });

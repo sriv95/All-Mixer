@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ML_LATENCY_SAMPLES } from '../../worklet/protocol';
+import { ML_LATENCY_SAMPLES, PITCH_LATENCY_SAMPLES } from '../../worklet/protocol';
 import type { AvProbe } from '../av-probe';
 import { ERR_OTHER_COPY, ERR_OTHER_OWNER, MasterChain, OWNER_ATTR, isOpaqueMedia } from './master-chain';
 
@@ -41,6 +41,8 @@ class FakeWorklet extends FakeNode {
     ['instrumentalGain', new FakeParam(1)],
     ['drumsGain', new FakeParam(1)],
     ['othersGain', new FakeParam(1)],
+    ['vocalPitch', new FakeParam(0)],
+    ['instrumentalPitch', new FakeParam(0)],
   ]);
   constructor(
     readonly ctx: FakeContext,
@@ -303,11 +305,12 @@ describe('MasterChain separation', () => {
     expect(sep.parameters.get('vocalGain')!.value).toBe(0);
     expect(sep.parameters.get('instrumentalGain')!.value).toBe(1.5);
     expect(chain.separationState).toBe('on');
-    expect(chain.latency).toMatchObject({ engine: 'bypass', processingSamples: 0, sampleRate: 48000 });
-    expect(chain.latency.processingMs).toBe(0);
-    expect(chain.latency.videoDelayMs).toBeCloseTo(30, 2);
+    // only the pitch stage's fixed delay
+    expect(chain.latency).toMatchObject({ engine: 'bypass', processingSamples: PITCH_LATENCY_SAMPLES, sampleRate: 48000 });
+    expect(chain.latency.processingMs).toBeCloseTo((PITCH_LATENCY_SAMPLES / 48000) * 1000, 6);
+    expect(chain.latency.videoDelayMs).toBeCloseTo(30 + chain.latency.processingMs, 2);
     expect(changes).toHaveLength(1);
-    expect(changes[0][0]).toBe(0);
+    expect(changes[0][0]).toBe(PITCH_LATENCY_SAMPLES);
     expect(changes[0][1]).toBeGreaterThan(performance.now());
   });
 
@@ -339,16 +342,52 @@ describe('MasterChain separation', () => {
     chain.setEngine('ml', 'auto');
     expect(sep.messages.at(-1)).toEqual({ type: 'engine', engine: 'ml', reason: 'auto' });
     port.onmessage!({ data: { type: 'engine', engine: 'ml', reason: 'auto', at: ctx.currentTime + 1 } });
-    expect(chain.latency).toMatchObject({ engine: 'ml', reason: 'auto', processingSamples: ML_LATENCY_SAMPLES });
-    expect(chain.latency.processingMs).toBeCloseTo((ML_LATENCY_SAMPLES / 44100) * 1000, 3);
-    expect(changes.at(-1)![0]).toBe(ML_LATENCY_SAMPLES);
+    expect(chain.latency).toMatchObject({ engine: 'ml', reason: 'auto', processingSamples: ML_LATENCY_SAMPLES + PITCH_LATENCY_SAMPLES });
+    expect(chain.latency.processingMs).toBeCloseTo(((ML_LATENCY_SAMPLES + PITCH_LATENCY_SAMPLES) / 44100) * 1000, 3);
+    expect(changes.at(-1)![0]).toBe(ML_LATENCY_SAMPLES + PITCH_LATENCY_SAMPLES);
     // heard one processing delay after the input sample; device latency is added by the fake ctx
     const heard = (at: number, n: number) => performance.now() + (at + n / 44100 - ctx.currentTime) * 1000 + chain.latency.deviceMs;
-    expect(changes.at(-1)![1]).toBeCloseTo(heard(ctx.currentTime + 1, ML_LATENCY_SAMPLES), -1);
+    expect(changes.at(-1)![1]).toBeCloseTo(heard(ctx.currentTime + 1, ML_LATENCY_SAMPLES + PITCH_LATENCY_SAMPLES), -1);
     port.onmessage!({ data: { type: 'engine', engine: 'bypass', reason: 'deadline-miss', at: ctx.currentTime + 2 } });
-    expect(chain.latency).toMatchObject({ engine: 'bypass', reason: 'deadline-miss', processingSamples: 0 });
-    expect(changes.at(-1)![0]).toBe(0);
-    expect(changes.at(-1)![1]).toBeCloseTo(heard(ctx.currentTime + 2, 0), -1);
+    expect(chain.latency).toMatchObject({ engine: 'bypass', reason: 'deadline-miss', processingSamples: PITCH_LATENCY_SAMPLES });
+    expect(changes.at(-1)![0]).toBe(PITCH_LATENCY_SAMPLES);
+    expect(changes.at(-1)![1]).toBeCloseTo(heard(ctx.currentTime + 2, PITCH_LATENCY_SAMPLES), -1);
+  });
+
+  it('passes the pitches to the worklet (0 when absent)', async () => {
+    const { chain, sep } = await separating();
+    chain.setSeparation({ ...on, pitchVocal: -2, pitchInstrumental: 3 });
+    expect(sep.parameters.get('vocalPitch')!.value).toBe(-2);
+    expect(sep.parameters.get('instrumentalPitch')!.value).toBe(3);
+    chain.setSeparation(on);
+    expect(sep.parameters.get('vocalPitch')!.value).toBe(0);
+    expect(sep.parameters.get('instrumentalPitch')!.value).toBe(0);
+  });
+
+  it('a pitch shift alone (Default mode) runs the worklet on the original mix; the stem gains stay at 1', async () => {
+    running();
+    const chain = new MasterChain(undefined, () => 'chrome-extension://x/worklet.js');
+    chain.setVideo(video());
+    chain.setSeparation({ ...off, pitchVocal: 2, pitchInstrumental: 2 });
+    await flushPromises();
+    const sep = worklets[0];
+    expect(sep.messages[0]).toEqual({ type: 'active', on: true });
+    expect(sep.parameters.get('instrumentalGain')!.value).toBe(1);
+    expect(sep.parameters.get('vocalGain')!.value).toBe(1);
+    expect(sep.parameters.get('instrumentalPitch')!.value).toBe(2);
+    expect(chain.separationState).toBe('off');
+    expect(chain.latency.processingSamples).toBe(PITCH_LATENCY_SAMPLES);
+    // back to 0: fades to the direct path
+    chain.setSeparation(off);
+    expect(chain.latency.processingSamples).toBe(0);
+  });
+
+  it('without a pitch the worklet is not loaded in Default mode', () => {
+    running();
+    const chain = new MasterChain(undefined, () => 'chrome-extension://x/worklet.js');
+    chain.setVideo(video());
+    chain.setSeparation(off);
+    expect(contexts).toHaveLength(0);
   });
 
   it('ignores a switch to ML when the context is not at the model rate', async () => {
