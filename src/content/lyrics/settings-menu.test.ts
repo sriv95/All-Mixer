@@ -30,7 +30,7 @@ describe('buildMenuRows', () => {
   it('www: two sections, source (with its options) and display, in karaoke mode', () => {
     const rows = buildMenuRows({ sources, captions, prefs: prefs(), canEdit: true, timing: { offsetMs: 0 }, lyrics: { synced: true } }, actions());
     expect(ids(rows)).toEqual(['sourceSection', 'displaySection']);
-    expect(ids(rows, 'sourceSection')).toEqual(['source', 'captionLanguage', 'findLyrics', 'myLyrics', 'sourceOptions']);
+    expect(ids(rows, 'sourceSection')).toEqual(['source', 'captionLanguage', 'sourceOptions']);
     expect(ids(rows, 'sourceOptions')).toEqual(['timing', 'timingKeys', 'exportLyrics']);
     expect(ids(rows, 'exportLyrics')).toEqual(['copyLyrics', 'saveLrc']);
     expect(ids(rows, 'displaySection')).toEqual(['display', 'lines', 'karaokeText', 'resetPosition']);
@@ -167,17 +167,23 @@ describe('buildMenuRows', () => {
     expect(a.setPrefs).toHaveBeenLastCalledWith({ lyricsTimingKeys: false });
   });
 
-  it('Find other lyrics: offered when lyrics are shown or missing, in the source section and on YT Music', () => {
+  it('Find other lyrics: offered when lyrics are shown or missing, among the sources (www) and on YT Music', () => {
     const a = actions();
     const rows = (canEdit?: boolean, site?: 'ytmusic') => buildMenuRows({ sources, prefs: prefs(), canEdit, site }, a);
-    expect(find(rows(), 'findLyrics')).toBeUndefined();
-    expect(ids(rows(true), 'sourceSection')).toEqual(['source', 'findLyrics', 'myLyrics']);
+    const labels = (r: MenuRow[]) => find(r, 'source')!.options.map((o) => o.label);
+    expect(labels(rows())).toEqual(['Auto', 'LRCLIB (not found)', 'YouTube captions']);
+    // www: after the stored sources, before the YouTube captions.
+    expect(labels(rows(true))).toEqual(['Auto', 'LRCLIB (not found)', 'Find other lyrics…', 'Use my own lyrics…', 'YouTube captions']);
+    expect(ids(rows(true), 'sourceSection')).toEqual(['source']);
+    // YT Music has selects, so the actions stay separate rows.
     expect(ids(rows(true, 'ytmusic'))).toEqual(['source', 'findLyrics', 'myLyrics']);
-    const all = rows(true, 'ytmusic');
-    find(all, 'findLyrics')!.run!();
-    find(all, 'myLyrics')!.run!();
+    const www = find(rows(true), 'source')!.options;
+    www[2].run!();
+    www[3].run!();
     expect(a.findLyrics).toHaveBeenCalled();
     expect(a.myLyrics).toHaveBeenCalled();
+    // No source row (lyrics not loaded yet): they are rows of the section.
+    expect(ids(buildMenuRows({ prefs: prefs(), canEdit: true }, a), 'sourceSection')).toEqual(['findLyrics', 'myLyrics']);
   });
 
   it('My style: save the current look, then pick it; saving is only offered for a look that is not a preset yet', () => {
@@ -386,7 +392,7 @@ describe('YtSettingsMenu', () => {
     m.setRows(buildMenuRows(input, a));
     go('sourceSection');
     const labels = () => [...sub().querySelectorAll('.ytp-menuitem-label')].map((e) => e.textContent);
-    expect(labels()).toEqual(['Source', 'Caption language', 'Find other lyrics…', 'Use my own lyrics…', 'Source options']);
+    expect(labels()).toEqual(['Source', 'Caption language', 'Source options']);
     settingEl('sourceOptions').click();
     expect(titles()).toEqual(['Source options']);
     expect(labels()).toEqual(['Lyrics timing', 'Timing keys', 'Export lyrics']);
@@ -404,15 +410,20 @@ describe('YtSettingsMenu', () => {
     expect(titles()).toEqual(['Source options']);
   });
 
-  it('Find other lyrics and Use my own lyrics run from the source section', () => {
+  it('Find other lyrics and Use my own lyrics sit in the Source choices, before YouTube captions, and run without picking a source', () => {
     const a = actions();
     const m = new YtSettingsMenu();
     m.setRows(buildMenuRows({ sources, prefs: prefs(), canEdit: true }, a));
-    go('sourceSection');
+    go('sourceSection', 'source');
+    const labels = [...sub().querySelectorAll('.ytp-menuitem-label')].map((e) => e.textContent);
+    expect(labels).toEqual(['Auto', 'LRCLIB (not found)', 'Find other lyrics…', 'Use my own lyrics…', 'YouTube captions']);
     sub().querySelector<HTMLElement>('[data-am-row-button="findLyrics"]')!.click();
     sub().querySelector<HTMLElement>('[data-am-row-button="myLyrics"]')!.click();
     expect(a.findLyrics).toHaveBeenCalled();
     expect(a.myLyrics).toHaveBeenCalled();
+    expect(a.selectSource).not.toHaveBeenCalled();
+    expect(titles()).toEqual(['Source']); // an action keeps the panel open
+    expect(sub().querySelectorAll('[aria-checked="true"]')).toHaveLength(1);
   });
 
   it('Custom Karaoke Text: opens Color and Size, picks a preset and a custom color', () => {
