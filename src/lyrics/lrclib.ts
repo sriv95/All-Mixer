@@ -8,14 +8,20 @@ export type { FoundLyrics } from './lrclib-types';
 const BASE = 'https://lrclib.net/api';
 const TIMEOUT_MS = 8000;
 
-/** Plain GET (no custom headers, so no CORS preflight). 404 → null; other errors throw. */
-async function getJson<T>(path: string, params: Record<string, string>, fetchFn: typeof fetch): Promise<T | null> {
+const RETRY_DELAY_MS = 400;
+
+/** Plain GET (no custom headers, so no CORS preflight). 404 → null; other errors throw. One retry on a 5xx: LRCLIB's 502s are brief. */
+async function getJson<T>(path: string, params: Record<string, string>, fetchFn: typeof fetch, retry = true): Promise<T | null> {
   const url = `${BASE}/${path}?${new URLSearchParams(params)}`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   try {
     const res = await fetchFn(url, { signal: ctrl.signal });
     if (res.status === 404) return null;
+    if (res.status >= 500 && retry) {
+      await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+      return getJson<T>(path, params, fetchFn, false);
+    }
     if (!res.ok) throw new Error(`LRCLIB ${path} failed: HTTP ${res.status}`);
     return (await res.json()) as T;
   } finally {
