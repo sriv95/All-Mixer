@@ -3,9 +3,12 @@
 // with b the core's bypass weight (1 = original mix). Without the drum stage `drums` is 0 and othersGain scales the instrumental.
 // The separation (ML engine, or the bypass path that plays the original mix) lives in SeparatorCore; vocal + instrumental = input delayed
 // by the engine's latency, so 100 % / 100 % is the original.
+// The vocal term and the instrumental term (each with its share of the bypass weight) then go through their own pitch shifter
+// (pitch-shifter.ts) and are added, so each stem has its own pitch; on the original mix the whole mix is the instrumental term.
 // process() allocates nothing; every buffer is created in the constructor.
 import { QUANTUM, SeparatorCore } from './core';
-import { PARAM_DRUMS, PARAM_INSTRUMENTAL, PARAM_OTHERS, PARAM_VOCAL, SEPARATOR_PROCESSOR, type FromWorklet, type ToWorklet } from './protocol';
+import { PitchShifter } from './pitch-shifter';
+import { PARAM_DRUMS, PARAM_INSTRUMENTAL, PARAM_INSTRUMENTAL_PITCH, PARAM_OTHERS, PARAM_VOCAL, PARAM_VOCAL_PITCH, SEPARATOR_PROCESSOR, type FromWorklet, type ToWorklet } from './protocol';
 
 // AudioWorkletGlobalScope is not in TypeScript's DOM lib.
 declare const sampleRate: number;
@@ -22,6 +25,8 @@ class SeparatorProcessor extends AudioWorkletProcessor {
       { name: PARAM_INSTRUMENTAL, defaultValue: 1, minValue: 0, maxValue: 6, automationRate: 'k-rate' },
       { name: PARAM_DRUMS, defaultValue: 1, minValue: 0, maxValue: 6, automationRate: 'k-rate' },
       { name: PARAM_OTHERS, defaultValue: 1, minValue: 0, maxValue: 6, automationRate: 'k-rate' },
+      { name: PARAM_VOCAL_PITCH, defaultValue: 0, minValue: -12, maxValue: 12, automationRate: 'k-rate' },
+      { name: PARAM_INSTRUMENTAL_PITCH, defaultValue: 0, minValue: -12, maxValue: 12, automationRate: 'k-rate' },
     ];
   }
 
@@ -34,6 +39,13 @@ class SeparatorProcessor extends AudioWorkletProcessor {
   private readonly dL = new Float32Array(QUANTUM);
   private readonly dR = new Float32Array(QUANTUM);
   private readonly bw = new Float32Array(QUANTUM);
+  // The vocal term and the instrumental term, before the pitch shifters.
+  private readonly tvL = new Float32Array(QUANTUM);
+  private readonly tvR = new Float32Array(QUANTUM);
+  private readonly tiL = new Float32Array(QUANTUM);
+  private readonly tiR = new Float32Array(QUANTUM);
+  private readonly vocalPitch = new PitchShifter();
+  private readonly instrumentalPitch = new PitchShifter();
   private active = false;
   // Gains applied at the end of the previous quantum; each quantum ramps linearly from these.
   private vg = 1;
@@ -46,8 +58,11 @@ class SeparatorProcessor extends AudioWorkletProcessor {
     this.port.onmessage = (e: MessageEvent<ToWorklet>) => {
       const msg = e.data;
       if (msg.type === 'active') {
-        if (msg.on && !this.active) this.core.setActive(true, msg.engine, msg.reason);
-        else if (!msg.on) this.core.setActive(false);
+        if (msg.on && !this.active) {
+          this.vocalPitch.reset();
+          this.instrumentalPitch.reset();
+          this.core.setActive(true, msg.engine, msg.reason);
+        } else if (!msg.on) this.core.setActive(false);
         this.active = msg.on;
       } else if (msg.type === 'flush') {
         this.core.flush();
@@ -88,7 +103,7 @@ class SeparatorProcessor extends AudioWorkletProcessor {
       oR.fill(0);
       return true;
     }
-    const { vL, vR, iL, iR, dL, dR, bw } = this;
+    const { vL, vR, iL, iR, dL, dR, bw, tvL, tvR, tiL, tiR } = this;
     this.core.process(inL, inR, vL, vR, iL, iR, bw, currentTime, dL, dR);
 
     // Per-sample ramp from last quantum's gains so k-rate steps do not zipper. The drums are a part of the
@@ -105,8 +120,16 @@ class SeparatorProcessor extends AudioWorkletProcessor {
       const d = dg0 + (dg1 - dg0) * k;
       const o = og0 + (og1 - og0) * k;
       const b = bw[i];
-      oL[i] = (1 - b) * (v * vL[i] + g * (d * dL[i] + o * (iL[i] - dL[i]))) + b * (vL[i] + iL[i]);
-      oR[i] = (1 - b) * (v * vR[i] + g * (d * dR[i] + o * (iR[i] - dR[i]))) + b * (vR[i] + iR[i]);
+      tvL[i] = ((1 - b) * v + b) * vL[i];
+      tvR[i] = ((1 - b) * v + b) * vR[i];
+      tiL[i] = (1 - b) * g * (d * dL[i] + o * (iL[i] - dL[i])) + b * iL[i];
+      tiR[i] = (1 - b) * g * (d * dR[i] + o * (iR[i] - dR[i])) + b * iR[i];
+    }
+    this.vocalPitch.process(tvL, tvR, oL, oR, len, parameters[PARAM_VOCAL_PITCH][0]);
+    this.instrumentalPitch.process(tiL, tiR, tiL, tiR, len, parameters[PARAM_INSTRUMENTAL_PITCH][0]);
+    for (let i = 0; i < len; i++) {
+      oL[i] += tiL[i];
+      oR[i] += tiR[i];
     }
     this.vg = vg1;
     this.ig = ig1;

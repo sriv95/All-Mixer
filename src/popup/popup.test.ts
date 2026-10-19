@@ -458,6 +458,52 @@ describe('popup', () => {
     expect(has('tab-separate')).toBe(false);
   });
 
+  describe('pitch', () => {
+    const value = (id: string) => el<HTMLOutputElement>(`${id}-value`).textContent;
+
+    it('the Default tab steps the global pitch with − and +, within ±6', async () => {
+      await load();
+      expect(value('pitch')).toBe('0');
+      el('pitch-up').click();
+      await settle();
+      expect(sent().at(-1).settings.pitch).toBe(1);
+      expect(value('pitch')).toBe('+1');
+      el('pitch-down').click();
+      await settle();
+      el('pitch-down').click();
+      await settle();
+      expect(sent().at(-1).settings.pitch).toBe(-1);
+      expect(value('pitch')).toBe('−1');
+      await load({ stored: { pitch: 6 } });
+      expect(el<HTMLButtonElement>('pitch-up').disabled).toBe(true);
+    });
+
+    it('the Separate tab has the global pitch in the Global volume box and no stem steppers until "Change pitch separately"', async () => {
+      await load({ stored: { mode: 'separate', pitch: 2 } });
+      expect(el('pitch-label').closest('.mx-row')).toBe(el('master').closest('.mx-row'));
+      expect(has('vocal-pitch-up')).toBe(false);
+      expect(el<HTMLInputElement>('pitch-split').checked).toBe(false);
+    });
+
+    it('"Change pitch separately" starts both stems at the global pitch and moves the steppers into the stem rows', async () => {
+      await load({ stored: { mode: 'separate', pitch: 2 } });
+      el('pitch-split').click();
+      await settle();
+      expect(sent().at(-1).settings).toMatchObject({ pitchSplit: true, vocalPitch: 2, instrPitch: 2 });
+      expect(el('vocal-pitch-up').closest('.mx-row')).toBe(el('vocal').closest('.mx-row'));
+      expect(el<HTMLButtonElement>('pitch-up').disabled).toBe(true);
+      el('vocal-pitch-down').click();
+      el('instrumental-pitch-up').click();
+      await settle();
+      expect(sent().at(-1).settings).toMatchObject({ pitch: 2, vocalPitch: 1, instrPitch: 3 });
+      expect(value('vocal-pitch')).toBe('+1');
+      el('pitch-split').click();
+      await settle();
+      expect(sent().at(-1).settings.pitchSplit).toBe(false);
+      expect(has('vocal-pitch-up')).toBe(false);
+    });
+  });
+
   describe('Separate tab', () => {
     const sep = (state: 'loading' | 'on' | 'error', extra: object = {}, engine = 'ml', processingMs = 120.2) =>
       ({ ...okStatus, separation: { state, latency: { engine, processingMs }, ...extra } }) as unknown as ContentStatus;

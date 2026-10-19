@@ -167,3 +167,11 @@ export type FromMlWorker =
 
 /** Page → worker init (iframe page forwards the ML port from the content script). */
 export type MlWorkerInit = { type: 'init'; speeds?: SpeedCache; appVersion?: string; model: MlModel; port: MessagePort; modelUrl: string; mdxUrl: string; installed?: InstalledModel; delayMs?: number | null; drums?: boolean; drumsInstalled?: InstalledModel; wasmBase: string; stallMs?: number; stallAfterMs?: number; timing?: boolean };
+
+/** Pitch AudioParams (semitones): the vocal and the instrumental get their own shifter (src/worklet/pitch-shifter.ts). */
+export const PARAM_VOCAL_PITCH = 'vocalPitch';
+export const PARAM_INSTRUMENTAL_PITCH = 'instrumentalPitch';
+/** Pitch shifter grain window, samples. */
+export const PITCH_WINDOW = 2048;
+/** Delay the pitch stage adds to everything the worklet plays (also at 0 semitones, so the delay never jumps), samples: half a window. */
+export const PITCH_LATENCY_SAMPLES = PITCH_WINDOW / 2;
