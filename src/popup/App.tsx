@@ -454,6 +454,7 @@ function SeparateControls({ settings, update, ready, compact, advancedOpen, setA
               </div>
               <p className="m-0 text-xs leading-snug text-muted">Each extra split uses more GPU and adds more delay over the Delay limit.</p>
               <Collapse show={!!models.drums}>{models.drums && <ModelRow idPrefix="drums" line={models.drums} />}</Collapse>
+              <Collapse show={!!models.guitar}>{models.guitar && <ModelRow idPrefix="guitar" line={models.guitar} />}</Collapse>
             </div>
           </Disclosure>
         </div>
@@ -472,7 +473,7 @@ function persistAdvanced(open: boolean, set: (open: boolean) => void): void {
   }
 }
 
-function ModelRow({ idPrefix, line }: { idPrefix: 'model' | 'drums'; line: ModelLine }) {
+function ModelRow({ idPrefix, line }: { idPrefix: 'model' | 'drums' | 'guitar'; line: ModelLine }) {
   return (
     <div id={`${idPrefix}-row`} className="flex flex-col gap-2">
       <p className="m-0 flex items-center justify-between gap-3 text-xs leading-snug text-muted">

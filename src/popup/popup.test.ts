@@ -439,6 +439,17 @@ describe('popup', () => {
       expect(has('drums-row')).toBe(true);
       expect(el('drums-btn').textContent).toBe('Update');
     });
+
+    it('shows the guitar model row only with the debug flag, and asks the background for it', async () => {
+      const gremote = { format: MODEL_FORMAT, version: 1, files: { 'guitar.onnx': 45 * 2 ** 20, 'guitar-meta.json': 19000 }, checkedAt: 0 };
+      await load({ stored: sepSplit(), local: { 'modelRemote.guitar': gremote } });
+      expect(has('guitar-row')).toBe(false);
+      await load({ stored: sepSplit(), local: { 'debug.guitar': true, 'modelRemote.guitar': gremote } });
+      expect(el('guitar-text').textContent).toMatch(/Guitar split is a one-time download \(45 MB\)/);
+      el<HTMLButtonElement>('guitar-btn').click();
+      expect(sendMessage).toHaveBeenCalledWith({ type: 'model-install', id: 'guitar' });
+      expect(has('model-row')).toBe(false); // not a Model menu entry
+    });
   });
 
   it('shows the waiting-for-gesture hint', async () => {

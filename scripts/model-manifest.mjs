@@ -2,6 +2,7 @@
 // that the extension downloads from (MODEL_BASE_URL in src/shared/model-store.ts):
 //   bun run export-roformer                           -> models-out/{roformer,deux}.onnx + -meta.json
 //   bun run export-scnet                              -> models-out/drums.onnx
+//   bun run export-roformer guitar                    -> models-out/guitar.onnx + -meta.json (debug only, see README)
 //   bun run model-manifest roformer=1 deux=1 drums=1  -> models-out/hf/manifest.json + models-out/hf/v<version>/...
 //   hf upload <owner>/<repo> models-out/hf .
 // List every model with its version (an unchanged model keeps its number; its files are only used for the sizes).
@@ -12,7 +13,7 @@ import { copyFileSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const FORMAT = 2; // MODEL_FORMAT in src/shared/model-store.ts
-const IDS = ['roformer', 'deux', 'drums']; // MODEL_IDS in src/shared/model-store.ts
+const IDS = ['roformer', 'deux', 'drums', 'guitar']; // MODEL_IDS in src/shared/model-store.ts
 const filesOf = (id) => (id === 'drums' ? ['drums.onnx'] : [`${id}.onnx`, `${id}-meta.json`]); // modelFileNames there
 const args = Object.fromEntries(process.argv.slice(2).map((a) => a.split('=')));
 const bad = Object.entries(args).filter(([id, v]) => !IDS.includes(id) || !Number.isSafeInteger(Number(v)) || Number(v) < 1);
