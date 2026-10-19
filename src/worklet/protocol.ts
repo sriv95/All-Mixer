@@ -87,7 +87,7 @@ export const ML_BUFFER_BYTES = ML_HEADER_BYTES + 4 * ML_BLOCK * 4;
 /** Control messages between the content script and the ML worker (via the ml.html iframe). */
 export const ML_PAGE_PATH = 'ml/ml.html';
 export const ML_INIT = 'all-mixer-ml-init';
-/** The ML_INIT message also carries `model: MlModel`, `delayMs` (the delay budget: it sets the RoFormer chunk and the MDX segment; null = the 2 s default) and `drums` (split the instrumental) and `gpu: GpuPreference`. */
+/** The ML_INIT message also carries `model: MlModel`, `delayMs` (the delay budget: it sets the RoFormer chunk and the MDX segment; null = the 2 s default) and `drums` (split the instrumental) with `split: SplitModel` (which model) and `gpu: GpuPreference`. */
 /** Warm-up gate: p90 of 20 timed runs (ignores the two slowest) of one MDX block step (analyze + model + synthesize) must leave ≥ 1.5× in the 319 ms compute slack (~213 ms). The runtime deadline-miss fallback is the final guard. */
 export const ML_WARMUP_P90_MS = (ML_SLACK_SAMPLES / ML_SAMPLE_RATE) * 1000 / 1.5;
 
@@ -98,6 +98,9 @@ export const ML_WARMUP_P90_MS = (ML_SLACK_SAMPLES / ML_SAMPLE_RATE) * 1000 / 1.5
  * 'deux' = becruily's 2-stem model, vocal stem (menu: Best quality, needs a good GPU).
  */
 export type MlModel = 'mdx' | 'roformer' | 'deux';
+/** Model of the Split instrumental stage: the drum model, or (debug) a guitar model that takes the guitar out of the instrumental instead (src/ml/guitar-stage.ts). The stem is played with the Drums gain. */
+export type SplitModel = 'drums' | 'guitar';
+export const SPLIT_MODELS: readonly SplitModel[] = ['drums', 'guitar'];
 /** Which GPU the ML worker asks WebGPU for. Chrome cannot list adapters, only prefer one: 'auto' leaves the choice to the browser. */
 export type GpuPreference = 'auto' | 'high-performance' | 'low-power';
 export const GPU_PREFERENCES: readonly GpuPreference[] = ['auto', 'high-performance', 'low-power'];
@@ -115,6 +118,8 @@ export interface MlGeometry {
   warmupP90Ms: number;
   /** Drum stage on (src/ml/scnet.ts): the block buffer carries a drums plane pair too (6 planes instead of 4). */
   drums?: boolean;
+  /** Block buffers in the worklet's pool (default 4): more when a stage run stops the worker for several blocks (rof-plan.ts poolFor). */
+  pool?: number;
 }
 
 /**
@@ -169,7 +174,7 @@ export type FromMlWorker =
   | { type: 'unavailable'; reason: string };
 
 /** Page → worker init (iframe page forwards the ML port from the content script). */
-export type MlWorkerInit = { type: 'init'; speeds?: SpeedCache; appVersion?: string; model: MlModel; port: MessagePort; modelUrl: string; mdxUrl: string; installed?: InstalledModel; delayMs?: number | null; drums?: boolean; gpu?: GpuPreference; drumsInstalled?: InstalledModel; wasmBase: string; stallMs?: number; stallAfterMs?: number; timing?: boolean };
+export type MlWorkerInit = { type: 'init'; speeds?: SpeedCache; appVersion?: string; model: MlModel; port: MessagePort; modelUrl: string; mdxUrl: string; installed?: InstalledModel; delayMs?: number | null; drums?: boolean; split?: SplitModel; gpu?: GpuPreference; splitInstalled?: InstalledModel; wasmBase: string; stallMs?: number; stallAfterMs?: number; timing?: boolean };
 
 /** Pitch AudioParams (semitones): the vocal and the instrumental get their own shifter (src/worklet/pitch-shifter.ts). */
 export const PARAM_VOCAL_PITCH = 'vocalPitch';

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ML_BLOCK, ML_QUANTUM, ML_RESULT_OFFSET, ML_SAMPLE_RATE, ROF_BLOCK, ROF_CHUNK, ROF_LATENCY_SAMPLES, ROF_OVERLAP } from '../worklet/protocol';
-import { BASE_FRAMES, HOP, MARGIN, MAX_FRAMES, OVERLAP, drumRuns, gateMs, makeGeometry, planMdxDrums, planRof, stepMs } from './rof-plan';
+import { BASE_FRAMES, HOP, MARGIN, MAX_FRAMES, OVERLAP, drumRuns, gateMs, makeGeometry, planMdxDrums, planRof, poolFor, stepMs } from './rof-plan';
 import { SC_LAG, SC_STRIDE } from './scnet';
 
 const S = ML_SAMPLE_RATE;
@@ -67,6 +67,25 @@ describe('planRof', () => {
   it('null when the GPU cannot keep up at any block length of that budget', () => {
     expect(planRof(2 * S, 1000)).toBeNull(); // step is longer than the audio it covers
     expect(planRof(15 * S, 2000)).toBeNull();
+  });
+});
+
+describe('planRof with another split stage (guitar)', () => {
+  const FAST = 200, GUITAR_MS = 120;
+  it('the stage shape sets the wait and the number of runs', () => {
+    const stage = { stride: 39680, lag: 48512 };
+    const g = planRof(10 * S, FAST, GUITAR_MS, stage)!;
+    expect(g.extra).toBe(48512);
+    expect(g.slack).toBeGreaterThanOrEqual(Math.floor((MARGIN * (stepMs(g.frames, FAST) + drumRuns(g.block, 39680) * GUITAR_MS) * S) / 1000));
+    expect(drumRuns(39679, 39680)).toBe(1);
+    expect(drumRuns(39680, 39680)).toBe(2);
+    expect(planMdxDrums(100, GUITAR_MS, stage)!.resultOffset).toBe(ML_RESULT_OFFSET + 48512);
+  });
+  it('a stage run that stops the block loop for several blocks needs a bigger buffer pool, never fewer than 4 or more than 16', () => {
+    expect(poolFor(800, 778)).toBe(5);
+    expect(poolFor(100, 778)).toBe(4);
+    expect(poolFor(2400, 778)).toBe(7);
+    expect(poolFor(60000, 778)).toBe(16);
   });
 });
 

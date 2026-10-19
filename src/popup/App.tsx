@@ -1,10 +1,10 @@
 import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { AudioLines, AudioWaveform, Cpu, Download, Drum, LoaderCircle, Maximize2, Mic, Minimize2, MicOff, Music, RefreshCw, RotateCcw, Settings2, SlidersVertical, Timer, TriangleAlert, Undo2, Volume2, Zap } from 'lucide-react';
+import { AudioLines, AudioWaveform, Cpu, Download, Drum, Guitar, LoaderCircle, Maximize2, Mic, Minimize2, MicOff, Music, RefreshCw, RotateCcw, Settings2, SlidersVertical, Timer, TriangleAlert, Undo2, Volume2, Zap } from 'lucide-react';
 import type { ContentStatus, GetStatus, GetTabSettings, SetTabSettings } from '../shared/messages';
 import { clampDelayS, clampOthersPct, clampPct, clampPitch, masterPctAt, masterPosOf, MASTER_POS_MAX, normalizeSettings, PITCH_MAX, type MixerSettings, type Mode } from '../shared/settings';
 import { separationView, type SepView } from '../shared/separation-view';
 import { MAX_DELAY_S, MIN_DELAY_S } from '../ml/rof-plan';
-import type { MlModel } from '../worklet/protocol';
+import type { MlModel, SplitModel } from '../worklet/protocol';
 import { gpuOptions, gpuSelected, probeGpuNames, type GpuNames } from '../shared/gpu';
 import { installModel, useModels, type ModelLine } from './models';
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
@@ -330,6 +330,11 @@ const MODEL_CHOICES: readonly Choice<MlModel>[] = [
   { value: 'deux', label: 'Best quality', hint: 'Needs a good GPU, optional download' },
 ];
 
+const SPLIT_CHOICES: readonly Choice<SplitModel>[] = [
+  { value: 'drums', label: 'Drums (SCNet)' },
+  { value: 'guitar', label: 'Guitar', hint: 'becruily, 45 MB' },
+];
+
 type Levels = Pick<MixerSettings, 'vocalPct' | 'instrumentalPct' | 'drumsPct' | 'othersPct'>;
 const levelsOf = (s: MixerSettings): Levels => ({ vocalPct: s.vocalPct, instrumentalPct: s.instrumentalPct, drumsPct: s.drumsPct, othersPct: s.othersPct });
 const sameLevels = (a: Levels, b: Levels) => a.vocalPct === b.vocalPct && a.instrumentalPct === b.instrumentalPct && a.drumsPct === b.drumsPct && a.othersPct === b.othersPct;
@@ -353,7 +358,8 @@ function SeparateControls({ settings, update, ready, compact, advancedOpen, setA
   splitOpen: boolean;
   setSplitOpen: (open: boolean) => void;
 }) {
-  const models = useModels(settings.mlModel, settings.splitInstrumental, ready);
+  const models = useModels(settings.mlModel, settings.splitInstrumental && settings.splitModel === 'drums', ready);
+  const stem = settings.splitModel === 'drums' ? 'Drums' : 'Guitar'; // the stem the Drums gain applies to (guitar models are debug only)
   const [gpuNames, setGpuNames] = useState<GpuNames>({});
   useEffect(() => { void probeGpuNames().then(setGpuNames); }, []);
   const [delayDraft, setDelayDraft] = useState(settings.mlDelayS);
@@ -381,7 +387,7 @@ function SeparateControls({ settings, update, ready, compact, advancedOpen, setA
         <SliderRow id="instrumental" icon={<Music size={15} />} label="Instrumental" unit="%" pitch={stemPitch('instrumental-pitch', 'Instrumental pitch', settings.instrPitch, (v) => update({ instrPitch: clampPitch(v) }))} value={settings.instrumentalPct} min={0} max={100} step={5} onValue={(v) => update({ instrumentalPct: clampPct(v) })} />
         <Collapse show={settings.splitInstrumental}>
           <div id="split-mix" className="flex flex-col gap-3.5 border-t border-well pt-3.5">
-            <SliderRow id="drums" icon={<Drum size={15} />} label="Drums" hint="in the instrumental" unit="%" value={settings.drumsPct} min={0} max={100} step={5} onValue={(v) => update({ drumsPct: clampPct(v) })} />
+            <SliderRow id="drums" icon={settings.splitModel === 'drums' ? <Drum size={15} /> : <Guitar size={15} />} label={stem} hint="in the instrumental" unit="%" value={settings.drumsPct} min={0} max={100} step={5} onValue={(v) => update({ drumsPct: clampPct(v) })} />
             <SliderRow id="others" icon={<AudioLines size={15} />} label="Others" hint="in the instrumental" unit="%" value={settings.othersPct} min={0} max={100} step={5} onValue={(v) => update({ othersPct: clampOthersPct(v) })} />
           </div>
         </Collapse>
@@ -449,11 +455,20 @@ function SeparateControls({ settings, update, ready, compact, advancedOpen, setA
             title={<span className="flex items-center gap-1.5"><Drum size={15} className="text-brand" aria-hidden />Split instrumental</span>}>
             <div className="flex flex-col gap-3 px-3 pb-3">
               <div className="flex items-center justify-between gap-3">
-                <label htmlFor="split-on" className="text-[13px] font-bold">Drums</label>
+                <label htmlFor="split-on" className="text-[13px] font-bold">{stem}</label>
                 <Switch id="split-on" checked={settings.splitInstrumental} onChange={(on) => update({ splitInstrumental: on })} />
               </div>
               <p className="m-0 text-xs leading-snug text-muted">Each extra split uses more GPU and adds more delay over the Delay limit.</p>
               <Collapse show={!!models.drums}>{models.drums && <ModelRow idPrefix="drums" line={models.drums} />}</Collapse>
+              {models.guitar && (
+                <div id="split-debug" className="flex flex-col gap-2.5 border-t border-well pt-3">
+                  <div className="flex flex-col gap-1.5">
+                    <label htmlFor="split-model" className="text-[13px] font-bold">Split model (debug)</label>
+                    <Select id="split-model" value={settings.splitModel} options={SPLIT_CHOICES} onValue={(splitModel) => update({ splitModel })} />
+                  </div>
+                  <ModelRow idPrefix="guitar" line={models.guitar} />
+                </div>
+              )}
             </div>
           </Disclosure>
         </div>
@@ -472,7 +487,7 @@ function persistAdvanced(open: boolean, set: (open: boolean) => void): void {
   }
 }
 
-function ModelRow({ idPrefix, line }: { idPrefix: 'model' | 'drums'; line: ModelLine }) {
+function ModelRow({ idPrefix, line }: { idPrefix: 'model' | 'drums' | 'guitar'; line: ModelLine }) {
   return (
     <div id={`${idPrefix}-row`} className="flex flex-col gap-2">
       <p className="m-0 flex items-center justify-between gap-3 text-xs leading-snug text-muted">

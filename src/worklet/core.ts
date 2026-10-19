@@ -55,7 +55,7 @@ const slotsFor = (g: MlGeometry): number => pow2Ceil(Math.ceil(ringFor(g) / g.bl
 /** Ring and slot counts of the default (MDX) geometry. */
 export const RING = ringFor(GEOMETRY.mdx);
 export const SLOTS = slotsFor(GEOMETRY.mdx);
-/** Block buffers: one filling, ≤ 2 at the worker (MDX hop 743 ms vs ≤ 0.4 s response), the rest spare. */
+/** Block buffers: one filling, ≤ 2 at the worker (MDX hop 743 ms vs ≤ 0.4 s response), the rest spare. `MlGeometry.pool` overrides it. */
 const POOL = 4;
 
 /** Ring sizing rule (unit tested): a power of two, holding latency + one quantum + one block. */
@@ -190,7 +190,7 @@ export class SeparatorCore {
     this.mlDR = new Float32Array(g.drums ? ring : 0);
     this.slotStart = new Float64Array(this.slots).fill(NaN);
     this.pool = [];
-    for (let i = 0; i < POOL; i++) this.pool.push(entry(new ArrayBuffer(bufferBytes(g)), g.block, planesFor(g)));
+    for (let i = 0; i < (g.pool ?? POOL); i++) this.pool.push(entry(new ArrayBuffer(bufferBytes(g)), g.block, planesFor(g)));
   }
 
   setPort(port: MessagePort): void {
@@ -494,7 +494,7 @@ export class SeparatorCore {
   private onBlock(buf: ArrayBuffer): void {
     // A buggy worker must not grow the pool.
     const block = this.g.block;
-    if (buf.byteLength !== bufferBytes(this.g) || this.pool.length >= POOL) return;
+    if (buf.byteLength !== bufferBytes(this.g) || this.pool.length >= (this.g.pool ?? POOL)) return;
     const e = entry(buf, block, planesFor(this.g));
     const start = e.head[1];
     const rel = start - (this.streamStart + this.base);

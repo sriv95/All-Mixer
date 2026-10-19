@@ -28,6 +28,7 @@ describe('normalizeSettings', () => {
       instrumentalPct: 100,
       mlModel: 'mdx',
       splitInstrumental: false,
+      splitModel: 'drums',
       drumsPct: 100,
       othersPct: 100,
       mlDelayS: 2,
@@ -38,6 +39,10 @@ describe('normalizeSettings', () => {
       instrPitch: 0,
     });
     expect(normalizeSettings({ mode: 'weird' }).mode).toBe('default');
+  });
+  it('keeps a known split model and falls back to the drum model otherwise', () => {
+    for (const m of ['drums', 'guitar']) expect(normalizeSettings({ splitModel: m }).splitModel).toBe(m);
+    expect(normalizeSettings({ splitModel: 'piano' }).splitModel).toBe('drums');
   });
   it('keeps a known GPU preference and falls back to auto otherwise', () => {
     for (const g of ['auto', 'high-performance', 'low-power']) expect(normalizeSettings({ gpu: g }).gpu).toBe(g);

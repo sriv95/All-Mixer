@@ -1,4 +1,4 @@
-import { GPU_PREFERENCES, ML_MODELS, type GpuPreference, type MlModel } from '../worklet/protocol';
+import { GPU_PREFERENCES, ML_MODELS, SPLIT_MODELS, type GpuPreference, type MlModel, type SplitModel } from '../worklet/protocol';
 import { MAX_DELAY_S, MIN_DELAY_S } from '../ml/rof-plan';
 
 export type Mode = 'default' | 'separate';
@@ -16,6 +16,8 @@ export interface MixerSettings {
   mlModel: MlModel;
   /** Split instrumental (Advanced): a second model takes the drums out of the instrumental, which then has a Drums and an Others gain. Costs GPU time and delay. */
   splitInstrumental: boolean;
+  /** Which model splits the instrumental (guitar models are debug only, see README). The Drums gain applies to its stem. */
+  splitModel: SplitModel;
   /** Drums gain inside the instrumental, percent (0–100); the instrumental gain applies on top. Used when splitInstrumental is on. */
   drumsPct: number;
   /** Gain of the rest of the instrumental (everything but the drums), percent (0–100). */
@@ -44,6 +46,7 @@ export const DEFAULT_SETTINGS: Readonly<MixerSettings> = Object.freeze({
   instrumentalPct: 100,
   mlModel: 'mdx',
   splitInstrumental: false,
+  splitModel: 'drums',
   drumsPct: 100,
   othersPct: 100,
   mlDelayS: MIN_DELAY_S,
@@ -110,6 +113,7 @@ export function normalizeSettings(raw: unknown): MixerSettings {
     instrumentalPct: clampPct(r.instrumentalPct, DEFAULT_SETTINGS.instrumentalPct),
     mlModel: ML_MODELS.includes(r.mlModel as MlModel) ? (r.mlModel as MlModel) : DEFAULT_SETTINGS.mlModel,
     splitInstrumental: r.splitInstrumental === true,
+    splitModel: SPLIT_MODELS.includes(r.splitModel as SplitModel) ? (r.splitModel as SplitModel) : DEFAULT_SETTINGS.splitModel,
     drumsPct: clampPct(r.drumsPct, DEFAULT_SETTINGS.drumsPct),
     othersPct: clampOthersPct(r.othersPct),
     mlDelayS: clampDelayS(r.mlDelayS),

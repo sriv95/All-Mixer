@@ -2,7 +2,18 @@
 // through the drum stage (src/ml/scnet.ts), and the reply carries the drums next to the vocal planes. Drums trail the
 // vocal result by up to SC_LAG samples (a chunk has to be complete), so the vocal planes wait in rings and the whole
 // reply is that much older: resultOffset grows by SC_LAG, and the delay of the geometry with it (rof-plan.ts).
-import { DrumStage, SC_LAG, type ScnetModelFn } from './scnet';
+import { DrumStage, type ScnetModelFn } from './scnet';
+
+/** What the split needs from a stage (the drum stage, or the guitar stage in guitar-stage.ts). */
+export interface SplitStage {
+  /** Longest wait of a sample for its stem, samples. */
+  readonly lag: number;
+  reset(): void;
+  /** Append `n` instrumental samples and run what is complete. */
+  push(l: Float32Array, r: Float32Array, n: number, model: ScnetModelFn): Promise<void>;
+  /** Final stem samples [start, start + n) (zero before the stream began); `start + n` must not pass what the last push completed. */
+  read(start: number, n: number, outL: Float32Array, outR: Float32Array): void;
+}
 
 /** What the block loop (ml-worker.ts serve) needs from a model pipeline. */
 export interface BlockEngine {
@@ -21,7 +32,7 @@ export interface BlockEngine {
 const CAP = 2 ** 20;
 const MASK = CAP - 1;
 
-export function withDrums(inner: BlockEngine, run: ScnetModelFn, stage = new DrumStage()): BlockEngine {
+export function withDrums(inner: BlockEngine, run: ScnetModelFn, stage: SplitStage = new DrumStage()): BlockEngine {
   const H = inner.block, Ro = inner.resultOffset;
   const xL = new Float32Array(CAP), xR = new Float32Array(CAP); // input, by input sample
   const planes = Array.from({ length: 4 }, () => new Float32Array(CAP)); // Vk L, R, vocal L, R, by result sample u
@@ -29,7 +40,7 @@ export function withDrums(inner: BlockEngine, run: ScnetModelFn, stage = new Dru
   let n = 0; // result samples so far: block m covers u in [m·H, (m + 1)·H)
   return {
     block: H,
-    resultOffset: Ro + SC_LAG,
+    resultOffset: Ro + stage.lag,
     planes: 6,
     reset() {
       inner.reset();
@@ -54,10 +65,10 @@ export function withDrums(inner: BlockEngine, run: ScnetModelFn, stage = new Dru
       await stage.push(instL, instR, H, run);
       // the reply is for result samples [n − SC_LAG, n − SC_LAG + H): final in the stage, and still in the rings
       for (let i = 0; i < H; i++) {
-        const u = n - SC_LAG + i;
+        const u = n - stage.lag + i;
         for (let k = 0; k < 4; k++) d[k * H + i] = u >= 0 ? planes[k][u & MASK] : 0;
       }
-      stage.read(n - SC_LAG, H, d.subarray(4 * H, 5 * H), d.subarray(5 * H, 6 * H));
+      stage.read(n - stage.lag, H, d.subarray(4 * H, 5 * H), d.subarray(5 * H, 6 * H));
       n += H;
     },
     afterReply: inner.afterReply ? () => inner.afterReply!() : undefined,
