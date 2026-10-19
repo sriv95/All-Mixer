@@ -13,6 +13,8 @@ import { HOP, makeGeometry, type RofGeometry } from './rof-plan';
 import { ML_QUANTUM } from '../worklet/protocol';
 
 const N_FFT = 2048;
+/** STFT hops the stream supports: 441 for the vocal models and becruily's guitar, 512 for chenCFD's guitar. */
+export const ROF_HOPS: readonly number[] = [HOP, 512];
 const BINS = N_FFT / 2 + 1;
 const FS = 2 * BINS; // (bin, channel) interleaved
 const PAD = N_FFT / 2;
@@ -38,6 +40,7 @@ export class RoformerStream {
   readonly x: Float32Array;
   readonly frames: number;
 
+  private readonly hop: number; // STFT hop of the model (meta.hop)
   private readonly C: number; // chunk
   private readonly H: number; // block
   private readonly R: number; // overlap
@@ -69,12 +72,13 @@ export class RoformerStream {
   private readonly tail: Float32Array;
 
   constructor(meta: RoformerMeta, g: RofGeometry = DEFAULT_ROF_GEOMETRY) {
-    if (meta.nFft !== N_FFT || meta.hop !== HOP) throw new Error('roformer meta does not match the stream geometry');
-    if (g.chunk !== (g.frames - 1) * HOP || g.block % ML_QUANTUM || g.overlap % ML_QUANTUM || g.overlap > g.block || g.chunk - g.block < g.overlap) {
+    if (meta.nFft !== N_FFT || !ROF_HOPS.includes(meta.hop)) throw new Error('roformer meta does not match the stream geometry');
+    if (g.chunk !== (g.frames - 1) * meta.hop || g.block % ML_QUANTUM || g.overlap % ML_QUANTUM || g.overlap > g.block || g.chunk - g.block < g.overlap) {
       throw new Error('bad roformer geometry');
     }
     const { frames: F, chunk: C } = g;
     this.frames = F;
+    this.hop = meta.hop;
     this.C = C;
     this.H = g.block;
     this.R = g.overlap;
@@ -95,7 +99,7 @@ export class RoformerStream {
     this.ola = new Float64Array(2 * this.padded);
     for (let i = 0; i < N_FFT; i++) this.win[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / N_FFT);
     const env = new Float64Array(this.padded);
-    for (let t = 0; t < F; t++) for (let n = 0; n < N_FFT; n++) env[t * HOP + n] += this.win[n] * this.win[n];
+    for (let t = 0; t < F; t++) for (let n = 0; n < N_FFT; n++) env[t * this.hop + n] += this.win[n] * this.win[n];
     this.norm = env.map((e) => (e > 1e-11 ? 1 / e : 1));
     for (let i = 0; i < g.overlap; i++) this.ramp[i] = 0.5 - 0.5 * Math.cos((Math.PI * (i + 0.5)) / g.overlap);
   }
@@ -107,7 +111,7 @@ export class RoformerStream {
 
   /** Block b in (`inL`/`inR`: `block` samples): slide the chunk, STFT its frames, gather the model input into `x`. */
   analyze(inL: Float32Array, inR: Float32Array): void {
-    const { chunk, win, re, im, fft, specRe, specIm, x, sel, fin, C, H, K } = this;
+    const { chunk, win, re, im, fft, specRe, specIm, x, sel, fin, C, H, K, hop } = this;
     const F = this.frames;
     chunk.copyWithin(0, H, C);
     chunk.copyWithin(C, C + H, 2 * C);
@@ -115,7 +119,7 @@ export class RoformerStream {
     chunk.set(inR.subarray(0, H), C + K);
     for (let t = 0; t < F; t++) {
       for (let n = 0; n < N_FFT; n++) {
-        let s = t * HOP + n - PAD; // reflect padding, torch centre=True
+        let s = t * hop + n - PAD; // reflect padding, torch centre=True
         if (s < 0) s = -s;
         else if (s >= C) s = 2 * (C - 1) - s;
         re[n] = chunk[s] * win[n];
@@ -146,7 +150,7 @@ export class RoformerStream {
    * written to outL/outR (`block` samples each).
    */
   synthesize(m: Float32Array, outL: Float32Array, outR: Float32Array): void {
-    const { sel, fin, accRe, accIm, invBands, specRe, specIm, re, im, win, fft, ola, norm, padded, ramp, tail, H, R, E } = this;
+    const { sel, fin, accRe, accIm, invBands, specRe, specIm, re, im, win, fft, ola, norm, padded, ramp, tail, H, R, E, hop } = this;
     const F = this.frames;
     // masks of the bands that overlap a bin, averaged
     accRe.fill(0);
@@ -183,7 +187,7 @@ export class RoformerStream {
         }
       }
       fft.transform(re, im, true);
-      const s = t * HOP;
+      const s = t * hop;
       for (let n = 0; n < N_FFT; n++) {
         ola[s + n] += (re[n] * win[n]) / N_FFT;
         ola[padded + s + n] += (im[n] * win[n]) / N_FFT;

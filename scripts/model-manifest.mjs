@@ -13,7 +13,7 @@ import { copyFileSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const FORMAT = 2; // MODEL_FORMAT in src/shared/model-store.ts
-const IDS = ['roformer', 'deux', 'drums', 'guitar']; // MODEL_IDS in src/shared/model-store.ts
+const IDS = ['roformer', 'deux', 'drums', 'guitar', 'guitar2']; // MODEL_IDS in src/shared/model-store.ts
 const filesOf = (id) => (id === 'drums' ? ['drums.onnx'] : [`${id}.onnx`, `${id}-meta.json`]); // modelFileNames there
 const args = Object.fromEntries(process.argv.slice(2).map((a) => a.split('=')));
 const bad = Object.entries(args).filter(([id, v]) => !IDS.includes(id) || !Number.isSafeInteger(Number(v)) || Number(v) < 1);

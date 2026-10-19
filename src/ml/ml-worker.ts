@@ -7,6 +7,7 @@
 // instrumental and the reply carries them as two more planes.
 import {
   GEOMETRY,
+  ML_BLOCK,
   ML_HEADER_BYTES,
   ML_SAMPLE_RATE,
   ML_WARMUP_P90_MS,
@@ -27,13 +28,22 @@ import { adapterName as nameOfAdapter } from '../shared/gpu';
 import { opfsFiles, readModelFile } from '../shared/model-files';
 import { MODEL_FORMAT, MODEL_LABEL, modelFileNames, type ModelId } from '../shared/model-store';
 import { RoformerStream, DEFAULT_ROF_GEOMETRY, type RoformerMeta } from './roformer';
-import { MAX_DELAY_S, MIN_DELAY_S, drumRuns, gateMs, planMdxDrums, planRof, stepMs, type RofGeometry } from './rof-plan';
-import { withDrums, type BlockEngine } from './drum-engine';
+import { DRUM_STAGE, MAX_DELAY_S, MIN_DELAY_S, drumRuns, gateMs, planMdxDrums, planRof, poolFor, stepMs, type RofGeometry, type StageShape } from './rof-plan';
+import { withDrums, type BlockEngine, type SplitStage } from './drum-engine';
+import { GuitarStage, guitarBlockFor, guitarGeometry, stageShape } from './guitar-stage';
 import { lookupSpeed, speedKey } from './plan-cache';
-import { SC_BINS, SC_FRAMES, SC_INPUT, type ScnetModelFn } from './scnet';
+import { DrumStage, SC_BINS, SC_FRAMES, SC_INPUT, type ScnetModelFn } from './scnet';
 
 type Ort = typeof import('onnxruntime-web/webgpu');
 type Session = Awaited<ReturnType<Ort['InferenceSession']['create']>>;
+
+/** The split stage (the drum model, or a guitar model): its model call, the p90 of one run (ms) and what the planners need to know. */
+interface Split {
+  run: ScnetModelFn;
+  ms: number;
+  stage: SplitStage;
+  shape: StageShape;
+}
 
 const ctx = self as unknown as { postMessage(m: FromMlWorker): void; onmessage: ((e: MessageEvent<MlWorkerInit>) => void) | null };
 
@@ -110,15 +120,16 @@ async function start(init: MlWorkerInit): Promise<void> {
   }
   pipeline.reset();
   // Split instrumental: the drum model joins the engine, and the plan (delay, speed check) is the worker's own.
-  let drums: { run: ScnetModelFn; ms: number } | null = null;
+  let drums: Split | null = null;
   let geometry: MlGeometry | undefined;
   if (init.drums) {
     if (wu.p90 >= ML_WARMUP_P90_MS) return unavailable(`too slow on this device (p90 ${wu.p90.toFixed(1)} ms)`);
-    const d = await loadDrums(ort, init);
+    const d = await loadSplit(ort, init);
     if (typeof d === 'string') return unavailable(d);
     drums = d;
-    geometry = planMdxDrums(wu.p90, d.ms) ?? undefined;
-    if (!geometry) return unavailable(`too slow for the drum split (the vocal model takes ${wu.p90.toFixed(0)} ms per block, the drum model ${d.ms.toFixed(0)} ms per run)`);
+    geometry = planMdxDrums(wu.p90, d.ms, d.shape) ?? undefined;
+    if (geometry) geometry.pool = poolFor(d.ms, (ML_BLOCK / ML_SAMPLE_RATE) * 1000); // a stage run stops the block loop
+    if (!geometry) return unavailable(`too slow for the split (the vocal model takes ${wu.p90.toFixed(0)} ms per block, the ${init.split ?? 'drums'} model ${d.ms.toFixed(0)} ms per run)`);
   }
 
   // 4. A longer segment for a delay limit above the default one: plan it from the speed measured above (linear in the
@@ -165,7 +176,7 @@ async function start(init: MlWorkerInit): Promise<void> {
     afterReply: () => pipeline.catchUp(models.spleeter),
     misses: () => pipeline.splMisses,
   };
-  const engine = drums ? withDrums(mdxEngine, drums.run) : mdxEngine;
+  const engine = drums ? withDrums(mdxEngine, drums.run, drums.stage) : mdxEngine;
   serve(init.port, engine, { stallMs: init.stallMs ?? 0, stallAfterMs: init.stallAfterMs ?? 5000 }, init.timing ? new MlTiming() : null);
 }
 
@@ -236,7 +247,7 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
   // 2. Plan a chunk for the delay budget. 3. Time the plan itself; when it is slower than predicted, correct the speed and plan again.
   const wantMs = init.delayMs ?? MIN_DELAY_S * 1000;
   let chosen = null as Run | null; // set in `search`
-  let drums: { run: ScnetModelFn; ms: number } | null = null;
+  let drums: Split | null = null;
   let note = '';
   const speedKeyOf = speedKey({ model: id, modelVersion: init.installed?.version ?? 0, appVersion: init.appVersion ?? '', adapter: adapterName });
   const measureSpeed = async (): Promise<number> => {
@@ -249,14 +260,14 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
   const search = async (start: number, w: { skip: number; n: number }): Promise<void> => {
     let baseMs = start;
     for (let attempt = 0; attempt < 3 && !chosen; attempt++) {
-      const g = planRof((wantMs / 1000) * ML_SAMPLE_RATE, baseMs, drums?.ms);
+      const g = planRof((wantMs / 1000) * ML_SAMPLE_RATE, baseMs, drums?.ms, drums?.shape);
       if (!g) {
-        note = `too slow for a ${Math.round(wantMs / 1000)} s delay (a step takes ${baseMs.toFixed(0)} ms for 1.1 s of audio${drums ? `, a drum run ${drums.ms.toFixed(0)} ms` : ''})${wantMs < MAX_DELAY_S * 1000 ? ': try a longer delay limit' : ''}`;
+        note = `too slow for a ${Math.round(wantMs / 1000)} s delay (a step takes ${baseMs.toFixed(0)} ms for 1.1 s of audio${drums ? `, a ${init.split ?? 'drums'} run ${drums.ms.toFixed(0)} ms` : ''})${wantMs < MAX_DELAY_S * 1000 ? ': try a longer delay limit' : ''}`;
         break;
       }
       try {
         const r = await measure(g, w);
-        if (r.wu.p90 + (drums ? drumRuns(g.block) * drums.ms : 0) <= gateMs(g)) {
+        if (r.wu.p90 + (drums ? drumRuns(g.block, drums.shape.stride) * drums.ms : 0) <= gateMs(g)) {
           chosen = r;
           planBaseMs = baseMs;
         } else {
@@ -272,7 +283,7 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
   const remembered = lookupSpeed(init.speeds, speedKeyOf);
   try {
     if (init.drums) {
-      const d = await loadDrums(ort, init);
+      const d = await loadSplit(ort, init);
       if (typeof d === 'string') return unavailable(d);
       drums = d;
     }
@@ -304,7 +315,7 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
       d.copyWithin(2 * g.block, 0, 2 * g.block); // the vocal is both Vk and the A cappella
     },
   };
-  const engine = drums ? withDrums(vocalEngine, drums.run) : vocalEngine;
+  const engine = drums ? withDrums(vocalEngine, drums.run, drums.stage) : vocalEngine;
   serve(init.port, engine, { stallMs: init.stallMs ?? 0, stallAfterMs: init.stallAfterMs ?? 5000 }, init.timing ? new MlTiming() : null);
 }
 
@@ -315,29 +326,55 @@ const rms = (x: Float32Array): number => {
 };
 
 /**
- * SCNet Tran Small (the drum split model, one fp32 graph of a fixed shape) from OPFS, and the p90 of one run (ms).
- * A string is the reason it cannot be used.
+ * The model of the split stage from OPFS and the p90 of one run (ms): SCNet Tran Small (one fp32 graph of a fixed
+ * shape) for the drums, or a Mel-Band RoFormer guitar model (debug, guitar-stage.ts) at its chunk. A string is the
+ * reason it cannot be used.
  */
-async function loadDrums(ort: Ort, init: MlWorkerInit): Promise<{ run: ScnetModelFn; ms: number } | string> {
-  const inst = init.drumsInstalled;
-  if (!inst) return `the ${MODEL_LABEL.drums} model is not downloaded`;
-  if (inst.format !== MODEL_FORMAT) return `the ${MODEL_LABEL.drums} model is out of date: download it again`;
+async function loadSplit(ort: Ort, init: MlWorkerInit): Promise<Split | string> {
+  const id: ModelId = init.split ?? 'drums';
+  const inst = init.splitInstalled;
+  if (!inst) return `the ${MODEL_LABEL[id]} model is not downloaded`;
+  if (inst.format !== MODEL_FORMAT) return `the ${MODEL_LABEL[id]} model is out of date: download it again`;
   try {
-    const [onnx] = modelFileNames('drums');
-    const buf = await readModelFile(opfsFiles(), inst.version, onnx, inst.files[onnx]).then((x) => x.arrayBuffer());
-    const session = await ort.InferenceSession.create(buf, { executionProviders: ['webgpu'], graphOptimizationLevel: 'all', logSeverityLevel: 3 });
-    const run: ScnetModelFn = async (x) => {
-      const out = await session.run({ [session.inputNames[0]]: new ort.Tensor('float32', x, [1, 4, SC_BINS, SC_FRAMES]) });
+    const files = opfsFiles();
+    const [onnx, metaFile] = modelFileNames(id);
+    const opts = { executionProviders: ['webgpu'], graphOptimizationLevel: 'all', logSeverityLevel: 3 } as const;
+    const buf = await readModelFile(files, inst.version, onnx, inst.files[onnx]).then((x) => x.arrayBuffer());
+    if (id === 'drums') {
+      const session = await ort.InferenceSession.create(buf, opts);
+      const run: ScnetModelFn = async (x) => {
+        const out = await session.run({ [session.inputNames[0]]: new ort.Tensor('float32', x, [1, 4, SC_BINS, SC_FRAMES]) });
+        const t = out[session.outputNames[0]];
+        const data = (await t.getData()) as Float32Array;
+        t.dispose();
+        return data;
+      };
+      const noise = Float32Array.from({ length: SC_INPUT }, () => (Math.random() * 2 - 1) * 0.1);
+      const wu = await warmUp(async () => void (await run(noise)), { skip: 2, n: 5 });
+      return { run, ms: wu.p90, stage: new DrumStage(), shape: DRUM_STAGE };
+    }
+    const meta = JSON.parse(await readModelFile(files, inst.version, metaFile, inst.files[metaFile]).then((x) => x.text())) as RoformerMeta;
+    const g = guitarGeometry(meta.hop, guitarBlockFor(init.delayMs ?? null));
+    const stage = new GuitarStage(meta, g, { onRun: init.timing ? (ms) => console.info(`[all-mixer ml] ${id} run ${ms.toFixed(0)} ms (${(g.block / ML_SAMPLE_RATE).toFixed(1)} s block)`) : undefined });
+    const frames = stage.roformer.frames;
+    const session = await ort.InferenceSession.create(buf, { ...opts, freeDimensionOverrides: { frames } });
+    const input = new ort.Tensor('float32', stage.roformer.x, [1, frames, stage.roformer.x.length / frames]);
+    const run: ScnetModelFn = async () => {
+      const out = await session.run({ [session.inputNames[0]]: input });
       const t = out[session.outputNames[0]];
       const data = (await t.getData()) as Float32Array;
       t.dispose();
       return data;
     };
-    const noise = Float32Array.from({ length: SC_INPUT }, () => (Math.random() * 2 - 1) * 0.1);
-    const wu = await warmUp(async () => void (await run(noise)), { skip: 2, n: 5 });
-    return { run, ms: wu.p90 };
+    // A whole step (analyze + model + synthesize) on noise: the time does not depend on the content.
+    const n = Float32Array.from({ length: g.block }, () => (Math.random() * 2 - 1) * 0.3);
+    const o = new Float32Array(g.block);
+    const wu = await warmUp(() => stage.roformer.process(n, n, run, o, o), { skip: 1, n: 3 }); // a long chunk takes seconds
+    stage.reset();
+    if (init.timing) console.info(`[all-mixer ml] ${id}: chunk ${frames} frames, block ${(g.block / ML_SAMPLE_RATE).toFixed(1)} s, run p90 ${wu.p90.toFixed(0)} ms, lag ${(stage.lag / ML_SAMPLE_RATE).toFixed(1)} s`);
+    return { run, ms: wu.p90, stage, shape: stageShape(g) };
   } catch (e) {
-    return `drum model: ${String(e)}`;
+    return `${id} model: ${String(e)}`;
   }
 }
 
@@ -388,7 +425,8 @@ function serve(port: MessagePort, engine: BlockEngine, dbg: StallOpts, timing: M
           await engine.afterReply(); // after the reply, so MDX results never wait for it
           timing?.catchUp(performance.now() - tBack);
         }
-      } catch {
+      } catch (e) {
+        if (timing) console.warn(`[all-mixer ml] block failed: ${e instanceof Error ? e.stack ?? e.message : String(e)}`);
         engine.reset();
         epoch = -1;
         if (!sent) back(buf, head, -1);

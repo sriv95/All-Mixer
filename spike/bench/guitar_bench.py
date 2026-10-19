@@ -8,7 +8,7 @@ MUSDB has no guitar stem, so there is NO ground-truth SDR here. Proxies per clip
   resid      share the four stems do not explain (artifacts, or true content the regression missed)
 Inputs (what the 2nd/3rd pass of the cascade would see): `inst` = accompaniment, `nodrums` = accompaniment - drums.
 Also wall time per clip (CPU, torch) and parameter count.
-  .venv/bin/python spike/bench/guitar_bench.py becruily [htdemucs_6s] [--clips N] [--inputs inst,nodrums]
+  .venv/bin/python spike/bench/guitar_bench.py becruily [chencfd] [htdemucs_6s] [--clips N] [--inputs inst,nodrums]
 Appends one JSON row per (model, input) to spike/bench/results/guitar.jsonl, and writes the first 3 clips'
 estimates to spike/bench/results/guitar/<model>-<input>-<clip>.wav for listening.
 """
@@ -22,13 +22,23 @@ OUT = ROOT / 'spike/bench/results/guitar.jsonl'
 WAVS = ROOT / 'spike/bench/results/guitar'
 
 
-def load_becruily():
+# name -> (config, checkpoint), both in .cache (scripts/export-roformer.py downloads them)
+MEL = {
+    'becruily': (CACHE / 'config_guitar_becruily.yaml', CACHE / 'becruily_guitar.ckpt'),
+    'chencfd': (ROOT / '.cache/guitar2/config_moisesdb_mel_band_roformer_guitar.yaml', ROOT / '.cache/guitar2/model_mel_band_roformer_ep_314_sdr_7.9825.ckpt'),
+}
+
+
+def load_mel(name):
     from audio_separator.separator.uvr_lib_v5.roformer import mel_band_roformer as mbr
     # audio-separator builds the mask estimator with expansion 4 whatever the config says (see scripts/export-roformer.py)
-    cfg = yaml.unsafe_load(open(CACHE / 'config_guitar_becruily.yaml'))
+    config, ckpt = MEL[name]
+    cfg = yaml.unsafe_load(open(config))
+    if not cfg['model'].get('linear_transformer_depth'):
+        cfg['model'].pop('linear_transformer_depth', None)
     mbr.MaskEstimator = functools.partial(mbr.MaskEstimator, mlp_expansion_factor=cfg['model'].get('mlp_expansion_factor', 4))
     m = mbr.MelBandRoformer(**cfg['model'])
-    sd = torch.load(CACHE / 'becruily_guitar.ckpt', map_location='cpu', weights_only=False)
+    sd = torch.load(ckpt, map_location='cpu', weights_only=False)
     m.load_state_dict(sd.get('state_dict', sd) if isinstance(sd, dict) else sd, strict=True)
     m.eval()
 
@@ -83,7 +93,7 @@ def main():
     OUT.parent.mkdir(parents=True, exist_ok=True)
     WAVS.mkdir(parents=True, exist_ok=True)
     for name in a.models:
-        run, params = load_becruily() if name == 'becruily' else load_as(name, 'guitar')
+        run, params = load_mel(name) if name in MEL else load_as(name, 'guitar')
         for inp in a.inputs.split(','):
             rows, secs = [], []
             for i in range(a.clips):

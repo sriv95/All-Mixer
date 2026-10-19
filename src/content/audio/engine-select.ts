@@ -1,11 +1,13 @@
 import {
   GEOMETRY,
+  SPLIT_MODELS,
   type FromMlWorker,
   type GpuPreference,
   type MlEngine,
   type MlGeometry,
   type MlModel,
   type MlReason,
+  type SplitModel,
 } from '../../worklet/protocol';
 import type { ModelId } from '../../shared/model-store';
 import type { LatencyListener } from './latency';
@@ -52,6 +54,8 @@ export interface SelectorRequest {
   delayMs?: number | null;
   /** Split the instrumental (drum stage, needs the drum model); changing it while on restarts the probe. */
   drums?: boolean;
+  /** Model of the split stage; default the drum model. Changing it while on restarts the probe. */
+  split?: SplitModel;
   /** GPU preference; changing it while on restarts the probe. Default 'auto'. */
   gpu?: GpuPreference;
 }
@@ -68,6 +72,7 @@ interface Warm {
   model: MlModel;
   delayMs: number | null;
   drums: boolean;
+  split: SplitModel;
   gpu: GpuPreference;
   geometry: MlGeometry;
 }
@@ -85,6 +90,7 @@ export class EngineSelector {
   private model: MlModel = 'mdx';
   private delayMs: number | null = null;
   private drums = false;
+  private split: SplitModel = 'drums';
   private gpu: GpuPreference = 'auto';
   private choice: EngineChoice = { state: 'off' };
   /** Set while the host in `host` has passed its warm-up (cleared with the host). */
@@ -93,7 +99,7 @@ export class EngineSelector {
 
   constructor(
     private readonly chain: EngineChain,
-    private readonly createHost: (model: MlModel, delayMs: number | null, drums: boolean, gpu: GpuPreference) => MlHostLike = (model, delayMs, drums, gpu) => new MlHost(undefined, undefined, model, delayMs, drums, gpu),
+    private readonly createHost: (model: MlModel, delayMs: number | null, drums: boolean, gpu: GpuPreference, split: SplitModel) => MlHostLike = (model, delayMs, drums, gpu, split) => new MlHost(undefined, undefined, model, delayMs, drums, gpu, split),
   ) {
     chain.onLatencyChange((info) => {
       if (this.mlActive && info.engine === 'bypass' && info.reason === 'deadline-miss') {
@@ -121,11 +127,13 @@ export class EngineSelector {
     const model = req.model ?? 'mdx';
     const delayMs = req.delayMs ?? null;
     const drums = req.drums === true;
+    const split = req.split ?? 'drums';
     const gpu = req.gpu ?? 'auto';
-    const restart = req.on && this.on && (model !== this.model || delayMs !== this.delayMs || drums !== this.drums || gpu !== this.gpu);
+    const restart = req.on && this.on && (model !== this.model || delayMs !== this.delayMs || drums !== this.drums || (drums && split !== this.split) || gpu !== this.gpu);
     this.model = model;
     this.delayMs = delayMs;
     this.drums = drums;
+    this.split = split;
     this.gpu = gpu;
     this.on = req.on;
     if (!req.on) {
@@ -136,7 +144,7 @@ export class EngineSelector {
       this.setChoice({ state: 'off' });
       return;
     }
-    if (turnedOn && this.warm && this.resume(model, delayMs, drums, gpu)) return;
+    if (turnedOn && this.warm && this.resume(model, delayMs, drums, gpu, split)) return;
     if (restart) {
       // A new model, delay budget, drum split or GPU: back to the original mix, drop the old host, probe again.
       if (this.mlActive) this.chain.setEngine('bypass', 'auto');
@@ -150,8 +158,8 @@ export class EngineSelector {
   private probe(): void {
     if (!this.chain.canRunMl()) return this.giveUp(RATE_CAUSE);
     const model = this.model;
-    const { delayMs, drums, gpu } = this;
-    const host = this.createHost(model, delayMs, drums, gpu);
+    const { delayMs, drums, gpu, split } = this;
+    const host = this.createHost(model, delayMs, drums, gpu, split);
     this.host = host;
     this.probing = true;
     this.setChoice({ state: 'warming' });
@@ -163,7 +171,7 @@ export class EngineSelector {
       if (m.geometry) this.chain.setMlGeometry(m.geometry);
       else if (m.p90 >= GEOMETRY[model].warmupP90Ms) return this.giveUp(`too slow on this device (p90 ${m.p90.toFixed(1)} ms)`);
       if (!this.chain.setEngine('ml', 'auto')) return this.giveUp(RATE_CAUSE);
-      this.warm = { model, delayMs, drums, gpu, geometry: m.geometry ?? GEOMETRY[model] };
+      this.warm = { model, delayMs, drums, split, gpu, geometry: m.geometry ?? GEOMETRY[model] };
       this.mlActive = true;
       this.setChoice({ state: 'on' });
     });
@@ -174,10 +182,10 @@ export class EngineSelector {
   }
 
   /** Separate turned on again while a warmed-up host is kept: use it if it was made for these settings. */
-  private resume(model: MlModel, delayMs: number | null, drums: boolean, gpu: GpuPreference): boolean {
+  private resume(model: MlModel, delayMs: number | null, drums: boolean, gpu: GpuPreference, split: SplitModel): boolean {
     const w = this.warm!;
     clearTimeout(this.idleTimer);
-    if (w.model === model && w.delayMs === delayMs && w.drums === drums && w.gpu === gpu) {
+    if (w.model === model && w.delayMs === delayMs && w.drums === drums && (!drums || w.split === split) && w.gpu === gpu) {
       this.chain.setMlGeometry(w.geometry);
       if (this.chain.setEngine('ml', 'auto')) {
         this.mlActive = true;
@@ -192,8 +200,9 @@ export class EngineSelector {
   /** The downloaded files of model `id` changed (first download, update): probe again if it is in use. */
   reload(id: ModelId): void {
     // A kept host runs the old files: drop it.
-    if (this.warm && !this.on && (id === 'drums' ? this.warm.drums : this.warm.model === id)) this.disposeHost();
-    if (!this.on || (id === 'drums' ? !this.drums : this.model !== id)) return;
+    const isSplit = (SPLIT_MODELS as readonly string[]).includes(id);
+    if (this.warm && !this.on && (isSplit ? this.warm.drums && this.warm.split === id : this.warm.model === id)) this.disposeHost();
+    if (!this.on || (isSplit ? !this.drums || this.split !== id : this.model !== id)) return;
     if (this.mlActive) this.chain.setEngine('bypass', 'auto');
     this.disposeHost();
     this.mlActive = false;
