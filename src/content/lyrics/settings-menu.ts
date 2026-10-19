@@ -534,11 +534,17 @@ export class YtSettingsMenu implements LyricsMenu {
     this.sub?.remove();
     this.sub = panel;
     popup.append(panel);
-    // A long list (the karaoke text settings) must scroll inside the player, not run off its top.
+    // A long list (the karaoke text settings) must scroll inside the player, not run off its top. The panel menu is
+    // `display:table` on YouTube, which ignores overflow, so a block wrapper scrolls it. `important`: YouTube's own
+    // rules would win otherwise.
     const room = this.roomAbove(popup);
     if (room > 0) {
-      menu.style.overflowY = 'auto';
-      menu.style.maxHeight = `${Math.max(80, room - header.offsetHeight)}px`;
+      const scroller = this.doc.createElement('div');
+      scroller.style.setProperty('overflow-y', 'auto', 'important');
+      scroller.style.setProperty('max-height', `${Math.max(80, room - header.offsetHeight)}px`, 'important');
+      menu.style.width = '100%';
+      menu.replaceWith(scroller);
+      scroller.append(menu);
     }
     // Native submenus size the popup to their panel.
     const w = panel.offsetWidth;
