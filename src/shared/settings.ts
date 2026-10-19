@@ -1,4 +1,4 @@
-import { GPU_PREFERENCES, ML_MODELS, SPLIT_MODELS, type GpuPreference, type MlModel, type SplitModel } from '../worklet/protocol';
+import { GPU_PREFERENCES, ML_MODELS, type GpuPreference, type MlModel } from '../worklet/protocol';
 import { MAX_DELAY_S, MIN_DELAY_S } from '../ml/rof-plan';
 
 export type Mode = 'default' | 'separate';
@@ -16,11 +16,13 @@ export interface MixerSettings {
   mlModel: MlModel;
   /** Split instrumental (Advanced): a second model takes the drums out of the instrumental, which then has a Drums and an Others gain. Costs GPU time and delay. */
   splitInstrumental: boolean;
-  /** Which model splits the instrumental (guitar models are debug only, see README). The Drums gain applies to its stem. */
-  splitModel: SplitModel;
+  /** Split instrumental (Advanced): a third model takes the guitar out of the instrumental too (needs a fast GPU). The Guitar gain applies to it; Drums and Guitar can be on together. */
+  splitGuitar: boolean;
   /** Drums gain inside the instrumental, percent (0–100); the instrumental gain applies on top. Used when splitInstrumental is on. */
   drumsPct: number;
-  /** Gain of the rest of the instrumental (everything but the drums), percent (0–100). */
+  /** Guitar gain inside the instrumental, percent (0–100). Used when splitGuitar is on. */
+  guitarPct: number;
+  /** Gain of the rest of the instrumental (everything but the drums and the guitar), percent (0–100). */
   othersPct: number;
   /** Delay limit, seconds (MIN_DELAY_S to MAX_DELAY_S): the audio delay stays below it (the drum split adds its own wait on top); a longer limit gives the model a longer chunk. */
   mlDelayS: number;
@@ -46,8 +48,9 @@ export const DEFAULT_SETTINGS: Readonly<MixerSettings> = Object.freeze({
   instrumentalPct: 100,
   mlModel: 'mdx',
   splitInstrumental: false,
-  splitModel: 'drums',
+  splitGuitar: false,
   drumsPct: 100,
+  guitarPct: 100,
   othersPct: 100,
   mlDelayS: MIN_DELAY_S,
   gpu: 'auto',
@@ -113,8 +116,9 @@ export function normalizeSettings(raw: unknown): MixerSettings {
     instrumentalPct: clampPct(r.instrumentalPct, DEFAULT_SETTINGS.instrumentalPct),
     mlModel: ML_MODELS.includes(r.mlModel as MlModel) ? (r.mlModel as MlModel) : DEFAULT_SETTINGS.mlModel,
     splitInstrumental: r.splitInstrumental === true,
-    splitModel: SPLIT_MODELS.includes(r.splitModel as SplitModel) ? (r.splitModel as SplitModel) : DEFAULT_SETTINGS.splitModel,
+    splitGuitar: r.splitGuitar === true,
     drumsPct: clampPct(r.drumsPct, DEFAULT_SETTINGS.drumsPct),
+    guitarPct: clampPct(r.guitarPct, DEFAULT_SETTINGS.guitarPct),
     othersPct: clampOthersPct(r.othersPct),
     mlDelayS: clampDelayS(r.mlDelayS),
     gpu: GPU_PREFERENCES.includes(r.gpu as GpuPreference) ? (r.gpu as GpuPreference) : DEFAULT_SETTINGS.gpu,
@@ -145,12 +149,13 @@ export function separationFor(settings: MixerSettings): {
   vocal: number;
   instrumental: number;
   drums: number;
+  guitar: number;
   others: number;
   /** Semitones. */
   pitchVocal: number;
   pitchInstrumental: number;
 } {
-  const split = settings.splitInstrumental;
+  const drums = settings.splitInstrumental, guitar = settings.splitGuitar;
   // Own pitches only exist in Separate mode; the Default tab always uses the global one.
   const own = settings.mode === 'separate' && settings.pitchSplit;
   return {
@@ -159,7 +164,8 @@ export function separationFor(settings: MixerSettings): {
     on: settings.mode === 'separate',
     vocal: settings.vocalPct / 100,
     instrumental: settings.instrumentalPct / 100,
-    drums: split ? settings.drumsPct / 100 : 1,
-    others: split ? settings.othersPct / 100 : 1,
+    drums: drums ? settings.drumsPct / 100 : 1,
+    guitar: guitar ? settings.guitarPct / 100 : 1,
+    others: drums || guitar ? settings.othersPct / 100 : 1,
   };
 }

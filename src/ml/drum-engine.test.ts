@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { withDrums, type BlockEngine } from './drum-engine';
+import { withDrums, withStages, type BlockEngine, type SplitStage } from './drum-engine';
 import { SC_LAG } from './scnet';
 
 const H = 40 * 128;
@@ -90,5 +90,72 @@ describe('withDrums', () => {
     expect(e.misses!()).toBe(7);
     await e.afterReply!();
     expect(after).toBe(1);
+  });
+});
+
+/** A stage that hands back `scale` times what it was given, `lag` samples after the push. */
+function fakeStage(lag: number, scale: number): SplitStage & { pushes: number } {
+  const l: number[] = [], r: number[] = [];
+  const s = {
+    lag,
+    pushes: 0,
+    reset() {
+      l.length = r.length = 0;
+    },
+    async push(a: Float32Array, b: Float32Array, n: number) {
+      s.pushes++;
+      for (let i = 0; i < n; i++) {
+        l.push(scale * a[i]);
+        r.push(scale * b[i]);
+      }
+    },
+    read(start: number, n: number, outL: Float32Array, outR: Float32Array) {
+      for (let i = 0; i < n; i++) {
+        outL[i] = start + i >= 0 ? l[start + i] : 0;
+        outR[i] = start + i >= 0 ? r[start + i] : 0;
+      }
+    },
+  };
+  return s;
+}
+
+describe('withStages', () => {
+  it('two stages: 8 planes, the longest lag, each stage handed the same instrumental and read at the same samples', async () => {
+    const a = fakeStage(3 * H, 1), b = fakeStage(5 * H, 0.5);
+    const e = withStages(fakeInner(), [{ stage: a, run: (x) => x }, { stage: b, run: (x) => x }]);
+    expect(e.planes).toBe(8);
+    expect(e.resultOffset).toBe(Ro + 5 * H);
+    const d = new Float32Array(8 * H);
+    let checked = 0, worst = 0;
+    for (let m = 0; m < 14; m++) {
+      d.fill(0);
+      for (let i = 0; i < H; i++) {
+        d[i] = sig(0, m * H + i);
+        d[H + i] = sig(1, m * H + i);
+      }
+      await e.process(d);
+      const start = m * H - e.resultOffset;
+      if (m * H < 5 * H + 2 * H) continue;
+      for (let i = 0; i < H; i++) {
+        // the instrumental is half the input (Vk = half), so the stages give 0.5 and 0.25 of it
+        for (const [plane, ch, want] of [[4, 0, 0.5], [5, 1, 0.5], [6, 0, 0.25], [7, 1, 0.25]] as const) worst = Math.max(worst, Math.abs(d[plane * H + i] - want * sig(ch, start + i)));
+        checked++;
+      }
+    }
+    expect(a.pushes).toBe(14);
+    expect(b.pushes).toBe(14);
+    expect(checked).toBeGreaterThan(H);
+    expect(worst).toBeLessThan(5e-4);
+  });
+
+  it('reset resets the engine and every stage', async () => {
+    const a = fakeStage(H, 1), b = fakeStage(H, 1);
+    const inner = fakeInner();
+    const e = withStages(inner, [{ stage: a, run: (x) => x }, { stage: b, run: (x) => x }]);
+    await e.process(new Float32Array(8 * H));
+    e.reset();
+    expect(inner.resets).toBe(1);
+    await e.process(new Float32Array(8 * H));
+    expect(a.pushes).toBe(2);
   });
 });

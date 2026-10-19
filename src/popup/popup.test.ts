@@ -208,7 +208,7 @@ describe('popup', () => {
     await load({ stored: { mode: 'separate', separationQuality: 'light' } });
     expect(has('separation-quality')).toBe(false);
     expect(document.querySelectorAll('select')).toHaveLength(0);
-    expect(document.querySelectorAll('[role=combobox]')).toHaveLength(3); // model, GPU and the split's stem
+    expect(document.querySelectorAll('[role=combobox]')).toHaveLength(2); // model and GPU
   });
 
   describe('model dropdown', () => {
@@ -440,32 +440,40 @@ describe('popup', () => {
       expect(el('drums-btn').textContent).toBe('Update');
     });
 
-    it('shows the guitar model row while the split is on with Guitar, and asks the background for it', async () => {
+    it('the Guitar switch has its own slider, model row and download; Drums and Guitar can be on together', async () => {
       const gremote = { format: MODEL_FORMAT, version: 1, files: { 'guitar.onnx': 45 * 2 ** 20, 'guitar-meta.json': 19000 }, checkedAt: 0 };
-      await load({ stored: sepSplit(), local: { 'modelRemote.guitar': gremote } });
-      expect(has('guitar-row')).toBe(false); // the drum model is the split model
-      await load({ stored: sepSplit({ splitModel: 'guitar' }), local: { 'modelRemote.guitar': gremote } });
+      await load({ stored: { mode: 'separate' }, local: { 'modelRemote.guitar': gremote } });
+      expect(el<HTMLInputElement>('split-guitar').checked).toBe(false);
+      expect(has('guitar-row')).toBe(false);
+      expect(has('split-mix')).toBe(false);
+      el('split-guitar').click();
+      await settle();
+      expect(sent().at(-1).settings).toMatchObject({ splitGuitar: true, splitInstrumental: false });
+      expect(has('split-mix')).toBe(true);
       expect(el('guitar-text').textContent).toMatch(/Guitar split is a one-time download \(45 MB\)/);
       expect(has('drums-row')).toBe(false);
       el<HTMLButtonElement>('guitar-btn').click();
       expect(sendMessage).toHaveBeenCalledWith({ type: 'model-install', id: 'guitar' });
       expect(has('model-row')).toBe(false); // not a Model menu entry
-      await load({ stored: { mode: 'separate', splitModel: 'guitar' }, local: { 'modelRemote.guitar': gremote } });
-      expect(has('guitar-row')).toBe(false); // split off
+      await load({ stored: sepSplit({ splitGuitar: true, drumsPct: 60, guitarPct: 20 }), local: { 'modelRemote.guitar': gremote, 'modelRemote.drums': dremote } });
+      expect(isOpen('split')).toBe(true);
+      expect(has('drums-row') && has('guitar-row')).toBe(true);
+      expect(el<HTMLInputElement>('drums').value).toBe('60');
+      expect(el<HTMLInputElement>('guitar').value).toBe('20');
     });
 
-    it('the split model dropdown picks the stem, relabels the Drums gain and warns about the delay for Guitar', async () => {
-      await load({ stored: sepSplit() });
-      expect(el('split-model').textContent).toMatch(/Drums/);
-      expect(el('split-on').closest('div')!.textContent).toMatch(/Split the drums/);
-      expect(has('guitar-note')).toBe(false);
-      choose('split-model', 'guitar');
+    it('the Guitar slider sends its gain, and the guitar switch alone opens the split section', async () => {
+      await load({ stored: { mode: 'separate', splitGuitar: true } });
+      expect(isOpen('split')).toBe(true);
+      input('guitar', '35');
       await settle();
-      expect(sent().at(-1).settings.splitModel).toBe('guitar');
-      expect(el('split-on').closest('div')!.textContent).toMatch(/Split the guitar/);
-      expect(el('drums').closest('div')!.textContent).toMatch(/Guitar/);
-      await load({ stored: sepSplit({ splitModel: 'guitar' }) });
-      expect(el('guitar-note').textContent).toMatch(/6 s of delay/);
+      expect(sent().at(-1).settings.guitarPct).toBe(35);
+    });
+
+    it('there is no stem dropdown and no guitar note', async () => {
+      await load({ stored: sepSplit({ splitGuitar: true }) });
+      expect(has('split-model')).toBe(false);
+      expect(has('guitar-note')).toBe(false);
     });
   });
 

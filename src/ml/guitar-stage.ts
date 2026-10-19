@@ -1,8 +1,8 @@
-// Guitar stage (debug, `splitModel` guitar): a Mel-Band RoFormer guitar model (src/ml/roformer.ts) in the
-// place of the drum stage. It takes the instrumental (input − Vk) and returns the guitar; the worklet treats the
-// result like the drums (the Drums gain and the Others gain). Blocks of `block` samples go through a RoformerStream
-// as they complete; its output for block b is the guitar of [b·B − R, (b + 1)·B − R), so a sample waits at most
-// B + R for its guitar (`lag`). A run takes seconds (a 6 s chunk: 2 s on an M1) and stops the ML block loop while it
+// Guitar stage: becruily's Mel-Band RoFormer guitar model (src/ml/roformer.ts) as a stem of Split instrumental, next to the
+// drum stage (src/ml/scnet.ts) and in parallel with it. It takes the instrumental (input − Vk) and returns the guitar; the
+// worklet mixes it with its own gain, apart from the drums and the rest. Blocks of `block` samples go through a
+// RoformerStream as they complete; its output for block b is the guitar of [b·B − R, (b + 1)·B − R), so a sample waits at
+// most B + R for its guitar (`lag`). A run takes seconds (a 6 s chunk: 2 s on an M1) and stops the ML block loop while it
 // goes on: ORT's WebGPU EP cannot run two sessions at once (a second run fails to map its output buffer), so the planner
 // covers it with slack and the worklet gets a bigger block pool (rof-plan.ts poolFor).
 import { RoformerStream, type RoformerMeta } from './roformer';
