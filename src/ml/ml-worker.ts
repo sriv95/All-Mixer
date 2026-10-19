@@ -40,11 +40,11 @@ const unavailable = (reason: string): void => ctx.postMessage({ type: 'unavailab
 
 async function start(init: MlWorkerInit): Promise<void> {
   // 1. WebGPU probe first: without a real adapter ORT is not even loaded.
-  const gpu = (navigator as Navigator & { gpu?: { requestAdapter(): Promise<GPUAdapterLike | null> } }).gpu;
+  const gpu = (navigator as Navigator & { gpu?: { requestAdapter(options?: { powerPreference: 'high-performance' | 'low-power' }): Promise<GPUAdapterLike | null> } }).gpu;
   if (!gpu) return unavailable('no navigator.gpu in the worker');
   let adapter: GPUAdapterLike | null;
   try {
-    adapter = await gpu.requestAdapter();
+    adapter = await gpu.requestAdapter(init.gpu && init.gpu !== 'auto' ? { powerPreference: init.gpu } : undefined);
   } catch (e) {
     return unavailable(`requestAdapter failed: ${String(e)}`);
   }
@@ -62,6 +62,7 @@ async function start(init: MlWorkerInit): Promise<void> {
     ort.env.wasm.wasmPaths = init.wasmBase;
     ort.env.wasm.numThreads = 1; // no SharedArrayBuffer; the webgpu EP does the work
     ort.env.wasm.proxy = false;
+    if (init.gpu && init.gpu !== 'auto') ort.env.webgpu.powerPreference = init.gpu; // ORT requests its own adapter
     ort.env.logLevel = 'error'; // models declare a dynamic dim; ORT warns VerifyOutputSizes per run
     const opts = { executionProviders: ['webgpu'], graphOptimizationLevel: 'all', logSeverityLevel: 3 } as const;
     const [mdxModel, splBuf] = await Promise.all([init.mdxUrl, init.modelUrl].map(async (u) => (await fetch(u)).arrayBuffer()));
@@ -177,6 +178,7 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
     ort.env.wasm.wasmPaths = init.wasmBase;
     ort.env.wasm.numThreads = 1;
     ort.env.wasm.proxy = false;
+    if (init.gpu && init.gpu !== 'auto') ort.env.webgpu.powerPreference = init.gpu;
     ort.env.logLevel = 'error';
     const inst = init.installed;
     if (!inst) return unavailable(`the ${MODEL_LABEL[id]} model is not downloaded`);

@@ -10,6 +10,7 @@ CI builds the extension, creates tag `vx.y.z` and a GitHub release with this sec
 
 ### Added
 
+- GPU: Advanced has a GPU setting for Separate mode: Automatic, High performance or Low power. On a computer with two GPUs it picks which one does the work. When Separate mode is too slow, the alert offers to try the high performance GPU.
 - Pitch: a − / + control under Global volume shifts the pitch by up to 6 semitones either way, in Default and Separate mode. The speed stays the same. In Separate mode, Advanced has "Change pitch separately": the vocal and the instrumental get their own − / + next to their levels.
 
 ### Changed
