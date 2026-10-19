@@ -482,6 +482,9 @@ export class YtSettingsMenu implements LyricsMenu {
     const label = this.doc.createElement('div');
     label.className = SETTINGS_SELECTORS.menuItemLabel.slice(1);
     label.textContent = labelText;
+    // A row with only a label must still be clickable across its whole width, not just on the text.
+    item.style.cssText = 'width:100%;box-sizing:border-box;cursor:pointer;';
+    label.style.flex = '1 1 auto';
     item.append(label);
     return { item, label };
   }
@@ -588,6 +591,7 @@ export class YtSettingsMenu implements LyricsMenu {
       item.setAttribute('aria-checked', String(o.value === row.selected));
       if (o.disabled) {
         item.setAttribute('aria-disabled', 'true');
+        item.style.cursor = 'default';
         label.style.opacity = '0.5';
       }
       item.tabIndex = o.disabled ? -1 : 0;
