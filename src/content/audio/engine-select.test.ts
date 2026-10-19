@@ -294,6 +294,16 @@ describe('EngineSelector', () => {
     expect(sel.status).toEqual({ state: 'on' });
   });
 
+  it('the GPU preference goes to the host; a change restarts the probe', () => {
+    const gpus: string[] = [];
+    const chain = { setEngine: vi.fn(() => true), setMlPort: vi.fn(), setMlGeometry: vi.fn(), canRunMl: vi.fn(() => true), onLatencyChange: () => () => {} };
+    const sel = new EngineSelector(chain, (_m, _d, _r, gpu) => (gpus.push(gpu), new FakeHost()));
+    sel.update({ on: true });
+    sel.update({ on: true, gpu: 'auto' });
+    expect(gpus).toEqual(['auto']);
+    sel.update({ on: true, gpu: 'low-power' });
+    expect(gpus).toEqual(['auto', 'low-power']);
+  });
   it('the delay budget goes to the host; a change restarts the probe, for the default model too', () => {
     const { sel, hosts, delays, chain } = setup();
     sel.update(req(true, 'roformer', null));
