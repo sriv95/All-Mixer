@@ -39,7 +39,7 @@ const r = await page.evaluate(async ({ id, block, overlap }) => {
   const inp = new Float32Array(await (await fetch('/ml/models/gs_in.f32')).arrayBuffer());
   const meta = await (await fetch(`/ml/models/${id}-meta.json`)).json();
   const model = await (await fetch(`/ml/models/${id}.onnx`)).arrayBuffer();
-  const stage = new GuitarStage(meta, guitarGeometry(meta.hop, block, overlap));
+  const stage = new GuitarStage(meta, guitarGeometry(block, overlap));
   const frames = stage.roformer.frames;
   const s = await InferenceSession.create(model, { executionProviders: ['webgpu'], graphOptimizationLevel: 'all', freeDimensionOverrides: { frames } });
   const t = new Tensor('float32', stage.roformer.x, [1, frames, stage.roformer.x.length / frames]);

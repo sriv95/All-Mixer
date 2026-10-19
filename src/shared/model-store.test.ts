@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MODEL_FORMAT, modelFileNames, modelState, parseManifest, STALL_MS, type InstalledModel, type Progress, type RemoteRecord } from './model-store';
+import { MODEL_FORMAT, MODEL_LABEL, VOCAL_MODEL_IDS, modelFileNames, modelState, parseManifest, STALL_MS, type InstalledModel, type Progress, type RemoteRecord } from './model-store';
 
 const files = { 'roformer.onnx': 100, 'roformer-meta.json': 10 };
 const inst = (version: number, format = MODEL_FORMAT): InstalledModel => ({ format, version, files });
@@ -23,6 +23,13 @@ describe('parseManifest', () => {
   });
   it('the guitar model has the RoFormer files', () => {
     expect(modelFileNames('guitar')).toEqual(['guitar.onnx', 'guitar-meta.json']);
+  });
+  it('the all-stems model is a Model menu entry with the RoFormer files, and the menu names are Best Vocal and Focus Instrumental Splitting', () => {
+    expect(modelFileNames('sw')).toEqual(['sw.onnx', 'sw-meta.json']);
+    expect(VOCAL_MODEL_IDS).toEqual(['roformer', 'deux', 'sw']);
+    expect(MODEL_LABEL).toMatchObject({ roformer: 'High quality', deux: 'Best Vocal', sw: 'Focus Instrumental Splitting' });
+    const sw = { 'sw.onnx': 359, 'sw-meta.json': 13 };
+    expect(parseManifest({ format: 2, models: { sw: { version: 1, files: sw } } })).toEqual({ sw: { format: 2, version: 1, files: sw } });
   });
   it('drops a bad model entry but keeps the good ones', () => {
     expect(parseManifest({ format: 1, models: { roformer: { version: 0, files }, deux: { version: 1, files: dfiles } } })).toEqual({ deux: { format: 1, version: 1, files: dfiles } });

@@ -219,7 +219,7 @@ describe('popup', () => {
     it('shows the stored model and sends a change', async () => {
       await load({ stored: { mode: 'separate', mlModel: 'roformer' } });
       expect(trigger().textContent).toMatch(/High quality/);
-      expect(values()).toEqual(['mdx', 'roformer', 'deux']);
+      expect(values()).toEqual(['mdx', 'roformer', 'deux', 'sw']);
       expect(el('ml-model-option-roformer').getAttribute('aria-selected')).toBe('true');
       choose('ml-model', 'mdx');
       await settle();
@@ -333,9 +333,9 @@ describe('popup', () => {
       expect(sendMessage).toHaveBeenCalledWith({ type: 'model-install', id: 'roformer' });
     });
 
-    it('shows the state of the selected model (Best quality = deux)', async () => {
+    it('shows the state of the selected model (Best Vocal = deux)', async () => {
       await load({ stored: { mode: 'separate', mlModel: 'deux' }, local: { 'modelInstalled.roformer': installedV1, 'modelRemote.deux': remote(1, dfiles) } });
-      expect(el('model-text').textContent).toMatch(/Best quality is a one-time download \(50 MB\)/);
+      expect(el('model-text').textContent).toMatch(/Best Vocal is a one-time download \(50 MB\)/);
       el<HTMLButtonElement>('model-btn').click();
       expect(sendMessage).toHaveBeenCalledWith({ type: 'model-install', id: 'deux' });
     });
@@ -468,6 +468,52 @@ describe('popup', () => {
       input('guitar', '35');
       await settle();
       expect(sent().at(-1).settings.guitarPct).toBe(35);
+    });
+
+    describe('Focus Instrumental Splitting (all stems)', () => {
+      const swFiles = { 'sw.onnx': 343 * 2 ** 20, 'sw-meta.json': 13000 };
+      const sw = (extra: Record<string, unknown> = {}) => ({ mode: 'separate', mlModel: 'sw', ...extra });
+
+      it('is the fourth Model entry and has its own download row', async () => {
+        await load({ stored: sw(), local: { 'modelRemote.sw': { format: MODEL_FORMAT, version: 1, files: swFiles, checkedAt: 0 } } });
+        expect(el('ml-model').textContent).toMatch(/Focus Instrumental Splitting/);
+        expect(el('model-text').textContent).toMatch(/Focus Instrumental Splitting is a one-time download \(343 MB\)/);
+        el<HTMLButtonElement>('model-btn').click();
+        expect(sendMessage).toHaveBeenCalledWith({ type: 'model-install', id: 'sw' });
+      });
+
+      it('shows a slider for the drums, guitar, bass, piano and others, and each sends its gain', async () => {
+        await load({ stored: sw({ bassPct: 20, pianoPct: 30 }) });
+        expect(has('split-mix')).toBe(true);
+        expect(el<HTMLInputElement>('bass').value).toBe('20');
+        expect(el<HTMLInputElement>('piano').value).toBe('30');
+        for (const [id, key, v] of [['drums', 'drumsPct', '40'], ['guitar', 'guitarPct', '50'], ['bass', 'bassPct', '60'], ['piano', 'pianoPct', '70'], ['others', 'othersPct', '80']] as const) {
+          input(id, v);
+          await settle();
+          expect(sent().at(-1).settings[key]).toBe(Number(v));
+        }
+      });
+
+      it('the Drums and Guitar switches are not available: the Split section says why instead', async () => {
+        await load({ stored: sw({ splitInstrumental: true, splitGuitar: true }), local: { 'modelRemote.drums': dremote } });
+        expect(has('split-on')).toBe(false);
+        expect(has('split-guitar')).toBe(false);
+        expect(has('drums-row')).toBe(false);
+        expect(el('split-all').textContent).toMatch(/already splits the drums, guitar, bass and piano/);
+      });
+
+      it('the bass and piano sliders are only there with this model', async () => {
+        await load({ stored: { mode: 'separate', splitInstrumental: true, splitGuitar: true } });
+        expect(has('bass')).toBe(false);
+        expect(has('piano')).toBe(false);
+      });
+
+      it('Reset puts the bass and piano back to 100% too', async () => {
+        await load({ stored: sw({ bassPct: 10, pianoPct: 20, drumsPct: 30 }) });
+        el('preset-reset').click();
+        await settle();
+        expect(sent().at(-1).settings).toMatchObject({ bassPct: 100, pianoPct: 100, drumsPct: 100, guitarPct: 100, othersPct: 100 });
+      });
     });
 
     it('there is no stem dropdown and no guitar note', async () => {

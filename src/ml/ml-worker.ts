@@ -25,8 +25,8 @@ import { MlTiming } from './timing';
 import { adapterName as nameOfAdapter } from '../shared/gpu';
 import { opfsFiles, readModelFile } from '../shared/model-files';
 import { MODEL_FORMAT, MODEL_LABEL, modelFileNames, type InstalledModel, type ModelId } from '../shared/model-store';
-import { RoformerStream, DEFAULT_ROF_GEOMETRY, type RoformerMeta } from './roformer';
-import { DRUM_STAGE, MAX_DELAY_S, MIN_DELAY_S, drumRuns, gateMs, planMdxDrums, planRof, poolFor, stepMs, type RofGeometry, type StageCost, type StageShape } from './rof-plan';
+import { RoformerStream, DEFAULT_ROF_GEOMETRY, SW_BASE_GEOMETRY, type RoformerMeta } from './roformer';
+import { BASE_FRAMES, DRUM_STAGE, MAX_DELAY_S, MIN_DELAY_S, drumRuns, gateMs, planMdxDrums, planRof, poolFor, stepMs, type RofGeometry, type StageCost, type StageShape } from './rof-plan';
 import { withStages, type BlockEngine, type SplitStage } from './drum-engine';
 import { GuitarStage, guitarGeometry, stageShape } from './guitar-stage';
 import { lookupSpeed, speedKey } from './plan-cache';
@@ -183,9 +183,17 @@ async function start(init: MlWorkerInit): Promise<void> {
   serve(init.port, engine, { stallMs: init.stallMs ?? 0, stallAfterMs: init.stallAfterMs ?? 5000 }, init.timing ? new MlTiming() : null);
 }
 
-/** RoFormer: one fp16 transformer core on WebGPU, STFT / mask / iSTFT in JS. The chunk length is planned from the speed of this GPU. */
+/** The stems the all-stems model hands over, as (name, first plane of the reply): the vocal one is both Vk and the A cappella. */
+const SW_PLANES = { vocals: 0, drums: 4, guitar: 6, bass: 8, piano: 10 } as const;
+
+/**
+ * RoFormer: one fp16 transformer core on WebGPU, STFT / mask / iSTFT in JS. The chunk length is planned from the speed of this GPU.
+ * With the 'sw' model (BS-RoFormer SW) the one pass gives six stems: the engine fills the vocal planes and the drums, guitar, bass
+ * and piano planes itself (what the drum and guitar stages do for the other models), and the rest of the instrumental is what is left.
+ */
 async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<void> {
   const id = init.model as ModelId;
+  const sw = id === 'sw';
   let ort: Ort, buf: ArrayBuffer, meta: RoformerMeta;
   const t0 = performance.now();
   try {
@@ -217,6 +225,8 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
     stream: RoformerStream;
     /** One block step in place: analyze + model + synthesize. */
     process: (l: Float32Array, r: Float32Array) => Promise<void>;
+    /** The all-stems model: one block step, the stems into `outs[stem]` = [L, R]. */
+    processStems: (l: Float32Array, r: Float32Array, outs: ReadonlyArray<readonly [Float32Array, Float32Array] | undefined>) => Promise<void>;
     wu: WarmUpResult;
   }
   const measure = async (g: RofGeometry, w: { skip: number; n: number }): Promise<Run> => {
@@ -238,9 +248,11 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
         nl[i] = (Math.random() * 2 - 1) * 0.3;
         nr[i] = (Math.random() * 2 - 1) * 0.3;
       }
-      const wu = await warmUp(() => stream.process(nl, nr, run, ol, or), w);
+      // The stems an all-stems step has to make (the rest of the instrumental is what is left): vocals, drums, guitar, bass, piano.
+      const want = (meta.stems ?? []).map((n) => (n in SW_PLANES ? ([new Float32Array(g.block), new Float32Array(g.block)] as const) : undefined));
+      const wu = await warmUp(() => (sw ? stream.processStems(nl, nr, run, want) : stream.process(nl, nr, run, ol, or)), w);
       stream.reset();
-      return { g, session, stream, process: (l, r) => stream.process(l, r, run, l, r), wu };
+      return { g, session, stream, process: (l, r) => stream.process(l, r, run, l, r), processStems: (l, r, outs) => stream.processStems(l, r, run, outs), wu };
     } catch (e) {
       void session.release();
       throw e;
@@ -254,7 +266,7 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
   let note = '';
   const speedKeyOf = speedKey({ model: id, modelVersion: init.installed?.version ?? 0, appVersion: init.appVersion ?? '', adapter: adapterName });
   const measureSpeed = async (): Promise<number> => {
-    const first = await measure(DEFAULT_ROF_GEOMETRY, { skip: 2, n: 6 });
+    const first = await measure(sw ? SW_BASE_GEOMETRY : DEFAULT_ROF_GEOMETRY, { skip: 2, n: 6 });
     void first.session.release();
     return first.wu.p90;
   };
@@ -263,9 +275,9 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
   const search = async (start: number, w: { skip: number; n: number }): Promise<void> => {
     let baseMs = start;
     for (let attempt = 0; attempt < 3 && !chosen; attempt++) {
-      const g = planRof((wantMs / 1000) * ML_SAMPLE_RATE, baseMs, stages.map(costOf));
+      const g = planRof((wantMs / 1000) * ML_SAMPLE_RATE, baseMs, stages.map(costOf), meta.hop);
       if (!g) {
-        note = `too slow for a ${Math.round(wantMs / 1000)} s delay (a step takes ${baseMs.toFixed(0)} ms for 1.1 s of audio${stages.map((s) => `, a ${s.id} run ${s.ms.toFixed(0)} ms`).join('')})${wantMs < MAX_DELAY_S * 1000 ? ': try a longer delay limit' : ''}`;
+        note = `too slow for a ${Math.round(wantMs / 1000)} s delay (a step takes ${baseMs.toFixed(0)} ms for ${((BASE_FRAMES * meta.hop) / ML_SAMPLE_RATE).toFixed(1)} s of audio${stages.map((s) => `, a ${s.id} run ${s.ms.toFixed(0)} ms`).join('')})${wantMs < MAX_DELAY_S * 1000 ? ': try a longer delay limit' : ''}`;
         break;
       }
       try {
@@ -285,7 +297,7 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
   };
   const remembered = lookupSpeed(init.speeds, speedKeyOf);
   try {
-    if (init.drums || init.guitar) {
+    if (!sw && (init.drums || init.guitar)) {
       const d = await loadStages(ort, init);
       if (typeof d === 'string') return unavailable(d);
       stages = d;
@@ -301,7 +313,7 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
   }
   if (!chosen) return unavailable(note || 'too slow on this device');
   const { g, wu } = chosen;
-  const geometry: MlGeometry = { block: g.block, resultOffset: g.overlap + g.extra, latency: g.latency, warmupP90Ms: gateMs(g), ...(init.drums ? { drums: true } : {}), ...(init.guitar ? { guitar: true } : {}), ...(stages.length ? { pool: poolFor(runsMs(stages), (g.block / ML_SAMPLE_RATE) * 1000) } : {}) };
+  const geometry: MlGeometry = { block: g.block, resultOffset: g.overlap + g.extra, latency: g.latency, warmupP90Ms: gateMs(g), ...(sw ? { drums: true, guitar: true, bass: true, piano: true } : {}), ...(init.drums && !sw ? { drums: true } : {}), ...(init.guitar && !sw ? { guitar: true } : {}), ...(stages.length ? { pool: poolFor(runsMs(stages), (g.block / ML_SAMPLE_RATE) * 1000) } : {}) };
   const createMs = performance.now() - t0;
   if (init.timing) console.info(`[all-mixer ml] ${id} chunk ${g.frames} frames (${((g.chunk / ML_SAMPLE_RATE)).toFixed(2)} s), block ${(g.block / ML_SAMPLE_RATE).toFixed(2)} s, overlap ${(g.overlap / ML_SAMPLE_RATE).toFixed(2)} s, delay ${(g.latency / ML_SAMPLE_RATE).toFixed(2)} s; warm-up p50 ${wu.p50.toFixed(1)} p90 ${wu.p90.toFixed(1)} p95 ${wu.p95.toFixed(1)} (gate ${geometry.warmupP90Ms.toFixed(1)}), ready after ${createMs.toFixed(0)} ms, ${adapterName}`);
   ctx.postMessage({ type: 'ready', p50: wu.p50, p90: wu.p90, p95: wu.p95, createMs, adapter: adapterName, geometry, speed: { key: speedKeyOf, baseMs: planBaseMs } });
@@ -318,7 +330,21 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
       d.copyWithin(2 * g.block, 0, 2 * g.block); // the vocal is both Vk and the A cappella
     },
   };
-  const engine = stages.length ? withStages(vocalEngine, stages) : vocalEngine;
+  const swEngine: BlockEngine = {
+    block: g.block,
+    resultOffset: g.overlap,
+    planes: 4 + 2 * 4,
+    reset: () => chosen!.stream.reset(),
+    process: async (d) => {
+      const B = g.block;
+      const plane = (k: number): Float32Array => d.subarray(k * B, (k + 1) * B);
+      const outs: Array<readonly [Float32Array, Float32Array] | undefined> = (meta.stems ?? []).map((n) => (n in SW_PLANES ? ([plane(SW_PLANES[n as keyof typeof SW_PLANES]), plane(SW_PLANES[n as keyof typeof SW_PLANES] + 1)] as const) : undefined));
+      // The input planes are read whole by the analysis before the vocal stem is written over them.
+      await chosen!.processStems(plane(0), plane(1), outs);
+      d.copyWithin(2 * B, 0, 2 * B); // the vocal is both Vk and the A cappella
+    },
+  };
+  const engine = sw ? swEngine : stages.length ? withStages(vocalEngine, stages) : vocalEngine;
   serve(init.port, engine, { stallMs: init.stallMs ?? 0, stallAfterMs: init.stallAfterMs ?? 5000 }, init.timing ? new MlTiming() : null);
 }
 

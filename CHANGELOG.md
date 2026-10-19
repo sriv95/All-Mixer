@@ -11,11 +11,13 @@ CI builds the extension, creates tag `vx.y.z` and a GitHub release with this sec
 ### Added
 
 - Split instrumental: Advanced has a Guitar switch next to the Drums one, on its own or together with it (together they need a fast GPU), and a Guitar level next to the Drums level. Guitar is a one-time download (45 MB) and adds about 6 s of delay on top of the Delay limit. The model is by becruily and is free for non-commercial use only.
+- Model: a fourth entry, **Focus Instrumental Splitting**, splits the song into vocal, drums, guitar, bass, piano and everything else in one pass, each with its own level (Drums, Guitar, Bass, Piano, Others). It is a one-time download (343 MB) and needs a fast GPU, about like Best Vocal. With it the Drums and Guitar switches in Split instrumental are not available. The model has no licence from its author.
 - GPU: Advanced has a GPU setting for Separate mode: Automatic, High performance or Low power. On a computer with two GPUs it picks which one does the work, and each choice shows the name of its GPU. When Separate mode is too slow, the alert offers to try the high performance GPU.
 - Pitch: a − / + control under Global volume shifts the pitch by up to 6 semitones either way, in Default and Separate mode. The speed stays the same. In Separate mode, Advanced has "Change pitch separately": the vocal and the instrumental get their own − / + next to their levels.
 
 ### Changed
 
+- Model menu: "Best quality" is now called "Best Vocal".
 - Separate mode: the audio and picture are about 23 ms later than before (the pitch stage). A pitch shift in Default mode adds the same delay.
 
 ## [0.4.0] - 2026-10-19
