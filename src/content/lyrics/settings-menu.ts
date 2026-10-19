@@ -486,6 +486,13 @@ export class YtSettingsMenu implements LyricsMenu {
     // take clicks) across its whole width, as for its own rows.
     const content = this.doc.createElement('div');
     content.className = SETTINGS_SELECTORS.menuItemContent.slice(1);
+    // Rows that open something or run an action carry an (empty) icon cell, like YouTube's own subtitle options; it
+    // gives the label its left gap. Radio rows keep their own check gap.
+    if (role !== 'menuitemradio') {
+      const icon = this.doc.createElement('div');
+      icon.className = 'ytp-menuitem-icon';
+      item.append(icon);
+    }
     item.style.cssText = 'width:100%;box-sizing:border-box;cursor:pointer;';
     item.append(label, content);
     return { item, label, content };
@@ -508,11 +515,13 @@ export class YtSettingsMenu implements LyricsMenu {
     panel.setAttribute(OWN_ATTR, '');
     const header = this.doc.createElement('div');
     header.className = SETTINGS_SELECTORS.panelHeader.slice(1);
+    // Same markup as YouTube's own submenu header: the button sits in a 48 px container, which gives its left gap.
+    const backBox = this.doc.createElement('div');
+    backBox.className = 'ytp-panel-back-button-container';
     const back = this.doc.createElement('button');
     back.type = 'button';
     back.className = `ytp-button ${SETTINGS_SELECTORS.backButton.slice(1)}`;
     back.setAttribute('aria-label', 'Back');
-    back.textContent = '‹';
     back.addEventListener('click', (e) => {
       e.stopPropagation();
       this.back();
@@ -520,7 +529,8 @@ export class YtSettingsMenu implements LyricsMenu {
     const title = this.doc.createElement('span');
     title.className = 'ytp-panel-title';
     title.textContent = row ? row.label : GROUP_LABEL;
-    header.append(back, title);
+    backBox.append(back);
+    header.append(backBox, title);
     const menu = this.doc.createElement('div');
     menu.className = SETTINGS_SELECTORS.panelMenu.slice(1);
     if (row?.rows) this.fillRows(menu, row.rows);
@@ -546,9 +556,14 @@ export class YtSettingsMenu implements LyricsMenu {
       menu.replaceWith(scroller);
       scroller.append(menu);
     }
-    // Native submenus size the popup to their panel.
+    // Native submenus size the popup to their panel: measure the panel at its natural width, free of the previous
+    // panel's size (a long note wraps at 380 px).
+    popup.style.width = '';
+    popup.style.height = '';
+    panel.style.cssText = 'width:max-content;min-width:250px;max-width:380px;';
     const w = panel.offsetWidth;
     const h = panel.offsetHeight;
+    panel.style.cssText = '';
     if (w > 0 && h > 0) {
       popup.style.width = `${w}px`;
       popup.style.height = `${h}px`;
@@ -623,7 +638,7 @@ export class YtSettingsMenu implements LyricsMenu {
     if (row.note) {
       const note = this.doc.createElement('div');
       note.className = 'ytp-menuitem-label';
-      note.style.cssText = 'padding:8px 15px;opacity:0.7;font-size:90%;white-space:normal;';
+      note.style.cssText = 'padding:8px 20px 8px 35px;opacity:0.7;font-size:90%;white-space:normal;';
       note.textContent = row.note;
       menu.append(note);
     }
