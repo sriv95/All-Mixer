@@ -475,18 +475,20 @@ export class YtSettingsMenu implements LyricsMenu {
     else this.closeSub();
   }
 
-  private item(role: string, labelText: string): { item: HTMLElement; label: HTMLElement } {
+  private item(role: string, labelText: string): { item: HTMLElement; label: HTMLElement; content: HTMLElement } {
     const item = this.doc.createElement('div');
     item.className = SETTINGS_SELECTORS.menuItem.slice(1);
     item.setAttribute('role', role);
     const label = this.doc.createElement('div');
     label.className = SETTINGS_SELECTORS.menuItemLabel.slice(1);
     label.textContent = labelText;
-    // A row with only a label must still be clickable across its whole width, not just on the text.
+    // Every row gets the value column, empty when it has no value: that is what makes YouTube lay a row out (and
+    // take clicks) across its whole width, as for its own rows.
+    const content = this.doc.createElement('div');
+    content.className = SETTINGS_SELECTORS.menuItemContent.slice(1);
     item.style.cssText = 'width:100%;box-sizing:border-box;cursor:pointer;';
-    label.style.flex = '1 1 auto';
-    item.append(label);
-    return { item, label };
+    item.append(label, content);
+    return { item, label, content };
   }
 
   private renderSub(popup: HTMLElement): void {
@@ -562,14 +564,11 @@ export class YtSettingsMenu implements LyricsMenu {
   /** One row per setting (opens its choices or, for a group, its settings). */
   private fillRows(menu: HTMLElement, rows: MenuRow[]): void {
     for (const row of rows) {
-      const { item, label } = this.item('menuitem', row.label);
+      const { item, content } = this.item('menuitem', row.label);
       item.setAttribute('aria-haspopup', 'true');
       item.setAttribute(ROW_ATTR + '-setting', row.id);
       item.tabIndex = 0;
-      const content = this.doc.createElement('div');
-      content.className = SETTINGS_SELECTORS.menuItemContent.slice(1);
       content.textContent = selectedLabel(row);
-      label.after(content);
       this.activate(item, () => this.open([...this.path, row.id]));
       menu.append(item);
     }
@@ -604,7 +603,7 @@ export class YtSettingsMenu implements LyricsMenu {
       menu.append(item);
     }
     if (row.picker) {
-      const { item, label } = this.item('menuitem', 'Pick a color');
+      const { item, content } = this.item('menuitem', 'Pick a color');
       const input = this.doc.createElement('input');
       input.type = 'color';
       input.value = row.selected;
@@ -612,7 +611,7 @@ export class YtSettingsMenu implements LyricsMenu {
       // `change` (picker closed), not `input`: a pick re-renders this panel and would drop the open picker.
       input.addEventListener('change', () => row.select(input.value));
       input.addEventListener('click', (e) => e.stopPropagation());
-      label.after(input);
+      content.append(input);
       menu.append(item);
     }
     if (row.note) {
