@@ -28,3 +28,26 @@ export async function probeGpuNames(gpu: Gpu | undefined = (navigator as Navigat
   );
   return out;
 }
+
+export type GpuNames = Partial<Record<GpuPreference, string>>;
+
+/** The GPUs to choose from, by raw name (one entry per distinct name); generic labels while no name is known. */
+export function gpuOptions(names: GpuNames): { value: GpuPreference; label: string }[] {
+  const seen = new Set<string>();
+  const out: { value: GpuPreference; label: string }[] = [];
+  for (const value of ['high-performance', 'low-power'] as const) {
+    const label = names[value];
+    if (label && !seen.has(label)) {
+      seen.add(label);
+      out.push({ value, label });
+    }
+  }
+  return out.length ? out : [{ value: 'auto', label: 'Automatic' }, { value: 'high-performance', label: 'Fast GPU' }, { value: 'low-power', label: 'Built-in GPU' }];
+}
+
+/** The option that shows `pref`: the one with the same GPU name (Automatic and a name shared by both preferences resolve this way). */
+export function gpuSelected(names: GpuNames, pref: GpuPreference): GpuPreference {
+  const opts = gpuOptions(names);
+  if (opts.some((o) => o.value === pref)) return pref;
+  return opts.find((o) => o.label === names[pref])?.value ?? pref;
+}
