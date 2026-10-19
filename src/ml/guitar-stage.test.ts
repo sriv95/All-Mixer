@@ -25,13 +25,14 @@ describe('guitarGeometry', () => {
 });
 
 describe('guitarBlockFor', () => {
-  it('follows the delay limit less the overlap, between the shortest and the longest block, in render quanta', () => {
+  it('follows the delay limit less the overlap, between 5.5 s and the longest block, in render quanta', () => {
     expect(guitarBlockFor(null)).toBe(guitarBlockFor(2000));
-    expect(guitarBlockFor(2000)).toBe(Math.floor((88200 - GUITAR_OVERLAP) / 128) * 128);
+    expect(guitarBlockFor(2000)).toBe(GUITAR_BLOCK); // the default limit gives the shortest block, 5.5 s
     expect(guitarBlockFor(1000)).toBe(GUITAR_BLOCK);
+    expect(guitarBlockFor(8000)).toBe(Math.floor((8 * 44100 - GUITAR_OVERLAP) / 128) * 128);
     expect(guitarBlockFor(15000)).toBe(GUITAR_MAX_BLOCK);
     for (const ms of [2000, 5000, 7300, 10000]) expect(guitarBlockFor(ms) % 128).toBe(0);
-    expect(guitarBlockFor(6000)).toBeGreaterThan(guitarBlockFor(4000));
+    expect(guitarBlockFor(10000)).toBeGreaterThan(guitarBlockFor(7000));
   });
 });
 
@@ -42,7 +43,7 @@ describe('GuitarStage', () => {
     const H = 30 * 128; // pushes of an engine block, not a multiple of the stage block
     let worst = 0, checked = 0;
     const l = new Float32Array(H), r = new Float32Array(H), ol = new Float32Array(H), or = new Float32Array(H);
-    for (let m = 0; m < 100; m++) {
+    for (let m = 0; m < 280; m++) {
       for (let i = 0; i < H; i++) {
         l[i] = sigL(m * H + i);
         r[i] = sigR(m * H + i);
@@ -89,7 +90,7 @@ describe('GuitarStage', () => {
     expect(e.resultOffset).toBe(Ro + lag);
     const d = new Float32Array(6 * H);
     let worst = 0, checked = 0;
-    for (let m = 0; m < 70; m++) {
+    for (let m = 0; m < 190; m++) {
       d.fill(0);
       for (let i = 0; i < H; i++) {
         d[i] = sigL(m * H + i);

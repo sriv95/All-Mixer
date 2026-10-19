@@ -331,8 +331,8 @@ const MODEL_CHOICES: readonly Choice<MlModel>[] = [
 ];
 
 const SPLIT_CHOICES: readonly Choice<SplitModel>[] = [
-  { value: 'drums', label: 'Drums (SCNet)' },
-  { value: 'guitar', label: 'Guitar', hint: 'becruily, 45 MB' },
+  { value: 'drums', label: 'Drums' },
+  { value: 'guitar', label: 'Guitar', hint: 'Needs a fast GPU' },
 ];
 
 type Levels = Pick<MixerSettings, 'vocalPct' | 'instrumentalPct' | 'drumsPct' | 'othersPct'>;
@@ -358,8 +358,8 @@ function SeparateControls({ settings, update, ready, compact, advancedOpen, setA
   splitOpen: boolean;
   setSplitOpen: (open: boolean) => void;
 }) {
-  const models = useModels(settings.mlModel, settings.splitInstrumental && settings.splitModel === 'drums', ready);
-  const stem = settings.splitModel === 'drums' ? 'Drums' : 'Guitar'; // the stem the Drums gain applies to (guitar models are debug only)
+  const models = useModels(settings.mlModel, settings.splitInstrumental ? settings.splitModel : null, ready);
+  const stem = settings.splitModel === 'drums' ? 'Drums' : 'Guitar'; // the stem the Drums gain applies to
   const [gpuNames, setGpuNames] = useState<GpuNames>({});
   useEffect(() => { void probeGpuNames().then(setGpuNames); }, []);
   const [delayDraft, setDelayDraft] = useState(settings.mlDelayS);
@@ -454,21 +454,20 @@ function SeparateControls({ settings, update, ready, compact, advancedOpen, setA
           <Disclosure id="split" open={splitOpen} onOpen={setSplitOpen} className="rounded-2xl bg-surface/70" buttonClassName="p-3"
             title={<span className="flex items-center gap-1.5"><Drum size={15} className="text-brand" aria-hidden />Split instrumental</span>}>
             <div className="flex flex-col gap-3 px-3 pb-3">
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="split-model" className="text-[13px] font-bold">Split out</label>
+                <Select id="split-model" value={settings.splitModel} options={SPLIT_CHOICES} onValue={(splitModel) => update({ splitModel })} />
+              </div>
               <div className="flex items-center justify-between gap-3">
-                <label htmlFor="split-on" className="text-[13px] font-bold">{stem}</label>
+                <label htmlFor="split-on" className="text-[13px] font-bold">Split the {stem.toLowerCase()} from the instrumental</label>
                 <Switch id="split-on" checked={settings.splitInstrumental} onChange={(on) => update({ splitInstrumental: on })} />
               </div>
               <p className="m-0 text-xs leading-snug text-muted">Each extra split uses more GPU and adds more delay over the Delay limit.</p>
-              <Collapse show={!!models.drums}>{models.drums && <ModelRow idPrefix="drums" line={models.drums} />}</Collapse>
-              {models.guitar && (
-                <div id="split-debug" className="flex flex-col gap-2.5 border-t border-well pt-3">
-                  <div className="flex flex-col gap-1.5">
-                    <label htmlFor="split-model" className="text-[13px] font-bold">Split model (debug)</label>
-                    <Select id="split-model" value={settings.splitModel} options={SPLIT_CHOICES} onValue={(splitModel) => update({ splitModel })} />
-                  </div>
-                  <ModelRow idPrefix="guitar" line={models.guitar} />
-                </div>
+              {settings.splitModel === 'guitar' && (
+                <p id="guitar-note" className="m-0 text-xs leading-snug text-muted">Guitar needs a fast GPU and adds about 6 s of delay; a longer Delay limit splits it better. Model by becruily, free for non-commercial use.</p>
               )}
+              <Collapse show={!!models.drums}>{models.drums && <ModelRow idPrefix="drums" line={models.drums} />}</Collapse>
+              <Collapse show={!!models.guitar}>{models.guitar && <ModelRow idPrefix="guitar" line={models.guitar} />}</Collapse>
             </div>
           </Disclosure>
         </div>
