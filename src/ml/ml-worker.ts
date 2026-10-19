@@ -354,7 +354,7 @@ async function loadSplit(ort: Ort, init: MlWorkerInit): Promise<Split | string> 
       return { run, ms: wu.p90, stage: new DrumStage(), shape: DRUM_STAGE };
     }
     const meta = JSON.parse(await readModelFile(files, inst.version, metaFile, inst.files[metaFile]).then((x) => x.text())) as RoformerMeta;
-    const g = guitarGeometry(meta.hop, guitarBlockFor(init.delayMs ?? null));
+    const g = guitarGeometry(guitarBlockFor(init.delayMs ?? null));
     const stage = new GuitarStage(meta, g, { onRun: init.timing ? (ms) => console.info(`[all-mixer ml] ${id} run ${ms.toFixed(0)} ms (${(g.block / ML_SAMPLE_RATE).toFixed(1)} s block)`) : undefined });
     const frames = stage.roformer.frames;
     const session = await ort.InferenceSession.create(buf, { ...opts, freeDimensionOverrides: { frames } });

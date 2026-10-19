@@ -445,8 +445,7 @@ describe('popup', () => {
       await load({ stored: sepSplit(), local: { 'modelRemote.guitar': gremote } });
       expect(has('guitar-row')).toBe(false);
       await load({ stored: sepSplit(), local: { 'debug.guitar': true, 'modelRemote.guitar': gremote } });
-      expect(el('guitar-text').textContent).toMatch(/Guitar split \(becruily\) is a one-time download \(45 MB\)/);
-      expect(has('guitar2-row')).toBe(true);
+      expect(el('guitar-text').textContent).toMatch(/Guitar split is a one-time download \(45 MB\)/);
       el<HTMLButtonElement>('guitar-btn').click();
       expect(sendMessage).toHaveBeenCalledWith({ type: 'model-install', id: 'guitar' });
       expect(has('model-row')).toBe(false); // not a Model menu entry
@@ -458,9 +457,9 @@ describe('popup', () => {
       await load({ stored: sepSplit(), local: { 'debug.guitar': true } });
       expect(el('split-model').textContent).toMatch(/Drums/);
       expect(el('split-on').closest('div')!.textContent).toBe('Drums');
-      choose('split-model', 'guitar2');
+      choose('split-model', 'guitar');
       await settle();
-      expect(sent().at(-1).settings.splitModel).toBe('guitar2');
+      expect(sent().at(-1).settings.splitModel).toBe('guitar');
       expect(el('split-on').closest('div')!.textContent).toBe('Guitar');
       expect(el('drums').closest('div')!.textContent).toMatch(/Guitar/);
     });

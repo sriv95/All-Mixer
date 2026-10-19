@@ -117,14 +117,12 @@ describe('EngineSelector', () => {
     });
     sel.update({ on: true, model: 'mdx', drums: false, split: 'guitar' });
     expect(hosts).toHaveLength(1);
-    sel.update({ on: true, model: 'mdx', drums: false, split: 'guitar2' }); // no split: the choice does not matter
+    sel.update({ on: true, model: 'mdx', drums: false, split: 'drums' }); // no split: the choice does not matter
     expect(hosts).toHaveLength(1);
-    sel.update({ on: true, model: 'mdx', drums: true, split: 'guitar2' });
+    sel.update({ on: true, model: 'mdx', drums: true, split: 'drums' });
     sel.update({ on: true, model: 'mdx', drums: true, split: 'guitar' });
-    expect(splits).toEqual(['guitar', 'guitar2', 'guitar']);
-    sel.reload('guitar2'); // not the one in use
-    expect(hosts).toHaveLength(3);
-    sel.reload('drums');
+    expect(splits).toEqual(['guitar', 'drums', 'guitar']);
+    sel.reload('drums'); // not the one in use
     expect(hosts).toHaveLength(3);
     sel.reload('guitar');
     expect(hosts).toHaveLength(4);

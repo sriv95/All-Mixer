@@ -45,12 +45,11 @@ const alignDown = (n: number): number => Math.floor(n / ML_QUANTUM) * ML_QUANTUM
 const alignUp = (n: number): number => Math.ceil(n / ML_QUANTUM) * ML_QUANTUM;
 
 /** Frames of a chunk that holds CONTEXT + block + overlap. */
-export const framesFor = (block: number, overlap: number, hop = HOP): number => Math.ceil((block + overlap + CONTEXT) / hop) + 1;
+export const framesFor = (block: number, overlap: number): number => Math.ceil((block + overlap + CONTEXT) / HOP) + 1;
 
-/** `hop` is the STFT hop of the model (441, or 512 for chenCFD's guitar model). */
-export function makeGeometry(block: number, overlap: number, slack: number, extra = 0, hop = HOP): RofGeometry {
-  const frames = framesFor(block, overlap, hop);
-  return { frames, chunk: (frames - 1) * hop, block, overlap, slack, extra, latency: block + overlap + extra + slack + ML_QUANTUM };
+export function makeGeometry(block: number, overlap: number, slack: number, extra = 0): RofGeometry {
+  const frames = framesFor(block, overlap);
+  return { frames, chunk: (frames - 1) * HOP, block, overlap, slack, extra, latency: block + overlap + extra + slack + ML_QUANTUM };
 }
 
 /** A split stage as the planners see it: a model run completes every `stride` samples, and a result waits up to `lag` samples for it. */

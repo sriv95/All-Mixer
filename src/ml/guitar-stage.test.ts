@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { GUITAR_BLOCK, GUITAR_MAX_BLOCK, GUITAR_OVERLAP, GuitarStage, guitarBlockFor, guitarGeometry, stageShape } from './guitar-stage';
 import { framesFor } from './rof-plan';
 import { withDrums, type BlockEngine } from './drum-engine';
-import { RoformerStream, type RoformerMeta } from './roformer';
+import type { RoformerMeta } from './roformer';
 
 const BINS = 1025;
-const metaOf = (hop: number): RoformerMeta => ({ nFft: 2048, hop, sel: Array.from({ length: 2 * BINS }, (_, i) => i), bands: Array.from({ length: BINS }, () => 1) });
+const meta: RoformerMeta = { nFft: 2048, hop: 441, sel: Array.from({ length: 2 * BINS }, (_, i) => i), bands: Array.from({ length: BINS }, () => 1) };
 /** masks of 1 + 0i for every model input value: the identity */
 const identity = (x: Float32Array): Float32Array => {
   const m = new Float32Array(x.length);
@@ -16,14 +16,11 @@ const sigL = (n: number) => 0.5 * Math.sin((2 * Math.PI * 440 * n) / 44100) + 0.
 const sigR = (n: number) => 0.4 * Math.cos((2 * Math.PI * 1000 * n) / 44100) + 0.2 * Math.sin((2 * Math.PI * 7000 * n) / 44100);
 
 describe('guitarGeometry', () => {
-  it('fewer frames at hop 512 than at 441; both chunks hold block + overlap + context', () => {
-    expect(guitarGeometry(441).frames).toBe(framesFor(GUITAR_BLOCK, GUITAR_OVERLAP, 441));
-    expect(guitarGeometry(512).frames).toBeLessThan(guitarGeometry(441).frames);
-    for (const hop of [441, 512]) {
-      const g = guitarGeometry(hop);
-      expect(g.chunk).toBe((g.frames - 1) * hop);
-      expect(g.chunk - g.block - g.overlap).toBeGreaterThanOrEqual(439);
-    }
+  it('the chunk holds block + overlap + context', () => {
+    const g = guitarGeometry();
+    expect(g.frames).toBe(framesFor(GUITAR_BLOCK, GUITAR_OVERLAP));
+    expect(g.chunk).toBe((g.frames - 1) * 441);
+    expect(g.chunk - g.block - g.overlap).toBeGreaterThanOrEqual(439);
   });
 });
 
@@ -38,57 +35,35 @@ describe('guitarBlockFor', () => {
   });
 });
 
-describe('RoformerStream with a hop of 512', () => {
-  it('reproduces the input (identity masks), delayed by the overlap', async () => {
-    const g = guitarGeometry(512);
-    const s = new RoformerStream(metaOf(512), g);
-    const blk = (f: (n: number) => number, b: number) => Float32Array.from({ length: g.block }, (_, i) => f(b * g.block + i));
-    const outL = new Float32Array(g.block), outR = new Float32Array(g.block);
-    let worst = 0;
-    for (let b = 0; b < 3; b++) {
-      await s.process(blk(sigL, b), blk(sigR, b), identity, outL, outR);
-      if (b === 0) continue;
-      for (let i = 0; i < g.block; i++) worst = Math.max(worst, Math.abs(outL[i] - sigL(b * g.block - g.overlap + i)), Math.abs(outR[i] - sigR(b * g.block - g.overlap + i)));
+describe('GuitarStage', () => {
+  it(`with identity masks the stage returns the pushed signal, final within lag after each push`, async () => {
+    const st = new GuitarStage(meta);
+    expect(st.lag).toBe(stageShape(guitarGeometry()).lag);
+    const H = 30 * 128; // pushes of an engine block, not a multiple of the stage block
+    let worst = 0, checked = 0;
+    const l = new Float32Array(H), r = new Float32Array(H), ol = new Float32Array(H), or = new Float32Array(H);
+    for (let m = 0; m < 100; m++) {
+      for (let i = 0; i < H; i++) {
+        l[i] = sigL(m * H + i);
+        r[i] = sigR(m * H + i);
+      }
+      await st.push(l, r, H, identity);
+      const n = (m + 1) * H;
+      const from = n - st.lag; // the engine reads [n − lag, n − lag + H) after pushing H samples at n − H... i.e. up to n − lag + H
+      if (from < 2 * st.lag) continue; // the first chunks have no real context yet
+      const start = n - H - st.lag;
+      st.read(start, H, ol, or);
+      for (let i = 0; i < H; i++) {
+        worst = Math.max(worst, Math.abs(ol[i] - sigL(start + i)), Math.abs(or[i] - sigR(start + i)));
+        checked++;
+      }
     }
+    expect(checked).toBeGreaterThan(0);
     expect(worst).toBeLessThan(2e-4);
   });
-  it('a geometry made for the other hop is refused', () => {
-    expect(() => new RoformerStream(metaOf(512), guitarGeometry(441))).toThrow();
-    expect(() => new RoformerStream(metaOf(441), guitarGeometry(512))).toThrow();
-  });
-});
-
-describe('GuitarStage', () => {
-  for (const hop of [441, 512]) {
-    it(`hop ${hop}: with identity masks the stage returns the pushed signal, final within lag after each push`, async () => {
-      const st = new GuitarStage(metaOf(hop));
-      expect(st.lag).toBe(stageShape(guitarGeometry(hop)).lag);
-      const H = 30 * 128; // pushes of an engine block, not a multiple of the stage block
-      let worst = 0, checked = 0;
-      const l = new Float32Array(H), r = new Float32Array(H), ol = new Float32Array(H), or = new Float32Array(H);
-      for (let m = 0; m < 100; m++) {
-        for (let i = 0; i < H; i++) {
-          l[i] = sigL(m * H + i);
-          r[i] = sigR(m * H + i);
-        }
-        await st.push(l, r, H, identity);
-        const n = (m + 1) * H;
-        const from = n - st.lag; // the engine reads [n − lag, n − lag + H) after pushing H samples at n − H... i.e. up to n − lag + H
-        if (from < 2 * st.lag) continue; // the first chunks have no real context yet
-        const start = n - H - st.lag;
-        st.read(start, H, ol, or);
-        for (let i = 0; i < H; i++) {
-          worst = Math.max(worst, Math.abs(ol[i] - sigL(start + i)), Math.abs(or[i] - sigR(start + i)));
-          checked++;
-        }
-      }
-      expect(checked).toBeGreaterThan(0);
-      expect(worst).toBeLessThan(2e-4);
-    });
-  }
 
   it('reset starts the stream over', async () => {
-    const st = new GuitarStage(metaOf(441));
+    const st = new GuitarStage(meta);
     const H = 20 * 128;
     const l = Float32Array.from({ length: H }, (_, i) => sigL(i)), r = Float32Array.from({ length: H }, (_, i) => sigR(i));
     for (let i = 0; i < 4; i++) await st.push(l, r, H, identity);
@@ -109,8 +84,8 @@ describe('GuitarStage', () => {
         d.fill(0, 0, 4 * H); // Vk = vocal = 0: the instrumental is the input
       },
     };
-    const lag = stageShape(guitarGeometry(441)).lag;
-    const e = withDrums(inner, identity, new GuitarStage(metaOf(441)));
+    const lag = stageShape(guitarGeometry()).lag;
+    const e = withDrums(inner, identity, new GuitarStage(meta));
     expect(e.resultOffset).toBe(Ro + lag);
     const d = new Float32Array(6 * H);
     let worst = 0, checked = 0;

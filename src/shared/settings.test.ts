@@ -41,7 +41,7 @@ describe('normalizeSettings', () => {
     expect(normalizeSettings({ mode: 'weird' }).mode).toBe('default');
   });
   it('keeps a known split model and falls back to the drum model otherwise', () => {
-    for (const m of ['drums', 'guitar', 'guitar2']) expect(normalizeSettings({ splitModel: m }).splitModel).toBe(m);
+    for (const m of ['drums', 'guitar']) expect(normalizeSettings({ splitModel: m }).splitModel).toBe(m);
     expect(normalizeSettings({ splitModel: 'piano' }).splitModel).toBe('drums');
   });
   it('keeps a known GPU preference and falls back to auto otherwise', () => {

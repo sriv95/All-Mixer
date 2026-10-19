@@ -332,8 +332,7 @@ const MODEL_CHOICES: readonly Choice<MlModel>[] = [
 
 const SPLIT_CHOICES: readonly Choice<SplitModel>[] = [
   { value: 'drums', label: 'Drums (SCNet)' },
-  { value: 'guitar', label: 'Guitar (becruily)', hint: 'Mel-Band RoFormer, 45 MB' },
-  { value: 'guitar2', label: 'Guitar (chenCFD)', hint: 'Mel-Band RoFormer, 136 MB, hop 512' },
+  { value: 'guitar', label: 'Guitar', hint: 'becruily, 45 MB' },
 ];
 
 type Levels = Pick<MixerSettings, 'vocalPct' | 'instrumentalPct' | 'drumsPct' | 'othersPct'>;
@@ -461,13 +460,13 @@ function SeparateControls({ settings, update, ready, compact, advancedOpen, setA
               </div>
               <p className="m-0 text-xs leading-snug text-muted">Each extra split uses more GPU and adds more delay over the Delay limit.</p>
               <Collapse show={!!models.drums}>{models.drums && <ModelRow idPrefix="drums" line={models.drums} />}</Collapse>
-              {models.guitars && (
+              {models.guitar && (
                 <div id="split-debug" className="flex flex-col gap-2.5 border-t border-well pt-3">
                   <div className="flex flex-col gap-1.5">
                     <label htmlFor="split-model" className="text-[13px] font-bold">Split model (debug)</label>
                     <Select id="split-model" value={settings.splitModel} options={SPLIT_CHOICES} onValue={(splitModel) => update({ splitModel })} />
                   </div>
-                  {models.guitars.map((line) => <ModelRow key={line.id} idPrefix={line.id as 'guitar' | 'guitar2'} line={line} />)}
+                  <ModelRow idPrefix="guitar" line={models.guitar} />
                 </div>
               )}
             </div>
@@ -488,7 +487,7 @@ function persistAdvanced(open: boolean, set: (open: boolean) => void): void {
   }
 }
 
-function ModelRow({ idPrefix, line }: { idPrefix: 'model' | 'drums' | 'guitar' | 'guitar2'; line: ModelLine }) {
+function ModelRow({ idPrefix, line }: { idPrefix: 'model' | 'drums' | 'guitar'; line: ModelLine }) {
   return (
     <div id={`${idPrefix}-row`} className="flex flex-col gap-2">
       <p className="m-0 flex items-center justify-between gap-3 text-xs leading-snug text-muted">

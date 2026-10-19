@@ -1,6 +1,6 @@
 // GuitarStage (src/ml/guitar-stage.ts, bundled with `bun build`) with the real model on WebGPU, against the torch fp32 estimate of
 // the same model on the whole input in one pass (spike/bench/guitar_ref.py: ~27 s of MUSDB accompaniment).
-// Usage: node bench/guitar_stage_eval.mjs <guitar|guitar2> [blockSec=0.9] [overlapSec=0.2]
+// Usage: node bench/guitar_stage_eval.mjs <guitar> [blockSec=0.9] [overlapSec=0.2]
 // Needs: models-out/<id>.onnx + -meta.json copied to spike/ml/models/, and the files of guitar_ref.py in .cache/guitar/ref.
 // Prints the SDR (dB) of the stage's guitar against the one-pass reference per 5 s, after a 2 s start-up, the ms per model run
 // and the lag (what the stage adds to the delay).
@@ -13,7 +13,7 @@ import { chromium } from 'playwright';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const [id, blockSec = '0.9', overlapSec = '0.2'] = process.argv.slice(2);
-const torchName = { guitar: 'becruily', guitar2: 'chencfd' }[id];
+const torchName = { guitar: 'becruily' }[id];
 const ref = path.resolve(root, '../.cache/guitar/ref');
 const q128 = (sec) => Math.round((Number(sec) * 44100) / 128) * 128;
 execFileSync('bun', ['build', path.resolve(root, '../src/ml/guitar-stage.ts'), '--outfile', path.resolve(root, 'ml/models/guitar-stage.bundle.js'), '--target=browser'], { stdio: 'ignore' });

@@ -20,19 +20,17 @@ export const CHUNK = 8 * 2 ** 20;
 
 /**
  * The downloadable models. 'roformer' and 'deux' are the Model menu entries (src/worklet/protocol.ts MlModel);
- * 'drums' is SCNet Tran Small, the model of Split instrumental (src/ml/scnet.ts). 'guitar' (becruily) and 'guitar2'
- * (chenCFD, STFT hop 512) are Mel-Band RoFormer guitar stem models that can take the place of the drum model there
- * (src/ml/guitar-stage.ts); their rows and the choice of the split model are hidden unless
- * `chrome.storage.local[GUITAR_DEBUG_KEY]` is true.
+ * 'drums' is SCNet Tran Small, the model of Split instrumental (src/ml/scnet.ts). 'guitar' is becruily's Mel-Band
+ * RoFormer guitar stem model; it can take the place of the drum model there (src/ml/guitar-stage.ts). Its row and the
+ * choice of the split model are hidden unless `chrome.storage.local[GUITAR_DEBUG_KEY]` is true.
  */
-export type ModelId = 'roformer' | 'deux' | 'drums' | 'guitar' | 'guitar2';
-export const MODEL_IDS: readonly ModelId[] = ['roformer', 'deux', 'drums', 'guitar', 'guitar2'];
+export type ModelId = 'roformer' | 'deux' | 'drums' | 'guitar';
+export const MODEL_IDS: readonly ModelId[] = ['roformer', 'deux', 'drums', 'guitar'];
 /** The Model menu entries (the vocal models). */
 export const VOCAL_MODEL_IDS: readonly ModelId[] = ['roformer', 'deux'];
-export const GUITAR_MODEL_IDS: readonly ModelId[] = ['guitar', 'guitar2'];
 export const GUITAR_DEBUG_KEY = 'debug.guitar';
 /** Menu names. */
-export const MODEL_LABEL: Readonly<Record<ModelId, string>> = { roformer: 'High quality', deux: 'Best quality', drums: 'Drum split', guitar: 'Guitar split (becruily)', guitar2: 'Guitar split (chenCFD)' };
+export const MODEL_LABEL: Readonly<Record<ModelId, string>> = { roformer: 'High quality', deux: 'Best quality', drums: 'Drum split', guitar: 'Guitar split' };
 /** The files of a model: weights and, for the RoFormers, the STFT metadata. */
 export const modelFileNames = (id: ModelId): string[] => (id === 'drums' ? ['drums.onnx'] : [`${id}.onnx`, `${id}-meta.json`]);
 

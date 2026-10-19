@@ -29,15 +29,12 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 BASE = 'https://github.com/nomadkaraoke/python-audio-separator/releases/download/model-configs'
 DEUX = 'https://huggingface.co/becruily/mel-band-roformer-deux/resolve/main'
 GUITAR = 'https://huggingface.co/becruily/mel-band-roformer-guitar/resolve/main'
-GUITAR2 = 'https://github.com/chenCFD/Guitar_Source_Separation/releases/download/v1.0'
 # name -> (checkpoint url, SHA-256 or None, config url, index of the vocal stem in the model output)
 MODELS = {
     'roformer': (f'{BASE}/mel_band_roformer_kim_ft_unwa.ckpt', 'e6bd8d333880191254a6ef6be3cb0ffa4dda9d3282e36b0cce2e88a660e00d39', f'{BASE}/config_mel_band_roformer_kim_ft_unwa.yaml', 0),
     # stems are [Vocals, Instrumental]; stem 0 has ~0 % of its energy below 150 Hz, stem 1 about 65 %
-    # spike only (no menu entry yet): becruily's guitar model, stems [Guitar, Other], one mask estimator; licence unstated
+    # debug Split model, not a menu entry: becruily's guitar model, stems [Guitar, Other], one mask estimator; licence unstated
     'guitar': (f'{GUITAR}/becruily_guitar.ckpt', None, f'{GUITAR}/config_guitar_becruily.yaml', 0),
-    # spike only: chenCFD's guitar model (MIT repo, trained on MoisesDB), STFT hop 512 instead of 441
-    'guitar2': (f'{GUITAR2}/model_mel_band_roformer_ep_314_sdr_7.9825.ckpt', '1a81a87b46eed215c051579ac5cff3b139bfdfb9fa3bf4666df059ef87404d14', f'{GUITAR2}/config_moisesdb_mel_band_roformer_guitar.yaml', 0),
     'deux': (f'{DEUX}/becruily_deux.ckpt', '10255c02295bf3e3865d4ee50ff752d7b19b124ed5fd93b147babc4333eda3aa', f'{DEUX}/config.yaml', 0),
 }
 HOP = 441
@@ -142,7 +139,7 @@ def export(name, force):
         # how many mel bands cover each bin
         'bands': m.num_bands_per_freq.tolist(),
     }
-    assert meta['nFft'] == 2048 and (meta['hop'] == HOP or name == 'guitar2')  # the extension's stream is built for hop 441; guitar2 needs a hop-512 stream
+    assert meta['hop'] == HOP and meta['nFft'] == 2048
     (out / f'{name}-meta.json').write_text(json.dumps(meta, separators=(',', ':')))
     print('wrote', out / f'{name}.onnx', (out / f'{name}.onnx').stat().st_size // 2**20, 'MiB')
 

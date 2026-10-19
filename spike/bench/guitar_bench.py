@@ -8,7 +8,7 @@ MUSDB has no guitar stem, so there is NO ground-truth SDR here. Proxies per clip
   resid      share the four stems do not explain (artifacts, or true content the regression missed)
 Inputs (what the 2nd/3rd pass of the cascade would see): `inst` = accompaniment, `nodrums` = accompaniment - drums.
 Also wall time per clip (CPU, torch) and parameter count.
-  .venv/bin/python spike/bench/guitar_bench.py becruily [chencfd] [htdemucs_6s] [--clips N] [--inputs inst,nodrums]
+  .venv/bin/python spike/bench/guitar_bench.py becruily [htdemucs_6s] [--clips N] [--inputs inst,nodrums]
 Appends one JSON row per (model, input) to spike/bench/results/guitar.jsonl, and writes the first 3 clips'
 estimates to spike/bench/results/guitar/<model>-<input>-<clip>.wav for listening.
 """
@@ -25,7 +25,6 @@ WAVS = ROOT / 'spike/bench/results/guitar'
 # name -> (config, checkpoint), both in .cache (scripts/export-roformer.py downloads them)
 MEL = {
     'becruily': (CACHE / 'config_guitar_becruily.yaml', CACHE / 'becruily_guitar.ckpt'),
-    'chencfd': (ROOT / '.cache/guitar2/config_moisesdb_mel_band_roformer_guitar.yaml', ROOT / '.cache/guitar2/model_mel_band_roformer_ep_314_sdr_7.9825.ckpt'),
 }
 
 

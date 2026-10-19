@@ -1,9 +1,9 @@
-// Debug: get the guitar models (becruily's `guitar`, chenCFD's `guitar2`) into the extension on any machine, without a
-// Hugging Face upload.
+// Debug: get becruily's guitar model into the extension on any machine without the Hugging Face repo (for a model that is
+// not published yet, or a changed export).
 //   bun run fetch-guitar [--no-serve] [--port 8765]
-// 1. exports the ones missing in models-out (guitar.onnx + -meta.json, ...) with scripts/export-roformer.py (needs
-//    `uv sync`; downloads 45 MB and 277 MB checkpoints, a few minutes),
-// 2. writes a repo of just these models to models-out/guitar-hf (manifest.json + v1/), apart from models-out/hf so a
+// 1. exports it to models-out (guitar.onnx + guitar-meta.json) unless it is there with scripts/export-roformer.py (needs
+//    `uv sync`; downloads a 45 MB checkpoint, about a minute),
+// 2. writes a repo of just this model to models-out/guitar-hf (manifest.json + v1/), apart from models-out/hf so a
 //    full publish folder is never overwritten,
 // 3. serves it on localhost with CORS and Range (the downloader asks for 8 MiB ranges) until Ctrl-C.
 // Then, in the extension service-worker console:
@@ -16,7 +16,7 @@ import { createServer } from 'node:http';
 import { resolve } from 'node:path';
 
 const FORMAT = 2; // MODEL_FORMAT in src/shared/model-store.ts
-const IDS = ['guitar', 'guitar2']; // GUITAR_MODEL_IDS there
+const IDS = ['guitar']; // ModelId there
 const filesOf = (id) => [`${id}.onnx`, `${id}-meta.json`]; // modelFileNames there
 const root = resolve(import.meta.dirname, '..');
 const src = resolve(root, 'models-out');

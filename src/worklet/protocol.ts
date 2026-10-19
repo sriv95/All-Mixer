@@ -99,8 +99,8 @@ export const ML_WARMUP_P90_MS = (ML_SLACK_SAMPLES / ML_SAMPLE_RATE) * 1000 / 1.5
  */
 export type MlModel = 'mdx' | 'roformer' | 'deux';
 /** Model of the Split instrumental stage: the drum model, or (debug) a guitar model that takes the guitar out of the instrumental instead (src/ml/guitar-stage.ts). The stem is played with the Drums gain. */
-export type SplitModel = 'drums' | 'guitar' | 'guitar2';
-export const SPLIT_MODELS: readonly SplitModel[] = ['drums', 'guitar', 'guitar2'];
+export type SplitModel = 'drums' | 'guitar';
+export const SPLIT_MODELS: readonly SplitModel[] = ['drums', 'guitar'];
 /** Which GPU the ML worker asks WebGPU for. Chrome cannot list adapters, only prefer one: 'auto' leaves the choice to the browser. */
 export type GpuPreference = 'auto' | 'high-performance' | 'low-power';
 export const GPU_PREFERENCES: readonly GpuPreference[] = ['auto', 'high-performance', 'low-power'];

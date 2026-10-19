@@ -1,5 +1,5 @@
 import { useEffect, useReducer, useState } from 'react';
-import { GUITAR_DEBUG_KEY, GUITAR_MODEL_IDS, MODEL_IDS, MODEL_LABEL, VOCAL_MODEL_IDS, keyInstalled, keyProgress, keyRemote, mb, modelState, type InstalledModel, type ModelId, type ModelState, type Progress, type RemoteRecord } from '../shared/model-store';
+import { GUITAR_DEBUG_KEY, MODEL_IDS, MODEL_LABEL, VOCAL_MODEL_IDS, keyInstalled, keyProgress, keyRemote, mb, modelState, type InstalledModel, type ModelId, type ModelState, type Progress, type RemoteRecord } from '../shared/model-store';
 
 // The RoFormer models are separate downloads (background/model-manager.ts); their state lives in chrome.storage.local.
 interface ModelRecords {
@@ -39,9 +39,9 @@ function modelLine(id: ModelId, s: ModelState): Omit<ModelLine, 'id'> {
 }
 
 /** The state of the downloadable models, kept live from chrome.storage.local. */
-export function useModels(selected: string, splitOn: boolean, enabled: boolean): { model?: ModelLine; drums?: ModelLine; guitars?: ModelLine[] } {
+export function useModels(selected: string, splitOn: boolean, enabled: boolean): { model?: ModelLine; drums?: ModelLine; guitar?: ModelLine } {
   const [guitarDebug, setGuitarDebug] = useState(false);
-  const [records, setRecords] = useState<AllRecords>({ roformer: {}, deux: {}, drums: {}, guitar: {}, guitar2: {} });
+  const [records, setRecords] = useState<AllRecords>({ roformer: {}, deux: {}, drums: {}, guitar: {} });
   const [, tick] = useReducer((n: number) => n + 1, 0);
 
   useEffect(() => {
@@ -85,15 +85,15 @@ export function useModels(selected: string, splitOn: boolean, enabled: boolean):
     return () => clearTimeout(t);
   });
 
-  const out: { model?: ModelLine; drums?: ModelLine; guitars?: ModelLine[] } = {};
+  const out: { model?: ModelLine; drums?: ModelLine; guitar?: ModelLine } = {};
   // Shown for the selected downloadable model, and for any model with an update on offer or a download running.
   const id = isModelId(selected) ? selected : VOCAL_MODEL_IDS.find((m) => states[m].kind === 'update' || states[m].kind === 'downloading');
   if (id) out.model = { id, ...modelLine(id, states[id]) };
   // The drum model: shown while the split is on, or when an update is on offer or a download is running.
   const ds = states.drums;
   if (splitOn || ds.kind === 'update' || ds.kind === 'downloading') out.drums = { id: 'drums', ...modelLine('drums', ds) };
-  // The guitar models: for the debug flag only.
-  if (guitarDebug) out.guitars = GUITAR_MODEL_IDS.map((id) => ({ id, ...modelLine(id, states[id]) }));
+  // The guitar model: for the debug flag only.
+  if (guitarDebug) out.guitar = { id: 'guitar', ...modelLine('guitar', states.guitar) };
   return out;
 }
 
