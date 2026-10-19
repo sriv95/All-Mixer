@@ -1,7 +1,6 @@
 import type { ContentRequest, ContentStatus, GetMyTabSettings, SetBadge } from '../shared/messages';
 import { separationView } from '../shared/separation-view';
 import { DEFAULT_SETTINGS, masterGainFor, mlDelayMsFor, normalizeSettings, separationFor, type MixerSettings } from '../shared/settings';
-import { Compare } from './compare';
 import { EngineSelector } from './audio/engine-select';
 import { MasterChain } from './audio/master-chain';
 import { MODEL_IDS, keyInstalled } from '../shared/model-store';
@@ -28,7 +27,6 @@ let timeDisplay: TimeDisplay | null = null;
 let debugBudget: number | null = null;
 let debugDelayMs: number | null = null; // QA override, see debug-video-delay
 const probe = new AvProbe();
-const compare = new Compare(() => video && push());
 const chain = new MasterChain(() => syncDelay(), undefined, probe);
 const selector = new EngineSelector(chain);
 const spinner = new PlayerSpinner();
@@ -103,8 +101,7 @@ let modeKnown = false; // the first settings load is not a toggle
 // Nothing starts (audio context, ML host) in a frame or page until it has media: most frames have none.
 const push = () => {
   chain.setGain(masterGainFor(settings));
-  // Hearing the original: every stem at 100 %.
-  const sep = compare.active ? { ...separationFor(settings), vocal: 1, instrumental: 1, drums: 1, others: 1 } : separationFor(settings);
+  const sep = separationFor(settings);
   chain.setSeparation(sep);
   selector.update({ on: sep.on, model: settings.mlModel, delayMs: mlDelayMsFor(settings), drums: settings.splitInstrumental });
   syncDelay();
@@ -164,9 +161,6 @@ chrome.runtime.onMessage.addListener((msg: ContentRequest, _sender, sendResponse
     debugBudget = msg.budgetBytes ?? null;
     overlay?.setBudget(debugBudget);
     syncDelay(true);
-    sendResponse({ ok: true });
-  } else if (msg.type === 'hold-original') {
-    compare.set(msg.on);
     sendResponse({ ok: true });
   } else if (msg.type === 'get-status') {
     sendResponse(status());
