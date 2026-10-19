@@ -8,37 +8,32 @@ CI builds the extension, creates tag `vx.y.z` and a GitHub release with this sec
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-19
+
 ### Added
 
-- Popup: "Undo" for five seconds after a preset, to bring back the levels it replaced.
-- Popup: dark mode (follows the system), hints on the tabs, the presets and Reset, and a compact view (button in the header) that hides the presets and the banner detail. The compact view is remembered.
-- Toolbar badge: the extension icon shows what Separate mode is doing without opening the popup. Gray dots while it warms up, black "ON" while it separates, a red "!" on white when it stops (for example the device is too slow). The tooltip says the same in words. The extension now has an icon.
-- Popup: when Separate mode stops because the device is too slow, buttons offer the fix: switch to the Default model, raise the delay limit, or try again.
+- Toolbar badge shows Separate mode state: gray dots while warming up, "ON" while separating, red "!" when it stops. The tooltip says the same. The extension now has an icon.
+- Popup: dark mode (follows the system), hints, and a compact view (remembered).
+- Popup: "Undo" for five seconds after a preset.
+- Popup: when Separate mode stops because the device is too slow, buttons offer the fix: Default model, higher delay limit, or retry.
 
 ### Changed
 
-- Lyrics settings on YouTube are grouped into two sections. "Lyrics source" holds the source (with Find other lyrics and Use my own lyrics among its choices, before YouTube captions), caption language, and "Source options" (lyrics timing, timing keys, and an "Export lyrics" section with Copy lyrics and Save as .lrc). "Lyrics display" holds the display mode, karaoke lines, Custom Karaoke Text and Reset position. YT Music keeps its single list.
-- Popup: new look (soft cards, pressed tracks, icons) and a clearer state banner for Separate mode: warming up, separating with the delay, stopped. Default and Separate are now tabs.
-- Popup: motion. The tab highlight slides, panels slide toward the tab you pick and fill in block by block, sliders and numbers glide when a preset or Reset changes them, the chosen preset goes bold with a ring, the Model list, Advanced and Split instrumental slide open, a bar fills while a model downloads, and the Separate banner shows moving sound bars (live) or a sweeping bar (warming up). Digits roll when you drag, the switch thumb squeezes when pressed, the row you hold grows its number and dims the others, and a placeholder shows while the popup reads the tab's settings (no more flash of the Default tab). Motion follows the system "Reduce motion" setting. The warming-up toolbar badge cycles its dots.
-- High / Best quality: the warm-up remembers the speed of your GPU, so the next one skips the speed test and is about 40 % shorter (on an M-series Mac at an 8 s limit: 24 s, then 14 s). The chunk it plans is still timed and checked, and a speed that no longer holds is measured again.
-- Separate mode: turning it off and on again within 3 minutes starts at once, with no warm-up (the model stays loaded in the tab meanwhile, up to about 0.5 GB of GPU memory). Other settings or a longer wait warm up again.
-- Popup: when the tab needs a reload (no All Mixer! running in it yet), the Separate mode checkbox is hidden and the popup says to reload the tab.
-- Separate mode: while the model warms up (the video is held for 10 to 40 s), the player's loading spinner shows over the picture, with "Preparing vocal separation… 12 s" under it. The player keeps showing "playing" meanwhile (no paused look), and pressing pause during the wait pauses for real and the video stays paused after it. The other waits say what they are for too.
-- Separate mode: the time and the seek bar of YouTube and YouTube Music now show what you see and hear, not the video position that runs ahead by the delay. This holds across chapter boundaries and for screen readers (English labels), and the bar is left alone while you drag it.
-- Separate mode: when a video ends, the next one (autoplay / queue) starts only after the delayed last seconds have played, with the player's loading spinner shown meanwhile. Pausing during that wait stops it at once.
-- Separate mode: after a seek or a new video, the player's loading spinner shows from the seek, over the loading, until the sound is really out of the speakers (it follows the audio, so a Bluetooth delay is covered too). Pause hides it and play brings it back while the sound is still missing.
-- Popup: the Vocal, Instrumental and Drums sliders now go from 0 to 100 %. Only Global Volume boosts.
-- Popup: the Default / Separate tabs are replaced by a **Separate mode** checkbox. Checked shows the Separate settings.
-- Separation: **Split instrumental** adds its delay on top of the Delay limit, so the limit no longer jumps to 8 s.
-- Popup: **Global Volume** (0 to 600 %, 100 % in the middle of the slider) sits at the top and boosts both modes, with its own Reset. It replaces Master volume, which was Default mode only. The Reset preset leaves it alone.
-- Popup: the **Others** slider now goes from 0 to 100 %.
+- Lyrics settings on YouTube: two sections, "Lyrics source" and "Lyrics display". "Find other lyrics" and "Use my own lyrics" are now source choices.
+- Popup: new look and animations (follow "Reduce motion"), and a clearer Separate state banner.
+- Popup: a **Separate mode** checkbox replaces the Default / Separate tabs. It is hidden when the tab needs a reload.
+- Popup: **Global Volume** (0 to 600 %) replaces Master volume and boosts both modes. Vocal, Instrumental, Drums and Others sliders go from 0 to 100 %.
+- High / Best quality: warm-up remembers your GPU speed, so the next one is about 40 % shorter.
+- Separate mode: turning it off and on within 3 minutes restarts at once, with no warm-up.
+- Separate mode: **Split instrumental** adds its delay on top of the Delay limit.
+- Separate mode: the loading spinner and a "Preparing vocal separation…" message show during warm-up, seeks, new videos and the end of a video. Pause works during these waits.
+- Separate mode: the time and seek bar show what you hear, not the video position that runs ahead by the delay.
 
 ### Fixed
 
-- Lyrics: a long lyrics settings list now scrolls inside the player (YouTube) or above its button (YT Music) instead of running off the top, where the first settings could not be reached.
-- Lyrics: the lyrics settings on YouTube now look like YouTube's own submenus: the same left gap on every row and in the header, a back arrow without a doubled mark, and a width that fits the list instead of wrapping labels. A click anywhere on a row counts.
-- Lyrics: moving between the lyrics settings panels on YouTube now slides like YouTube's own submenus (the popup resizes smoothly too), and stays instant with "Reduce motion" on.
-- Lyrics: a brief server error (HTTP 5xx) from LRCLIB is retried once before the lyrics search gives up.
+- Lyrics: a long settings list scrolls instead of running off the top.
+- Lyrics: YouTube settings match YouTube's own submenus in spacing, width and slide animation.
+- Lyrics: a brief LRCLIB server error (HTTP 5xx) is retried once.
 
 ## [0.3.0] - 2026-10-18
 
