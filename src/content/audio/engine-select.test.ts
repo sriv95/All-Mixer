@@ -105,24 +105,24 @@ describe('EngineSelector', () => {
     expect(sel.status).toEqual({ state: 'warming' });
   });
 
-  it('a change of the split model restarts the probe only while the split is on, and reload follows the chosen split model', () => {
-    const splits: unknown[] = [];
+  it('a change of the guitar split restarts the probe, and reload follows the stages in use', () => {
+    const guitars: unknown[] = [];
     const { chain } = setup();
     const hosts: FakeHost[] = [];
-    const sel = new EngineSelector(chain, (_m, _d, _dr, _g, split) => {
+    const sel = new EngineSelector(chain, (_m, _d, _dr, _g, guitar) => {
       const h = new FakeHost();
       hosts.push(h);
-      splits.push(split);
+      guitars.push(guitar);
       return h;
     });
-    sel.update({ on: true, model: 'mdx', drums: false, split: 'guitar' });
+    sel.update({ on: true, model: 'mdx', drums: true, guitar: false });
+    sel.update({ on: true, model: 'mdx', drums: true, guitar: false });
     expect(hosts).toHaveLength(1);
-    sel.update({ on: true, model: 'mdx', drums: false, split: 'drums' }); // no split: the choice does not matter
-    expect(hosts).toHaveLength(1);
-    sel.update({ on: true, model: 'mdx', drums: true, split: 'drums' });
-    sel.update({ on: true, model: 'mdx', drums: true, split: 'guitar' });
-    expect(splits).toEqual(['guitar', 'drums', 'guitar']);
-    sel.reload('drums'); // not the one in use
+    sel.update({ on: true, model: 'mdx', drums: true, guitar: true });
+    expect(guitars).toEqual([false, true]);
+    sel.update({ on: true, model: 'mdx', drums: false, guitar: true }); // the guitar alone is a split too
+    expect(hosts).toHaveLength(3);
+    sel.reload('drums'); // the drum model is not in use
     expect(hosts).toHaveLength(3);
     sel.reload('guitar');
     expect(hosts).toHaveLength(4);

@@ -32,19 +32,33 @@ export interface BlockEngine {
 const CAP = 2 ** 20;
 const MASK = CAP - 1;
 
-export function withDrums(inner: BlockEngine, run: ScnetModelFn, stage: SplitStage = new DrumStage()): BlockEngine {
+/** A split stage with the model call it runs. */
+export interface StageRun {
+  stage: SplitStage;
+  run: ScnetModelFn;
+}
+
+/** The drum stage alone (src/ml/scnet.ts), or another single stage. */
+export const withDrums = (inner: BlockEngine, run: ScnetModelFn, stage: SplitStage = new DrumStage()): BlockEngine => withStages(inner, [{ stage, run }]);
+
+/**
+ * `stages` in the order of the reply planes after the vocal ones (drums, then guitar). Every stage gets the same
+ * instrumental; the reply waits for the one with the longest lag, so a stage with a shorter lag is final long before it is read.
+ */
+export function withStages(inner: BlockEngine, stages: readonly StageRun[]): BlockEngine {
   const H = inner.block, Ro = inner.resultOffset;
+  const lag = stages.reduce((m, s) => Math.max(m, s.stage.lag), 0);
   const xL = new Float32Array(CAP), xR = new Float32Array(CAP); // input, by input sample
   const planes = Array.from({ length: 4 }, () => new Float32Array(CAP)); // Vk L, R, vocal L, R, by result sample u
   const instL = new Float32Array(H), instR = new Float32Array(H);
   let n = 0; // result samples so far: block m covers u in [m·H, (m + 1)·H)
   return {
     block: H,
-    resultOffset: Ro + stage.lag,
-    planes: 6,
+    resultOffset: Ro + lag,
+    planes: 4 + 2 * stages.length,
     reset() {
       inner.reset();
-      stage.reset();
+      for (const s of stages) s.stage.reset();
       xL.fill(0);
       xR.fill(0);
       for (const p of planes) p.fill(0);
@@ -62,13 +76,13 @@ export function withDrums(inner: BlockEngine, run: ScnetModelFn, stage: SplitSta
         instL[i] = (x >= 0 ? xL[x & MASK] : 0) - d[i];
         instR[i] = (x >= 0 ? xR[x & MASK] : 0) - d[H + i];
       }
-      await stage.push(instL, instR, H, run);
-      // the reply is for result samples [n − SC_LAG, n − SC_LAG + H): final in the stage, and still in the rings
+      for (const s of stages) await s.stage.push(instL, instR, H, s.run);
+      // the reply is for result samples [n − lag, n − lag + H): final in the stages, and still in the rings
       for (let i = 0; i < H; i++) {
-        const u = n - stage.lag + i;
+        const u = n - lag + i;
         for (let k = 0; k < 4; k++) d[k * H + i] = u >= 0 ? planes[k][u & MASK] : 0;
       }
-      stage.read(n - stage.lag, H, d.subarray(4 * H, 5 * H), d.subarray(5 * H, 6 * H));
+      stages.forEach((s, j) => s.stage.read(n - lag, H, d.subarray((4 + 2 * j) * H, (5 + 2 * j) * H), d.subarray((5 + 2 * j) * H, (6 + 2 * j) * H)));
       n += H;
     },
     afterReply: inner.afterReply ? () => inner.afterReply!() : undefined,

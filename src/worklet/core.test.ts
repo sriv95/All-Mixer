@@ -52,6 +52,8 @@ class FakePort {
   latencyQ = 1;
   /** Drum geometry: the drums plane is this fraction of the true input. */
   drumShare = 0.25;
+  /** Guitar geometry: the guitar plane is this fraction of the true input. */
+  guitarShare = 0.1;
   now = 0;
 
   constructor(
@@ -83,9 +85,15 @@ class FakePort {
         data[block + i] = p >= 0 && p < this.sigR.length ? this.sigR[p] : 0;
         data[2 * block + i] = data[i];
         data[3 * block + i] = data[block + i];
+        let plane = 4;
         if (this.g.drums) {
-          data[4 * block + i] = this.drumShare * data[i];
-          data[5 * block + i] = this.drumShare * data[block + i];
+          data[plane * block + i] = this.drumShare * data[i];
+          data[(plane + 1) * block + i] = this.drumShare * data[block + i];
+          plane += 2;
+        }
+        if (this.g.guitar) {
+          data[plane * block + i] = this.guitarShare * data[i];
+          data[(plane + 1) * block + i] = this.guitarShare * data[block + i];
         }
       }
       head[1] = start;
@@ -124,6 +132,9 @@ interface Rig {
   /** Drums output (the geometry's drum plane). */
   dL: number[];
   dR: number[];
+  /** Guitar output (the geometry's guitar plane). */
+  gL: number[];
+  gR: number[];
   /** Bypass weight per output sample. */
   b: number[];
   q: number;
@@ -147,6 +158,8 @@ function rig(seconds: number, signal: (n: number, seed: number) => Float32Array 
   const bw = new Float32Array(QUANTUM);
   const dl = new Float32Array(QUANTUM);
   const dr = new Float32Array(QUANTUM);
+  const gl = new Float32Array(QUANTUM);
+  const gr = new Float32Array(QUANTUM);
   const r: Rig = {
     core,
     port,
@@ -159,12 +172,14 @@ function rig(seconds: number, signal: (n: number, seed: number) => Float32Array 
     iR: [],
     dL: [],
     dR: [],
+    gL: [],
+    gR: [],
     b: [],
     q: 0,
     run(nq) {
       for (let k = 0; k < nq; k++) {
         const p = r.q * QUANTUM;
-        core.process(sigL.subarray(p, p + QUANTUM), sigR.subarray(p, p + QUANTUM), vl, vr, il, ir, bw, p / SR, dl, dr);
+        core.process(sigL.subarray(p, p + QUANTUM), sigR.subarray(p, p + QUANTUM), vl, vr, il, ir, bw, p / SR, dl, dr, gl, gr);
         for (let i = 0; i < QUANTUM; i++) {
           r.vL.push(vl[i]);
           r.vR.push(vr[i]);
@@ -172,6 +187,8 @@ function rig(seconds: number, signal: (n: number, seed: number) => Float32Array 
           r.iR.push(ir[i]);
           r.dL.push(dl[i]);
           r.dR.push(dr[i]);
+          r.gL.push(gl[i]);
+          r.gR.push(gr[i]);
           r.b.push(bw[i]);
         }
         r.q++;
@@ -724,5 +741,53 @@ describe('SeparatorCore, drum stage', () => {
     r.core.setActive(true, 'bypass');
     r.run(200);
     expect(r.dL.every((v) => v === 0)).toBe(true);
+  });
+});
+
+describe('SeparatorCore, guitar stage', () => {
+  const base = { block: 40 * QUANTUM, resultOffset: 10 * QUANTUM, latency: 81 * QUANTUM, warmupP90Ms: 1 };
+  const guitarG: MlGeometry = { ...base, guitar: true };
+  const bothG: MlGeometry = { ...base, drums: true, guitar: true };
+
+  it('each stage adds two planes to a block buffer', () => {
+    expect(planesFor(guitarG)).toBe(6);
+    expect(planesFor(bothG)).toBe(8);
+    expect(bufferBytes(bothG)).toBe(ML_HEADER_BYTES + 8 * bothG.block * 4);
+  });
+
+  it('with both stages the drums and the guitar planes come out apart, with the instrumental delay', () => {
+    const r = rig(3, noise, bothG);
+    r.core.setActive(true, 'ml');
+    r.run(Math.ceil((3 * SR) / QUANTUM) - 2);
+    const D = bothG.latency;
+    let dErr = 0, gErr = 0;
+    for (let n = D + 2 * bothG.block; n < r.dL.length; n++) {
+      dErr = Math.max(dErr, Math.abs(r.dL[n] - 0.25 * r.sigL[n - D]), Math.abs(r.dR[n] - 0.25 * r.sigR[n - D]));
+      gErr = Math.max(gErr, Math.abs(r.gL[n] - 0.1 * r.sigL[n - D]), Math.abs(r.gR[n] - 0.1 * r.sigR[n - D]));
+    }
+    expect(dErr).toBeLessThan(1e-6);
+    expect(gErr).toBeLessThan(1e-6);
+  });
+
+  it('with the guitar stage alone the guitar comes out and the drums stay silent', () => {
+    const r = rig(3, noise, guitarG);
+    r.core.setActive(true, 'ml');
+    r.run(Math.ceil((3 * SR) / QUANTUM) - 2);
+    const D = guitarG.latency;
+    let gErr = 0;
+    for (let n = D + 2 * guitarG.block; n < r.gL.length; n++) gErr = Math.max(gErr, Math.abs(r.gL[n] - 0.1 * r.sigL[n - D]));
+    expect(gErr).toBeLessThan(1e-6);
+    expect(r.dL.every((v) => v === 0)).toBe(true);
+  });
+
+  it('without the guitar stage the guitar output stays silent, and in bypass too', () => {
+    const r = rig(2, noise, 'mdx');
+    r.core.setActive(true, 'ml');
+    r.run(Math.ceil((2 * SR) / QUANTUM) - 2);
+    expect(r.gL.every((v) => v === 0)).toBe(true);
+    const b = rig(1, noise, bothG);
+    b.core.setActive(true, 'bypass');
+    b.run(200);
+    expect(b.gL.every((v) => v === 0)).toBe(true);
   });
 });

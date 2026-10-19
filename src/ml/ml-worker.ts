@@ -6,13 +6,11 @@
 // either engine is wrapped by the drum stage (src/ml/drum-engine.ts): SCNet Tran Small takes the drums out of the
 // instrumental and the reply carries them as two more planes.
 import {
-  GEOMETRY,
   ML_BLOCK,
   ML_HEADER_BYTES,
   ML_SAMPLE_RATE,
   ML_WARMUP_P90_MS,
   ML_RESULT_OFFSET,
-  bufferBytes,
   type FromMlWorker,
   type MlGeometry,
   type MlWorkerInit,
@@ -26,19 +24,22 @@ import { makeStall, type StallOpts } from './stall';
 import { MlTiming } from './timing';
 import { adapterName as nameOfAdapter } from '../shared/gpu';
 import { opfsFiles, readModelFile } from '../shared/model-files';
-import { MODEL_FORMAT, MODEL_LABEL, modelFileNames, type ModelId } from '../shared/model-store';
+import { MODEL_FORMAT, MODEL_LABEL, modelFileNames, type InstalledModel, type ModelId } from '../shared/model-store';
 import { RoformerStream, DEFAULT_ROF_GEOMETRY, type RoformerMeta } from './roformer';
-import { DRUM_STAGE, MAX_DELAY_S, MIN_DELAY_S, drumRuns, gateMs, planMdxDrums, planRof, poolFor, stepMs, type RofGeometry, type StageShape } from './rof-plan';
-import { withDrums, type BlockEngine, type SplitStage } from './drum-engine';
+import { DRUM_STAGE, MAX_DELAY_S, MIN_DELAY_S, drumRuns, gateMs, planMdxDrums, planRof, poolFor, stepMs, type RofGeometry, type StageCost, type StageShape } from './rof-plan';
+import { withStages, type BlockEngine, type SplitStage } from './drum-engine';
 import { GuitarStage, guitarBlockFor, guitarGeometry, stageShape } from './guitar-stage';
 import { lookupSpeed, speedKey } from './plan-cache';
 import { DrumStage, SC_BINS, SC_FRAMES, SC_INPUT, type ScnetModelFn } from './scnet';
 
 type Ort = typeof import('onnxruntime-web/webgpu');
 type Session = Awaited<ReturnType<Ort['InferenceSession']['create']>>;
+const costOf = (s: Split): StageCost => ({ ...s.shape, ms: s.ms });
+const runsMs = (stages: readonly Split[]): number => stages.reduce((sum, s) => sum + s.ms, 0);
 
-/** The split stage (the drum model, or a guitar model): its model call, the p90 of one run (ms) and what the planners need to know. */
+/** A split stage (the drum model, or the guitar model): its model call, the p90 of one run (ms) and what the planners need to know. */
 interface Split {
+  id: 'drums' | 'guitar';
   run: ScnetModelFn;
   ms: number;
   stage: SplitStage;
@@ -119,24 +120,26 @@ async function start(init: MlWorkerInit): Promise<void> {
     return unavailable(`warm-up: ${String(e)}`);
   }
   pipeline.reset();
-  // Split instrumental: the drum model joins the engine, and the plan (delay, speed check) is the worker's own.
-  let drums: Split | null = null;
+  // Split instrumental: the drum and guitar models join the engine, and the plan (delay, speed check) is the worker's own.
+  let stages: Split[] = [];
   let geometry: MlGeometry | undefined;
-  if (init.drums) {
+  if (init.drums || init.guitar) {
     if (wu.p90 >= ML_WARMUP_P90_MS) return unavailable(`too slow on this device (p90 ${wu.p90.toFixed(1)} ms)`);
-    const d = await loadSplit(ort, init);
+    const d = await loadStages(ort, init);
     if (typeof d === 'string') return unavailable(d);
-    drums = d;
-    geometry = planMdxDrums(wu.p90, d.ms, d.shape) ?? undefined;
-    if (geometry) geometry.pool = poolFor(d.ms, (ML_BLOCK / ML_SAMPLE_RATE) * 1000); // a stage run stops the block loop
-    if (!geometry) return unavailable(`too slow for the split (the vocal model takes ${wu.p90.toFixed(0)} ms per block, the ${init.split ?? 'drums'} model ${d.ms.toFixed(0)} ms per run)`);
+    stages = d;
+    geometry = planMdxDrums(wu.p90, stages.map(costOf)) ?? undefined;
+    if (!geometry) return unavailable(`too slow for the split (the vocal model takes ${wu.p90.toFixed(0)} ms per block, ${stages.map((s) => `the ${s.id} model ${s.ms.toFixed(0)} ms per run`).join(', ')})`);
+    geometry.drums = init.drums === true;
+    geometry.guitar = init.guitar === true;
+    geometry.pool = poolFor(runsMs(stages), (ML_BLOCK / ML_SAMPLE_RATE) * 1000); // stage runs stop the block loop
   }
 
   // 4. A longer segment for a delay limit above the default one: plan it from the speed measured above (linear in the
   // frames), time it on a session of its own (fixed T is faster than a dynamic run), and keep the default segment
   // when it is slower than predicted or does not fit the GPU.
   let baseMs = wu.p90;
-  for (let attempt = 0; attempt < 3 && !drums; attempt++) {
+  for (let attempt = 0; attempt < 3 && !stages.length; attempt++) {
     const plan = planMdx(((init.delayMs ?? MIN_DELAY_S * 1000) / 1000) * ML_SAMPLE_RATE, baseMs);
     if (!plan || plan.frames === MDX_T_MIN) break;
     try {
@@ -169,14 +172,14 @@ async function start(init: MlWorkerInit): Promise<void> {
 
   const mdxEngine: BlockEngine = {
     block,
-    resultOffset: drums ? ML_RESULT_OFFSET : (geometry?.resultOffset ?? ML_RESULT_OFFSET), // withDrums adds the drum wait itself
+    resultOffset: stages.length ? ML_RESULT_OFFSET : (geometry?.resultOffset ?? ML_RESULT_OFFSET), // withStages adds the stage wait itself
     reset: () => pipeline.reset(),
     // Vk in place over the input; the MDX vocal in the second half of the buffer
     process: (d) => pipeline.process(d.subarray(0, block), d.subarray(block, 2 * block), models, d.subarray(0, block), d.subarray(block, 2 * block), d.subarray(2 * block, 3 * block), d.subarray(3 * block)),
     afterReply: () => pipeline.catchUp(models.spleeter),
     misses: () => pipeline.splMisses,
   };
-  const engine = drums ? withDrums(mdxEngine, drums.run, drums.stage) : mdxEngine;
+  const engine = stages.length ? withStages(mdxEngine, stages) : mdxEngine;
   serve(init.port, engine, { stallMs: init.stallMs ?? 0, stallAfterMs: init.stallAfterMs ?? 5000 }, init.timing ? new MlTiming() : null);
 }
 
@@ -247,7 +250,7 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
   // 2. Plan a chunk for the delay budget. 3. Time the plan itself; when it is slower than predicted, correct the speed and plan again.
   const wantMs = init.delayMs ?? MIN_DELAY_S * 1000;
   let chosen = null as Run | null; // set in `search`
-  let drums: Split | null = null;
+  let stages: Split[] = [];
   let note = '';
   const speedKeyOf = speedKey({ model: id, modelVersion: init.installed?.version ?? 0, appVersion: init.appVersion ?? '', adapter: adapterName });
   const measureSpeed = async (): Promise<number> => {
@@ -260,14 +263,14 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
   const search = async (start: number, w: { skip: number; n: number }): Promise<void> => {
     let baseMs = start;
     for (let attempt = 0; attempt < 3 && !chosen; attempt++) {
-      const g = planRof((wantMs / 1000) * ML_SAMPLE_RATE, baseMs, drums?.ms, drums?.shape);
+      const g = planRof((wantMs / 1000) * ML_SAMPLE_RATE, baseMs, stages.map(costOf));
       if (!g) {
-        note = `too slow for a ${Math.round(wantMs / 1000)} s delay (a step takes ${baseMs.toFixed(0)} ms for 1.1 s of audio${drums ? `, a ${init.split ?? 'drums'} run ${drums.ms.toFixed(0)} ms` : ''})${wantMs < MAX_DELAY_S * 1000 ? ': try a longer delay limit' : ''}`;
+        note = `too slow for a ${Math.round(wantMs / 1000)} s delay (a step takes ${baseMs.toFixed(0)} ms for 1.1 s of audio${stages.map((s) => `, a ${s.id} run ${s.ms.toFixed(0)} ms`).join('')})${wantMs < MAX_DELAY_S * 1000 ? ': try a longer delay limit' : ''}`;
         break;
       }
       try {
         const r = await measure(g, w);
-        if (r.wu.p90 + (drums ? drumRuns(g.block, drums.shape.stride) * drums.ms : 0) <= gateMs(g)) {
+        if (r.wu.p90 + stages.reduce((sum, s) => sum + drumRuns(g.block, s.shape.stride) * s.ms, 0) <= gateMs(g)) {
           chosen = r;
           planBaseMs = baseMs;
         } else {
@@ -282,10 +285,10 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
   };
   const remembered = lookupSpeed(init.speeds, speedKeyOf);
   try {
-    if (init.drums) {
-      const d = await loadSplit(ort, init);
+    if (init.drums || init.guitar) {
+      const d = await loadStages(ort, init);
       if (typeof d === 'string') return unavailable(d);
-      drums = d;
+      stages = d;
     }
     if (remembered !== null) await search(remembered, { skip: 1, n: 3 });
     // Nothing remembered, or it no longer holds (another load on the GPU): measure now.
@@ -298,7 +301,7 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
   }
   if (!chosen) return unavailable(note || 'too slow on this device');
   const { g, wu } = chosen;
-  const geometry: MlGeometry = { block: g.block, resultOffset: g.overlap + g.extra, latency: g.latency, warmupP90Ms: gateMs(g), ...(drums ? { drums: true } : {}) };
+  const geometry: MlGeometry = { block: g.block, resultOffset: g.overlap + g.extra, latency: g.latency, warmupP90Ms: gateMs(g), ...(init.drums ? { drums: true } : {}), ...(init.guitar ? { guitar: true } : {}), ...(stages.length ? { pool: poolFor(runsMs(stages), (g.block / ML_SAMPLE_RATE) * 1000) } : {}) };
   const createMs = performance.now() - t0;
   if (init.timing) console.info(`[all-mixer ml] ${id} chunk ${g.frames} frames (${((g.chunk / ML_SAMPLE_RATE)).toFixed(2)} s), block ${(g.block / ML_SAMPLE_RATE).toFixed(2)} s, overlap ${(g.overlap / ML_SAMPLE_RATE).toFixed(2)} s, delay ${(g.latency / ML_SAMPLE_RATE).toFixed(2)} s; warm-up p50 ${wu.p50.toFixed(1)} p90 ${wu.p90.toFixed(1)} p95 ${wu.p95.toFixed(1)} (gate ${geometry.warmupP90Ms.toFixed(1)}), ready after ${createMs.toFixed(0)} ms, ${adapterName}`);
   ctx.postMessage({ type: 'ready', p50: wu.p50, p90: wu.p90, p95: wu.p95, createMs, adapter: adapterName, geometry, speed: { key: speedKeyOf, baseMs: planBaseMs } });
@@ -315,7 +318,7 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
       d.copyWithin(2 * g.block, 0, 2 * g.block); // the vocal is both Vk and the A cappella
     },
   };
-  const engine = drums ? withDrums(vocalEngine, drums.run, drums.stage) : vocalEngine;
+  const engine = stages.length ? withStages(vocalEngine, stages) : vocalEngine;
   serve(init.port, engine, { stallMs: init.stallMs ?? 0, stallAfterMs: init.stallAfterMs ?? 5000 }, init.timing ? new MlTiming() : null);
 }
 
@@ -325,14 +328,28 @@ const rms = (x: Float32Array): number => {
   return Math.sqrt(e / x.length);
 };
 
+/** The stages that are on, drums first (the order of the reply planes). A string is the reason one cannot be used. */
+async function loadStages(ort: Ort, init: MlWorkerInit): Promise<Split[] | string> {
+  const out: Split[] = [];
+  if (init.drums) {
+    const d = await loadSplit(ort, init, 'drums', init.drumsInstalled);
+    if (typeof d === 'string') return d;
+    out.push(d);
+  }
+  if (init.guitar) {
+    const g = await loadSplit(ort, init, 'guitar', init.guitarInstalled);
+    if (typeof g === 'string') return g;
+    out.push(g);
+  }
+  return out;
+}
+
 /**
- * The model of the split stage from OPFS and the p90 of one run (ms): SCNet Tran Small (one fp32 graph of a fixed
- * shape) for the drums, or a Mel-Band RoFormer guitar model (debug, guitar-stage.ts) at its chunk. A string is the
+ * The model of a split stage from OPFS and the p90 of one run (ms): SCNet Tran Small (one fp32 graph of a fixed
+ * shape) for the drums, or becruily's Mel-Band RoFormer guitar model (guitar-stage.ts) at its chunk. A string is the
  * reason it cannot be used.
  */
-async function loadSplit(ort: Ort, init: MlWorkerInit): Promise<Split | string> {
-  const id: ModelId = init.split ?? 'drums';
-  const inst = init.splitInstalled;
+async function loadSplit(ort: Ort, init: MlWorkerInit, id: 'drums' | 'guitar', inst: InstalledModel | undefined): Promise<Split | string> {
   if (!inst) return `the ${MODEL_LABEL[id]} model is not downloaded`;
   if (inst.format !== MODEL_FORMAT) return `the ${MODEL_LABEL[id]} model is out of date: download it again`;
   try {
@@ -351,7 +368,7 @@ async function loadSplit(ort: Ort, init: MlWorkerInit): Promise<Split | string> 
       };
       const noise = Float32Array.from({ length: SC_INPUT }, () => (Math.random() * 2 - 1) * 0.1);
       const wu = await warmUp(async () => void (await run(noise)), { skip: 2, n: 5 });
-      return { run, ms: wu.p90, stage: new DrumStage(), shape: DRUM_STAGE };
+      return { id, run, ms: wu.p90, stage: new DrumStage(), shape: DRUM_STAGE };
     }
     const meta = JSON.parse(await readModelFile(files, inst.version, metaFile, inst.files[metaFile]).then((x) => x.text())) as RoformerMeta;
     const g = guitarGeometry(guitarBlockFor(init.delayMs ?? null));
@@ -372,7 +389,7 @@ async function loadSplit(ort: Ort, init: MlWorkerInit): Promise<Split | string> 
     const wu = await warmUp(() => stage.roformer.process(n, n, run, o, o), { skip: 1, n: 3 }); // a long chunk takes seconds
     stage.reset();
     if (init.timing) console.info(`[all-mixer ml] ${id}: chunk ${frames} frames, block ${(g.block / ML_SAMPLE_RATE).toFixed(1)} s, run p90 ${wu.p90.toFixed(0)} ms, lag ${(stage.lag / ML_SAMPLE_RATE).toFixed(1)} s`);
-    return { run, ms: wu.p90, stage, shape: stageShape(g) };
+    return { id, run, ms: wu.p90, stage, shape: stageShape(g) };
   } catch (e) {
     return `${id} model: ${String(e)}`;
   }
@@ -382,7 +399,7 @@ async function loadSplit(ort: Ort, init: MlWorkerInit): Promise<Split | string> 
 function serve(port: MessagePort, engine: BlockEngine, dbg: StallOpts, timing: MlTiming | null): void {
   const { block } = engine;
   const planes = engine.planes ?? 4;
-  const bytes = bufferBytes({ ...GEOMETRY.mdx, block, drums: planes === 6 });
+  const bytes = ML_HEADER_BYTES + planes * block * 4;
   const stall = makeStall(dbg); // debug flag; null when off
   let latestEpoch = -1; // newest epoch seen on the port
   let epoch = -1; // epoch the stream state belongs to

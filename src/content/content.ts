@@ -103,7 +103,7 @@ const push = () => {
   chain.setGain(masterGainFor(settings));
   const sep = separationFor(settings);
   chain.setSeparation(sep);
-  selector.update({ on: sep.on, model: settings.mlModel, delayMs: mlDelayMsFor(settings), drums: settings.splitInstrumental, split: settings.splitModel, gpu: settings.gpu });
+  selector.update({ on: sep.on, model: settings.mlModel, delayMs: mlDelayMsFor(settings), drums: settings.splitInstrumental, guitar: settings.splitGuitar, gpu: settings.gpu });
   syncDelay();
 };
 const apply = (raw: unknown) => {

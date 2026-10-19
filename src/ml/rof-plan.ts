@@ -58,6 +58,12 @@ export interface StageShape {
   lag: number;
 }
 export const DRUM_STAGE: StageShape = { stride: SC_STRIDE, lag: SC_LAG };
+/** A stage that is on, with the p90 of one of its model runs (ms). */
+export interface StageCost extends StageShape {
+  ms: number;
+}
+/** The longest wait of any stage: the vocal planes and the reply are that much older. */
+export const stagesLag = (stages: readonly StageShape[]): number => stages.reduce((m, s) => Math.max(m, s.lag), 0);
 
 /** Stage model runs one block can need (the drum model by default): a chunk completes every `stride` samples. */
 export const drumRuns = (block: number, stride = SC_STRIDE): number => Math.floor(block / stride) + 1;
@@ -72,13 +78,14 @@ export const OVERLAP = 8832;
 export const stepMs = (frames: number, baseMs: number): number => baseMs * (frames / BASE_FRAMES) * (1 + Math.max(0, frames - 400) / 1500);
 
 /**
- * The longest block whose delay fits `delaySamples` for a GPU with a base step of `baseMs` (and, with the drum stage,
- * `drumMs` per drum model run), or null when the GPU cannot keep up: the step (with MARGIN) must fit the block, or steps queue up. The drum stage's wait (`extra`) comes on top of the budget: latency ≤ delaySamples + extra always.
+ * The longest block whose delay fits `delaySamples` for a GPU with a base step of `baseMs` (and, with the split stages,
+ * their model runs), or null when the GPU cannot keep up: the step (with MARGIN) must fit the block, or steps queue up.
+ * The stages' wait (`extra`, the longest of them) comes on top of the budget: latency ≤ delaySamples + extra always.
  */
-export function planRof(delaySamples: number, baseMs: number, drumMs = 0, stage: StageShape = DRUM_STAGE): RofGeometry | null {
-  const extra = drumMs > 0 ? stage.lag : 0;
+export function planRof(delaySamples: number, baseMs: number, stages: readonly StageCost[] = []): RofGeometry | null {
+  const extra = stagesLag(stages);
   const budget = delaySamples - OVERLAP - ML_QUANTUM; // block + slack
-  const slackFor = (block: number): number => alignUp(MARGIN * (stepMs(framesFor(block, OVERLAP), baseMs) + (drumMs > 0 ? drumRuns(block, stage.stride) * drumMs : 0)) * SAMPLES_PER_MS);
+  const slackFor = (block: number): number => alignUp(MARGIN * (stepMs(framesFor(block, OVERLAP), baseMs) + stages.reduce((sum, s) => sum + drumRuns(block, s.stride) * s.ms, 0)) * SAMPLES_PER_MS);
   // Both limits (delay, and step ≤ block) get harder as the block grows, but not in a simple way past 400 frames: scan down.
   for (let block = alignDown(budget); block >= MIN_BLOCK; block -= ML_QUANTUM) {
     if (framesFor(block, OVERLAP) > MAX_FRAMES) continue;
@@ -92,17 +99,19 @@ export function planRof(delaySamples: number, baseMs: number, drumMs = 0, stage:
 export const gateMs = (g: RofGeometry): number => g.slack / SAMPLES_PER_MS / MARGIN;
 
 /**
- * Geometry of the default (MDX) model with the drum stage: its fixed block and offset, plus the wait for the drum chunk
- * (SC_LAG). A step that runs the drum model takes `mdxMs + drumMs` and the block behind it waits for it, so the slack
- * covers both and half a drum run more. null when the two together cannot keep up with the audio (their load per block
- * period, with MARGIN, is over 1).
+ * Geometry of the default (MDX) model with the split stages: its fixed block and offset, plus the wait for the longest
+ * stage chunk. A step that runs the stage models takes `mdxMs` plus their runs and the block behind it waits for it, so
+ * the slack covers them and half a run more. null when they together cannot keep up with the audio (their load per
+ * block period, with MARGIN, is over 1). The caller sets the `drums` / `guitar` flags of the stages that are on.
  */
-export function planMdxDrums(mdxMs: number, drumMs: number, stage: StageShape = DRUM_STAGE): MlGeometry | null {
+export function planMdxDrums(mdxMs: number, stages: readonly StageCost[]): MlGeometry | null {
   const periodMs = ML_BLOCK / SAMPLES_PER_MS;
-  if (MARGIN * (mdxMs + (drumMs * ML_BLOCK) / stage.stride) > periodMs) return null;
-  const slack = alignUp(MARGIN * (mdxMs + 1.5 * drumMs) * SAMPLES_PER_MS);
-  const resultOffset = ML_RESULT_OFFSET + stage.lag;
-  return { block: ML_BLOCK, resultOffset, latency: ML_BLOCK + resultOffset + slack + ML_QUANTUM, warmupP90Ms: slack / SAMPLES_PER_MS / MARGIN, drums: true };
+  const load = stages.reduce((sum, s) => sum + (s.ms * ML_BLOCK) / s.stride, 0);
+  if (MARGIN * (mdxMs + load) > periodMs) return null;
+  const runs = stages.reduce((sum, s) => sum + s.ms, 0);
+  const slack = alignUp(MARGIN * (mdxMs + 1.5 * runs) * SAMPLES_PER_MS);
+  const resultOffset = ML_RESULT_OFFSET + stagesLag(stages);
+  return { block: ML_BLOCK, resultOffset, latency: ML_BLOCK + resultOffset + slack + ML_QUANTUM, warmupP90Ms: slack / SAMPLES_PER_MS / MARGIN };
 }
 
 /**
