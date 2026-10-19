@@ -22,6 +22,14 @@ export interface MixerSettings {
   othersPct: number;
   /** Delay limit, seconds (MIN_DELAY_S to MAX_DELAY_S): the audio delay stays below it (the drum split adds its own wait on top); a longer limit gives the model a longer chunk. */
   mlDelayS: number;
+  /** Global pitch, semitones (−PITCH_MAX to +PITCH_MAX), the same in both modes; the tempo does not change. */
+  pitch: number;
+  /** Separate mode (Advanced): the vocal and the instrumental get their own pitch instead of the global one. */
+  pitchSplit: boolean;
+  /** Vocal pitch, semitones. Used when pitchSplit is on. */
+  vocalPitch: number;
+  /** Instrumental pitch, semitones. Used when pitchSplit is on. */
+  instrPitch: number;
 }
 
 const GAIN_MIN_PCT = 0;
@@ -37,7 +45,20 @@ export const DEFAULT_SETTINGS: Readonly<MixerSettings> = Object.freeze({
   drumsPct: 100,
   othersPct: 100,
   mlDelayS: MIN_DELAY_S,
+  pitch: 0,
+  pitchSplit: false,
+  vocalPitch: 0,
+  instrPitch: 0,
 });
+
+/** Pitch range, semitones either way: a key change for singing; wider shifts sound rough. */
+export const PITCH_MAX = 6;
+
+export function clampPitch(value: unknown): number {
+  const n = typeof value === 'string' ? Number(value) : value;
+  if (typeof n !== 'number' || !Number.isFinite(n)) return 0;
+  return Math.min(PITCH_MAX, Math.max(-PITCH_MAX, Math.round(n)));
+}
 
 export function clampPct(value: unknown, fallback = 100, min = GAIN_MIN_PCT, max = GAIN_MAX_PCT): number {
   const n = typeof value === 'string' ? Number(value) : value;
@@ -89,6 +110,10 @@ export function normalizeSettings(raw: unknown): MixerSettings {
     drumsPct: clampPct(r.drumsPct, DEFAULT_SETTINGS.drumsPct),
     othersPct: clampOthersPct(r.othersPct),
     mlDelayS: clampDelayS(r.mlDelayS),
+    pitch: clampPitch(r.pitch),
+    pitchSplit: r.pitchSplit === true,
+    vocalPitch: clampPitch(r.vocalPitch),
+    instrPitch: clampPitch(r.instrPitch),
   };
 }
 
@@ -113,9 +138,16 @@ export function separationFor(settings: MixerSettings): {
   instrumental: number;
   drums: number;
   others: number;
+  /** Semitones. */
+  pitchVocal: number;
+  pitchInstrumental: number;
 } {
   const split = settings.splitInstrumental;
+  // Own pitches only exist in Separate mode; the Default tab always uses the global one.
+  const own = settings.mode === 'separate' && settings.pitchSplit;
   return {
+    pitchVocal: own ? settings.vocalPitch : settings.pitch,
+    pitchInstrumental: own ? settings.instrPitch : settings.pitch,
     on: settings.mode === 'separate',
     vocal: settings.vocalPct / 100,
     instrumental: settings.instrumentalPct / 100,

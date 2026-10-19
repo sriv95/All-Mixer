@@ -1,13 +1,13 @@
 import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { AudioLines, Cpu, Download, Drum, LoaderCircle, Maximize2, Mic, Minimize2, MicOff, Music, RefreshCw, RotateCcw, Settings2, SlidersVertical, Timer, TriangleAlert, Undo2, Volume2 } from 'lucide-react';
+import { AudioLines, AudioWaveform, Cpu, Download, Drum, LoaderCircle, Maximize2, Mic, Minimize2, MicOff, Music, RefreshCw, RotateCcw, Settings2, SlidersVertical, Timer, TriangleAlert, Undo2, Volume2 } from 'lucide-react';
 import type { ContentStatus, GetStatus, GetTabSettings, SetTabSettings } from '../shared/messages';
-import { clampDelayS, clampOthersPct, clampPct, masterPctAt, masterPosOf, MASTER_POS_MAX, normalizeSettings, type MixerSettings, type Mode } from '../shared/settings';
+import { clampDelayS, clampOthersPct, clampPct, clampPitch, masterPctAt, masterPosOf, MASTER_POS_MAX, normalizeSettings, PITCH_MAX, type MixerSettings, type Mode } from '../shared/settings';
 import { separationView, type SepView } from '../shared/separation-view';
 import { MAX_DELAY_S, MIN_DELAY_S } from '../ml/rof-plan';
 import type { MlModel } from '../worklet/protocol';
 import { installModel, useModels, type ModelLine } from './models';
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
-import { Blocked, Btn, Card, Collapse, Disclosure, Rise, Roll, Select, Skeleton, Slider, SliderRow, Switch, Tip, fade, slide, useGlide, type Choice } from './ui';
+import { Blocked, Btn, Card, Collapse, Disclosure, PitchStepper, Rise, Roll, Select, Skeleton, Slider, SliderRow, Switch, Tip, fade, slide, useGlide, type Choice } from './ui';
 
 type Update = (patch: Partial<MixerSettings>) => void;
 
@@ -240,6 +240,13 @@ function Master({ settings, update, compact }: { settings: MixerSettings; update
       {!compact && (
         <div className="flex justify-between text-xs text-muted"><span>0%</span><span>Boost up to 600%</span></div>
       )}
+      {/* The stems have their own pitch while "Change pitch separately" is on (Separate tab). */}
+      <div className="flex items-center justify-between gap-2">
+        <span id="pitch-label" className="flex items-center gap-1.5 text-[13px] font-bold"><AudioWaveform size={15} className="text-brand" aria-hidden />Pitch</span>
+        <Tip text={compact && settings.pitchSplit ? 'Off while the pitch is set separately' : 'Semitones, the speed stays the same'} align="end">
+          <PitchStepper id="pitch" label="Pitch" value={settings.pitch} min={-PITCH_MAX} max={PITCH_MAX} disabled={compact && settings.pitchSplit} onValue={(v) => update({ pitch: clampPitch(v) })} />
+        </Tip>
+      </div>
     </Card>
   );
 }
@@ -360,13 +367,16 @@ function SeparateControls({ settings, update, ready, compact, advancedOpen, setA
     return () => clearTimeout(t);
   }, [undo, settings]);
 
+  const stemPitch = (id: string, label: string, value: number, onValue: (v: number) => void) =>
+    settings.pitchSplit ? <PitchStepper id={id} label={label} value={value} min={-PITCH_MAX} max={PITCH_MAX} onValue={onValue} /> : undefined;
+
   return (
     <>
       <Rise i={0}><Master settings={settings} update={update} compact /></Rise>
       <Rise i={1}>
       <Card className="mx-rows">
-        <SliderRow id="vocal" icon={<Mic size={15} />} label="Vocal" unit="%" value={settings.vocalPct} min={0} max={100} step={5} onValue={(v) => update({ vocalPct: clampPct(v) })} />
-        <SliderRow id="instrumental" icon={<Music size={15} />} label="Instrumental" unit="%" value={settings.instrumentalPct} min={0} max={100} step={5} onValue={(v) => update({ instrumentalPct: clampPct(v) })} />
+        <SliderRow id="vocal" icon={<Mic size={15} />} label="Vocal" unit="%" pitch={stemPitch('vocal-pitch', 'Vocal pitch', settings.vocalPitch, (v) => update({ vocalPitch: clampPitch(v) }))} value={settings.vocalPct} min={0} max={100} step={5} onValue={(v) => update({ vocalPct: clampPct(v) })} />
+        <SliderRow id="instrumental" icon={<Music size={15} />} label="Instrumental" unit="%" pitch={stemPitch('instrumental-pitch', 'Instrumental pitch', settings.instrPitch, (v) => update({ instrPitch: clampPitch(v) }))} value={settings.instrumentalPct} min={0} max={100} step={5} onValue={(v) => update({ instrumentalPct: clampPct(v) })} />
         <Collapse show={settings.splitInstrumental}>
           <div id="split-mix" className="flex flex-col gap-3.5 border-t border-well pt-3.5">
             <SliderRow id="drums" icon={<Drum size={15} />} label="Drums" hint="in the instrumental" unit="%" value={settings.drumsPct} min={0} max={100} step={5} onValue={(v) => update({ drumsPct: clampPct(v) })} />
@@ -410,7 +420,7 @@ function SeparateControls({ settings, update, ready, compact, advancedOpen, setA
       </Collapse>
       <Rise i={3}>
       <Disclosure id="advanced" open={advancedOpen} onOpen={(open) => persistAdvanced(open, setAdvancedOpen)} className="rounded-[20px] bg-card" buttonClassName="p-4"
-        title={<span className="flex items-center gap-1.5"><Settings2 size={15} className="text-brand" aria-hidden />Advanced <span className="font-medium text-muted">(model, delay)</span></span>}>
+        title={<span className="flex items-center gap-1.5"><Settings2 size={15} className="text-brand" aria-hidden />Advanced <span className="font-medium text-muted">(model, delay, pitch)</span></span>}>
         <div className="flex flex-col gap-3.5 px-4 pb-4">
           <div className="flex flex-col gap-1.5">
             <label htmlFor="ml-model" className="text-[13px] font-bold">Model</label>
@@ -423,6 +433,11 @@ function SeparateControls({ settings, update, ready, compact, advancedOpen, setA
               <p className="m-0 text-xs leading-snug text-muted">More audio delay gives more quality but uses more GPU.</p>
               <Btn id="ml-delay-apply" tone="small" disabled={delayDraft === settings.mlDelayS} onClick={() => update({ mlDelayS: clampDelayS(delayDraft) })}>Apply</Btn>
             </div>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <label htmlFor="pitch-split" className="text-[13px] font-bold">Change pitch separately</label>
+            {/* Turning it on starts both stems at the global pitch, so the sound does not jump. */}
+            <Switch id="pitch-split" checked={settings.pitchSplit} onChange={(on) => update(on ? { pitchSplit: true, vocalPitch: settings.pitch, instrPitch: settings.pitch } : { pitchSplit: false })} />
           </div>
           <Disclosure id="split" open={splitOpen} onOpen={setSplitOpen} className="rounded-2xl bg-surface/70" buttonClassName="p-3"
             title={<span className="flex items-center gap-1.5"><Drum size={15} className="text-brand" aria-hidden />Split instrumental</span>}>

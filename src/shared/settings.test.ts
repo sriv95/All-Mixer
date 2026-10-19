@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SETTINGS, clampPct, masterGainFor, mlDelayMsFor, normalizeSettings, separationFor } from './settings';
+import { DEFAULT_SETTINGS, PITCH_MAX, clampPct, masterGainFor, mlDelayMsFor, normalizeSettings, separationFor } from './settings';
 
 describe('clampPct', () => {
   it('clamps to 0–100 and rounds', () => {
@@ -31,6 +31,10 @@ describe('normalizeSettings', () => {
       drumsPct: 100,
       othersPct: 100,
       mlDelayS: 2,
+      pitch: 0,
+      pitchSplit: false,
+      vocalPitch: 0,
+      instrPitch: 0,
     });
     expect(normalizeSettings({ mode: 'weird' }).mode).toBe('default');
   });
@@ -86,7 +90,19 @@ describe('separationFor', () => {
       instrumental: 0.8,
       drums: 1,
       others: 1,
+      pitchVocal: 0,
+      pitchInstrumental: 0,
     });
+  });
+  it('keeps pitches whole and within ±PITCH_MAX', () => {
+    expect(normalizeSettings({ pitch: 3.6, vocalPitch: -99, instrPitch: 'x' })).toMatchObject({ pitch: 4, vocalPitch: -PITCH_MAX, instrPitch: 0 });
+    expect(normalizeSettings({ pitchSplit: 'yes' }).pitchSplit).toBe(false);
+  });
+  it('own pitches apply only in Separate mode with the split on, else the global pitch', () => {
+    const base = { ...DEFAULT_SETTINGS, pitch: 2, vocalPitch: -1, instrPitch: 3 };
+    expect(separationFor({ ...base, mode: 'separate' })).toMatchObject({ pitchVocal: 2, pitchInstrumental: 2 });
+    expect(separationFor({ ...base, mode: 'separate', pitchSplit: true })).toMatchObject({ pitchVocal: -1, pitchInstrumental: 3 });
+    expect(separationFor({ ...base, mode: 'default', pitchSplit: true })).toMatchObject({ pitchVocal: 2, pitchInstrumental: 2 });
   });
   it('the drums and others gains apply only with the split on (the instrumental gain stays separate)', () => {
     const base = { ...DEFAULT_SETTINGS, mode: 'separate' as const, instrumentalPct: 50, drumsPct: 200, othersPct: 25 };
