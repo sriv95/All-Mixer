@@ -23,6 +23,7 @@ import { MlPipeline, type Models } from './pipeline';
 import { warmUp, warmUpGated, type WarmUpResult } from './warmup';
 import { makeStall, type StallOpts } from './stall';
 import { MlTiming } from './timing';
+import { adapterName as nameOfAdapter } from '../shared/gpu';
 import { opfsFiles, readModelFile } from '../shared/model-files';
 import { MODEL_FORMAT, MODEL_LABEL, modelFileNames, type ModelId } from '../shared/model-store';
 import { RoformerStream, DEFAULT_ROF_GEOMETRY, type RoformerMeta } from './roformer';
@@ -51,7 +52,7 @@ async function start(init: MlWorkerInit): Promise<void> {
   if (!adapter) return unavailable('no WebGPU adapter');
   if (adapter.isFallbackAdapter) return unavailable('only a fallback (software) WebGPU adapter');
   const info = adapter.info ?? {};
-  const adapterName = [info.vendor, info.architecture, info.description].filter(Boolean).join(' ') || 'unknown';
+  const adapterName = nameOfAdapter(info);
   if (init.model !== 'mdx') return startRoformer(init, adapterName);
 
   // 2. ORT + models.
