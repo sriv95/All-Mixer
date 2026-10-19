@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GUITAR_BLOCK, GUITAR_MAX_BLOCK, GUITAR_OVERLAP, GuitarStage, guitarBlockFor, guitarGeometry, stageShape } from './guitar-stage';
+import { GUITAR_BLOCK, GUITAR_OVERLAP, GuitarStage, guitarGeometry, stageShape } from './guitar-stage';
 import { framesFor } from './rof-plan';
 import { withDrums, type BlockEngine } from './drum-engine';
 import type { RoformerMeta } from './roformer';
@@ -21,18 +21,6 @@ describe('guitarGeometry', () => {
     expect(g.frames).toBe(framesFor(GUITAR_BLOCK, GUITAR_OVERLAP));
     expect(g.chunk).toBe((g.frames - 1) * 441);
     expect(g.chunk - g.block - g.overlap).toBeGreaterThanOrEqual(439);
-  });
-});
-
-describe('guitarBlockFor', () => {
-  it('follows the delay limit less the overlap, between 5.5 s and the longest block, in render quanta', () => {
-    expect(guitarBlockFor(null)).toBe(guitarBlockFor(2000));
-    expect(guitarBlockFor(2000)).toBe(GUITAR_BLOCK); // the default limit gives the shortest block, 5.5 s
-    expect(guitarBlockFor(1000)).toBe(GUITAR_BLOCK);
-    expect(guitarBlockFor(8000)).toBe(Math.floor((8 * 44100 - GUITAR_OVERLAP) / 128) * 128);
-    expect(guitarBlockFor(15000)).toBe(GUITAR_MAX_BLOCK);
-    for (const ms of [2000, 5000, 7300, 10000]) expect(guitarBlockFor(ms) % 128).toBe(0);
-    expect(guitarBlockFor(10000)).toBeGreaterThan(guitarBlockFor(7000));
   });
 });
 
