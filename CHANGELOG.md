@@ -34,6 +34,7 @@ CI builds the extension, creates tag `vx.y.z` and a GitHub release with this sec
 
 ### Fixed
 
+- Lyrics: a long lyrics settings list now scrolls inside the player (YouTube) or above its button (YT Music) instead of running off the top, where the first settings could not be reached.
 - Lyrics: a brief server error (HTTP 5xx) from LRCLIB is retried once before the lyrics search gives up.
 
 ## [0.3.0] - 2026-10-18
