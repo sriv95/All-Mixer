@@ -529,6 +529,12 @@ export class YtSettingsMenu implements LyricsMenu {
     this.sub?.remove();
     this.sub = panel;
     popup.append(panel);
+    // A long list (the karaoke text settings) must scroll inside the player, not run off its top.
+    const room = this.roomAbove(popup);
+    if (room > 0) {
+      menu.style.overflowY = 'auto';
+      menu.style.maxHeight = `${Math.max(80, room - header.offsetHeight)}px`;
+    }
     // Native submenus size the popup to their panel.
     const w = panel.offsetWidth;
     const h = panel.offsetHeight;
@@ -536,6 +542,18 @@ export class YtSettingsMenu implements LyricsMenu {
       popup.style.width = `${w}px`;
       popup.style.height = `${h}px`;
     }
+  }
+
+  /** Height the settings popup may have: from the bottom of its anchor up to the player's top (0: unknown). */
+  private roomAbove(popup: HTMLElement): number {
+    const player = popup.closest<HTMLElement>('.html5-video-player');
+    if (!player) return 0;
+    const p = player.getBoundingClientRect();
+    const below = p.bottom - popup.getBoundingClientRect().bottom;
+    let room = p.height - Math.max(0, below) - 12;
+    const own = parseFloat(this.doc.defaultView?.getComputedStyle(popup).maxHeight ?? '');
+    if (own > 0) room = Math.min(room, own);
+    return room > 0 ? room : 0;
   }
 
   /** One row per setting (opens its choices or, for a group, its settings). */
@@ -649,7 +667,7 @@ export class YtmSettingsPopover implements LyricsMenu {
     this.pop.setAttribute('role', 'dialog');
     this.pop.setAttribute('aria-label', 'Lyrics settings');
     this.pop.style.cssText =
-      'position:fixed;z-index:2147483000;display:none;min-width:220px;padding:10px 12px;background:#212121;color:#fff;border-radius:8px;font:13px/1.4 Roboto,Arial,sans-serif;box-shadow:0 4px 24px rgba(0,0,0,.6);';
+      'position:fixed;z-index:2147483000;display:none;box-sizing:border-box;min-width:220px;overflow-y:auto;padding:10px 12px;background:#212121;color:#fff;border-radius:8px;font:13px/1.4 Roboto,Arial,sans-serif;box-shadow:0 4px 24px rgba(0,0,0,.6);';
     doc.addEventListener('pointerdown', this.onOutside, true);
     doc.addEventListener('keydown', this.onKey, true);
     this.pop.addEventListener('keydown', (e) => e.stopPropagation());
@@ -672,6 +690,7 @@ export class YtmSettingsPopover implements LyricsMenu {
     this.pop.style.display = 'block';
     this.button.setAttribute('aria-expanded', 'true');
     const r = this.button.getBoundingClientRect();
+    this.pop.style.maxHeight = `${Math.max(120, r.top - 16)}px`; // scrolls instead of running off the top
     const h = this.pop.offsetHeight;
     this.pop.style.left = `${Math.max(8, Math.min(r.left, (this.doc.defaultView?.innerWidth ?? 1200) - this.pop.offsetWidth - 8))}px`;
     this.pop.style.top = `${Math.max(8, r.top - h - 8)}px`;

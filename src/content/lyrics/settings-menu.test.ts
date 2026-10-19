@@ -484,6 +484,16 @@ describe('YtmSettingsPopover', () => {
     document.body.replaceChildren();
   });
 
+  it('caps its height and scrolls, so the top rows stay reachable', () => {
+    const pop = new YtmSettingsPopover();
+    document.body.append(pop.button);
+    pop.setRows(buildMenuRows({ sources, captions, prefs: prefs() }, actions()));
+    pop.button.click();
+    const root = document.querySelector<HTMLElement>('[data-allmixer-lyrics-popover]')!;
+    expect(root.style.maxHeight).toMatch(/^\d+px$/);
+    expect(root.style.overflowY).toBe('auto');
+  });
+
   it('opens a popover of selects, reports changes, closes on Escape and outside click', () => {
     const a = actions();
     const pop = new YtmSettingsPopover();
