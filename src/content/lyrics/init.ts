@@ -5,7 +5,7 @@ import { CC_BUTTON_SELECTOR, clickCaptionsButton, findLyricsControls, getCaption
 import { linesToLrc, lyricsToText } from '../../lyrics/export';
 import { getPlayerInfo, getTimedText, onCaptionsAvailable } from './bridge-client';
 import { LyricsController, type LyricsState } from './controller';
-import { YtSettingsMenu, YtmSettingsPopover, buildMenuButtons, buildMenuRows, timingLabel, type LyricsMenu } from './settings-menu';
+import { YtSettingsMenu, YtmSettingsPopover, buildMenuRows, timingLabel, type LyricsMenu } from './settings-menu';
 import { openFindDialog, openOwnDialog } from './lyrics-dialog';
 import { showToast, timingKeyDelta } from './timing-keys';
 import { PanelSurface, YtmTabSurface } from './surfaces';
@@ -204,8 +204,7 @@ export function initLyrics(site: Site, presentedTime: () => number | null, prese
     const timing = ready?.lyrics.kind === 'synced' && lastVideoId ? { offsetMs: prefs.lyricsOffsets[lastVideoId] ?? 0 } : undefined;
     const input = { sources: ready?.sources, captions: ready?.captions, prefs, site, timing, lyrics: ready ? { synced: ready.lyrics.kind === 'synced' } : undefined, canEdit: !!lastVideoId && (lastState.kind === 'ready' || lastState.kind === 'not-found') };
     const rows = buildMenuRows(input, actions);
-    const buttons = buildMenuButtons(input, actions);
-    for (const m of menus) m.setRows(rows, buttons);
+    for (const m of menus) m.setRows(rows);
   };
   controller.addSurface({
     active: false,

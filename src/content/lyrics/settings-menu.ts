@@ -12,7 +12,12 @@ interface MenuOption {
 }
 
 export interface MenuRow {
-  id: 'source' | 'captionLanguage' | 'timing' | 'timingKeys' | 'display' | 'lines' | 'karaokeText' | 'size' | 'preset' | 'color' | 'font' | 'outline' | 'background' | 'animation' | 'position' | 'focus';
+  id:
+    | 'source' | 'captionLanguage' | 'timing' | 'timingKeys' | 'display' | 'lines' | 'karaokeText' | 'size' | 'preset' | 'color' | 'font' | 'outline' | 'background' | 'animation' | 'position' | 'focus'
+    // sections (www groups)
+    | 'sourceSection' | 'displaySection' | 'sourceOptions' | 'exportLyrics'
+    // actions
+    | 'resetPosition' | 'copyLyrics' | 'saveLrc' | 'findLyrics' | 'myLyrics';
   label: string;
   options: MenuOption[];
   selected: string;
@@ -25,15 +30,12 @@ export interface MenuRow {
   /** Also offer a native color picker under the choices; the values are #rrggbb. */
   picker?: 'color';
   select(value: string): void;
+  /** An action instead of a setting (reset position, copy lyrics...): no choices. May return a short confirmation shown in place of the label for a moment. */
+  run?(): string | void;
 }
 
-/** A button inside the lyrics settings (not a choice): e.g. reset position, copy lyrics. */
-export interface MenuButton {
-  id: 'resetPosition' | 'copyLyrics' | 'saveLrc' | 'findLyrics' | 'myLyrics';
-  label: string;
-  /** May return a short confirmation shown in place of the label for a moment. */
-  run(): string | void;
-}
+/** An action row: it runs `run` when picked and has no choices. */
+const action = (id: MenuRow['id'], label: string, run: () => string | void): MenuRow => ({ id, label, options: [], selected: '', select: () => {}, run });
 
 export interface MenuActions {
   selectSource(pref: SourcePref): void;
@@ -53,11 +55,11 @@ export interface MenuInput {
   sources?: SourceMenu;
   captions?: CaptionPicker;
   prefs: LyricsPrefs;
-  /** Set while synced lyrics of a known video are shown: the timing row appears. */
+  /** Set while synced lyrics of a known video are shown: the timing rows appear. */
   timing?: { offsetMs: number };
-  /** Set while lyrics are shown: the copy button appears, and the .lrc one for synced lyrics. */
+  /** Set while lyrics are shown: the copy action appears, and the .lrc one for synced lyrics. */
   lyrics?: { synced: boolean };
-  /** Lyrics are shown or missing for a known video: the "Find other lyrics" and "Use my own lyrics" buttons appear. */
+  /** Lyrics are shown or missing for a known video: the "Find other lyrics" and "Use my own lyrics" actions appear. */
   canEdit?: boolean;
   /** YT Music has no karaoke text or lyrics window (the Lyrics tab only), so it gets no display rows. Default: www. */
   site?: Site;
@@ -87,19 +89,141 @@ const FALLBACK_NOTES = {
   captions: 'This video has no usable captions, so the automatic order is used.',
 } as const;
 
-/** Builds the rows to show: no source row before lyrics load, caption language only with two or more tracks, karaoke rows only in karaoke mode, no display rows on YT Music. */
+/** The "Custom Karaoke Text" group: look presets, color, size, font... (www, karaoke mode). */
+function karaokeTextGroup(prefs: LyricsPrefs, actions: MenuActions): MenuRow {
+  const presets = stylePresets(prefs);
+  const matched = matchedStylePreset(prefs);
+  const group: MenuRow = {
+    id: 'karaokeText',
+    label: 'Custom Karaoke Text',
+    options: [],
+    selected: '',
+    rows: [
+      {
+        id: 'preset',
+        label: 'Style preset',
+        options: [
+          ...presets.map((p) => ({ value: p.id, label: p.label })),
+          ...(matched ? [] : [{ value: 'custom', label: 'Custom', disabled: true }]),
+          { value: 'reset', label: 'Reset style' },
+          { value: 'save', label: prefs.karaokeMyStyle ? 'Replace My style with the current look' : 'Save the current look as My style', disabled: !!matched },
+        ],
+        selected: matched?.id ?? 'custom',
+        select: (v) => {
+          if (v === 'reset') {
+            actions.setPrefs(RESET_STYLE);
+            return;
+          }
+          if (v === 'save') {
+            actions.setPrefs({ karaokeMyStyle: pickStyle(prefs) });
+            return;
+          }
+          const preset = presets.find((p) => p.id === v);
+          if (preset) actions.setPrefs(preset.style);
+        },
+      },
+      {
+        id: 'color',
+        label: 'Color',
+        options: [
+          ...COLOR_PRESETS.map(([value, label]) => ({ value, label })),
+          ...(COLOR_PRESETS.some(([c]) => c === prefs.karaokeColor) ? [] : [{ value: prefs.karaokeColor, label: `Custom (${prefs.karaokeColor})` }]),
+        ],
+        selected: prefs.karaokeColor,
+        picker: 'color',
+        select: (v) => actions.setPrefs({ karaokeColor: v }),
+      },
+      {
+        id: 'size',
+        label: 'Size',
+        options: KARAOKE_SIZES.map((n) => ({ value: String(n), label: `${n}%` })),
+        selected: String(nearestSize(prefs.karaokeFontSize)),
+        select: (v) => actions.setPrefs({ karaokeFontSize: Number(v) }),
+      },
+      {
+        id: 'font',
+        label: 'Font',
+        options: Object.entries(FONT_LABELS).map(([value, label]) => ({ value, label })),
+        selected: prefs.karaokeFont,
+        select: (v) => actions.setPrefs({ karaokeFont: v as KaraokeFont }),
+      },
+      {
+        id: 'outline',
+        label: 'Outline',
+        options: Object.entries(OUTLINE_LABELS).map(([value, label]) => ({ value, label })),
+        selected: prefs.karaokeOutline,
+        select: (v) => actions.setPrefs({ karaokeOutline: v as KaraokeOutline }),
+      },
+      {
+        id: 'background',
+        label: 'Background',
+        options: KARAOKE_BACKGROUNDS.map((n) => ({ value: String(n), label: n ? `${n}%` : 'None' })),
+        selected: String(prefs.karaokeBackground),
+        select: (v) => actions.setPrefs({ karaokeBackground: Number(v) as KaraokeBackground }),
+      },
+      {
+        id: 'animation',
+        label: 'Line transition',
+        options: [
+          { value: 'none', label: 'None' },
+          { value: 'fade', label: 'Fade' },
+          { value: 'slide', label: 'Slide up' },
+        ],
+        selected: prefs.karaokeAnimation,
+        note: 'Off when your system asks to reduce motion.',
+        select: (v) => actions.setPrefs({ karaokeAnimation: v as KaraokeAnimation }),
+      },
+      {
+        id: 'position',
+        label: 'Position',
+        options: [
+          ...POSITION_PRESETS.map((p) => ({ value: p.id, label: p.label })),
+          ...(matchedPosition(prefs) ? [] : [{ value: 'custom', label: 'Custom (dragged)', disabled: true }]),
+        ],
+        selected: matchedPosition(prefs)?.id ?? 'custom',
+        note: 'Drag the text to place it anywhere, or right-click it for these presets.',
+        select: (v) => {
+          const preset = POSITION_PRESETS.find((p) => p.id === v);
+          if (preset) actions.setPrefs({ karaokePosition: { x: 0.5, y: preset.y } });
+        },
+      },
+      {
+        id: 'focus',
+        label: 'Lyrics-only view',
+        options: [
+          { value: 'off', label: 'Off' },
+          { value: 'on', label: 'On' },
+        ],
+        selected: prefs.karaokeFocus ? 'on' : 'off',
+        note: 'Large text in the middle over a dimmed, blurred video.',
+        select: (v) => actions.setPrefs({ karaokeFocus: v === 'on' }),
+      },
+    ],
+    select: () => {},
+  };
+  group.summary = group.rows!.slice(1, 3).map(selectedLabel).join(' · ');
+  return group;
+}
+
+/**
+ * Builds the rows to show. YT Music: a flat list (source, caption language, timing, then the actions). www: two
+ * sections, "Lyrics source" (source, caption language, find / use my own, "Source options" with timing and the export
+ * actions) and "Lyrics display" (display mode, and in karaoke mode its lines, text look and reset position). Nothing
+ * that has no content is listed: no source row before lyrics load, caption language only with two or more tracks.
+ */
 export function buildMenuRows(input: MenuInput, actions: MenuActions): MenuRow[] {
   const { sources, captions, prefs } = input;
-  const rows: MenuRow[] = [];
+  const ytm = input.site === 'ytmusic';
+  const source: MenuRow[] = [];
   if (sources) {
     const entries: [SourcePref, string, boolean, string][] = [
       ['auto', sources.shown ? `Auto (${SHOWN_LABELS[sources.shown]})` : 'Auto', true, ''],
       ['lrclib', 'LRCLIB', sources.available.lrclib, ' (not found)'],
       ['captions', 'YouTube captions', sources.available.captions, ' (none)'],
     ];
-    rows.push({
+    source.push({
       id: 'source',
-      label: 'Lyrics source',
+      label: ytm ? 'Lyrics source' : 'Source',
       options: entries.map(([value, label, ok, hint]) => ({ value, label: ok ? label : label + hint, disabled: !ok })),
       selected: sources.pref,
       ...(sources.fellBack ? { note: FALLBACK_NOTES[sources.fellBack] } : {}),
@@ -107,7 +231,7 @@ export function buildMenuRows(input: MenuInput, actions: MenuActions): MenuRow[]
     });
   }
   if (captions && captions.options.length >= 2) {
-    rows.push({
+    source.push({
       id: 'captionLanguage',
       label: 'Caption language',
       options: captions.options.map((o) => ({ value: String(o.index), label: o.label })),
@@ -115,8 +239,9 @@ export function buildMenuRows(input: MenuInput, actions: MenuActions): MenuRow[]
       select: (v) => actions.selectCaptionTrack({ index: Number(v) }),
     });
   }
+  const timing: MenuRow[] = [];
   if (input.timing) {
-    rows.push({
+    timing.push({
       id: 'timing',
       label: 'Lyrics timing',
       // A value from the timing keys can sit between the steps: list it too.
@@ -125,7 +250,7 @@ export function buildMenuRows(input: MenuInput, actions: MenuActions): MenuRow[]
       note: '+ shows the lyrics later, - earlier. Kept for this video.',
       select: (v) => actions.setOffset(Number(v)),
     });
-    rows.push({
+    timing.push({
       id: 'timingKeys',
       label: 'Timing keys',
       options: [
@@ -137,130 +262,35 @@ export function buildMenuRows(input: MenuInput, actions: MenuActions): MenuRow[]
       select: (v) => actions.setPrefs({ lyricsTimingKeys: v === 'on' }),
     });
   }
-  if (input.site === 'ytmusic') return rows;
-  rows.push({
+  const exportActions: MenuRow[] = [];
+  if (input.lyrics) exportActions.push(action('copyLyrics', 'Copy lyrics', () => actions.copyLyrics()));
+  if (input.lyrics?.synced) exportActions.push(action('saveLrc', 'Save as .lrc', () => actions.saveLrc()));
+  const edit: MenuRow[] = input.canEdit
+    ? [action('findLyrics', 'Find other lyrics…', () => actions.findLyrics()), action('myLyrics', 'Use my own lyrics…', () => actions.myLyrics())]
+    : [];
+
+  if (ytm) return [...source, ...timing, ...exportActions, ...edit];
+
+  const sourceOptions: MenuRow[] = [...timing];
+  if (exportActions.length) sourceOptions.push({ id: 'exportLyrics', label: 'Export lyrics', options: [], selected: '', rows: exportActions, select: () => {} });
+  const sourceSection: MenuRow[] = [...source, ...edit];
+  if (sourceOptions.length) {
+    sourceSection.push({ id: 'sourceOptions', label: 'Source options', options: [], selected: '', rows: sourceOptions, summary: timing[0] ? selectedLabel(timing[0]) : '', select: () => {} });
+  }
+  const karaoke = prefs.lyricsDisplayMode === 'karaoke';
+  const display: MenuRow = {
     id: 'display',
-    label: 'Lyrics display',
+    label: 'Display',
     options: [
       { value: 'karaoke', label: 'Karaoke text' },
       { value: 'window', label: 'Lyrics window' },
     ],
     selected: prefs.lyricsDisplayMode,
     select: (v) => actions.setPrefs({ lyricsDisplayMode: v as LyricsDisplayMode }),
-  });
-  if (prefs.lyricsDisplayMode === 'karaoke') {
-    const presets = stylePresets(prefs);
-    const matched = matchedStylePreset(prefs);
-    const group: MenuRow = {
-      id: 'karaokeText',
-      label: 'Custom Karaoke Text',
-      options: [],
-      selected: '',
-      rows: [
-        {
-          id: 'preset',
-          label: 'Style preset',
-          options: [
-            ...presets.map((p) => ({ value: p.id, label: p.label })),
-            ...(matched ? [] : [{ value: 'custom', label: 'Custom', disabled: true }]),
-            { value: 'reset', label: 'Reset style' },
-            { value: 'save', label: prefs.karaokeMyStyle ? 'Replace My style with the current look' : 'Save the current look as My style', disabled: !!matched },
-          ],
-          selected: matched?.id ?? 'custom',
-          select: (v) => {
-            if (v === 'reset') {
-              actions.setPrefs(RESET_STYLE);
-              return;
-            }
-            if (v === 'save') {
-              actions.setPrefs({ karaokeMyStyle: pickStyle(prefs) });
-              return;
-            }
-            const preset = presets.find((p) => p.id === v);
-            if (preset) actions.setPrefs(preset.style);
-          },
-        },
-        {
-          id: 'color',
-          label: 'Color',
-          options: [
-            ...COLOR_PRESETS.map(([value, label]) => ({ value, label })),
-            ...(COLOR_PRESETS.some(([c]) => c === prefs.karaokeColor) ? [] : [{ value: prefs.karaokeColor, label: `Custom (${prefs.karaokeColor})` }]),
-          ],
-          selected: prefs.karaokeColor,
-          picker: 'color',
-          select: (v) => actions.setPrefs({ karaokeColor: v }),
-        },
-        {
-          id: 'size',
-          label: 'Size',
-          options: KARAOKE_SIZES.map((n) => ({ value: String(n), label: `${n}%` })),
-          selected: String(nearestSize(prefs.karaokeFontSize)),
-          select: (v) => actions.setPrefs({ karaokeFontSize: Number(v) }),
-        },
-        {
-          id: 'font',
-          label: 'Font',
-          options: Object.entries(FONT_LABELS).map(([value, label]) => ({ value, label })),
-          selected: prefs.karaokeFont,
-          select: (v) => actions.setPrefs({ karaokeFont: v as KaraokeFont }),
-        },
-        {
-          id: 'outline',
-          label: 'Outline',
-          options: Object.entries(OUTLINE_LABELS).map(([value, label]) => ({ value, label })),
-          selected: prefs.karaokeOutline,
-          select: (v) => actions.setPrefs({ karaokeOutline: v as KaraokeOutline }),
-        },
-        {
-          id: 'background',
-          label: 'Background',
-          options: KARAOKE_BACKGROUNDS.map((n) => ({ value: String(n), label: n ? `${n}%` : 'None' })),
-          selected: String(prefs.karaokeBackground),
-          select: (v) => actions.setPrefs({ karaokeBackground: Number(v) as KaraokeBackground }),
-        },
-        {
-          id: 'animation',
-          label: 'Line transition',
-          options: [
-            { value: 'none', label: 'None' },
-            { value: 'fade', label: 'Fade' },
-            { value: 'slide', label: 'Slide up' },
-          ],
-          selected: prefs.karaokeAnimation,
-          note: 'Off when your system asks to reduce motion.',
-          select: (v) => actions.setPrefs({ karaokeAnimation: v as KaraokeAnimation }),
-        },
-        {
-          id: 'position',
-          label: 'Position',
-          options: [
-            ...POSITION_PRESETS.map((p) => ({ value: p.id, label: p.label })),
-            ...(matchedPosition(prefs) ? [] : [{ value: 'custom', label: 'Custom (dragged)', disabled: true }]),
-          ],
-          selected: matchedPosition(prefs)?.id ?? 'custom',
-          note: 'Drag the text to place it anywhere, or right-click it for these presets.',
-          select: (v) => {
-            const preset = POSITION_PRESETS.find((p) => p.id === v);
-            if (preset) actions.setPrefs({ karaokePosition: { x: 0.5, y: preset.y } });
-          },
-        },
-        {
-          id: 'focus',
-          label: 'Lyrics-only view',
-          options: [
-            { value: 'off', label: 'Off' },
-            { value: 'on', label: 'On' },
-          ],
-          selected: prefs.karaokeFocus ? 'on' : 'off',
-          note: 'Large text in the middle over a dimmed, blurred video.',
-          select: (v) => actions.setPrefs({ karaokeFocus: v === 'on' }),
-        },
-      ],
-      select: () => {},
-    };
-    group.summary = group.rows!.slice(1, 3).map(selectedLabel).join(' · ');
-    rows.push(
+  };
+  const displaySection: MenuRow[] = [display];
+  if (karaoke) {
+    displaySection.push(
       {
         id: 'lines',
         label: 'Karaoke lines',
@@ -271,29 +301,20 @@ export function buildMenuRows(input: MenuInput, actions: MenuActions): MenuRow[]
         selected: String(prefs.karaokeLines),
         select: (v) => actions.setPrefs({ karaokeLines: v === '1' ? 1 : 2 }),
       },
-      group,
+      karaokeTextGroup(prefs, actions),
+      action('resetPosition', 'Reset position', () => actions.setPrefs({ karaokePosition: { ...DEFAULT_LYRICS_PREFS.karaokePosition } })),
     );
   }
+  const rows: MenuRow[] = [];
+  if (sourceSection.length) {
+    rows.push({ id: 'sourceSection', label: 'Lyrics source', options: [], selected: '', rows: sourceSection, summary: source[0] ? selectedLabel(source[0]) : '', select: () => {} });
+  }
+  rows.push({ id: 'displaySection', label: 'Lyrics display', options: [], selected: '', rows: displaySection, summary: selectedLabel(display), select: () => {} });
   return rows;
 }
 
-/** Buttons for the lyrics settings: reset position (karaoke text only; the window remembers its own place), copy and save of the shown lyrics. */
-export function buildMenuButtons(input: MenuInput, actions: MenuActions): MenuButton[] {
-  const buttons: MenuButton[] = [];
-  if (input.site !== 'ytmusic' && input.prefs.lyricsDisplayMode === 'karaoke') {
-    buttons.push({ id: 'resetPosition', label: 'Reset position', run: () => actions.setPrefs({ karaokePosition: { ...DEFAULT_LYRICS_PREFS.karaokePosition } }) });
-  }
-  if (input.lyrics) buttons.push({ id: 'copyLyrics', label: 'Copy lyrics', run: () => actions.copyLyrics() });
-  if (input.lyrics?.synced) buttons.push({ id: 'saveLrc', label: 'Save as .lrc', run: () => actions.saveLrc() });
-  if (input.canEdit) {
-    buttons.push({ id: 'findLyrics', label: 'Find other lyrics…', run: () => actions.findLyrics() });
-    buttons.push({ id: 'myLyrics', label: 'Use my own lyrics…', run: () => actions.myLyrics() });
-  }
-  return buttons;
-}
-
 const selectedLabel = (row: MenuRow): string =>
-  row.rows ? (row.summary ?? row.rows.map(selectedLabel).join(' · ')) : (row.options.find((o) => o.value === row.selected)?.label ?? '');
+  row.rows ? (row.summary ?? row.rows.map(selectedLabel).filter(Boolean).join(' · ')) : (row.options.find((o) => o.value === row.selected)?.label ?? '');
 
 /** Shows `message` in place of the button's text for a moment (no-op without one). */
 function flash(el: HTMLElement, message: string | void): void {
@@ -307,7 +328,7 @@ function flash(el: HTMLElement, message: string | void): void {
 
 /** Both renderers take the new settings whenever the state or prefs change. */
 export interface LyricsMenu {
-  setRows(rows: MenuRow[], buttons?: MenuButton[]): void;
+  setRows(rows: MenuRow[]): void;
 }
 
 /** Slide time of YouTube's own submenu change (`.ytp-popup-animating .ytp-panel`: 0.25 s). */
@@ -325,15 +346,14 @@ const rowKey = (row: MenuRow): string =>
 
 /**
  * www: one "Lyrics" row (with the ♪ icon) at the end of YouTube's settings panel. It opens our own panel with
- * the lyrics settings (and buttons), and each setting opens its choices, like Playback speed.
+ * the lyrics sections, each section opens its settings, and each setting opens its choices, like Playback speed.
  * YouTube re-renders the popup, so `ensure()` re-inserts what vanished (never duplicates).
  */
 export class YtSettingsMenu implements LyricsMenu {
   private rows: MenuRow[] = [];
-  private buttons: MenuButton[] = [];
-  /** Open panels: [] closed, [GROUP_ID] the lyrics settings, [GROUP_ID, rowId, ...] one setting (a group's settings, or the choices). */
   /** Ends a running slide at once (a new navigation, or a rebuild, must not wait for it). */
   private finishAnim: () => void = () => undefined;
+  /** Open panels: [] closed, [GROUP_ID] the lyrics sections, [GROUP_ID, rowId, ...] a section, a setting of it (a group's settings, or the choices)... */
   private path: string[] = [];
   private subKey = '';
   private sub: HTMLElement | null = null;
@@ -345,9 +365,8 @@ export class YtSettingsMenu implements LyricsMenu {
 
   constructor(private readonly doc: Document = document) {}
 
-  setRows(rows: MenuRow[], buttons: MenuButton[] = []): void {
+  setRows(rows: MenuRow[]): void {
     this.rows = rows;
-    this.buttons = buttons;
     if (this.path.length > 1 && !this.rowAt(this.path)) this.path = [GROUP_ID];
     this.ensure();
   }
@@ -383,12 +402,12 @@ export class YtSettingsMenu implements LyricsMenu {
 
   /** What the group row shows on its right: the current display mode. */
   private summary(): string {
-    const display = this.rows.find((r) => r.id === 'display');
+    const display = this.rows.find((r) => r.id === 'displaySection')?.rows?.find((r) => r.id === 'display');
     return display ? selectedLabel(display) : '';
   }
 
   private groupKey(): string {
-    return JSON.stringify([this.rows.map(rowKey), this.buttons.map((b) => b.label)]);
+    return JSON.stringify(this.rows.map(rowKey));
   }
 
   /** Make the popup show our group row exactly once, at the end of the main menu. */
@@ -550,10 +569,7 @@ export class YtSettingsMenu implements LyricsMenu {
     menu.className = SETTINGS_SELECTORS.panelMenu.slice(1);
     if (row?.rows) this.fillRows(menu, row.rows);
     else if (row) this.fillChoices(menu, row);
-    else {
-      this.fillRows(menu, this.rows);
-      this.fillButtons(menu);
-    }
+    else this.fillRows(menu, this.rows);
     panel.append(header, menu);
     this.subKey = this.panelKey();
     if (!(dir && leaving === this.sub)) this.sub?.remove();
@@ -572,10 +588,10 @@ export class YtSettingsMenu implements LyricsMenu {
       scroller.append(menu);
     }
     // Native submenus size the popup to their panel: measure the panel at its natural width, free of the previous
-    // panel's size (a long note wraps at 380 px).
+    // panel's size (a long note wraps at the player's width, at most 460 px).
     popup.style.width = '';
     popup.style.height = '';
-    panel.style.cssText = 'width:max-content;min-width:250px;max-width:380px;';
+    panel.style.cssText = `width:max-content;min-width:250px;max-width:${this.maxPanelWidth(popup)}px;`;
     const w = panel.offsetWidth;
     const h = panel.offsetHeight;
     panel.style.cssText = '';
@@ -623,6 +639,13 @@ export class YtSettingsMenu implements LyricsMenu {
     popup.style.height = `${to.h}px`;
   }
 
+  /** Widest the panel may be: wide enough for a label and a long value side by side, within the player. */
+  private maxPanelWidth(popup: HTMLElement): number {
+    const player = popup.closest<HTMLElement>('.html5-video-player');
+    const room = player ? player.getBoundingClientRect().width - 24 : 0;
+    return room > 250 ? Math.min(460, room) : 460;
+  }
+
   /** Height the settings popup may have: from the bottom of its anchor up to the player's top (0: unknown). */
   private roomAbove(popup: HTMLElement): number {
     const player = popup.closest<HTMLElement>('.html5-video-player');
@@ -635,25 +658,21 @@ export class YtSettingsMenu implements LyricsMenu {
     return room > 0 ? room : 0;
   }
 
-  /** One row per setting (opens its choices or, for a group, its settings). */
+  /** One row per setting (opens its choices or, for a group, its settings); an action row runs and shows its confirmation. */
   private fillRows(menu: HTMLElement, rows: MenuRow[]): void {
     for (const row of rows) {
-      const { item, content } = this.item('menuitem', row.label);
-      item.setAttribute('aria-haspopup', 'true');
-      item.setAttribute(ROW_ATTR + '-setting', row.id);
+      const { item, label, content } = this.item('menuitem', row.label);
       item.tabIndex = 0;
-      content.textContent = selectedLabel(row);
-      this.activate(item, () => this.open([...this.path, row.id]));
-      menu.append(item);
-    }
-  }
-
-  private fillButtons(menu: HTMLElement): void {
-    for (const b of this.buttons) {
-      const { item, label } = this.item('menuitem', b.label);
-      item.setAttribute(ROW_ATTR + '-button', b.id);
-      item.tabIndex = 0;
-      this.activate(item, () => flash(label, b.run()));
+      if (row.run) {
+        const run = row.run.bind(row);
+        item.setAttribute(ROW_ATTR + '-button', row.id);
+        this.activate(item, () => flash(label, run()));
+      } else {
+        item.setAttribute('aria-haspopup', 'true');
+        item.setAttribute(ROW_ATTR + '-setting', row.id);
+        content.textContent = selectedLabel(row);
+        this.activate(item, () => this.open([...this.path, row.id]));
+      }
       menu.append(item);
     }
   }
@@ -738,7 +757,6 @@ export class YtmSettingsPopover implements LyricsMenu {
   readonly button: HTMLButtonElement;
   private readonly pop: HTMLElement;
   private rows: MenuRow[] = [];
-  private buttons: MenuButton[] = [];
 
   constructor(private readonly doc: Document = document) {
     this.button = doc.createElement('button');
@@ -771,9 +789,8 @@ export class YtmSettingsPopover implements LyricsMenu {
     return this.pop.style.display !== 'none';
   }
 
-  setRows(rows: MenuRow[], buttons: MenuButton[] = []): void {
+  setRows(rows: MenuRow[]): void {
     this.rows = rows;
-    this.buttons = buttons;
     if (this.isOpen) this.render();
   }
 
@@ -819,8 +836,23 @@ export class YtmSettingsPopover implements LyricsMenu {
 
   private render(): void {
     const frag = this.doc.createDocumentFragment();
-    // The popover is flat: a group's settings are listed as its own rows.
-    for (const row of this.rows.flatMap((r) => r.rows ?? [r])) {
+    // The popover is flat: a group's settings are listed as its own rows, and an action row is a button.
+    const flat = (rows: MenuRow[]): MenuRow[] => rows.flatMap((r) => (r.rows ? flat(r.rows) : [r]));
+    for (const row of flat(this.rows)) {
+      if (row.run) {
+        const run = row.run.bind(row);
+        const btn = this.doc.createElement('button');
+        btn.type = 'button';
+        btn.setAttribute(ROW_ATTR, row.id);
+        btn.textContent = row.label;
+        btn.style.cssText = 'font:inherit;color:#fff;background:#333;border:1px solid rgba(255,255,255,.3);border-radius:4px;padding:4px 10px;margin:6px 0;cursor:pointer;width:100%;';
+        btn.addEventListener('click', () => {
+          flash(btn, run());
+          btn.blur();
+        });
+        frag.append(btn);
+        continue;
+      }
       const wrap = this.doc.createElement('label');
       wrap.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:12px;margin:6px 0;';
       wrap.setAttribute(ROW_ATTR, row.id);
@@ -849,18 +881,6 @@ export class YtmSettingsPopover implements LyricsMenu {
         note.textContent = row.note;
         frag.append(note);
       }
-    }
-    for (const b of this.buttons) {
-      const btn = this.doc.createElement('button');
-      btn.type = 'button';
-      btn.setAttribute(ROW_ATTR, b.id);
-      btn.textContent = b.label;
-      btn.style.cssText = 'font:inherit;color:#fff;background:#333;border:1px solid rgba(255,255,255,.3);border-radius:4px;padding:4px 10px;margin:6px 0;cursor:pointer;width:100%;';
-      btn.addEventListener('click', () => {
-        flash(btn, b.run());
-        btn.blur();
-      });
-      frag.append(btn);
     }
     this.pop.replaceChildren(frag);
   }
