@@ -310,6 +310,9 @@ export interface LyricsMenu {
   setRows(rows: MenuRow[], buttons?: MenuButton[]): void;
 }
 
+/** Slide time of YouTube's own submenu change (`.ytp-popup-animating .ytp-panel`: 0.25 s). */
+const PANEL_ANIM_MS = 250;
+type PanelDir = 'forward' | 'back';
 const OWN_ATTR = 'data-am-panel';
 const ROW_ATTR = 'data-am-row';
 const GROUP_ID = 'lyrics';
@@ -329,6 +332,8 @@ export class YtSettingsMenu implements LyricsMenu {
   private rows: MenuRow[] = [];
   private buttons: MenuButton[] = [];
   /** Open panels: [] closed, [GROUP_ID] the lyrics settings, [GROUP_ID, rowId, ...] one setting (a group's settings, or the choices). */
+  /** Ends a running slide at once (a new navigation, or a rebuild, must not wait for it). */
+  private finishAnim: () => void = () => undefined;
   private path: string[] = [];
   private subKey = '';
   private sub: HTMLElement | null = null;
@@ -466,13 +471,19 @@ export class YtSettingsMenu implements LyricsMenu {
   private open(path: string[]): void {
     const popup = findSettingsPopup(this.doc);
     if (!popup) return;
+    const dir = this.motion() ? (path.length >= this.path.length ? 'forward' : 'back') : undefined;
     this.path = path;
-    this.renderSub(popup);
+    this.renderSub(popup, dir);
+  }
+
+  /** Slide between panels unless the system asks for reduced motion. */
+  private motion(): boolean {
+    return !this.doc.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   }
 
   private back(): void {
     if (this.path.length > 1) this.open(this.path.slice(0, -1));
-    else this.closeSub();
+    else this.closeSub(this.motion());
   }
 
   private item(role: string, labelText: string): { item: HTMLElement; label: HTMLElement; content: HTMLElement } {
@@ -498,16 +509,20 @@ export class YtSettingsMenu implements LyricsMenu {
     return { item, label, content };
   }
 
-  private renderSub(popup: HTMLElement): void {
+  private renderSub(popup: HTMLElement, dir?: PanelDir): void {
     const row = this.rowAt(this.path);
     if (!this.path.length || (this.path.length > 1 && !row)) {
       this.closeSub();
       return;
     }
+    this.finishAnim();
     const main = findSettingsMainMenu(popup, OWN_ATTR)?.closest<HTMLElement>(SETTINGS_SELECTORS.panel) ?? null;
+    // Going into the first submenu, the main panel stays visible while it slides out.
+    const leaving = this.sub ?? (dir && main && main !== this.hidden ? main : null);
+    const before = { w: popup.offsetWidth, h: popup.offsetHeight };
     if (main && main !== this.hidden) {
       this.hidden = main;
-      main.style.display = 'none';
+      if (!(dir && leaving === main)) main.style.display = 'none';
     }
     if (!this.saved) this.saved = { width: popup.style.width, height: popup.style.height };
     const panel = this.doc.createElement('div');
@@ -541,7 +556,7 @@ export class YtSettingsMenu implements LyricsMenu {
     }
     panel.append(header, menu);
     this.subKey = this.panelKey();
-    this.sub?.remove();
+    if (!(dir && leaving === this.sub)) this.sub?.remove();
     this.sub = panel;
     popup.append(panel);
     // A long list (the karaoke text settings) must scroll inside the player, not run off its top. The panel menu is
@@ -564,10 +579,48 @@ export class YtSettingsMenu implements LyricsMenu {
     const w = panel.offsetWidth;
     const h = panel.offsetHeight;
     panel.style.cssText = '';
-    if (w > 0 && h > 0) {
-      popup.style.width = `${w}px`;
-      popup.style.height = `${h}px`;
+    if (w > 0 && h > 0) this.resize(popup, before, { w, h }, !!(dir && leaving));
+    if (dir && leaving) this.slide(popup, panel, leaving, dir, () => (leaving === main ? (leaving.style.display = 'none') : leaving.remove()));
+  }
+
+  /**
+   * Same classes as YouTube's own submenus, which are start/end states of a CSS transition: the new panel starts at
+   * the class's side and the class is dropped so it slides to rest; the old panel gets the opposite class and slides out.
+   */
+  private slide(popup: HTMLElement, entering: HTMLElement, leaving: HTMLElement, dir: PanelDir, done: () => void): void {
+    const inCls = dir === 'forward' ? 'ytp-panel-animate-forward' : 'ytp-panel-animate-back';
+    const outCls = dir === 'forward' ? 'ytp-panel-animate-back' : 'ytp-panel-animate-forward';
+    // The start state goes on while the panels still have no transition (YouTube's `.ytp-popup-animating` rule gives
+    // them one), or it would be reached by a transition instead of being the starting point.
+    entering.classList.add(inCls);
+    void this.doc.defaultView?.getComputedStyle(entering).transform; // commit it
+    popup.classList.add('ytp-popup-animating');
+    const win = this.doc.defaultView;
+    if (win) win.requestAnimationFrame(() => entering.classList.remove(inCls));
+    else entering.classList.remove(inCls);
+    leaving.classList.add(outCls);
+    const finish = () => {
+      clearTimeout(timer);
+      this.finishAnim = () => undefined;
+      leaving.classList.remove(outCls);
+      popup.style.transition = '';
+      popup.classList.remove('ytp-popup-animating');
+      done();
+    };
+    const timer = setTimeout(finish, PANEL_ANIM_MS + 50);
+    this.finishAnim = finish;
+  }
+
+  /** Grow or shrink the popup to the new panel (animated while sliding, as YouTube does). */
+  private resize(popup: HTMLElement, from: { w: number; h: number }, to: { w: number; h: number }, animate: boolean): void {
+    if (animate && from.w > 0 && from.h > 0) {
+      popup.style.width = `${from.w}px`;
+      popup.style.height = `${from.h}px`;
+      void popup.offsetWidth; // commit the start size so the change below transitions
+      popup.style.transition = `opacity .1s cubic-bezier(0,0,.2,1), width ${PANEL_ANIM_MS}ms cubic-bezier(.4,0,.2,1), height ${PANEL_ANIM_MS}ms cubic-bezier(.4,0,.2,1)`;
     }
+    popup.style.width = `${to.w}px`;
+    popup.style.height = `${to.h}px`;
   }
 
   /** Height the settings popup may have: from the bottom of its anchor up to the player's top (0: unknown). */
@@ -644,21 +697,37 @@ export class YtSettingsMenu implements LyricsMenu {
     }
   }
 
-  private closeSub(): void {
+  /** Leave the submenus; `animate` slides the main panel back in (a click on Back, not a rebuild). */
+  private closeSub(animate = false): void {
+    this.finishAnim();
+    const popup = findSettingsPopup(this.doc);
+    const leaving = this.sub;
+    const main = this.hidden;
+    const before = popup ? { w: popup.offsetWidth, h: popup.offsetHeight } : { w: 0, h: 0 };
     this.path = [];
     this.subKey = '';
-    this.sub?.remove();
     this.sub = null;
-    if (this.hidden) {
-      this.hidden.style.display = '';
-      this.hidden = null;
-    }
-    const popup = findSettingsPopup(this.doc);
-    if (popup && this.saved) {
-      popup.style.width = this.saved.width;
-      popup.style.height = this.saved.height;
-    }
+    this.hidden = null;
+    if (main) main.style.display = '';
+    const saved = this.saved;
     this.saved = null;
+    if (popup && saved) {
+      if (animate && main && leaving) {
+        popup.style.width = '';
+        popup.style.height = '';
+        const to = { w: parseFloat(saved.width) || main.offsetWidth, h: parseFloat(saved.height) || main.offsetHeight };
+        this.resize(popup, before, to, true);
+        this.slide(popup, main, leaving, 'back', () => {
+          leaving.remove();
+          popup.style.width = saved.width;
+          popup.style.height = saved.height;
+        });
+      } else {
+        leaving?.remove();
+        popup.style.width = saved.width;
+        popup.style.height = saved.height;
+      }
+    } else leaving?.remove();
     // Rows may have changed while the submenu was open.
     if (popup) this.ensure();
   }

@@ -231,8 +231,15 @@ function fakePopup(): HTMLElement {
   return document.querySelector<HTMLElement>('.ytp-settings-menu')!;
 }
 
+const reducedMotion = (on: boolean) => {
+  window.matchMedia = ((q: string) => ({ matches: on, media: q })) as unknown as typeof window.matchMedia;
+};
+
 describe('YtSettingsMenu', () => {
-  beforeEach(() => fakePopup());
+  beforeEach(() => {
+    fakePopup();
+    reducedMotion(true); // panels switch at once; the slide has its own test
+  });
   afterEach(() => {
     document.body.replaceChildren();
   });
@@ -244,6 +251,35 @@ describe('YtSettingsMenu', () => {
   const group = () => rowEls()[0];
   const popup = () => document.querySelector<HTMLElement>('.ytp-settings-menu')!;
   const sub = () => document.querySelector<HTMLElement>('[data-am-panel]')!;
+
+  it('slides panels with YouTube’s own classes, then leaves only the new one', () => {
+    vi.useFakeTimers();
+    try {
+      reducedMotion(false);
+      const m = new YtSettingsMenu();
+      setAll(m);
+      m.ensure();
+      const main = document.querySelector<HTMLElement>('.ytp-panel')!;
+      group().click();
+      expect(sub().classList.contains('ytp-panel-animate-forward')).toBe(true); // start state, dropped next frame to slide in
+      vi.advanceTimersByTime(20);
+      expect(sub().classList.contains('ytp-panel-animate-forward')).toBe(false);
+      expect(main.classList.contains('ytp-panel-animate-back')).toBe(true);
+      expect(main.style.display).not.toBe('none'); // still on screen while it slides out
+      expect(popup().classList.contains('ytp-popup-animating')).toBe(true);
+      vi.advanceTimersByTime(400);
+      expect(sub().className).toBe('ytp-panel');
+      expect(popup().classList.contains('ytp-popup-animating')).toBe(false);
+      expect(main.style.display).toBe('none');
+      sub().querySelector<HTMLElement>('.ytp-panel-back-button')!.click();
+      expect(sub().classList.contains('ytp-panel-animate-forward')).toBe(true); // the old panel slides out
+      vi.advanceTimersByTime(400);
+      expect(document.querySelector('[data-am-panel]')).toBeNull();
+      expect(main.style.display).toBe('');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   const settingEl = (id: string) => sub().querySelector<HTMLElement>(`[data-am-row-setting="${id}"]`)!;
   const titles = () => [...document.querySelectorAll('[data-am-panel] .ytp-panel-title')].map((e) => e.textContent);
 
