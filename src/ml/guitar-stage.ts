@@ -7,26 +7,19 @@
 // covers it with slack and the worklet gets a bigger block pool (rof-plan.ts poolFor).
 import { RoformerStream, type RoformerMeta } from './roformer';
 import { makeGeometry, type RofGeometry, type StageShape } from './rof-plan';
-import { ML_QUANTUM, ML_SAMPLE_RATE } from '../worklet/protocol';
+import { ML_QUANTUM } from '../worklet/protocol';
 import type { SplitStage } from './drum-engine';
 import type { ScnetModelFn } from './scnet';
 
 // The guitar model is trained on 11 s chunks and falls apart on short ones: at 1 s it hands over much of the other
 // instruments (spike/bench/guitar_stage_eval.mjs: against the one-pass estimate, 5 dB SDR at 0.9 s, 9 dB at 5.9 s, 11 dB at
-// 9.9 s), so the block is 5.5 s at the least, longer with a longer Delay limit, and the stage adds its whole block to the
-// delay on top of it.
-/** Shortest block: 5.5 s per model run. */
+// 9.9 s), so the block is 5.5 s, and the stage adds its whole block to the delay on top of it. It stays 5.5 s with a longer
+// Delay limit: a run stops the block loop, and its time goes into the slack of every plan (rof-plan.ts), so a 10 s block
+// (twice the run) made the plan fail on GPUs that keep up with a 5.5 s one.
+/** Block: 5.5 s per model run. */
 export const GUITAR_BLOCK = 242432;
 /** 0.5 s overlap between chunks. */
 export const GUITAR_OVERLAP = 22016;
-/** Longest block: 10 s (about 1000 frames; the exported graph holds up to 1700). */
-export const GUITAR_MAX_BLOCK = 441000 - (441000 % 128);
-
-/** The block of the stage for a delay limit (ms; null = the 2 s default): the limit less the overlap, between GUITAR_BLOCK and GUITAR_MAX_BLOCK. */
-export function guitarBlockFor(delayMs: number | null): number {
-  const want = ((delayMs ?? 2000) / 1000) * ML_SAMPLE_RATE - GUITAR_OVERLAP;
-  return Math.min(GUITAR_MAX_BLOCK, Math.max(GUITAR_BLOCK, Math.floor(want / ML_QUANTUM) * ML_QUANTUM));
-}
 
 /** Geometry of the guitar model's chunk. */
 export const guitarGeometry = (block = GUITAR_BLOCK, overlap = GUITAR_OVERLAP): RofGeometry => makeGeometry(block, overlap, 0);
