@@ -28,8 +28,9 @@ describe('normalizeSettings', () => {
       instrumentalPct: 100,
       mlModel: 'mdx',
       splitInstrumental: false,
-      splitModel: 'drums',
+      splitGuitar: false,
       drumsPct: 100,
+      guitarPct: 100,
       othersPct: 100,
       mlDelayS: 2,
       gpu: 'auto',
@@ -40,9 +41,11 @@ describe('normalizeSettings', () => {
     });
     expect(normalizeSettings({ mode: 'weird' }).mode).toBe('default');
   });
-  it('keeps a known split model and falls back to the drum model otherwise', () => {
-    for (const m of ['drums', 'guitar']) expect(normalizeSettings({ splitModel: m }).splitModel).toBe(m);
-    expect(normalizeSettings({ splitModel: 'piano' }).splitModel).toBe('drums');
+  it('keeps the guitar split switch and level valid', () => {
+    expect(normalizeSettings({ splitGuitar: true }).splitGuitar).toBe(true);
+    expect(normalizeSettings({ splitGuitar: 'yes' }).splitGuitar).toBe(false);
+    expect(normalizeSettings({ guitarPct: 40 }).guitarPct).toBe(40);
+    expect(normalizeSettings({ guitarPct: 400 }).guitarPct).toBe(100);
   });
   it('keeps a known GPU preference and falls back to auto otherwise', () => {
     for (const g of ['auto', 'high-performance', 'low-power']) expect(normalizeSettings({ gpu: g }).gpu).toBe(g);
@@ -99,6 +102,7 @@ describe('separationFor', () => {
       vocal: 0,
       instrumental: 0.8,
       drums: 1,
+      guitar: 1,
       others: 1,
       pitchVocal: 0,
       pitchInstrumental: 0,
@@ -118,5 +122,7 @@ describe('separationFor', () => {
     const base = { ...DEFAULT_SETTINGS, mode: 'separate' as const, instrumentalPct: 50, drumsPct: 200, othersPct: 25 };
     expect(separationFor(base)).toMatchObject({ instrumental: 0.5, drums: 1, others: 1 });
     expect(separationFor({ ...base, splitInstrumental: true })).toMatchObject({ instrumental: 0.5, drums: 2, others: 0.25 });
+    expect(separationFor({ ...base, splitGuitar: true, guitarPct: 30 })).toMatchObject({ instrumental: 0.5, drums: 1, guitar: 0.3, others: 0.25 });
+    expect(separationFor({ ...base, splitInstrumental: true, splitGuitar: true, guitarPct: 30 })).toMatchObject({ drums: 2, guitar: 0.3, others: 0.25 });
   });
 });

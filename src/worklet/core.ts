@@ -99,6 +99,9 @@ export class SeparatorCore {
   /** Drums, a part of the instrumental (only filled when the geometry has the drum stage). */
   private mlDL = new Float32Array(RING);
   private mlDR = new Float32Array(RING);
+  /** Guitar, another part of the instrumental (only filled when the geometry has the guitar stage). */
+  private mlGL = new Float32Array(RING);
+  private mlGR = new Float32Array(RING);
   /** Absolute start of the ML block held in each slot (NaN = empty). */
   private slotStart = new Float64Array(SLOTS).fill(NaN);
 
@@ -188,6 +191,8 @@ export class SeparatorCore {
     this.mlSR = new Float32Array(ring);
     this.mlDL = new Float32Array(g.drums ? ring : 0);
     this.mlDR = new Float32Array(g.drums ? ring : 0);
+    this.mlGL = new Float32Array(g.guitar ? ring : 0);
+    this.mlGR = new Float32Array(g.guitar ? ring : 0);
     this.slotStart = new Float64Array(this.slots).fill(NaN);
     this.pool = [];
     for (let i = 0; i < (g.pool ?? POOL); i++) this.pool.push(entry(new ArrayBuffer(bufferBytes(g)), g.block, planesFor(g)));
@@ -260,8 +265,8 @@ export class SeparatorCore {
   /**
    * One render quantum (QUANTUM frames); `time` is the context time of its first frame.
    * Writes the delayed vocal and instrumental stems and the bypass weight per sample
-   * (0 = ML stems, 1 = original mix). `drL` / `drR` (optional) get the drums, the part of the instrumental that the
-   * drum stage took out (zero without it); the instrumental stays whole.
+   * (0 = ML stems, 1 = original mix). `drL` / `drR` and `guL` / `guR` (optional) get the drums and the guitar, the parts
+   * of the instrumental that the drum and guitar stages took out (zero without them); the instrumental stays whole.
    */
   process(
     inL: Float32Array,
@@ -274,6 +279,8 @@ export class SeparatorCore {
     time: number,
     drL?: Float32Array,
     drR?: Float32Array,
+    guL?: Float32Array,
+    guR?: Float32Array,
   ): void {
     if (!this.active) {
       vocL.fill(0);
@@ -283,6 +290,8 @@ export class SeparatorCore {
       byp.fill(0);
       drL?.fill(0);
       drR?.fill(0);
+      guL?.fill(0);
+      guR?.fill(0);
       return;
     }
     const pos = this.pos;
@@ -300,6 +309,8 @@ export class SeparatorCore {
       byp.fill(0);
       drL?.fill(0);
       drR?.fill(0);
+      guL?.fill(0);
+      guR?.fill(0);
       return;
     }
     // Fade-out quantum with audio pending in the ring: read it, consume nothing.
@@ -337,8 +348,9 @@ export class SeparatorCore {
     const dE = (target - env0) / QUANTUM;
     const w0 = this.w0;
     const dW = (this.w1 - w0) / QUANTUM;
-    const { dryL, dryR, mlL, mlR, mlSL, mlSR, mlDL, mlDR, mask } = this;
+    const { dryL, dryR, mlL, mlR, mlSL, mlSR, mlDL, mlDR, mlGL, mlGR, mask } = this;
     const drums = this.g.drums === true && drL !== undefined && drR !== undefined;
+    const guitar = this.g.guitar === true && guL !== undefined && guR !== undefined;
     for (let i = 0; i < QUANTUM; i++) {
       const j = (r0 + i) & mask;
       const e = env0 + dE * (i + 1);
@@ -352,10 +364,18 @@ export class SeparatorCore {
         drL[i] = e * w * mlDL[j];
         drR[i] = e * w * mlDR[j];
       }
+      if (guitar) {
+        guL[i] = e * w * mlGL[j];
+        guR[i] = e * w * mlGR[j];
+      }
     }
     if (!drums) {
       drL?.fill(0);
       drR?.fill(0);
+    }
+    if (!guitar) {
+      guL?.fill(0);
+      guR?.fill(0);
     }
     this.env = target;
 
@@ -507,9 +527,15 @@ export class SeparatorCore {
         this.mlR[j] = live ? e.data[block + i] : 0;
         this.mlSL[j] = live ? e.data[2 * block + i] : 0;
         this.mlSR[j] = live ? e.data[3 * block + i] : 0;
+        let plane = 4;
         if (this.g.drums) {
-          this.mlDL[j] = live ? e.data[4 * block + i] : 0;
-          this.mlDR[j] = live ? e.data[5 * block + i] : 0;
+          this.mlDL[j] = live ? e.data[plane * block + i] : 0;
+          this.mlDR[j] = live ? e.data[(plane + 1) * block + i] : 0;
+          plane += 2;
+        }
+        if (this.g.guitar) {
+          this.mlGL[j] = live ? e.data[plane * block + i] : 0;
+          this.mlGR[j] = live ? e.data[(plane + 1) * block + i] : 0;
         }
       }
       this.slotStart[(rel / block) & (this.slots - 1)] = start;

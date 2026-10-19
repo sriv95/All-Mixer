@@ -1,5 +1,4 @@
 import { useEffect, useReducer, useState } from 'react';
-import type { SplitModel } from '../worklet/protocol';
 import { MODEL_IDS, MODEL_LABEL, VOCAL_MODEL_IDS, keyInstalled, keyProgress, keyRemote, mb, modelState, type InstalledModel, type ModelId, type ModelState, type Progress, type RemoteRecord } from '../shared/model-store';
 
 // The RoFormer models are separate downloads (background/model-manager.ts); their state lives in chrome.storage.local.
@@ -40,8 +39,8 @@ function modelLine(id: ModelId, s: ModelState): Omit<ModelLine, 'id'> {
 }
 
 /** The state of the downloadable models, kept live from chrome.storage.local. */
-/** `split`: the model of the split while Split instrumental is on, else null. */
-export function useModels(selected: string, split: SplitModel | null, enabled: boolean): { model?: ModelLine; drums?: ModelLine; guitar?: ModelLine } {
+/** `split`: which split stages are on. */
+export function useModels(selected: string, split: { drums: boolean; guitar: boolean }, enabled: boolean): { model?: ModelLine; drums?: ModelLine; guitar?: ModelLine } {
   const [records, setRecords] = useState<AllRecords>({ roformer: {}, deux: {}, drums: {}, guitar: {} });
   const [, tick] = useReducer((n: number) => n + 1, 0);
 
@@ -91,7 +90,7 @@ export function useModels(selected: string, split: SplitModel | null, enabled: b
   // A split model: shown while the split is on with it, or when an update is on offer or a download is running.
   for (const sid of ['drums', 'guitar'] as const) {
     const s = states[sid];
-    if (split === sid || s.kind === 'update' || s.kind === 'downloading') out[sid] = { id: sid, ...modelLine(sid, s) };
+    if (split[sid] || s.kind === 'update' || s.kind === 'downloading') out[sid] = { id: sid, ...modelLine(sid, s) };
   }
   return out;
 }

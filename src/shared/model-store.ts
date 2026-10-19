@@ -21,7 +21,7 @@ export const CHUNK = 8 * 2 ** 20;
 /**
  * The downloadable models. 'roformer' and 'deux' are the Model menu entries (src/worklet/protocol.ts MlModel);
  * 'drums' is SCNet Tran Small, the model of Split instrumental (src/ml/scnet.ts). 'guitar' is becruily's Mel-Band
- * RoFormer guitar stem model; it can take the place of the drum model there (src/ml/guitar-stage.ts).
+ * RoFormer guitar stem model, a second stem of Split instrumental next to the drums (src/ml/guitar-stage.ts).
  */
 export type ModelId = 'roformer' | 'deux' | 'drums' | 'guitar';
 export const MODEL_IDS: readonly ModelId[] = ['roformer', 'deux', 'drums', 'guitar'];

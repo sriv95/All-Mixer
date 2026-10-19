@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ML_BLOCK, ML_QUANTUM, ML_RESULT_OFFSET, ML_SAMPLE_RATE, ROF_BLOCK, ROF_CHUNK, ROF_LATENCY_SAMPLES, ROF_OVERLAP } from '../worklet/protocol';
-import { BASE_FRAMES, HOP, MARGIN, MAX_FRAMES, OVERLAP, drumRuns, gateMs, makeGeometry, planMdxDrums, planRof, poolFor, stepMs } from './rof-plan';
+import { BASE_FRAMES, DRUM_STAGE, HOP, MARGIN, MAX_FRAMES, OVERLAP, drumRuns, gateMs, makeGeometry, planMdxDrums, planRof, poolFor, stagesLag, stepMs } from './rof-plan';
 import { SC_LAG, SC_STRIDE } from './scnet';
 
 const S = ML_SAMPLE_RATE;
@@ -74,12 +74,12 @@ describe('planRof with another split stage (guitar)', () => {
   const FAST = 200, GUITAR_MS = 120;
   it('the stage shape sets the wait and the number of runs', () => {
     const stage = { stride: 39680, lag: 48512 };
-    const g = planRof(10 * S, FAST, GUITAR_MS, stage)!;
+    const g = planRof(10 * S, FAST, [{ ...stage, ms: GUITAR_MS }])!;
     expect(g.extra).toBe(48512);
     expect(g.slack).toBeGreaterThanOrEqual(Math.floor((MARGIN * (stepMs(g.frames, FAST) + drumRuns(g.block, 39680) * GUITAR_MS) * S) / 1000));
     expect(drumRuns(39679, 39680)).toBe(1);
     expect(drumRuns(39680, 39680)).toBe(2);
-    expect(planMdxDrums(100, GUITAR_MS, stage)!.resultOffset).toBe(ML_RESULT_OFFSET + 48512);
+    expect(planMdxDrums(100, [{ ...stage, ms: GUITAR_MS }])!.resultOffset).toBe(ML_RESULT_OFFSET + 48512);
   });
   it('a stage run that stops the block loop for several blocks needs a bigger buffer pool, never fewer than 4 or more than 16', () => {
     expect(poolFor(800, 778)).toBe(5);
@@ -90,10 +90,11 @@ describe('planRof with another split stage (guitar)', () => {
 });
 
 describe('planRof with the drum stage', () => {
-  const FAST = 200, DRUM = 250; // a desktop-class GPU: Kim FT at 112 frames, one SCNet Tran run (an M1 measured 717 and 820)
+  const FAST = 200, DRUM = 250;
+  const drum = (ms: number) => [{ ...DRUM_STAGE, ms }]; // a desktop-class GPU: Kim FT at 112 frames, one SCNet Tran run (an M1 measured 717 and 820)
   it('drums add the wait for the chunk to the delay, and their runs to the step', () => {
     expect(planRof(10 * S, FAST)!.extra).toBe(0);
-    const g = planRof(10 * S, FAST, DRUM)!;
+    const g = planRof(10 * S, FAST, drum(DRUM))!;
     expect(g).not.toBeNull();
     expect(g.extra).toBe(SC_LAG);
     expect(g.latency).toBe(g.block + g.overlap + g.extra + g.slack + ML_QUANTUM);
@@ -103,15 +104,15 @@ describe('planRof with the drum stage', () => {
     for (const v of [g.block, g.overlap, g.extra, g.slack, g.latency]) expect(v % ML_QUANTUM).toBe(0);
   });
   it('the same budget gives a shorter block with drums', () => {
-    expect(planRof(10 * S, FAST, DRUM)!.block).toBeLessThan(planRof(10 * S, FAST)!.block);
+    expect(planRof(10 * S, FAST, drum(DRUM))!.block).toBeLessThan(planRof(10 * S, FAST)!.block);
   });
   it('the drum wait is on top of the budget, and a GPU that cannot do both in real time never plans (an M1 with the High quality model)', () => {
-    const g = planRof(2 * S, FAST, DRUM)!;
+    const g = planRof(2 * S, FAST, drum(DRUM))!;
     expect(g.latency).toBe(g.block + g.overlap + g.slack + ML_QUANTUM + SC_LAG);
-    expect(planRof(15 * S, 717, 820)).toBeNull();
+    expect(planRof(15 * S, 717, drum(820))).toBeNull();
   });
   it('a slower GPU needs a longer budget', () => {
-    const need = (base: number, drum: number) => [...Array(14).keys()].map((i) => i + 2).find((s) => planRof(s * S, base, drum));
+    const need = (base: number, drum: number) => [...Array(14).keys()].map((i) => i + 2).find((s) => planRof(s * S, base, [{ ...DRUM_STAGE, ms: drum }]));
     expect(need(400, 500)).toBeGreaterThan(need(200, 250)!);
   });
   it('a block of more than one stride runs the drum model more than once', () => {
@@ -122,18 +123,33 @@ describe('planRof with the drum stage', () => {
 
 describe('planMdxDrums', () => {
   it('keeps the MDX block and adds the drum wait; the slack covers a step with a drum run', () => {
-    const g = planMdxDrums(143, 820)!; // MDX block step and one SCNet Tran run, measured on an M1
+    const g = planMdxDrums(143, [{ ...DRUM_STAGE, ms: 820 }])!; // MDX block step and one SCNet Tran run, measured on an M1
     expect(g).not.toBeNull();
     expect(g.block).toBe(ML_BLOCK);
     expect(g.resultOffset).toBe(ML_RESULT_OFFSET + SC_LAG);
-    expect(g.drums).toBe(true);
     const slack = g.latency - g.block - g.resultOffset - ML_QUANTUM;
     expect(slack).toBeGreaterThanOrEqual(Math.floor((MARGIN * (143 + 820) * S) / 1000));
     for (const v of [g.block, g.resultOffset, g.latency]) expect(v % ML_QUANTUM).toBe(0);
     expect(g.latency / S).toBeLessThan(8); // an M1: about 6 s in all
   });
   it('null when the load of both models is over the block period', () => {
-    expect(planMdxDrums(143, 820 * 3)).toBeNull();
-    expect(planMdxDrums(700, 820)).toBeNull();
+    expect(planMdxDrums(143, [{ ...DRUM_STAGE, ms: 820 * 3 }])).toBeNull();
+    expect(planMdxDrums(700, [{ ...DRUM_STAGE, ms: 820 }])).toBeNull();
+  });
+});
+
+describe('drums and guitar together', () => {
+  const guitar = { stride: 242432, lag: 264448, ms: 2400 };
+  const drums = { ...DRUM_STAGE, ms: 400 };
+  it('the wait is the longest stage lag; their runs and their load add up', () => {
+    expect(stagesLag([drums, guitar])).toBe(264448);
+    expect(stagesLag([])).toBe(0);
+    const both = planMdxDrums(100, [drums, guitar])!;
+    expect(both.resultOffset).toBe(ML_RESULT_OFFSET + 264448);
+    const only = planMdxDrums(100, [guitar])!;
+    expect(both.latency).toBeGreaterThan(only.latency); // the slack covers the drum run too
+    expect(planMdxDrums(100, [{ ...drums, ms: 5000 }, guitar])).toBeNull();
+    const g = planRof(10 * S, 200, [{ ...drums, ms: 250 }, { ...guitar, ms: 600 }])!;
+    expect(g.extra).toBe(264448);
   });
 });
