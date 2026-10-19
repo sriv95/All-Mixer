@@ -1,6 +1,7 @@
 import {
   GEOMETRY,
   type FromMlWorker,
+  type GpuPreference,
   type MlEngine,
   type MlGeometry,
   type MlModel,
@@ -51,6 +52,8 @@ export interface SelectorRequest {
   delayMs?: number | null;
   /** Split the instrumental (drum stage, needs the drum model); changing it while on restarts the probe. */
   drums?: boolean;
+  /** GPU preference; changing it while on restarts the probe. Default 'auto'. */
+  gpu?: GpuPreference;
 }
 
 const RATE_CAUSE = 'the audio context is not at 44.1 kHz';
@@ -65,6 +68,7 @@ interface Warm {
   model: MlModel;
   delayMs: number | null;
   drums: boolean;
+  gpu: GpuPreference;
   geometry: MlGeometry;
 }
 
@@ -81,6 +85,7 @@ export class EngineSelector {
   private model: MlModel = 'mdx';
   private delayMs: number | null = null;
   private drums = false;
+  private gpu: GpuPreference = 'auto';
   private choice: EngineChoice = { state: 'off' };
   /** Set while the host in `host` has passed its warm-up (cleared with the host). */
   private warm: Warm | null = null;
@@ -88,7 +93,7 @@ export class EngineSelector {
 
   constructor(
     private readonly chain: EngineChain,
-    private readonly createHost: (model: MlModel, delayMs: number | null, drums: boolean) => MlHostLike = (model, delayMs, drums) => new MlHost(undefined, undefined, model, delayMs, drums),
+    private readonly createHost: (model: MlModel, delayMs: number | null, drums: boolean, gpu: GpuPreference) => MlHostLike = (model, delayMs, drums, gpu) => new MlHost(undefined, undefined, model, delayMs, drums, gpu),
   ) {
     chain.onLatencyChange((info) => {
       if (this.mlActive && info.engine === 'bypass' && info.reason === 'deadline-miss') {
@@ -116,10 +121,12 @@ export class EngineSelector {
     const model = req.model ?? 'mdx';
     const delayMs = req.delayMs ?? null;
     const drums = req.drums === true;
-    const restart = req.on && this.on && (model !== this.model || delayMs !== this.delayMs || drums !== this.drums);
+    const gpu = req.gpu ?? 'auto';
+    const restart = req.on && this.on && (model !== this.model || delayMs !== this.delayMs || drums !== this.drums || gpu !== this.gpu);
     this.model = model;
     this.delayMs = delayMs;
     this.drums = drums;
+    this.gpu = gpu;
     this.on = req.on;
     if (!req.on) {
       if (this.mlActive) this.chain.setEngine('bypass', 'auto');
@@ -129,9 +136,9 @@ export class EngineSelector {
       this.setChoice({ state: 'off' });
       return;
     }
-    if (turnedOn && this.warm && this.resume(model, delayMs, drums)) return;
+    if (turnedOn && this.warm && this.resume(model, delayMs, drums, gpu)) return;
     if (restart) {
-      // A new model, delay budget or drum split: back to the original mix, drop the old host, probe again.
+      // A new model, delay budget, drum split or GPU: back to the original mix, drop the old host, probe again.
       if (this.mlActive) this.chain.setEngine('bypass', 'auto');
       this.disposeHost();
       this.mlActive = false;
@@ -143,8 +150,8 @@ export class EngineSelector {
   private probe(): void {
     if (!this.chain.canRunMl()) return this.giveUp(RATE_CAUSE);
     const model = this.model;
-    const { delayMs, drums } = this;
-    const host = this.createHost(model, delayMs, drums);
+    const { delayMs, drums, gpu } = this;
+    const host = this.createHost(model, delayMs, drums, gpu);
     this.host = host;
     this.probing = true;
     this.setChoice({ state: 'warming' });
@@ -156,7 +163,7 @@ export class EngineSelector {
       if (m.geometry) this.chain.setMlGeometry(m.geometry);
       else if (m.p90 >= GEOMETRY[model].warmupP90Ms) return this.giveUp(`too slow on this device (p90 ${m.p90.toFixed(1)} ms)`);
       if (!this.chain.setEngine('ml', 'auto')) return this.giveUp(RATE_CAUSE);
-      this.warm = { model, delayMs, drums, geometry: m.geometry ?? GEOMETRY[model] };
+      this.warm = { model, delayMs, drums, gpu, geometry: m.geometry ?? GEOMETRY[model] };
       this.mlActive = true;
       this.setChoice({ state: 'on' });
     });
@@ -167,10 +174,10 @@ export class EngineSelector {
   }
 
   /** Separate turned on again while a warmed-up host is kept: use it if it was made for these settings. */
-  private resume(model: MlModel, delayMs: number | null, drums: boolean): boolean {
+  private resume(model: MlModel, delayMs: number | null, drums: boolean, gpu: GpuPreference): boolean {
     const w = this.warm!;
     clearTimeout(this.idleTimer);
-    if (w.model === model && w.delayMs === delayMs && w.drums === drums) {
+    if (w.model === model && w.delayMs === delayMs && w.drums === drums && w.gpu === gpu) {
       this.chain.setMlGeometry(w.geometry);
       if (this.chain.setEngine('ml', 'auto')) {
         this.mlActive = true;

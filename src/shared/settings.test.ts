@@ -31,12 +31,17 @@ describe('normalizeSettings', () => {
       drumsPct: 100,
       othersPct: 100,
       mlDelayS: 2,
+      gpu: 'auto',
       pitch: 0,
       pitchSplit: false,
       vocalPitch: 0,
       instrPitch: 0,
     });
     expect(normalizeSettings({ mode: 'weird' }).mode).toBe('default');
+  });
+  it('keeps a known GPU preference and falls back to auto otherwise', () => {
+    for (const g of ['auto', 'high-performance', 'low-power']) expect(normalizeSettings({ gpu: g }).gpu).toBe(g);
+    expect(normalizeSettings({ gpu: 'nvidia' }).gpu).toBe('auto');
   });
   it('keeps a known ML model and falls back to mdx otherwise', () => {
     for (const m of ['roformer', 'deux']) expect(normalizeSettings({ mlModel: m }).mlModel).toBe(m);

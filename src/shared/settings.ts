@@ -1,4 +1,4 @@
-import { ML_MODELS, type MlModel } from '../worklet/protocol';
+import { GPU_PREFERENCES, ML_MODELS, type GpuPreference, type MlModel } from '../worklet/protocol';
 import { MAX_DELAY_S, MIN_DELAY_S } from '../ml/rof-plan';
 
 export type Mode = 'default' | 'separate';
@@ -22,6 +22,8 @@ export interface MixerSettings {
   othersPct: number;
   /** Delay limit, seconds (MIN_DELAY_S to MAX_DELAY_S): the audio delay stays below it (the drum split adds its own wait on top); a longer limit gives the model a longer chunk. */
   mlDelayS: number;
+  /** Which GPU Separate mode prefers: the browser's choice, the fast one or the power-saving one. */
+  gpu: GpuPreference;
   /** Global pitch, semitones (−PITCH_MAX to +PITCH_MAX), the same in both modes; the tempo does not change. */
   pitch: number;
   /** Separate mode (Advanced): the vocal and the instrumental get their own pitch instead of the global one. */
@@ -45,6 +47,7 @@ export const DEFAULT_SETTINGS: Readonly<MixerSettings> = Object.freeze({
   drumsPct: 100,
   othersPct: 100,
   mlDelayS: MIN_DELAY_S,
+  gpu: 'auto',
   pitch: 0,
   pitchSplit: false,
   vocalPitch: 0,
@@ -110,6 +113,7 @@ export function normalizeSettings(raw: unknown): MixerSettings {
     drumsPct: clampPct(r.drumsPct, DEFAULT_SETTINGS.drumsPct),
     othersPct: clampOthersPct(r.othersPct),
     mlDelayS: clampDelayS(r.mlDelayS),
+    gpu: GPU_PREFERENCES.includes(r.gpu as GpuPreference) ? (r.gpu as GpuPreference) : DEFAULT_SETTINGS.gpu,
     pitch: clampPitch(r.pitch),
     pitchSplit: r.pitchSplit === true,
     vocalPitch: clampPitch(r.vocalPitch),

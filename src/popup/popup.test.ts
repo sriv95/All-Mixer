@@ -208,7 +208,7 @@ describe('popup', () => {
     await load({ stored: { mode: 'separate', separationQuality: 'light' } });
     expect(has('separation-quality')).toBe(false);
     expect(document.querySelectorAll('select')).toHaveLength(0);
-    expect(document.querySelectorAll('[role=combobox]')).toHaveLength(1);
+    expect(document.querySelectorAll('[role=combobox]')).toHaveLength(2); // model and GPU
   });
 
   describe('model dropdown', () => {
@@ -266,7 +266,7 @@ describe('popup', () => {
     it('holds the model and delay controls and is closed by default', async () => {
       await load({ stored: { mode: 'separate' } });
       expect(isOpen('advanced')).toBe(false);
-      for (const id of ['ml-model', 'chunk-row', 'ml-delay']) expect(adv().contains(el(id))).toBe(true);
+      for (const id of ['ml-model', 'ml-gpu', 'chunk-row', 'ml-delay']) expect(adv().contains(el(id))).toBe(true);
       expect(adv().contains(el('vocal'))).toBe(false);
     });
     it('opens by itself when a non-default model is in use', async () => {
@@ -675,6 +675,15 @@ describe('popup', () => {
         el('act-default-model').click();
         await settle();
         expect(sent().at(-1).settings.mlModel).toBe('mdx');
+      });
+
+      it('offers the high performance GPU unless it is already chosen', async () => {
+        await load({ stored: { mode: 'separate' }, status: stopped });
+        el('act-fast-gpu').click();
+        await settle();
+        expect(sent().at(-1).settings.gpu).toBe('high-performance');
+        await load({ stored: { mode: 'separate', gpu: 'high-performance' }, status: stopped });
+        expect(has('act-fast-gpu')).toBe(false);
       });
 
       it('Try again turns Separate off and on again', async () => {

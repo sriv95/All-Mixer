@@ -87,7 +87,7 @@ export const ML_BUFFER_BYTES = ML_HEADER_BYTES + 4 * ML_BLOCK * 4;
 /** Control messages between the content script and the ML worker (via the ml.html iframe). */
 export const ML_PAGE_PATH = 'ml/ml.html';
 export const ML_INIT = 'all-mixer-ml-init';
-/** The ML_INIT message also carries `model: MlModel`, `delayMs` (the delay budget: it sets the RoFormer chunk and the MDX segment; null = the 2 s default) and `drums` (split the instrumental). */
+/** The ML_INIT message also carries `model: MlModel`, `delayMs` (the delay budget: it sets the RoFormer chunk and the MDX segment; null = the 2 s default) and `drums` (split the instrumental) and `gpu: GpuPreference`. */
 /** Warm-up gate: p90 of 20 timed runs (ignores the two slowest) of one MDX block step (analyze + model + synthesize) must leave ≥ 1.5× in the 319 ms compute slack (~213 ms). The runtime deadline-miss fallback is the final guard. */
 export const ML_WARMUP_P90_MS = (ML_SLACK_SAMPLES / ML_SAMPLE_RATE) * 1000 / 1.5;
 
@@ -98,6 +98,9 @@ export const ML_WARMUP_P90_MS = (ML_SLACK_SAMPLES / ML_SAMPLE_RATE) * 1000 / 1.5
  * 'deux' = becruily's 2-stem model, vocal stem (menu: Best quality, needs a good GPU).
  */
 export type MlModel = 'mdx' | 'roformer' | 'deux';
+/** Which GPU the ML worker asks WebGPU for. Chrome cannot list adapters, only prefer one: 'auto' leaves the choice to the browser. */
+export type GpuPreference = 'auto' | 'high-performance' | 'low-power';
+export const GPU_PREFERENCES: readonly GpuPreference[] = ['auto', 'high-performance', 'low-power'];
 export const ML_MODELS: readonly MlModel[] = ['mdx', 'roformer', 'deux'];
 
 /** Block geometry of one model: what the worklet, the worker and the delay math must agree on. */
@@ -166,7 +169,7 @@ export type FromMlWorker =
   | { type: 'unavailable'; reason: string };
 
 /** Page → worker init (iframe page forwards the ML port from the content script). */
-export type MlWorkerInit = { type: 'init'; speeds?: SpeedCache; appVersion?: string; model: MlModel; port: MessagePort; modelUrl: string; mdxUrl: string; installed?: InstalledModel; delayMs?: number | null; drums?: boolean; drumsInstalled?: InstalledModel; wasmBase: string; stallMs?: number; stallAfterMs?: number; timing?: boolean };
+export type MlWorkerInit = { type: 'init'; speeds?: SpeedCache; appVersion?: string; model: MlModel; port: MessagePort; modelUrl: string; mdxUrl: string; installed?: InstalledModel; delayMs?: number | null; drums?: boolean; gpu?: GpuPreference; drumsInstalled?: InstalledModel; wasmBase: string; stallMs?: number; stallAfterMs?: number; timing?: boolean };
 
 /** Pitch AudioParams (semitones): the vocal and the instrumental get their own shifter (src/worklet/pitch-shifter.ts). */
 export const PARAM_VOCAL_PITCH = 'vocalPitch';

@@ -1,4 +1,4 @@
-import { ML_INIT, ML_PAGE_PATH, type FromMlWorker, type MlModel, type ToMlWorker } from '../../worklet/protocol';
+import { ML_INIT, ML_PAGE_PATH, type FromMlWorker, type GpuPreference, type MlModel, type ToMlWorker } from '../../worklet/protocol';
 
 /**
  * Owns the hidden extension iframe (ml/ml.html) that hosts the ML worker, and the channel to it.
@@ -18,6 +18,7 @@ export class MlHost {
     private readonly model: MlModel = 'mdx',
     private readonly delayMs: number | null = null,
     private readonly drums: boolean = false,
+    private readonly gpu: GpuPreference = 'auto',
   ) {
     this.origin = /^[a-z-]+:\/\/[^/]+/.exec(pageUrl)?.[0] ?? '';
   }
@@ -46,7 +47,7 @@ export class MlHost {
     window.addEventListener('message', this.onMessage);
     frame.addEventListener('load', () => {
       if (this.frame !== frame) return;
-      frame.contentWindow?.postMessage({ type: ML_INIT, model: this.model, delayMs: this.delayMs, drums: this.drums }, origin, [channel.port2]);
+      frame.contentWindow?.postMessage({ type: ML_INIT, model: this.model, delayMs: this.delayMs, drums: this.drums, gpu: this.gpu }, origin, [channel.port2]);
     });
     (this.doc.body ?? this.doc.documentElement).appendChild(frame);
     return channel.port1;

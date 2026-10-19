@@ -1,10 +1,10 @@
 import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { AudioLines, AudioWaveform, Cpu, Download, Drum, LoaderCircle, Maximize2, Mic, Minimize2, MicOff, Music, RefreshCw, RotateCcw, Settings2, SlidersVertical, Timer, TriangleAlert, Undo2, Volume2 } from 'lucide-react';
+import { AudioLines, AudioWaveform, Cpu, Download, Drum, LoaderCircle, Maximize2, Mic, Minimize2, MicOff, Music, RefreshCw, RotateCcw, Settings2, SlidersVertical, Timer, TriangleAlert, Undo2, Volume2, Zap } from 'lucide-react';
 import type { ContentStatus, GetStatus, GetTabSettings, SetTabSettings } from '../shared/messages';
 import { clampDelayS, clampOthersPct, clampPct, clampPitch, masterPctAt, masterPosOf, MASTER_POS_MAX, normalizeSettings, PITCH_MAX, type MixerSettings, type Mode } from '../shared/settings';
 import { separationView, type SepView } from '../shared/separation-view';
 import { MAX_DELAY_S, MIN_DELAY_S } from '../ml/rof-plan';
-import type { MlModel } from '../worklet/protocol';
+import type { GpuPreference, MlModel } from '../worklet/protocol';
 import { installModel, useModels, type ModelLine } from './models';
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
 import { Blocked, Btn, Card, Collapse, Disclosure, PitchStepper, Rise, Roll, Select, Skeleton, Slider, SliderRow, Switch, Tip, fade, slide, useGlide, type Choice } from './ui';
@@ -315,6 +315,7 @@ function Banner({ view, settings, update, retry, compact }: { compact: boolean; 
         <div className="flex flex-col gap-2.5 pt-0.5">
           {settings.mlModel !== 'mdx' && <Btn tone="primary" id="act-default-model" onClick={() => update({ mlModel: 'mdx' as MlModel })}><Cpu size={16} aria-hidden />Switch to Default model</Btn>}
           {settings.mlDelayS < MAX_DELAY_S && <Btn id="act-raise-delay" onClick={() => update({ mlDelayS: nextDelay })}><Timer size={16} aria-hidden />Raise delay limit to {nextDelay} s</Btn>}
+          {settings.gpu !== 'high-performance' && <Btn id="act-fast-gpu" onClick={() => update({ gpu: 'high-performance' })}><Zap size={16} aria-hidden />Try the high performance GPU</Btn>}
           <Btn id="act-retry" onClick={() => void retry()}><RefreshCw size={16} aria-hidden />Try again</Btn>
         </div>
       </Collapse>
@@ -326,6 +327,12 @@ const MODEL_CHOICES: readonly Choice<MlModel>[] = [
   { value: 'mdx', label: 'Default' },
   { value: 'roformer', label: 'High quality', hint: 'Optional download' },
   { value: 'deux', label: 'Best quality', hint: 'Needs a good GPU, optional download' },
+];
+
+const GPU_CHOICES: readonly Choice<GpuPreference>[] = [
+  { value: 'auto', label: 'Automatic' },
+  { value: 'high-performance', label: 'High performance', hint: 'The fast GPU, if there are two' },
+  { value: 'low-power', label: 'Low power', hint: 'The built-in GPU, if there are two' },
 ];
 
 type Levels = Pick<MixerSettings, 'vocalPct' | 'instrumentalPct' | 'drumsPct' | 'othersPct'>;
@@ -425,6 +432,10 @@ function SeparateControls({ settings, update, ready, compact, advancedOpen, setA
             <Select id="ml-model" value={settings.mlModel} options={MODEL_CHOICES} onValue={(mlModel) => update({ mlModel })} />
           </div>
           <Collapse show={!!models.model}>{models.model && <ModelRow idPrefix="model" line={models.model} />}</Collapse>
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="ml-gpu" className="text-[13px] font-bold">GPU</label>
+            <Select id="ml-gpu" value={settings.gpu} options={GPU_CHOICES} onValue={(gpu) => update({ gpu })} />
+          </div>
           <div id="chunk-row" className="flex flex-col gap-3">
             <SliderRow id="ml-delay" icon={<Timer size={15} />} label="Delay limit" unit=" s" value={delayDraft} min={MIN_DELAY_S} max={MAX_DELAY_S} step={1} onValue={(v) => setDelayDraft(clampDelayS(v))} />
             <div className="flex items-center justify-between gap-3">
@@ -444,7 +455,7 @@ function SeparateControls({ settings, update, ready, compact, advancedOpen, setA
                 <label htmlFor="split-on" className="text-[13px] font-bold">Drums</label>
                 <Switch id="split-on" checked={settings.splitInstrumental} onChange={(on) => update({ splitInstrumental: on })} />
               </div>
-              <p className="m-0 text-xs leading-snug text-muted">Splitting the instrumental adds more delay over the Delay limit.</p>
+              <p className="m-0 text-xs leading-snug text-muted">Each extra split uses more GPU and adds more delay over the Delay limit.</p>
               <Collapse show={!!models.drums}>{models.drums && <ModelRow idPrefix="drums" line={models.drums} />}</Collapse>
             </div>
           </Disclosure>
