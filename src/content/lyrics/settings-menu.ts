@@ -9,6 +9,8 @@ interface MenuOption {
   value: string;
   label: string;
   disabled?: boolean;
+  /** An action among the choices (never selected): it runs when picked and may return a short confirmation. */
+  run?(): string | void;
 }
 
 export interface MenuRow {
@@ -221,10 +223,15 @@ export function buildMenuRows(input: MenuInput, actions: MenuActions): MenuRow[]
       ['lrclib', 'LRCLIB', sources.available.lrclib, ' (not found)'],
       ['captions', 'YouTube captions', sources.available.captions, ' (none)'],
     ];
+    const options: MenuOption[] = entries.map(([value, label, ok, hint]) => ({ value, label: ok ? label : label + hint, disabled: !ok }));
+    // www: finding or pasting other lyrics sits among the sources, before the YouTube captions.
+    if (!ytm && input.canEdit) {
+      options.splice(2, 0, { value: 'findLyrics', label: 'Find other lyrics…', run: () => actions.findLyrics() }, { value: 'myLyrics', label: 'Use my own lyrics…', run: () => actions.myLyrics() });
+    }
     source.push({
       id: 'source',
       label: ytm ? 'Lyrics source' : 'Source',
-      options: entries.map(([value, label, ok, hint]) => ({ value, label: ok ? label : label + hint, disabled: !ok })),
+      options,
       selected: sources.pref,
       ...(sources.fellBack ? { note: FALLBACK_NOTES[sources.fellBack] } : {}),
       select: (v) => actions.selectSource(v as SourcePref),
@@ -265,7 +272,7 @@ export function buildMenuRows(input: MenuInput, actions: MenuActions): MenuRow[]
   const exportActions: MenuRow[] = [];
   if (input.lyrics) exportActions.push(action('copyLyrics', 'Copy lyrics', () => actions.copyLyrics()));
   if (input.lyrics?.synced) exportActions.push(action('saveLrc', 'Save as .lrc', () => actions.saveLrc()));
-  const edit: MenuRow[] = input.canEdit
+  const edit: MenuRow[] = input.canEdit && (ytm || !sources)
     ? [action('findLyrics', 'Find other lyrics…', () => actions.findLyrics()), action('myLyrics', 'Use my own lyrics…', () => actions.myLyrics())]
     : [];
 
@@ -273,7 +280,7 @@ export function buildMenuRows(input: MenuInput, actions: MenuActions): MenuRow[]
 
   const sourceOptions: MenuRow[] = [...timing];
   if (exportActions.length) sourceOptions.push({ id: 'exportLyrics', label: 'Export lyrics', options: [], selected: '', rows: exportActions, select: () => {} });
-  const sourceSection: MenuRow[] = [...source, ...edit];
+  const sourceSection: MenuRow[] = [...source, ...edit]; // edit: only when there is no source row to hold them
   if (sourceOptions.length) {
     sourceSection.push({ id: 'sourceOptions', label: 'Source options', options: [], selected: '', rows: sourceOptions, summary: timing[0] ? selectedLabel(timing[0]) : '', select: () => {} });
   }
@@ -679,6 +686,17 @@ export class YtSettingsMenu implements LyricsMenu {
 
   private fillChoices(menu: HTMLElement, row: MenuRow): void {
     for (const o of row.options) {
+      if (o.run) {
+        const run = o.run.bind(o);
+        const { item, label } = this.item('menuitem', o.label);
+        item.querySelector('.ytp-menuitem-icon')?.remove();
+        label.style.paddingLeft = '35px'; // in line with the choices' labels
+        item.setAttribute(ROW_ATTR + '-button', o.value);
+        item.tabIndex = 0;
+        this.activate(item, () => flash(label, run()));
+        menu.append(item);
+        continue;
+      }
       const { item, label } = this.item('menuitemradio', o.label);
       item.setAttribute('aria-checked', String(o.value === row.selected));
       if (o.disabled) {
@@ -860,7 +878,7 @@ export class YtmSettingsPopover implements LyricsMenu {
       text.textContent = row.label;
       const sel = this.doc.createElement('select');
       sel.style.cssText = 'font:inherit;color:#fff;background:#333;border:1px solid rgba(255,255,255,.3);border-radius:4px;';
-      for (const o of row.options) {
+      for (const o of row.options.filter((o) => !o.run)) {
         const opt = this.doc.createElement('option');
         opt.value = o.value;
         opt.textContent = o.label;
