@@ -439,6 +439,30 @@ describe('popup', () => {
       expect(has('drums-row')).toBe(true);
       expect(el('drums-btn').textContent).toBe('Update');
     });
+
+    it('shows the guitar model row only with the debug flag, and asks the background for it', async () => {
+      const gremote = { format: MODEL_FORMAT, version: 1, files: { 'guitar.onnx': 45 * 2 ** 20, 'guitar-meta.json': 19000 }, checkedAt: 0 };
+      await load({ stored: sepSplit(), local: { 'modelRemote.guitar': gremote } });
+      expect(has('guitar-row')).toBe(false);
+      await load({ stored: sepSplit(), local: { 'debug.guitar': true, 'modelRemote.guitar': gremote } });
+      expect(el('guitar-text').textContent).toMatch(/Guitar split is a one-time download \(45 MB\)/);
+      el<HTMLButtonElement>('guitar-btn').click();
+      expect(sendMessage).toHaveBeenCalledWith({ type: 'model-install', id: 'guitar' });
+      expect(has('model-row')).toBe(false); // not a Model menu entry
+    });
+
+    it('with the debug flag, the split model dropdown picks the stem and relabels the Drums gain', async () => {
+      await load({ stored: { mode: 'separate' } });
+      expect(has('split-model')).toBe(false);
+      await load({ stored: sepSplit(), local: { 'debug.guitar': true } });
+      expect(el('split-model').textContent).toMatch(/Drums/);
+      expect(el('split-on').closest('div')!.textContent).toBe('Drums');
+      choose('split-model', 'guitar');
+      await settle();
+      expect(sent().at(-1).settings.splitModel).toBe('guitar');
+      expect(el('split-on').closest('div')!.textContent).toBe('Guitar');
+      expect(el('drums').closest('div')!.textContent).toMatch(/Guitar/);
+    });
   });
 
   it('shows the waiting-for-gesture hint', async () => {

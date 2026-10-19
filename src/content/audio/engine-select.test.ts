@@ -105,6 +105,29 @@ describe('EngineSelector', () => {
     expect(sel.status).toEqual({ state: 'warming' });
   });
 
+  it('a change of the split model restarts the probe only while the split is on, and reload follows the chosen split model', () => {
+    const splits: unknown[] = [];
+    const { chain } = setup();
+    const hosts: FakeHost[] = [];
+    const sel = new EngineSelector(chain, (_m, _d, _dr, _g, split) => {
+      const h = new FakeHost();
+      hosts.push(h);
+      splits.push(split);
+      return h;
+    });
+    sel.update({ on: true, model: 'mdx', drums: false, split: 'guitar' });
+    expect(hosts).toHaveLength(1);
+    sel.update({ on: true, model: 'mdx', drums: false, split: 'drums' }); // no split: the choice does not matter
+    expect(hosts).toHaveLength(1);
+    sel.update({ on: true, model: 'mdx', drums: true, split: 'drums' });
+    sel.update({ on: true, model: 'mdx', drums: true, split: 'guitar' });
+    expect(splits).toEqual(['guitar', 'drums', 'guitar']);
+    sel.reload('drums'); // not the one in use
+    expect(hosts).toHaveLength(3);
+    sel.reload('guitar');
+    expect(hosts).toHaveLength(4);
+  });
+
   it('is off until Separate turns on, and never probes while off', () => {
     const { sel, hosts } = setup();
     sel.update(req(false));

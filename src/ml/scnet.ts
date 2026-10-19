@@ -126,6 +126,7 @@ const MAX_PUSH = CAP - SC_CHUNK - SC_STRIDE;
 
 /** Drums of a growing instrumental, chunk by chunk. */
 export class DrumStage {
+  readonly lag = SC_LAG;
   private readonly chunk = new ScnetChunk();
   private readonly inL = new Float32Array(CAP);
   private readonly inR = new Float32Array(CAP);

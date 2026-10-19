@@ -21,6 +21,9 @@ describe('parseManifest', () => {
     expect(parseManifest({ format: 2, models: { drums: { version: 1, files: drums } } })).toEqual({ drums: { format: 2, version: 1, files: drums } });
     expect(parseManifest({ format: 2, models: { drums: { version: 1, files: { 'other.onnx': 1 } } } })).toBeNull();
   });
+  it('the guitar model has the RoFormer files', () => {
+    expect(modelFileNames('guitar')).toEqual(['guitar.onnx', 'guitar-meta.json']);
+  });
   it('drops a bad model entry but keeps the good ones', () => {
     expect(parseManifest({ format: 1, models: { roformer: { version: 0, files }, deux: { version: 1, files: dfiles } } })).toEqual({ deux: { format: 1, version: 1, files: dfiles } });
     expect(parseManifest({ format: 1, models: { deux: { version: 1, files } } })).toBeNull(); // files of another model

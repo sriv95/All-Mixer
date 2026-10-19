@@ -52,8 +52,15 @@ export function makeGeometry(block: number, overlap: number, slack: number, extr
   return { frames, chunk: (frames - 1) * HOP, block, overlap, slack, extra, latency: block + overlap + extra + slack + ML_QUANTUM };
 }
 
-/** Drum model runs one block can need: a chunk completes every SC_STRIDE samples. */
-export const drumRuns = (block: number): number => Math.floor(block / SC_STRIDE) + 1;
+/** A split stage as the planners see it: a model run completes every `stride` samples, and a result waits up to `lag` samples for it. */
+export interface StageShape {
+  stride: number;
+  lag: number;
+}
+export const DRUM_STAGE: StageShape = { stride: SC_STRIDE, lag: SC_LAG };
+
+/** Stage model runs one block can need (the drum model by default): a chunk completes every `stride` samples. */
+export const drumRuns = (block: number, stride = SC_STRIDE): number => Math.floor(block / stride) + 1;
 
 /** Cross-fade / lookahead samples: 0.2 s. The overlap is computed twice (end of one chunk, start of the next), so a longer one costs speed. */
 export const OVERLAP = 8832;
@@ -68,10 +75,10 @@ export const stepMs = (frames: number, baseMs: number): number => baseMs * (fram
  * The longest block whose delay fits `delaySamples` for a GPU with a base step of `baseMs` (and, with the drum stage,
  * `drumMs` per drum model run), or null when the GPU cannot keep up: the step (with MARGIN) must fit the block, or steps queue up. The drum stage's wait (`extra`) comes on top of the budget: latency ≤ delaySamples + extra always.
  */
-export function planRof(delaySamples: number, baseMs: number, drumMs = 0): RofGeometry | null {
-  const extra = drumMs > 0 ? SC_LAG : 0;
+export function planRof(delaySamples: number, baseMs: number, drumMs = 0, stage: StageShape = DRUM_STAGE): RofGeometry | null {
+  const extra = drumMs > 0 ? stage.lag : 0;
   const budget = delaySamples - OVERLAP - ML_QUANTUM; // block + slack
-  const slackFor = (block: number): number => alignUp(MARGIN * (stepMs(framesFor(block, OVERLAP), baseMs) + (drumMs > 0 ? drumRuns(block) * drumMs : 0)) * SAMPLES_PER_MS);
+  const slackFor = (block: number): number => alignUp(MARGIN * (stepMs(framesFor(block, OVERLAP), baseMs) + (drumMs > 0 ? drumRuns(block, stage.stride) * drumMs : 0)) * SAMPLES_PER_MS);
   // Both limits (delay, and step ≤ block) get harder as the block grows, but not in a simple way past 400 frames: scan down.
   for (let block = alignDown(budget); block >= MIN_BLOCK; block -= ML_QUANTUM) {
     if (framesFor(block, OVERLAP) > MAX_FRAMES) continue;
@@ -90,10 +97,16 @@ export const gateMs = (g: RofGeometry): number => g.slack / SAMPLES_PER_MS / MAR
  * covers both and half a drum run more. null when the two together cannot keep up with the audio (their load per block
  * period, with MARGIN, is over 1).
  */
-export function planMdxDrums(mdxMs: number, drumMs: number): MlGeometry | null {
+export function planMdxDrums(mdxMs: number, drumMs: number, stage: StageShape = DRUM_STAGE): MlGeometry | null {
   const periodMs = ML_BLOCK / SAMPLES_PER_MS;
-  if (MARGIN * (mdxMs + (drumMs * ML_BLOCK) / SC_STRIDE) > periodMs) return null;
+  if (MARGIN * (mdxMs + (drumMs * ML_BLOCK) / stage.stride) > periodMs) return null;
   const slack = alignUp(MARGIN * (mdxMs + 1.5 * drumMs) * SAMPLES_PER_MS);
-  const resultOffset = ML_RESULT_OFFSET + SC_LAG;
+  const resultOffset = ML_RESULT_OFFSET + stage.lag;
   return { block: ML_BLOCK, resultOffset, latency: ML_BLOCK + resultOffset + slack + ML_QUANTUM, warmupP90Ms: slack / SAMPLES_PER_MS / MARGIN, drums: true };
 }
+
+/**
+ * Block buffers the worklet needs when a stage run of `stallMs` stops the block loop: one filling, one being returned, and
+ * one for every block that comes in during the stall (4 is enough for a drum run of under a block). At most 16.
+ */
+export const poolFor = (stallMs: number, blockMs: number): number => Math.min(16, Math.max(4, 3 + Math.ceil(stallMs / blockMs)));

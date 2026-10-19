@@ -1,0 +1,6 @@
+{"model": "becruily", "input": "inst", "clips": 50, "params_m": 22.4, "sec_per_7s_clip": 3.04, "level_db": -8.056, "leak": 0.01, "other": 0.765, "resid": 0.219}
+{"model": "becruily", "input": "nodrums", "clips": 50, "params_m": 22.4, "sec_per_7s_clip": 3.03, "level_db": -5.583, "leak": 0.007, "other": 0.799, "resid": 0.167}
+{"model": "htdemucs_6s", "input": "inst", "clips": 50, "params_m": 0.0, "sec_per_7s_clip": 4.77, "level_db": -7.477, "leak": 0.01, "other": 0.724, "resid": 0.238}
+{"model": "htdemucs_6s", "input": "nodrums", "clips": 50, "params_m": 0.0, "sec_per_7s_clip": 4.78, "level_db": -5.241, "leak": 0.003, "other": 0.756, "resid": 0.228}
+{"model": "chencfd", "input": "inst", "clips": 50, "params_m": 69.1, "sec_per_7s_clip": 4.36, "level_db": -7.103, "leak": 0.025, "other": 0.655, "resid": 0.27}
+{"model": "chencfd", "input": "nodrums", "clips": 50, "params_m": 69.1, "sec_per_7s_clip": 4.39, "level_db": -3.876, "leak": 0.012, "other": 0.724, "resid": 0.168}
