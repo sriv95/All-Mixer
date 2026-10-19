@@ -5,6 +5,7 @@ import { clampDelayS, clampOthersPct, clampPct, clampPitch, masterPctAt, masterP
 import { separationView, type SepView } from '../shared/separation-view';
 import { MAX_DELAY_S, MIN_DELAY_S } from '../ml/rof-plan';
 import type { GpuPreference, MlModel } from '../worklet/protocol';
+import { probeGpuNames } from '../shared/gpu';
 import { installModel, useModels, type ModelLine } from './models';
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
 import { Blocked, Btn, Card, Collapse, Disclosure, PitchStepper, Rise, Roll, Select, Skeleton, Slider, SliderRow, Switch, Tip, fade, slide, useGlide, type Choice } from './ui';
@@ -329,10 +330,11 @@ const MODEL_CHOICES: readonly Choice<MlModel>[] = [
   { value: 'deux', label: 'Best quality', hint: 'Needs a good GPU, optional download' },
 ];
 
-const GPU_CHOICES: readonly Choice<GpuPreference>[] = [
-  { value: 'auto', label: 'Automatic' },
-  { value: 'high-performance', label: 'High performance', hint: 'The fast GPU, if there are two' },
-  { value: 'low-power', label: 'Low power', hint: 'The built-in GPU, if there are two' },
+/** The GPU choices; the hint is the raw adapter name this machine gives for the preference (a generic text until it is known). */
+const gpuChoices = (names: Partial<Record<GpuPreference, string>>): readonly Choice<GpuPreference>[] => [
+  { value: 'auto', label: 'Automatic', hint: names.auto },
+  { value: 'high-performance', label: 'High performance', hint: names['high-performance'] ?? 'The fast GPU, if there are two' },
+  { value: 'low-power', label: 'Low power', hint: names['low-power'] ?? 'The built-in GPU, if there are two' },
 ];
 
 type Levels = Pick<MixerSettings, 'vocalPct' | 'instrumentalPct' | 'drumsPct' | 'othersPct'>;
@@ -359,6 +361,8 @@ function SeparateControls({ settings, update, ready, compact, advancedOpen, setA
   setSplitOpen: (open: boolean) => void;
 }) {
   const models = useModels(settings.mlModel, settings.splitInstrumental, ready);
+  const [gpuNames, setGpuNames] = useState<Partial<Record<GpuPreference, string>>>({});
+  useEffect(() => { void probeGpuNames().then(setGpuNames); }, []);
   const [delayDraft, setDelayDraft] = useState(settings.mlDelayS);
   // The preset that was pressed last (n counts presses, so pressing it again replays the ring).
   const [ripple, setRipple] = useState<{ id: string; n: number } | null>(null);
@@ -434,7 +438,7 @@ function SeparateControls({ settings, update, ready, compact, advancedOpen, setA
           <Collapse show={!!models.model}>{models.model && <ModelRow idPrefix="model" line={models.model} />}</Collapse>
           <div className="flex flex-col gap-1.5">
             <label htmlFor="ml-gpu" className="text-[13px] font-bold">GPU</label>
-            <Select id="ml-gpu" value={settings.gpu} options={GPU_CHOICES} onValue={(gpu) => update({ gpu })} />
+            <Select id="ml-gpu" value={settings.gpu} options={gpuChoices(gpuNames)} onValue={(gpu) => update({ gpu })} />
           </div>
           <div id="chunk-row" className="flex flex-col gap-3">
             <SliderRow id="ml-delay" icon={<Timer size={15} />} label="Delay limit" unit=" s" value={delayDraft} min={MIN_DELAY_S} max={MAX_DELAY_S} step={1} onValue={(v) => setDelayDraft(clampDelayS(v))} />
