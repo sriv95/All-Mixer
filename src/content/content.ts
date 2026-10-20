@@ -15,6 +15,9 @@ import { DelayedVideo } from './video-delay/delayed-video';
 import { overlayDelayMs } from './video-delay/schedule';
 import { detectSite, watchMainVideo, type PageSite } from './youtube-dom';
 
+/** How long the top frame without media waits before it answers the popup. */
+const NO_MEDIA_REPLY_MS = 150;
+
 // Lyrics exist for YouTube / YT Music only; every other site gets the mixer without them.
 // Frames (embeds, ads) run the mixer too, but a YouTube embed gets no lyrics UI.
 const lyricsSite = window === window.top ? detectSite(location.hostname) : null;
@@ -27,7 +30,10 @@ let timeDisplay: TimeDisplay | null = null;
 let debugBudget: number | null = null;
 let debugDelayMs: number | null = null; // QA override, see debug-video-delay
 const probe = new AvProbe();
-const chain = new MasterChain(() => syncDelay(), undefined, probe);
+const chain = new MasterChain(() => {
+  syncDelay();
+  reportBadge(); // the separator can fail or finish loading after the engine choice was made
+}, undefined, probe);
 const selector = new EngineSelector(chain);
 const spinner = new PlayerSpinner();
 const spinnerFor = (reason: string, text: string) => (waiting: boolean) => spinner.set(reason, waiting ? text : null);
@@ -163,7 +169,13 @@ chrome.runtime.onMessage.addListener((msg: ContentRequest, _sender, sendResponse
     syncDelay(true);
     sendResponse({ ok: true });
   } else if (msg.type === 'get-status') {
-    sendResponse(status());
+    // Every frame hears this and the popup takes the first answer: a frame without media stays quiet, and the top frame
+    // answers late, so the frame that plays the media is heard whenever there is one.
+    if (video) sendResponse(status());
+    else if (window === window.top) {
+      setTimeout(() => sendResponse(status()), NO_MEDIA_REPLY_MS);
+      return true;
+    }
   }
   return false;
 });
