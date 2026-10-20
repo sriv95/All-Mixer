@@ -1,0 +1,61 @@
+name: Bug report
+description: Something in All Mixer! does not work as expected
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what you got instead.
+    validations:
+      required: true
+  - type: dropdown
+    id: feature
+    attributes:
+      label: Feature
+      options:
+        - Volume boost
+        - Separate mode (vocal / instrumental)
+        - Lyrics / karaoke
+        - Model download
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: site
+    attributes:
+      label: Site
+      options:
+        - youtube.com
+        - music.youtube.com
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Extension version
+      description: Shown on chrome://extensions.
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Chrome version and OS
+      placeholder: Chrome 130, macOS 15
+    validations:
+      required: true
+  - type: input
+    id: gpu
+    attributes:
+      label: GPU
+      description: For Separate mode problems. Shown on chrome://gpu.
+  - type: input
+    id: video
+    attributes:
+      label: Video or song link
+      description: Needed for lyrics problems.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Console output or screenshots
+      description: Errors from the DevTools console of the YouTube tab, if any.

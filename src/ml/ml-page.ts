@@ -48,7 +48,7 @@ window.addEventListener('message', (e: MessageEvent) => {
     };
     worker.onerror = (ev) => window.parent.postMessage({ type: 'unavailable', reason: `worker: ${ev.message}` } satisfies FromMlWorker, target!);
     const w = worker;
-    // Debug stall hook (off by default): see README, Debug.
+    // Debug stall hook (off by default): see src/README.md, Debug.
     void chrome.storage.local
       .get([SPEEDS_KEY, 'debug.mlStallMs', 'debug.mlStallAfterMs', 'debug.mlTiming', ...(model === 'mdx' ? [] : [keyInstalled(model)]), ...(drums ? [keyInstalled('drums')] : []), ...(guitar ? [keyInstalled('guitar')] : [])])
       .catch(() => ({}) as Record<string, unknown>)
