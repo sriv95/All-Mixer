@@ -190,6 +190,22 @@ export function findYtmLyricsTab(doc: ParentNode = document): HTMLElement | null
   return tabs[LYRICS_SELECTORS.ytmusic.lyricsTabIndex] ?? null;
 }
 
+/** The YT Music page that holds the Up next / Lyrics / Related tabs. */
+const YTM_PLAYER_PAGE = 'ytmusic-player-page';
+
+/**
+ * True when DOM mutations touch the player page (its tabs or content) or add / remove the page itself.
+ * The rest of YT Music churns constantly (player bar, shelves, menus) and says nothing about the Lyrics tab.
+ */
+export function touchesYtmPlayerPage(records: readonly MutationRecord[]): boolean {
+  const isPage = (n: Node) => n instanceof Element && (n.matches(YTM_PLAYER_PAGE) || n.querySelector(YTM_PLAYER_PAGE) !== null);
+  return records.some(
+    (r) =>
+      (r.target instanceof Element && r.target.closest(YTM_PLAYER_PAGE) !== null) ||
+      (r.type === 'childList' && (Array.from(r.addedNodes).some(isPage) || Array.from(r.removedNodes).some(isPage))),
+  );
+}
+
 export function findYtmTabContent(doc: ParentNode = document): HTMLElement | null {
   return doc.querySelector<HTMLElement>(LYRICS_SELECTORS.ytmusic.tabContent);
 }
