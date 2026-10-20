@@ -1,5 +1,5 @@
-// The Mel-Band RoFormer models ("High quality" = Kim fine-tune, "Best quality" = Deux), the drum split model (SCNet
-// Tran Small) and the guitar model (debug only) are not packed into the extension: the user downloads each from a public Hugging Face repo into the extension's own storage (OPFS). Pure
+// The RoFormer models ("High quality" = Kim fine-tune, "Best Vocal" = Deux, "Focus Instrumental Splitting" = BS-RoFormer SW, six
+// stems in one pass), the drum split model (SCNet Tran Small) and the guitar model are not packed into the extension: the user downloads each from a public Hugging Face repo into the extension's own storage (OPFS). Pure
 // logic shared by the background worker (download), the popup (state text) and the ML page (which model files to
 // load). No chrome.* or DOM here.
 //
@@ -19,16 +19,16 @@ export const MODEL_FORMAT = 2;
 export const CHUNK = 8 * 2 ** 20;
 
 /**
- * The downloadable models. 'roformer' and 'deux' are the Model menu entries (src/worklet/protocol.ts MlModel);
+ * The downloadable models. 'roformer', 'deux' and 'sw' are the Model menu entries (src/worklet/protocol.ts MlModel);
  * 'drums' is SCNet Tran Small, the model of Split instrumental (src/ml/scnet.ts). 'guitar' is becruily's Mel-Band
  * RoFormer guitar stem model, a second stem of Split instrumental next to the drums (src/ml/guitar-stage.ts).
  */
-export type ModelId = 'roformer' | 'deux' | 'drums' | 'guitar';
-export const MODEL_IDS: readonly ModelId[] = ['roformer', 'deux', 'drums', 'guitar'];
-/** The Model menu entries (the vocal models). */
-export const VOCAL_MODEL_IDS: readonly ModelId[] = ['roformer', 'deux'];
+export type ModelId = 'roformer' | 'deux' | 'sw' | 'drums' | 'guitar';
+export const MODEL_IDS: readonly ModelId[] = ['roformer', 'deux', 'sw', 'drums', 'guitar'];
+/** The downloadable Model menu entries. */
+export const VOCAL_MODEL_IDS: readonly ModelId[] = ['roformer', 'deux', 'sw'];
 /** Menu names. */
-export const MODEL_LABEL: Readonly<Record<ModelId, string>> = { roformer: 'High quality', deux: 'Best quality', drums: 'Drum split', guitar: 'Guitar split' };
+export const MODEL_LABEL: Readonly<Record<ModelId, string>> = { roformer: 'High quality', deux: 'Best Vocal', sw: 'Focus Instrumental Splitting', drums: 'Drum split', guitar: 'Guitar split' };
 /** The files of a model: weights and, for the RoFormers, the STFT metadata. */
 export const modelFileNames = (id: ModelId): string[] => (id === 'drums' ? ['drums.onnx'] : [`${id}.onnx`, `${id}-meta.json`]);
 

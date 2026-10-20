@@ -25,9 +25,11 @@ const MIN_BLOCK = 172 * ML_QUANTUM;
 const SAMPLES_PER_MS = ML_SAMPLE_RATE / 1000;
 
 export interface RofGeometry {
+  /** STFT hop of the model (441; the all-stems model uses 512). */
+  hop: number;
   /** STFT frames of the chunk (with centre padding). */
   frames: number;
-  /** Samples of the chunk: (frames − 1) · HOP. */
+  /** Samples of the chunk: (frames − 1) · hop. */
   chunk: number;
   /** Samples emitted per step (H). */
   block: number;
@@ -45,11 +47,11 @@ const alignDown = (n: number): number => Math.floor(n / ML_QUANTUM) * ML_QUANTUM
 const alignUp = (n: number): number => Math.ceil(n / ML_QUANTUM) * ML_QUANTUM;
 
 /** Frames of a chunk that holds CONTEXT + block + overlap. */
-export const framesFor = (block: number, overlap: number): number => Math.ceil((block + overlap + CONTEXT) / HOP) + 1;
+export const framesFor = (block: number, overlap: number, hop = HOP): number => Math.ceil((block + overlap + CONTEXT) / hop) + 1;
 
-export function makeGeometry(block: number, overlap: number, slack: number, extra = 0): RofGeometry {
-  const frames = framesFor(block, overlap);
-  return { frames, chunk: (frames - 1) * HOP, block, overlap, slack, extra, latency: block + overlap + extra + slack + ML_QUANTUM };
+export function makeGeometry(block: number, overlap: number, slack: number, extra = 0, hop = HOP): RofGeometry {
+  const frames = framesFor(block, overlap, hop);
+  return { hop, frames, chunk: (frames - 1) * hop, block, overlap, slack, extra, latency: block + overlap + extra + slack + ML_QUANTUM };
 }
 
 /** A split stage as the planners see it: a model run completes every `stride` samples, and a result waits up to `lag` samples for it. */
@@ -82,15 +84,15 @@ export const stepMs = (frames: number, baseMs: number): number => baseMs * (fram
  * their model runs), or null when the GPU cannot keep up: the step (with MARGIN) must fit the block, or steps queue up.
  * The stages' wait (`extra`, the longest of them) comes on top of the budget: latency ≤ delaySamples + extra always.
  */
-export function planRof(delaySamples: number, baseMs: number, stages: readonly StageCost[] = []): RofGeometry | null {
+export function planRof(delaySamples: number, baseMs: number, stages: readonly StageCost[] = [], hop = HOP): RofGeometry | null {
   const extra = stagesLag(stages);
   const budget = delaySamples - OVERLAP - ML_QUANTUM; // block + slack
-  const slackFor = (block: number): number => alignUp(MARGIN * (stepMs(framesFor(block, OVERLAP), baseMs) + stages.reduce((sum, s) => sum + drumRuns(block, s.stride) * s.ms, 0)) * SAMPLES_PER_MS);
+  const slackFor = (block: number): number => alignUp(MARGIN * (stepMs(framesFor(block, OVERLAP, hop), baseMs) + stages.reduce((sum, s) => sum + drumRuns(block, s.stride) * s.ms, 0)) * SAMPLES_PER_MS);
   // Both limits (delay, and step ≤ block) get harder as the block grows, but not in a simple way past 400 frames: scan down.
   for (let block = alignDown(budget); block >= MIN_BLOCK; block -= ML_QUANTUM) {
-    if (framesFor(block, OVERLAP) > MAX_FRAMES) continue;
+    if (framesFor(block, OVERLAP, hop) > MAX_FRAMES) continue;
     const slack = slackFor(block);
-    if (block + slack <= budget && slack <= block) return makeGeometry(block, OVERLAP, slack, extra);
+    if (block + slack <= budget && slack <= block) return makeGeometry(block, OVERLAP, slack, extra, hop);
   }
   return null;
 }
