@@ -6,7 +6,7 @@ import { separationView, type SepView } from '../shared/separation-view';
 import { MAX_DELAY_S, MIN_DELAY_S } from '../ml/rof-plan';
 import type { MlModel } from '../worklet/protocol';
 import { gpuOptions, gpuSelected, probeGpuNames, type GpuNames } from '../shared/gpu';
-import { installModel, useModels, type ModelLine } from './models';
+import { installModel, uninstallModel, useModels, type ModelLine } from './models';
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
 import { Blocked, Btn, Card, Collapse, Disclosure, PitchStepper, Rise, Roll, Select, Skeleton, Slider, SliderRow, Switch, Tip, fade, slide, useGlide, type Choice } from './ui';
 
@@ -509,6 +509,11 @@ function ModelRow({ idPrefix, line }: { idPrefix: 'model' | 'drums' | 'guitar'; 
             {line.button === 'Update' ? <RefreshCw size={13} aria-hidden /> : <Download size={13} aria-hidden />}
             {line.button}
           </Btn>
+        )}
+        {line.uninstall && (
+          <button id={`${idPrefix}-uninstall`} type="button" onClick={() => uninstallModel(line.id)} className="shrink-0 cursor-pointer border-0 bg-transparent p-0 text-xs text-muted underline">
+            Uninstall model
+          </button>
         )}
       </p>
       {line.progress !== undefined && (

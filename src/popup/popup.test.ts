@@ -372,6 +372,7 @@ describe('popup', () => {
       await load({ stored: { mode: 'separate', mlModel: 'roformer' }, local: { 'modelInstalled.roformer': installedV1, 'modelRemote.roformer': remote(1) } });
       expect(el('model-text').textContent).toBe('High quality model v1 installed.');
       expect(has('model-btn')).toBe(false);
+      expect(el('model-uninstall').textContent).toBe('Uninstall model');
     });
   });
 

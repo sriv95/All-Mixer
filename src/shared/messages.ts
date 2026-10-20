@@ -135,6 +135,12 @@ export interface ModelInstall {
   id: ModelId;
 }
 
+/** Popup → background: delete one downloaded model from disk. */
+export interface ModelUninstall {
+  type: 'model-uninstall';
+  id: ModelId;
+}
+
 /** Content script → background: what Separate mode is doing in this tab, for the toolbar badge. */
 export interface SetBadge {
   type: 'set-badge';
@@ -151,6 +157,7 @@ export type BackgroundRequest =
   | UnpinLyrics
   | ModelCheck
   | ModelInstall
+  | ModelUninstall
   | SetBadge;
 /**
  * QA only (sent via chrome.tabs.sendMessage from extension contexts): force the

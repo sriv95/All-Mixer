@@ -57,6 +57,13 @@ export class ModelManager {
     return p;
   }
 
+  /** Forget model `id` and delete its chunks. A running download of it is not stopped (the UI offers this only for an installed model). */
+  async uninstall(id: ModelId): Promise<void> {
+    await this.area.remove(keyInstalled(id));
+    await this.area.remove(keyProgress(id));
+    await pruneModel(this.files, id, { version: 0, files: {} });
+  }
+
   private async run(id: ModelId): Promise<void> {
     let version = 0, total = 0;
     try {

@@ -16,6 +16,8 @@ export interface ModelLine {
   id: ModelId;
   text: string;
   button?: string;
+  /** Offer to delete the installed model. */
+  uninstall?: boolean;
   /** 0 to 100 while a download runs. */
   progress?: number;
 }
@@ -34,7 +36,7 @@ function modelLine(id: ModelId, s: ModelState): Omit<ModelLine, 'id'> {
     case 'incompatible':
       return { text: `The ${label} model needs a newer version of All Mixer!.` };
     case 'ready':
-      return { text: `${label} model v${s.version} installed.` };
+      return { text: `${label} model v${s.version} installed.`, uninstall: true };
   }
 }
 
@@ -94,5 +96,7 @@ export function useModels(selected: string, split: { drums: boolean; guitar: boo
   }
   return out;
 }
+
+export const uninstallModel = (id: ModelId): void => void chrome.runtime.sendMessage({ type: 'model-uninstall', id });
 
 export const installModel = (id: ModelId): void => void chrome.runtime.sendMessage({ type: 'model-install', id });
