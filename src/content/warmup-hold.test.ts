@@ -64,6 +64,17 @@ describe('WarmupHold', () => {
     expect(seen).toEqual([]);
   });
 
+  it('pauses again when playback starts during the hold, and shows no pause to the player', async () => {
+    hold.hold();
+    await Promise.resolve();
+    paused = false; // a new song starts
+    hold.hold();
+    await Promise.resolve();
+    expect(paused).toBe(true);
+    expect(seen).toEqual([]);
+    expect(hold.active).toBe(true);
+  });
+
   it('a pause click during the hold shows the pause and keeps the video paused after the warm-up', async () => {
     hold.hold();
     await Promise.resolve();

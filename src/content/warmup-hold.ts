@@ -27,10 +27,13 @@ export class WarmupHold {
     return this.held !== null;
   }
 
-  /** Pause a playing video out of sight. A video that is not playing is left alone. */
+  /**
+   * Pause a playing video out of sight. A video that is not playing is left alone. Called again while held, it pauses
+   * the video once more if something started it (a new song, play after a user pause).
+   */
   hold(): void {
     const video = this.getVideo();
-    if (this.held || !video || video.paused) return;
+    if (!video || video.paused) return;
     this.held = video;
     this.swallow = true;
     // The event is queued, not sent in pause(): never let the flag outlive it.
