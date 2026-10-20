@@ -407,13 +407,10 @@ export class DelayedVideo {
     if (!frame) return;
     const { width, height } = this.canvas;
     this.ctx.drawImage(frame.img, 0, 0, width, height);
-    this.drawn++;
-    this.errs.push(performance.now() - frame.due);
-    this.offsets.push((this.video.currentTime - frame.mediaTime) * 1000 - (frame.delay ?? 0));
-    if (this.errs.length > STAT_WINDOW) {
-      this.errs.shift();
-      this.offsets.shift();
-    }
+    // Ring buffer: summarize() sorts, so the order of the samples does not matter.
+    const slot = this.drawn++ % STAT_WINDOW;
+    this.errs[slot] = performance.now() - frame.due;
+    this.offsets[slot] = (this.video.currentTime - frame.mediaTime) * 1000 - (frame.delay ?? 0);
     const first = !this.shown;
     this.probe?.trace('draw', {
       rafT: t,
