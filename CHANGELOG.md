@@ -8,26 +8,27 @@ CI builds the extension, creates tag `vx.y.z` and a GitHub release with this sec
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-20
+
 ### Added
 
-- Models: an installed model has an underlined **Uninstall model** link next to "installed" that deletes the download from disk. You can download it again later.
-- Split instrumental: Advanced has a Guitar switch next to the Drums one, on its own or together with it (together they need a fast GPU), and a Guitar level next to the Drums level. Guitar is a one-time download (45 MB) and adds about 6 s of delay on top of the Delay limit. The model is by becruily and is free for non-commercial use only.
-- Model: a fourth entry, **Focus Instrumental Splitting**, splits the song into vocal, drums, guitar, bass, piano and everything else in one pass, each with its own level (Drums, Guitar, Bass, Piano, Others). It is a one-time download (343 MB) and needs a fast GPU, about like Best Vocal. With it the Drums and Guitar switches in Split instrumental are not available. The model has no licence from its author.
-- GPU: Advanced has a GPU setting for Separate mode: Automatic, High performance or Low power. On a computer with two GPUs it picks which one does the work, and each choice shows the name of its GPU. When Separate mode is too slow, the alert offers to try the high performance GPU.
-- Pitch: a − / + control under Global volume shifts the pitch by up to 6 semitones either way, in Default and Separate mode. The speed stays the same. In Separate mode, Advanced has "Change pitch separately": the vocal and the instrumental get their own − / + next to their levels.
+- Models: **Uninstall model** link deletes a downloaded model from disk.
+- Split instrumental: Guitar switch and level (45 MB download, about 6 s more delay). Model by becruily, non-commercial use only.
+- Model: **Focus Instrumental Splitting** splits vocal, drums, guitar, bass, piano and others, each with its own level (343 MB, fast GPU). It has no licence from its author.
+- GPU: Advanced setting to pick Automatic, High performance or Low power. The slow-GPU alert offers the high performance GPU.
+- Pitch: − / + control shifts pitch up to 6 semitones in Default and Separate mode. Separate mode can shift vocal and instrumental separately.
 
 ### Changed
 
-- Model menu: "Best quality" is now called "Best Vocal".
-- Separate mode: the audio and picture are about 23 ms later than before (the pitch stage). A pitch shift in Default mode adds the same delay.
+- Model menu: "Best quality" is now "Best Vocal".
+- Separate mode: audio and picture are about 23 ms later (pitch stage).
 
 ### Fixed
 
-- Popup: the Separate banner sometimes did not show on pages with several frames (embeds, ads); it now reads the frame that plays the media.
-- Popup: the banner follows a stop or failure while the popup is open, and shows "Separation unavailable" when the engine gave up while the separator was still loading.
-- Toolbar badge: shows the red "!" when the separator fails after Separate mode went live.
-- Separate mode: playback that starts while the vocal separation is still preparing (a new song, play after a pause, a seek) no longer runs the original sound behind the spinner. It waits for the separation like the first play does.
-- Separate mode: at the end of a video the time shows the full length (0:19 of 0:19) instead of stopping one second short.
+- Popup: Separate banner reads the frame that plays the media, follows a stop or failure, and shows "Separation unavailable" when the engine gives up.
+- Toolbar badge: red "!" when the separator fails after going live.
+- Separate mode: playback waits for separation after a new song, pause or seek instead of playing the original sound.
+- Separate mode: time shows the full length at the end of a video.
 
 ## [0.4.0] - 2026-10-19
 
