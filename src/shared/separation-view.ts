@@ -11,17 +11,11 @@ export type SepView =
 export function separationView(mode: Mode, s: ContentStatus | undefined): SepView {
   const sep = s?.separation;
   if (mode !== 'separate' || !sep) return { kind: 'off' };
-  if (sep.state === 'loading') return { kind: 'warming' };
   if (sep.state === 'error') return { kind: 'error', cause: sep.error ?? 'unknown' };
-  if (sep.state !== 'on') return { kind: 'off' };
+  if (sep.state !== 'on' && sep.state !== 'loading') return { kind: 'off' };
   const choice = sep.choice;
-  switch (choice?.state) {
-    case 'warming':
-      return { kind: 'warming' };
-    case 'unavailable':
-    case 'stopped':
-      return { kind: choice.state, cause: choice.cause ?? 'unknown' };
-    default:
-      return { kind: 'live', delayS: (sep.latency.processingMs / 1000).toFixed(1) };
-  }
+  // The engine giving up is shown even while the separator still loads.
+  if (choice?.state === 'unavailable' || choice?.state === 'stopped') return { kind: choice.state, cause: choice.cause ?? 'unknown' };
+  if (sep.state === 'loading' || choice?.state === 'warming') return { kind: 'warming' };
+  return { kind: 'live', delayS: (sep.latency.processingMs / 1000).toFixed(1) };
 }

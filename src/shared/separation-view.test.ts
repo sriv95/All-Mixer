@@ -19,6 +19,12 @@ describe('separationView', () => {
     expect(separationView('separate', status({ choice: { state: 'warming' } }))).toEqual({ kind: 'warming' });
   });
 
+  it('shows the engine giving up even while the separator still loads', () => {
+    expect(separationView('separate', status({ state: 'loading', choice: { state: 'unavailable', cause: 'no webgpu' } }))).toEqual({ kind: 'unavailable', cause: 'no webgpu' });
+    expect(separationView('separate', status({ state: 'loading', choice: { state: 'stopped', cause: 'x' } }))).toEqual({ kind: 'stopped', cause: 'x' });
+    expect(separationView('separate', status({ state: 'loading', choice: { state: 'warming' } }))).toEqual({ kind: 'warming' });
+  });
+
   it('is live with the delay in seconds with one decimal', () => {
     expect(separationView('separate', status({ choice: { state: 'on' } }))).toEqual({ kind: 'live', delayS: '1.9' });
   });

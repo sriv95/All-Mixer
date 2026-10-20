@@ -13,6 +13,7 @@ import { Blocked, Btn, Card, Collapse, Disclosure, PitchStepper, Rise, Roll, Sel
 type Update = (patch: Partial<MixerSettings>) => void;
 
 const LOADING_POLL_MS = 500;
+const LIVE_POLL_MS = 2000;
 /** One click on "Raise delay limit" adds this many seconds. */
 const DELAY_STEP_S = 4;
 // The Advanced section stays open between popup openings, and opens by itself when a non-default model is in use.
@@ -101,13 +102,13 @@ export function App() {
   }, [refresh]);
 
   const view = separationView(settings.mode, loaded?.s);
-  const warming = view.kind === 'warming';
-  // While the separator starts or ML warms up, poll so the banner moves on by itself.
+  // While the separator starts or ML warms up, poll so the banner moves on by itself; while live, slowly, to catch a stop.
+  const pollMs = view.kind === 'warming' ? LOADING_POLL_MS : view.kind === 'live' ? LIVE_POLL_MS : null;
   useEffect(() => {
-    if (!warming) return;
-    const t = setTimeout(() => void refresh(), LOADING_POLL_MS);
+    if (pollMs === null) return;
+    const t = setTimeout(() => void refresh(), pollMs);
     return () => clearTimeout(t);
-  }, [warming, loaded, refresh]);
+  }, [pollMs, loaded, refresh]);
 
   // Stopped, too slow: off and on again is the retry the content script understands.
   const retry = async () => {

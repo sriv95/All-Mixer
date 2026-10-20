@@ -713,6 +713,13 @@ describe('popup', () => {
       expect(kind()).toBe('live');
     });
 
+    it('keeps polling while live, so a later stop shows without reopening the popup', async () => {
+      await load({ stored: { mode: 'separate' }, status: live(120.2) });
+      expect(kind()).toBe('live');
+      (chrome.tabs.sendMessage as ReturnType<typeof vi.fn>).mockResolvedValue(sep('on', { choice: { state: 'stopped', cause: 'ML missed its deadline' } }, 'bypass', 0));
+      await vi.waitFor(() => expect(kind()).toBe('stopped'), { timeout: 3500 });
+    }, 5000);
+
     it('leaving the Separate tab clears the separation banner', async () => {
       await load({ stored: { mode: 'separate' }, status: live(305) });
       expect(banner()!.textContent).toMatch(/0\.3 s audio delay/);
