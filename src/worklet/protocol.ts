@@ -39,6 +39,9 @@ export const PARAM_INSTRUMENTAL = 'instrumentalGain';
 export const PARAM_DRUMS = 'drumsGain';
 export const PARAM_OTHERS = 'othersGain';
 export const PARAM_GUITAR = 'guitarGain';
+/** The all-stems model (BS-RoFormer SW) also takes the bass and the piano out of the instrumental. */
+export const PARAM_BASS = 'bassGain';
+export const PARAM_PIANO = 'pianoGain';
 
 /** bypass = the original mix, unprocessed, no added delay. */
 export type MlEngine = 'bypass' | 'ml';
@@ -96,13 +99,15 @@ export const ML_WARMUP_P90_MS = (ML_SLACK_SAMPLES / ML_SAMPLE_RATE) * 1000 / 1.5
  * ML models the engine can run. 'mdx' is the shipped MDX-Net 9482 + Spleeter pipeline. The others are Mel-Band
  * RoFormers (fp16), downloaded on request (src/shared/model-store.ts ModelId): one big model each, no Spleeter mask,
  * short chunks so they fit the delay. 'roformer' = unwa's mel_band_roformer_kim_ft_unwa (menu: High quality),
- * 'deux' = becruily's 2-stem model, vocal stem (menu: Best quality, needs a good GPU).
+ * 'deux' = becruily's 2-stem model, vocal stem (menu: Best Vocal, needs a good GPU). 'sw' = BS-RoFormer SW, one pass for
+ * six stems (vocals, drums, bass, guitar, piano, other; menu: Focus Instrumental Splitting): it replaces the vocal model and the
+ * split stages, and its reply carries the drums, guitar, bass and piano planes.
  */
-export type MlModel = 'mdx' | 'roformer' | 'deux';
+export type MlModel = 'mdx' | 'roformer' | 'deux' | 'sw';
 /** Which GPU the ML worker asks WebGPU for. Chrome cannot list adapters, only prefer one: 'auto' leaves the choice to the browser. */
 export type GpuPreference = 'auto' | 'high-performance' | 'low-power';
 export const GPU_PREFERENCES: readonly GpuPreference[] = ['auto', 'high-performance', 'low-power'];
-export const ML_MODELS: readonly MlModel[] = ['mdx', 'roformer', 'deux'];
+export const ML_MODELS: readonly MlModel[] = ['mdx', 'roformer', 'deux', 'sw'];
 
 /** Block geometry of one model: what the worklet, the worker and the delay math must agree on. */
 export interface MlGeometry {
@@ -118,6 +123,9 @@ export interface MlGeometry {
   drums?: boolean;
   /** Guitar stage on (src/ml/guitar-stage.ts): two more planes after the drums, if any. */
   guitar?: boolean;
+  /** Bass and piano (the all-stems model): two more planes each, after the guitar. */
+  bass?: boolean;
+  piano?: boolean;
   /** Block buffers in the worklet's pool (default 4): more when a stage run stops the worker for several blocks (rof-plan.ts poolFor). */
   pool?: number;
 }
@@ -148,10 +156,14 @@ export const GEOMETRY: Readonly<Record<MlModel, MlGeometry>> = {
   mdx: { block: ML_BLOCK, resultOffset: ML_RESULT_OFFSET, latency: ML_LATENCY_SAMPLES, warmupP90Ms: ML_WARMUP_P90_MS },
   roformer: ROF_GEOMETRY,
   deux: ROF_GEOMETRY,
+  sw: ROF_GEOMETRY,
 };
 
-/** Planes of a block buffer: input / Vk L, R, vocal L, R, then drums L, R and guitar L, R when those stages are on. */
-export const planesFor = (g: Pick<MlGeometry, 'drums' | 'guitar'>): number => 4 + (g.drums ? 2 : 0) + (g.guitar ? 2 : 0);
+/** The parts of the instrumental a stage or the all-stems model can take out, in the order of the reply planes after the vocal ones. */
+export const PARTS = ['drums', 'guitar', 'bass', 'piano'] as const;
+
+/** Planes of a block buffer: input / Vk L, R, vocal L, R, then a pair for each of the PARTS that is on (drums, guitar, bass, piano). */
+export const planesFor = (g: Pick<MlGeometry, (typeof PARTS)[number]>): number => 4 + 2 * PARTS.filter((p) => g[p]).length;
 export const bufferBytes = (g: MlGeometry): number => ML_HEADER_BYTES + planesFor(g) * g.block * 4;
 
 export type ToMlWorker = { type: 'dispose' };

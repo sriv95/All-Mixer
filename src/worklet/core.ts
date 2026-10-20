@@ -32,6 +32,7 @@
 // ML is refused unless the context runs at ML_SAMPLE_RATE.
 import {
   GEOMETRY,
+  PARTS,
   ML_BLOCK,
   ML_BUFFER_BYTES,
   ML_HEADER_BYTES,
@@ -96,12 +97,8 @@ export class SeparatorCore {
   /** MDX vocal (A cappella); the instrumental uses mlL/mlR (Vk = x − Karaoke instrumental). */
   private mlSL = new Float32Array(RING);
   private mlSR = new Float32Array(RING);
-  /** Drums, a part of the instrumental (only filled when the geometry has the drum stage). */
-  private mlDL = new Float32Array(RING);
-  private mlDR = new Float32Array(RING);
-  /** Guitar, another part of the instrumental (only filled when the geometry has the guitar stage). */
-  private mlGL = new Float32Array(RING);
-  private mlGR = new Float32Array(RING);
+  /** The parts of the instrumental the geometry has (PARTS order: drums, guitar, bass, piano; only the ones that are on): L, R ring each. */
+  private mlP: Float32Array[] = [];
   /** Absolute start of the ML block held in each slot (NaN = empty). */
   private slotStart = new Float64Array(SLOTS).fill(NaN);
 
@@ -189,10 +186,7 @@ export class SeparatorCore {
     this.mlR = new Float32Array(ring);
     this.mlSL = new Float32Array(ring);
     this.mlSR = new Float32Array(ring);
-    this.mlDL = new Float32Array(g.drums ? ring : 0);
-    this.mlDR = new Float32Array(g.drums ? ring : 0);
-    this.mlGL = new Float32Array(g.guitar ? ring : 0);
-    this.mlGR = new Float32Array(g.guitar ? ring : 0);
+    this.mlP = PARTS.filter((p) => g[p]).flatMap(() => [new Float32Array(ring), new Float32Array(ring)]);
     this.slotStart = new Float64Array(this.slots).fill(NaN);
     this.pool = [];
     for (let i = 0; i < (g.pool ?? POOL); i++) this.pool.push(entry(new ArrayBuffer(bufferBytes(g)), g.block, planesFor(g)));
@@ -265,8 +259,8 @@ export class SeparatorCore {
   /**
    * One render quantum (QUANTUM frames); `time` is the context time of its first frame.
    * Writes the delayed vocal and instrumental stems and the bypass weight per sample
-   * (0 = ML stems, 1 = original mix). `drL` / `drR` and `guL` / `guR` (optional) get the drums and the guitar, the parts
-   * of the instrumental that the drum and guitar stages took out (zero without them); the instrumental stays whole.
+   * (0 = ML stems, 1 = original mix). `parts` (optional) is L, R for each of PARTS (drums, guitar, bass, piano): the parts of
+   * the instrumental that the stages or the all-stems model took out (zero for one the geometry does not have); the instrumental stays whole.
    */
   process(
     inL: Float32Array,
@@ -277,10 +271,7 @@ export class SeparatorCore {
     insR: Float32Array,
     byp: Float32Array,
     time: number,
-    drL?: Float32Array,
-    drR?: Float32Array,
-    guL?: Float32Array,
-    guR?: Float32Array,
+    parts?: readonly Float32Array[],
   ): void {
     if (!this.active) {
       vocL.fill(0);
@@ -288,10 +279,7 @@ export class SeparatorCore {
       insL.fill(0);
       insR.fill(0);
       byp.fill(0);
-      drL?.fill(0);
-      drR?.fill(0);
-      guL?.fill(0);
-      guR?.fill(0);
+      if (parts) for (const p of parts) p.fill(0);
       return;
     }
     const pos = this.pos;
@@ -307,10 +295,7 @@ export class SeparatorCore {
       insL.fill(0);
       insR.fill(0);
       byp.fill(0);
-      drL?.fill(0);
-      drR?.fill(0);
-      guL?.fill(0);
-      guR?.fill(0);
+      if (parts) for (const p of parts) p.fill(0);
       return;
     }
     // Fade-out quantum with audio pending in the ring: read it, consume nothing.
@@ -348,9 +333,7 @@ export class SeparatorCore {
     const dE = (target - env0) / QUANTUM;
     const w0 = this.w0;
     const dW = (this.w1 - w0) / QUANTUM;
-    const { dryL, dryR, mlL, mlR, mlSL, mlSR, mlDL, mlDR, mlGL, mlGR, mask } = this;
-    const drums = this.g.drums === true && drL !== undefined && drR !== undefined;
-    const guitar = this.g.guitar === true && guL !== undefined && guR !== undefined;
+    const { dryL, dryR, mlL, mlR, mlSL, mlSR, mlP, mask } = this;
     for (let i = 0; i < QUANTUM; i++) {
       const j = (r0 + i) & mask;
       const e = env0 + dE * (i + 1);
@@ -360,22 +343,25 @@ export class SeparatorCore {
       insL[i] = e * (dryL[j] - w * mlL[j]);
       insR[i] = e * (dryR[j] - w * mlR[j]);
       byp[i] = 1 - w;
-      if (drums) {
-        drL[i] = e * w * mlDL[j];
-        drR[i] = e * w * mlDR[j];
-      }
-      if (guitar) {
-        guL[i] = e * w * mlGL[j];
-        guR[i] = e * w * mlGR[j];
-      }
     }
-    if (!drums) {
-      drL?.fill(0);
-      drR?.fill(0);
-    }
-    if (!guitar) {
-      guL?.fill(0);
-      guR?.fill(0);
+    let ring = 0;
+    for (let p = 0; p < PARTS.length; p++) {
+      const on = this.g[PARTS[p]] === true;
+      const oL = parts?.[2 * p], oR = parts?.[2 * p + 1];
+      const rL = on ? mlP[2 * ring] : undefined, rR = on ? mlP[2 * ring + 1] : undefined;
+      if (on) ring++;
+      if (!oL || !oR) continue;
+      if (!rL || !rR) {
+        oL.fill(0);
+        oR.fill(0);
+        continue;
+      }
+      for (let i = 0; i < QUANTUM; i++) {
+        const j = (r0 + i) & mask;
+        const ew = (env0 + dE * (i + 1)) * (w0 + dW * (i + 1));
+        oL[i] = ew * rL[j];
+        oR[i] = ew * rR[j];
+      }
     }
     this.env = target;
 
@@ -527,16 +513,7 @@ export class SeparatorCore {
         this.mlR[j] = live ? e.data[block + i] : 0;
         this.mlSL[j] = live ? e.data[2 * block + i] : 0;
         this.mlSR[j] = live ? e.data[3 * block + i] : 0;
-        let plane = 4;
-        if (this.g.drums) {
-          this.mlDL[j] = live ? e.data[plane * block + i] : 0;
-          this.mlDR[j] = live ? e.data[(plane + 1) * block + i] : 0;
-          plane += 2;
-        }
-        if (this.g.guitar) {
-          this.mlGL[j] = live ? e.data[plane * block + i] : 0;
-          this.mlGR[j] = live ? e.data[(plane + 1) * block + i] : 0;
-        }
+        for (let k = 0; k < this.mlP.length; k++) this.mlP[k][j] = live ? e.data[(4 + k) * block + i] : 0;
       }
       this.slotStart[(rel / block) & (this.slots - 1)] = start;
       this.stats.returned++;
@@ -574,8 +551,7 @@ export class SeparatorCore {
     this.mlR.fill(0);
     this.mlSL.fill(0);
     this.mlSR.fill(0);
-    this.mlDL.fill(0);
-    this.mlDR.fill(0);
+    for (const p of this.mlP) p.fill(0);
     this.env = this.held ? 0 : 1;
   }
 }

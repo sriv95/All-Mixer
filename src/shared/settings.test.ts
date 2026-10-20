@@ -31,6 +31,8 @@ describe('normalizeSettings', () => {
       splitGuitar: false,
       drumsPct: 100,
       guitarPct: 100,
+      bassPct: 100,
+      pianoPct: 100,
       othersPct: 100,
       mlDelayS: 2,
       gpu: 'auto',
@@ -46,6 +48,11 @@ describe('normalizeSettings', () => {
     expect(normalizeSettings({ splitGuitar: 'yes' }).splitGuitar).toBe(false);
     expect(normalizeSettings({ guitarPct: 40 }).guitarPct).toBe(40);
     expect(normalizeSettings({ guitarPct: 400 }).guitarPct).toBe(100);
+  });
+  it('keeps the bass and piano levels valid, and the all-stems model as a known model', () => {
+    expect(normalizeSettings({ bassPct: 30, pianoPct: 70 })).toMatchObject({ bassPct: 30, pianoPct: 70 });
+    expect(normalizeSettings({ bassPct: 400, pianoPct: 'x' })).toMatchObject({ bassPct: 100, pianoPct: 100 });
+    expect(normalizeSettings({ mlModel: 'sw' }).mlModel).toBe('sw');
   });
   it('keeps a known GPU preference and falls back to auto otherwise', () => {
     for (const g of ['auto', 'high-performance', 'low-power']) expect(normalizeSettings({ gpu: g }).gpu).toBe(g);
@@ -103,6 +110,8 @@ describe('separationFor', () => {
       instrumental: 0.8,
       drums: 1,
       guitar: 1,
+      bass: 1,
+      piano: 1,
       others: 1,
       pitchVocal: 0,
       pitchInstrumental: 0,
@@ -124,5 +133,12 @@ describe('separationFor', () => {
     expect(separationFor({ ...base, splitInstrumental: true })).toMatchObject({ instrumental: 0.5, drums: 2, others: 0.25 });
     expect(separationFor({ ...base, splitGuitar: true, guitarPct: 30 })).toMatchObject({ instrumental: 0.5, drums: 1, guitar: 0.3, others: 0.25 });
     expect(separationFor({ ...base, splitInstrumental: true, splitGuitar: true, guitarPct: 30 })).toMatchObject({ drums: 2, guitar: 0.3, others: 0.25 });
+  });
+  it('the all-stems model applies the drums, guitar, bass, piano and others levels whatever the split switches say', () => {
+    const sw = { ...DEFAULT_SETTINGS, mode: 'separate' as const, mlModel: 'sw' as const, instrumentalPct: 50, drumsPct: 20, guitarPct: 30, bassPct: 40, pianoPct: 60, othersPct: 80 };
+    expect(separationFor(sw)).toMatchObject({ instrumental: 0.5, drums: 0.2, guitar: 0.3, bass: 0.4, piano: 0.6, others: 0.8 });
+    expect(separationFor({ ...sw, splitInstrumental: true, splitGuitar: true })).toMatchObject({ drums: 0.2, guitar: 0.3 });
+    // another model: bass and piano stay out of the mix
+    expect(separationFor({ ...sw, mlModel: 'deux' })).toMatchObject({ drums: 1, guitar: 1, bass: 1, piano: 1, others: 1 });
   });
 });

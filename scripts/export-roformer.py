@@ -1,6 +1,8 @@
 """Export the Mel-Band RoFormer vocal models for the extension (the Model menu in the popup):
   roformer  Unwa's Kim fine-tune `mel_band_roformer_kim_ft_unwa` (menu: High quality)
-  deux      becruily's 2-stem `mel-band-roformer-deux` (CC BY-NC 4.0); only its vocal stem is exported (menu: Best quality)
+  deux      becruily's 2-stem `mel-band-roformer-deux` (CC BY-NC 4.0); only its vocal stem is exported (menu: Best Vocal)
+  sw        BS-RoFormer SW (jarredou, 6 stems: bass, drums, other, vocals, guitar, piano; hop 512, 62 bands of 2 to 129 bins, depth 12;
+            licence not stated), all stems exported (menu: Focus Instrumental Splitting)
 Writes models-out/<name>.onnx + <name>-meta.json. They are not part of the extension build: `bun run model-manifest`
 prepares them for upload to the Hugging Face repo that the extension downloads from (src/shared/model-store.ts).
 
@@ -22,6 +24,7 @@ import numpy as np, torch, yaml, onnx, onnxruntime as ort
 from torch.export import Dim
 from einops import rearrange
 from onnxruntime.transformers.float16 import convert_float_to_float16
+from audio_separator.separator.uvr_lib_v5.roformer import bs_roformer as bsr
 from audio_separator.separator.uvr_lib_v5.roformer import mel_band_roformer as mbr
 from audio_separator.separator.uvr_lib_v5.roformer.mel_band_roformer import MaskEstimator, MelBandRoformer
 
@@ -29,15 +32,19 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 BASE = 'https://github.com/nomadkaraoke/python-audio-separator/releases/download/model-configs'
 DEUX = 'https://huggingface.co/becruily/mel-band-roformer-deux/resolve/main'
 GUITAR = 'https://huggingface.co/becruily/mel-band-roformer-guitar/resolve/main'
+SW = 'https://huggingface.co/FractalSurfer/BS-RoFormer-SW-6stem/resolve/main'  # a mirror: the author's own repo is gone
 # name -> (checkpoint url, SHA-256 or None, config url, index of the vocal stem in the model output)
 MODELS = {
     'roformer': (f'{BASE}/mel_band_roformer_kim_ft_unwa.ckpt', 'e6bd8d333880191254a6ef6be3cb0ffa4dda9d3282e36b0cce2e88a660e00d39', f'{BASE}/config_mel_band_roformer_kim_ft_unwa.yaml', 0),
     # stems are [Vocals, Instrumental]; stem 0 has ~0 % of its energy below 150 Hz, stem 1 about 65 %
     # debug Split model, not a menu entry: becruily's guitar model, stems [Guitar, Other], one mask estimator; licence unstated
     'guitar': (f'{GUITAR}/becruily_guitar.ckpt', None, f'{GUITAR}/config_guitar_becruily.yaml', 0),
+    'sw': (f'{SW}/BS-Rofo-SW-Fixed.ckpt', '24e7d35ee9c64415673d3fd33e06a67cac2c103c5df6267ba1576459c775916e', f'{SW}/BS-Rofo-SW-Fixed.yaml', None),
     'deux': (f'{DEUX}/becruily_deux.ckpt', '10255c02295bf3e3865d4ee50ff752d7b19b124ed5fd93b147babc4333eda3aa', f'{DEUX}/config.yaml', 0),
 }
 HOP = 441
+SW_HOP = 512
+SW_STEMS = ['bass', 'drums', 'other', 'vocals', 'guitar', 'piano']  # the order of the model's outputs
 FRAMES = 112  # example length for the trace; the exported axis is dynamic (16 to MAX_FRAMES)
 MAX_FRAMES = 1700
 
@@ -63,6 +70,7 @@ def rms_norm(self, x):
 
 
 mbr.RMSNorm.forward = rms_norm
+bsr.RMSNorm.forward = rms_norm
 
 
 def hcat(parts, dim, g=8):
@@ -93,6 +101,30 @@ class Core(torch.nn.Module):
         return hcat([mlp(x[..., i, :]) for i, mlp in enumerate(me.to_freqs)], -1)
 
 
+class BsCore(torch.nn.Module):
+    """The same core for the all-stems BS-RoFormer: one band per group of bins, a final norm, and the masks of every stem in a row."""
+
+    def __init__(self, m):
+        super().__init__()
+        self.m = m
+
+    def forward(self, x):  # x [1, T, 4100]: all STFT bins as (bin, channel, re/im) -> [1, T, stems * 4100], stem after stem
+        m = self.m
+        outs, o = [], 0
+        for w, net in zip(m.band_split.dim_inputs, m.band_split.to_features):
+            outs.append(net(x[..., o:o + w]).unsqueeze(-2))
+            o += w
+        x = hcat(outs, -2)
+        for tt, ft in m.layers:
+            x = rearrange(x, 'b t f d -> b f t d')
+            b, f, t, d = x.shape
+            x = tt(x.reshape(b * f, t, d)).reshape(b, f, t, d)
+            x = rearrange(x, 'b f t d -> b t f d').reshape(b * t, f, d)
+            x = ft(x).reshape(b, t, f, d)
+        x = m.final_norm(x)
+        return torch.cat([hcat([mlp(x[..., i, :]) for i, mlp in enumerate(me.to_freqs)], -1) for me in m.mask_estimators], -1)
+
+
 def export(name, force):
     out = ROOT / 'models-out'
     if not force and (out / f'{name}.onnx').exists() and (out / f'{name}-meta.json').exists():
@@ -105,14 +137,19 @@ def export(name, force):
     cfg = yaml.unsafe_load(open(config))
     if not cfg['model'].get('linear_transformer_depth'):
         cfg['model'].pop('linear_transformer_depth', None)  # not an argument of audio-separator's model; 0 = unused
-    # audio-separator builds the mask estimator with the default expansion 4 whatever the config says
-    mbr.MaskEstimator = functools.partial(MaskEstimator, mlp_expansion_factor=cfg['model'].get('mlp_expansion_factor', 4))
-    m = MelBandRoformer(**cfg['model'])
-    sd = torch.load(ckpt, map_location='cpu', weights_only=False)
+    sw = name == 'sw'
+    if sw:
+        m = bsr.BSRoformer(**cfg['model'])
+        sd = torch.load(ckpt, map_location='cpu', weights_only=True)  # a third-party file: tensors only
+    else:
+        # audio-separator builds the mask estimator with the default expansion 4 whatever the config says
+        mbr.MaskEstimator = functools.partial(MaskEstimator, mlp_expansion_factor=cfg['model'].get('mlp_expansion_factor', 4))
+        m = MelBandRoformer(**cfg['model'])
+        sd = torch.load(ckpt, map_location='cpu', weights_only=False)
     print(m.load_state_dict(sd.get('state_dict', sd) if isinstance(sd, dict) else sd, strict=True))
     m.eval()
-    fin = len(m.freq_indices) * 2
-    core = Core(m, stem).eval()
+    fin = 4 * 1025 if sw else len(m.freq_indices) * 2
+    core = (BsCore(m) if sw else Core(m, stem)).eval()
     x = torch.randn(1, FRAMES, fin) * 0.5
     out.mkdir(parents=True, exist_ok=True)
     tmp = ROOT / f'.cache/models/{name}_fp32.onnx'
@@ -135,11 +172,12 @@ def export(name, force):
         'nFft': cfg['model']['stft_n_fft'],
         'hop': cfg['model']['stft_hop_length'],
         # index into the interleaved (bin * 2 + channel) axis of every selected STFT value, in model order
-        'sel': m.freq_indices.tolist(),
+        'sel': list(range(2 * 1025)) if sw else m.freq_indices.tolist(),
         # how many mel bands cover each bin
-        'bands': m.num_bands_per_freq.tolist(),
+        'bands': [1] * (2 * 1025) if sw else m.num_bands_per_freq.tolist(),
+        **({'stems': SW_STEMS} if sw else {}),
     }
-    assert meta['hop'] == HOP and meta['nFft'] == 2048
+    assert meta['hop'] == (SW_HOP if sw else HOP) and meta['nFft'] == 2048
     (out / f'{name}-meta.json').write_text(json.dumps(meta, separators=(',', ':')))
     print('wrote', out / f'{name}.onnx', (out / f'{name}.onnx').stat().st_size // 2**20, 'MiB')
 

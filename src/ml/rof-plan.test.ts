@@ -153,3 +153,24 @@ describe('drums and guitar together', () => {
     expect(g.extra).toBe(264448);
   });
 });
+
+describe('a model with another hop (the all-stems model, 512)', () => {
+  it('the chunk is (frames − 1) hops of 512 and holds the context', () => {
+    for (const [b, r] of [[22016, 8832], [100096, 20096], [242432, 22016]]) {
+      const g = makeGeometry(b, r, 0, 0, 512);
+      expect(g.hop).toBe(512);
+      expect(g.chunk).toBe((g.frames - 1) * 512);
+      expect(g.chunk - g.block - g.overlap).toBeGreaterThanOrEqual(439);
+      expect(g.chunk - g.block - g.overlap).toBeLessThan(439 + 512);
+    }
+    expect(makeGeometry(1, 1, 0).hop).toBe(441);
+  });
+  it('plans with its own hop: fewer frames for the same block, and the plan stays inside its budget', () => {
+    const a = planRof(10 * S, 400)!, b = planRof(10 * S, 400, [], 512)!;
+    expect(b.hop).toBe(512);
+    expect(b.chunk).toBe((b.frames - 1) * 512);
+    expect(b.latency).toBeLessThanOrEqual(10 * S);
+    expect(b.frames).toBeLessThanOrEqual(MAX_FRAMES);
+    expect(a.hop).toBe(441);
+  });
+});

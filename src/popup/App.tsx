@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { AudioLines, AudioWaveform, Cpu, Download, Drum, Guitar, LoaderCircle, Maximize2, Mic, Minimize2, MicOff, Music, RefreshCw, RotateCcw, Settings2, SlidersVertical, Timer, TriangleAlert, Undo2, Volume2, Zap } from 'lucide-react';
+import { AudioLines, AudioWaveform, Cpu, Download, Drum, Guitar, LoaderCircle, Maximize2, Mic, Minimize2, MicOff, Music, Piano, RefreshCw, RotateCcw, Settings2, SlidersVertical, Timer, TriangleAlert, Undo2, Volume2, Waves, Zap } from 'lucide-react';
 import type { ContentStatus, GetStatus, GetTabSettings, SetTabSettings } from '../shared/messages';
 import { clampDelayS, clampOthersPct, clampPct, clampPitch, masterPctAt, masterPosOf, MASTER_POS_MAX, normalizeSettings, PITCH_MAX, type MixerSettings, type Mode } from '../shared/settings';
 import { separationView, type SepView } from '../shared/separation-view';
@@ -328,12 +328,14 @@ function Banner({ view, settings, update, retry, compact }: { compact: boolean; 
 const MODEL_CHOICES: readonly Choice<MlModel>[] = [
   { value: 'mdx', label: 'Default' },
   { value: 'roformer', label: 'High quality', hint: 'Optional download' },
-  { value: 'deux', label: 'Best quality', hint: 'Needs a good GPU, optional download' },
+  { value: 'deux', label: 'Best Vocal', hint: 'Needs a good GPU, optional download' },
+  { value: 'sw', label: 'Focus Instrumental Splitting', hint: 'Needs a good GPU, optional download' },
 ];
 
-type Levels = Pick<MixerSettings, 'vocalPct' | 'instrumentalPct' | 'drumsPct' | 'guitarPct' | 'othersPct'>;
-const levelsOf = (s: MixerSettings): Levels => ({ vocalPct: s.vocalPct, instrumentalPct: s.instrumentalPct, drumsPct: s.drumsPct, guitarPct: s.guitarPct, othersPct: s.othersPct });
-const sameLevels = (a: Levels, b: Levels) => a.vocalPct === b.vocalPct && a.instrumentalPct === b.instrumentalPct && a.drumsPct === b.drumsPct && a.guitarPct === b.guitarPct && a.othersPct === b.othersPct;
+type Levels = Pick<MixerSettings, 'vocalPct' | 'instrumentalPct' | 'drumsPct' | 'guitarPct' | 'bassPct' | 'pianoPct' | 'othersPct'>;
+const LEVEL_KEYS: readonly (keyof Levels)[] = ['vocalPct', 'instrumentalPct', 'drumsPct', 'guitarPct', 'bassPct', 'pianoPct', 'othersPct'];
+const levelsOf = (s: MixerSettings): Levels => Object.fromEntries(LEVEL_KEYS.map((k) => [k, s[k]])) as Levels;
+const sameLevels = (a: Levels, b: Levels) => LEVEL_KEYS.every((k) => a[k] === b[k]);
 /** How long "Undo" stays after a preset. */
 const UNDO_MS = 5000;
 
@@ -341,7 +343,7 @@ const PRESETS = [
   { id: 'preset-karaoke', label: 'Karaoke', tip: 'Vocal 0%, instrumental 100%', vocal: 0, instrumental: 100, icon: <MicOff size={15} aria-hidden /> },
   { id: 'preset-half-karaoke', label: 'Half karaoke', tip: 'Vocal 50%, instrumental 100%', vocal: 50, instrumental: 100, icon: <AudioLines size={15} aria-hidden /> },
   { id: 'preset-acappella', label: 'A cappella', tip: 'Vocal 100%, instrumental 0%', vocal: 100, instrumental: 0, icon: <Mic size={15} aria-hidden /> },
-  { id: 'preset-reset', label: 'Reset', tip: 'Vocal, instrumental, drums, guitar and others back to 100%', vocal: 100, instrumental: 100, icon: <RotateCcw size={15} aria-hidden /> },
+  { id: 'preset-reset', label: 'Reset', tip: 'Vocal, instrumental and the split levels back to 100%', vocal: 100, instrumental: 100, icon: <RotateCcw size={15} aria-hidden /> },
 ];
 
 function SeparateControls({ settings, update, ready, compact, advancedOpen, setAdvancedOpen, splitOpen, setSplitOpen }: {
@@ -354,7 +356,9 @@ function SeparateControls({ settings, update, ready, compact, advancedOpen, setA
   splitOpen: boolean;
   setSplitOpen: (open: boolean) => void;
 }) {
-  const models = useModels(settings.mlModel, { drums: settings.splitInstrumental, guitar: settings.splitGuitar }, ready);
+  // The all-stems model splits the drums, guitar, bass and piano itself: the split switches (and their models) are not available then.
+  const all = settings.mlModel === 'sw';
+  const models = useModels(settings.mlModel, { drums: settings.splitInstrumental && !all, guitar: settings.splitGuitar && !all }, ready);
   const [gpuNames, setGpuNames] = useState<GpuNames>({});
   useEffect(() => { void probeGpuNames().then(setGpuNames); }, []);
   const [delayDraft, setDelayDraft] = useState(settings.mlDelayS);
@@ -380,13 +384,19 @@ function SeparateControls({ settings, update, ready, compact, advancedOpen, setA
       <Card className="mx-rows">
         <SliderRow id="vocal" icon={<Mic size={15} />} label="Vocal" unit="%" pitch={stemPitch('vocal-pitch', 'Vocal pitch', settings.vocalPitch, (v) => update({ vocalPitch: clampPitch(v) }))} value={settings.vocalPct} min={0} max={100} step={5} onValue={(v) => update({ vocalPct: clampPct(v) })} />
         <SliderRow id="instrumental" icon={<Music size={15} />} label="Instrumental" unit="%" pitch={stemPitch('instrumental-pitch', 'Instrumental pitch', settings.instrPitch, (v) => update({ instrPitch: clampPitch(v) }))} value={settings.instrumentalPct} min={0} max={100} step={5} onValue={(v) => update({ instrumentalPct: clampPct(v) })} />
-        <Collapse show={settings.splitInstrumental || settings.splitGuitar}>
+        <Collapse show={all || settings.splitInstrumental || settings.splitGuitar}>
           <div id="split-mix" className="flex flex-col gap-3.5 border-t border-well pt-3.5">
-            <Collapse show={settings.splitInstrumental}>
+            <Collapse show={all || settings.splitInstrumental}>
               <SliderRow id="drums" icon={<Drum size={15} />} label="Drums" hint="in the instrumental" unit="%" value={settings.drumsPct} min={0} max={100} step={5} onValue={(v) => update({ drumsPct: clampPct(v) })} />
             </Collapse>
-            <Collapse show={settings.splitGuitar}>
+            <Collapse show={all || settings.splitGuitar}>
               <SliderRow id="guitar" icon={<Guitar size={15} />} label="Guitar" hint="in the instrumental" unit="%" value={settings.guitarPct} min={0} max={100} step={5} onValue={(v) => update({ guitarPct: clampPct(v) })} />
+            </Collapse>
+            <Collapse show={all}>
+              <SliderRow id="bass" icon={<Waves size={15} />} label="Bass" hint="in the instrumental" unit="%" value={settings.bassPct} min={0} max={100} step={5} onValue={(v) => update({ bassPct: clampPct(v) })} />
+            </Collapse>
+            <Collapse show={all}>
+              <SliderRow id="piano" icon={<Piano size={15} />} label="Piano" hint="in the instrumental" unit="%" value={settings.pianoPct} min={0} max={100} step={5} onValue={(v) => update({ pianoPct: clampPct(v) })} />
             </Collapse>
             <SliderRow id="others" icon={<AudioLines size={15} />} label="Others" hint="in the instrumental" unit="%" value={settings.othersPct} min={0} max={100} step={5} onValue={(v) => update({ othersPct: clampOthersPct(v) })} />
           </div>
@@ -403,7 +413,7 @@ function SeparateControls({ settings, update, ready, compact, advancedOpen, setA
             <Btn id={p.id} tone="preset" aria-pressed={pressed}
               onClick={() => {
                 setRipple((r) => ({ id: p.id, n: (r?.n ?? 0) + 1 }));
-                const patch = { vocalPct: p.vocal, instrumentalPct: p.instrumental, ...(p.id === 'preset-reset' ? { drumsPct: 100, guitarPct: 100, othersPct: 100 } : {}) };
+                const patch = { vocalPct: p.vocal, instrumentalPct: p.instrumental, ...(p.id === 'preset-reset' ? { drumsPct: 100, guitarPct: 100, bassPct: 100, pianoPct: 100, othersPct: 100 } : {}) };
                 const before = levelsOf(settings);
                 const after = levelsOf({ ...settings, ...patch });
                 if (!sameLevels(before, after)) setUndo({ before, after });
@@ -454,17 +464,23 @@ function SeparateControls({ settings, update, ready, compact, advancedOpen, setA
           <Disclosure id="split" open={splitOpen} onOpen={setSplitOpen} className="rounded-2xl bg-surface/70" buttonClassName="p-3"
             title={<span className="flex items-center gap-1.5"><Drum size={15} className="text-brand" aria-hidden />Split instrumental</span>}>
             <div className="flex flex-col gap-3 px-3 pb-3">
-              <div className="flex items-center justify-between gap-3">
-                <label htmlFor="split-on" className="text-[13px] font-bold">Drums</label>
-                <Switch id="split-on" checked={settings.splitInstrumental} onChange={(on) => update({ splitInstrumental: on })} />
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <label htmlFor="split-guitar" className="text-[13px] font-bold">Guitar</label>
-                <Switch id="split-guitar" checked={settings.splitGuitar} onChange={(on) => update({ splitGuitar: on })} />
-              </div>
-              <p className="m-0 text-xs leading-snug text-muted">Each extra split uses more GPU and adds more delay over the Delay limit.</p>
-              <Collapse show={!!models.drums}>{models.drums && <ModelRow idPrefix="drums" line={models.drums} />}</Collapse>
-              <Collapse show={!!models.guitar}>{models.guitar && <ModelRow idPrefix="guitar" line={models.guitar} />}</Collapse>
+              {all ? (
+                <p id="split-all" className="m-0 text-xs leading-snug text-muted">Focus Instrumental Splitting already splits the drums, guitar, bass and piano, each with its own level. Pick another model to use the switches here.</p>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between gap-3">
+                    <label htmlFor="split-on" className="text-[13px] font-bold">Drums</label>
+                    <Switch id="split-on" checked={settings.splitInstrumental} onChange={(on) => update({ splitInstrumental: on })} />
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <label htmlFor="split-guitar" className="text-[13px] font-bold">Guitar</label>
+                    <Switch id="split-guitar" checked={settings.splitGuitar} onChange={(on) => update({ splitGuitar: on })} />
+                  </div>
+                  <p className="m-0 text-xs leading-snug text-muted">Each extra split uses more GPU and adds more delay over the Delay limit.</p>
+                  <Collapse show={!!models.drums}>{models.drums && <ModelRow idPrefix="drums" line={models.drums} />}</Collapse>
+                  <Collapse show={!!models.guitar}>{models.guitar && <ModelRow idPrefix="guitar" line={models.guitar} />}</Collapse>
+                </>
+              )}
             </div>
           </Disclosure>
         </div>

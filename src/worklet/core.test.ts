@@ -54,6 +54,9 @@ class FakePort {
   drumShare = 0.25;
   /** Guitar geometry: the guitar plane is this fraction of the true input. */
   guitarShare = 0.1;
+  /** Bass and piano geometry (the all-stems model): their planes are these fractions of the true input. */
+  bassShare = 0.05;
+  pianoShare = 0.2;
   now = 0;
 
   constructor(
@@ -86,14 +89,11 @@ class FakePort {
         data[2 * block + i] = data[i];
         data[3 * block + i] = data[block + i];
         let plane = 4;
-        if (this.g.drums) {
-          data[plane * block + i] = this.drumShare * data[i];
-          data[(plane + 1) * block + i] = this.drumShare * data[block + i];
+        for (const [on, share] of [[this.g.drums, this.drumShare], [this.g.guitar, this.guitarShare], [this.g.bass, this.bassShare], [this.g.piano, this.pianoShare]] as const) {
+          if (!on) continue;
+          data[plane * block + i] = share * data[i];
+          data[(plane + 1) * block + i] = share * data[block + i];
           plane += 2;
-        }
-        if (this.g.guitar) {
-          data[plane * block + i] = this.guitarShare * data[i];
-          data[(plane + 1) * block + i] = this.guitarShare * data[block + i];
         }
       }
       head[1] = start;
@@ -135,6 +135,11 @@ interface Rig {
   /** Guitar output (the geometry's guitar plane). */
   gL: number[];
   gR: number[];
+  /** Bass and piano output. */
+  aL: number[];
+  aR: number[];
+  pL: number[];
+  pR: number[];
   /** Bypass weight per output sample. */
   b: number[];
   q: number;
@@ -160,6 +165,10 @@ function rig(seconds: number, signal: (n: number, seed: number) => Float32Array 
   const dr = new Float32Array(QUANTUM);
   const gl = new Float32Array(QUANTUM);
   const gr = new Float32Array(QUANTUM);
+  const al = new Float32Array(QUANTUM);
+  const ar = new Float32Array(QUANTUM);
+  const pl = new Float32Array(QUANTUM);
+  const pr = new Float32Array(QUANTUM);
   const r: Rig = {
     core,
     port,
@@ -174,12 +183,16 @@ function rig(seconds: number, signal: (n: number, seed: number) => Float32Array 
     dR: [],
     gL: [],
     gR: [],
+    aL: [],
+    aR: [],
+    pL: [],
+    pR: [],
     b: [],
     q: 0,
     run(nq) {
       for (let k = 0; k < nq; k++) {
         const p = r.q * QUANTUM;
-        core.process(sigL.subarray(p, p + QUANTUM), sigR.subarray(p, p + QUANTUM), vl, vr, il, ir, bw, p / SR, dl, dr, gl, gr);
+        core.process(sigL.subarray(p, p + QUANTUM), sigR.subarray(p, p + QUANTUM), vl, vr, il, ir, bw, p / SR, [dl, dr, gl, gr, al, ar, pl, pr]);
         for (let i = 0; i < QUANTUM; i++) {
           r.vL.push(vl[i]);
           r.vR.push(vr[i]);
@@ -189,6 +202,10 @@ function rig(seconds: number, signal: (n: number, seed: number) => Float32Array 
           r.dR.push(dr[i]);
           r.gL.push(gl[i]);
           r.gR.push(gr[i]);
+          r.aL.push(al[i]);
+          r.aR.push(ar[i]);
+          r.pL.push(pl[i]);
+          r.pR.push(pr[i]);
           r.b.push(bw[i]);
         }
         r.q++;
@@ -789,5 +806,42 @@ describe('SeparatorCore, guitar stage', () => {
     b.core.setActive(true, 'bypass');
     b.run(200);
     expect(b.gL.every((v) => v === 0)).toBe(true);
+  });
+});
+
+describe('SeparatorCore, all-stems model (drums, guitar, bass and piano planes)', () => {
+  const allG: MlGeometry = { block: 40 * QUANTUM, resultOffset: 10 * QUANTUM, latency: 81 * QUANTUM, warmupP90Ms: 1, drums: true, guitar: true, bass: true, piano: true };
+
+  it('a block buffer has 12 planes, in the order drums, guitar, bass, piano', () => {
+    expect(planesFor(allG)).toBe(12);
+    expect(planesFor({ bass: true })).toBe(6);
+    expect(planesFor({ piano: true, drums: true })).toBe(8);
+    expect(bufferBytes(allG)).toBe(ML_HEADER_BYTES + 12 * allG.block * 4);
+  });
+
+  it('every part comes out apart with the instrumental delay', () => {
+    const r = rig(3, noise, allG);
+    r.core.setActive(true, 'ml');
+    r.run(Math.ceil((3 * SR) / QUANTUM) - 2);
+    const D = allG.latency;
+    const worst = { d: 0, g: 0, a: 0, p: 0 };
+    for (let n = D + 2 * allG.block; n < r.dL.length; n++) {
+      worst.d = Math.max(worst.d, Math.abs(r.dL[n] - 0.25 * r.sigL[n - D]));
+      worst.g = Math.max(worst.g, Math.abs(r.gL[n] - 0.1 * r.sigL[n - D]));
+      worst.a = Math.max(worst.a, Math.abs(r.aL[n] - 0.05 * r.sigL[n - D]), Math.abs(r.aR[n] - 0.05 * r.sigR[n - D]));
+      worst.p = Math.max(worst.p, Math.abs(r.pL[n] - 0.2 * r.sigL[n - D]), Math.abs(r.pR[n] - 0.2 * r.sigR[n - D]));
+    }
+    expect(Math.max(worst.d, worst.g, worst.a, worst.p)).toBeLessThan(1e-6);
+  });
+
+  it('bass alone takes the first plane pair, and the other parts stay silent', () => {
+    const r = rig(3, noise, { ...allG, drums: false, guitar: false, piano: false });
+    r.core.setActive(true, 'ml');
+    r.run(Math.ceil((3 * SR) / QUANTUM) - 2);
+    const D = allG.latency;
+    let err = 0;
+    for (let n = D + 2 * allG.block; n < r.aL.length; n++) err = Math.max(err, Math.abs(r.aL[n] - 0.05 * r.sigL[n - D]));
+    expect(err).toBeLessThan(1e-6);
+    expect([r.dL, r.gL, r.pL].every((a) => a.every((v) => v === 0))).toBe(true);
   });
 });

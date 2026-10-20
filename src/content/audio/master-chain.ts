@@ -3,7 +3,9 @@ import {
   GEOMETRY,
   ML_SAMPLE_RATE,
   PARAM_DRUMS,
+  PARAM_BASS,
   PARAM_GUITAR,
+  PARAM_PIANO,
   PARAM_INSTRUMENTAL,
   PARAM_INSTRUMENTAL_PITCH,
   PARAM_OTHERS,
@@ -48,9 +50,11 @@ export interface SeparationRequest {
   /** Linear gains, 0–6. */
   vocal: number;
   instrumental: number;
-  /** Split instrumental: gains of the drums, of the guitar and of the rest of the instrumental, on top of `instrumental` (default 1). */
+  /** Split instrumental: gains of the drums, the guitar, the bass and the piano (the last two only with the all-stems model) and of the rest of the instrumental, on top of `instrumental` (default 1). */
   drums?: number;
   guitar?: number;
+  bass?: number;
+  piano?: number;
   others?: number;
   /** Pitch shift of the vocal and of the instrumental, semitones (default 0). Any shift routes the audio through the worklet, also with `on` false (then the gains above are ignored). */
   pitchVocal?: number;
@@ -353,6 +357,8 @@ export class MasterChain {
       sep.parameters.get(PARAM_INSTRUMENTAL)?.setTargetAtTime(gain(this.separation.instrumental), now, GAIN_TAU);
       sep.parameters.get(PARAM_DRUMS)?.setTargetAtTime(gain(this.separation.drums), now, GAIN_TAU);
       sep.parameters.get(PARAM_GUITAR)?.setTargetAtTime(gain(this.separation.guitar), now, GAIN_TAU);
+      sep.parameters.get(PARAM_BASS)?.setTargetAtTime(gain(this.separation.bass), now, GAIN_TAU);
+      sep.parameters.get(PARAM_PIANO)?.setTargetAtTime(gain(this.separation.piano), now, GAIN_TAU);
       sep.parameters.get(PARAM_OTHERS)?.setTargetAtTime(gain(this.separation.others), now, GAIN_TAU);
       sep.parameters.get(PARAM_VOCAL_PITCH)?.setTargetAtTime(this.separation.pitchVocal ?? 0, now, PITCH_TAU);
       sep.parameters.get(PARAM_INSTRUMENTAL_PITCH)?.setTargetAtTime(this.separation.pitchInstrumental ?? 0, now, PITCH_TAU);
