@@ -34,6 +34,16 @@ describe('YtmTabSurface (F1)', () => {
     expect(s.active).toBe(true);
   });
 
+  it('finds the Lyrics tab again after YT Music re-creates it', () => {
+    const s = new YtmTabSurface({ onSeek: () => {} });
+    select(1);
+    expect(s.active).toBe(true);
+    document.body.innerHTML = fixture;
+    expect(s.active).toBe(false);
+    select(1);
+    expect(s.active).toBe(true);
+  });
+
   it('re-enables a disabled Lyrics tab once synced lyrics exist', () => {
     const s = new YtmTabSurface({ onSeek: () => {} });
     s.render(synced);

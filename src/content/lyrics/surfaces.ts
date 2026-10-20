@@ -93,9 +93,12 @@ export class YtmTabSurface implements LyricsSurface {
   /** Load lyrics for every track: a disabled Lyrics tab can only be enabled once we know we have some. */
   readonly prefetch = true;
 
+  /** `active` is asked every frame while the lyrics play: keep the tab until YT Music re-creates it. */
+  private tab: HTMLElement | null = null;
+
   get active(): boolean {
-    const tab = findYtmLyricsTab(this.doc);
-    return !!tab && isTabSelected(tab);
+    if (!this.tab?.isConnected) this.tab = findYtmLyricsTab(this.doc);
+    return !!this.tab && isTabSelected(this.tab);
   }
 
   get mounted(): boolean {
