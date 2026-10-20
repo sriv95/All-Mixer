@@ -371,7 +371,8 @@ export class DelayedVideo {
     const due = md.expectedDisplayTime + delay;
     const epoch = this.epoch;
     const rvfcAt = performance.now();
-    this.probe?.trace('rvfc', {
+    // Skip building the trace object while the debug probe is off: this runs for every frame.
+    if (this.probe?.on) this.probe.trace('rvfc', {
       rvfcNow: _now,
       mediaTime: md.mediaTime,
       expectedDisplayTime: md.expectedDisplayTime,
@@ -384,7 +385,7 @@ export class DelayedVideo {
       (bmp) => {
         this.captureErrors = 0;
         if (epoch !== this.epoch || !this.running) return bmp.close();
-        this.probe?.trace('bitmap', { mediaTime: md.mediaTime, due, captureMs: performance.now() - rvfcAt });
+        if (this.probe?.on) this.probe.trace('bitmap', { mediaTime: md.mediaTime, due, captureMs: performance.now() - rvfcAt });
         const at = performance.now();
         if (this.awaitStill) {
           // First picture after a seek: show it at the next rAF, not `delay` later.
@@ -412,7 +413,7 @@ export class DelayedVideo {
     this.errs[slot] = performance.now() - frame.due;
     this.offsets[slot] = (this.video.currentTime - frame.mediaTime) * 1000 - (frame.delay ?? 0);
     const first = !this.shown;
-    this.probe?.trace('draw', {
+    if (this.probe?.on) this.probe.trace('draw', {
       rafT: t,
       mediaTime: frame.mediaTime,
       due: frame.due,

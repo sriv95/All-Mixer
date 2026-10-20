@@ -156,7 +156,7 @@ describe('DelayedVideo', () => {
       now = 1000;
       vi.spyOn(performance, 'now').mockImplementation(() => now);
       trace.mockClear();
-      const dv = new DelayedVideo(video, () => {}, { trace, setOverlayInfo: () => {}, overlayReset: () => {}, overlayFrame: () => {} } as never);
+      const dv = new DelayedVideo(video, () => {}, { on: true, trace, setOverlayInfo: () => {}, overlayReset: () => {}, overlayFrame: () => {} } as never);
       dv.setDelay(500, 0);
       return dv;
     };
