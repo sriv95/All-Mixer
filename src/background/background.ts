@@ -50,6 +50,9 @@ async function handle(msg: BackgroundRequest, sender: chrome.runtime.MessageSend
     case 'model-install':
       install(msg.id);
       return null;
+    case 'model-uninstall':
+      await models.uninstall(msg.id);
+      return null;
   }
 }
 
