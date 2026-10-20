@@ -1,4 +1,4 @@
-import { findTimeElements, type Site } from './youtube-dom';
+import { findTimeElements, isSeekDragging, type Site, type TimeElements } from './youtube-dom';
 
 /** A bigger gap between currentTime and the presented time is a seek in flight, not the picture delay. */
 const MAX_SHIFT_S = 10;
@@ -31,6 +31,8 @@ export class TimeDisplay {
   private readonly memo = new WeakMap<Element, { raw: number; out: string }>();
   private readonly observer = new MutationObserver(() => this.update());
   private raf = 0;
+  /** The player's elements, found once: the seek bar is looked up again only when YouTube re-creates one of them. */
+  private els: TimeElements | null = null;
 
   constructor(
     private readonly site: Site,
@@ -51,21 +53,18 @@ export class TimeDisplay {
     if (p !== null && this.video.ended && dur - p < END_SNAP_S) p = dur;
     const shift = this.video.currentTime - (p ?? NaN);
     if (p === null || !(dur > 0) || !(shift >= -0.05 && shift <= MAX_SHIFT_S)) return;
-    const { text, fills, knob, bar, dragging } = findTimeElements(this.site);
     // While the user drags the bar it shows the dragged position, which is where they point, not what plays.
-    if (dragging) return;
+    if (isSeekDragging(this.site)) return;
+    const { text, fills, knob, bar } = this.elements();
     const frac = Math.max(0, shift) / dur;
-    const watch = (el: HTMLElement, opts: MutationObserverInit) => this.observer.observe(el, opts);
 
     if (text) {
-      watch(text, { childList: true, characterData: true, subtree: true });
       const now = text.textContent ?? '';
       const next = now.replace(/^(\s*)[\d:]+/, (_, lead: string) => lead + formatTime(Math.min(p, dur)));
       if (next !== now) text.textContent = next;
     }
     this.shiftFills(fills, frac);
     if (knob) {
-      watch(knob, { attributes: true, attributeFilter: ['style'] });
       if (this.site === 'youtube') {
         const barW = bar?.clientWidth || 0;
         this.put(knob, 'transform', /^translateX\(([\d.e-]+)px\)$/, (x) => `translateX(${Math.max(0, x - frac * barW)}px)`);
@@ -74,10 +73,22 @@ export class TimeDisplay {
       }
     }
     if (bar) {
-      watch(bar, { attributes: true, attributeFilter: ['aria-valuenow', 'aria-valuetext'] });
       this.setAria(bar, Math.min(p, dur));
     }
     this.observer.takeRecords(); // our own writes
+  }
+
+  /** The cached elements while all are still in the page, else a fresh lookup (watched again; gone nodes drop out by themselves). */
+  private elements(): TimeElements {
+    const e = this.els;
+    if (e?.text?.isConnected && e.knob?.isConnected && e.bar?.isConnected && e.fills.length && e.fills.every((f) => f.isConnected)) return e;
+    const found = findTimeElements(this.site);
+    const watch = (el: HTMLElement | null, opts: MutationObserverInit) => el && this.observer.observe(el, opts);
+    watch(found.text, { childList: true, characterData: true, subtree: true });
+    watch(found.knob, { attributes: true, attributeFilter: ['style'] });
+    watch(found.bar, { attributes: true, attributeFilter: ['aria-valuenow', 'aria-valuetext'] });
+    for (const f of found.fills) watch(f, { attributes: true, attributeFilter: ['style'] });
+    return (this.els = found);
   }
 
   /**
@@ -93,7 +104,6 @@ export class TimeDisplay {
     const total = parts.reduce((a, q) => a + q.w, 0);
     let left = Math.max(0, parts.reduce((a, q) => a + q.raw * q.w, 0) / total - frac); // played share still to place
     for (const q of parts) {
-      this.observer.observe(q.el, { attributes: true, attributeFilter: ['style'] });
       const share = q.w / total;
       const x = Math.min(1, left / share);
       left = Math.max(0, left - share);

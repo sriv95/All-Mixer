@@ -54,6 +54,16 @@ describe('TimeDisplay (youtube)', () => {
     expect(q('.ytp-time-current').textContent).toBe('3:17');
   });
 
+  it('finds the elements again when the player re-creates them', () => {
+    document.body.innerHTML = `<div id="movie_player"><span class="ytp-time-current">1:40</span>
+      <div class="ytp-progress-bar"><div class="ytp-play-progress" style="transform: scaleX(0.5)"></div>
+      <div class="ytp-scrubber-container" style="transform: translateX(500px)"></div></div></div>`;
+    Object.defineProperty(q('.ytp-progress-bar'), 'clientWidth', { value: 1000 });
+    td.update();
+    expect(q('.ytp-time-current').textContent).toBe('1:38');
+    expect(q('.ytp-scrubber-container').style.transform).toBe('translateX(490px)');
+  });
+
   it('leaves the player alone without a presented time', () => {
     td.destroy();
     document.body.innerHTML = '<div id="movie_player"><span class="ytp-time-current">1:40</span></div>';
