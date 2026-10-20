@@ -58,5 +58,5 @@ Pure modules (LRC parse, LRCLIB client/match, caption parse, word alignment, lin
 ## Non-shipping directories
 
 - `spike/`: Python/JS research benches for the ML pipeline (reference implementations the TS code is checked against; has its own `package.json`, incl. Playwright). Not linted.
-- `scripts/qa-*`, `scripts/sri*/`, `qa/`, `docs/`: QA harness output (screenshots/JSON) and write-ups per ticket. `scripts/qa-*.mjs` are gitignored local harnesses; the other committed `scripts/*.mjs` (`fetch-*`, `onnx-dyn-dim`, `smoke-*`) are real tooling. `smoke-*.mjs` load `dist/` in Playwright with network access.
+- `scripts/qa-*`, `qa/`, `docs/`: QA harness output (screenshots/JSON) and write-ups per ticket. `scripts/qa-*.mjs` are gitignored local harnesses; the other committed `scripts/*.mjs` (`fetch-*`, `onnx-dyn-dim`, `smoke-*`) are real tooling. `smoke-*.mjs` load `dist/` in Playwright with network access.
 - Debug hooks (`debug.mlStallMs`, `debug.mlTiming`) are described in src/README.md "Debug".
