@@ -115,6 +115,18 @@ describe('ModelManager', () => {
     expect([...m.keys()].every((k) => k.startsWith('v2-'))).toBe(true);
   });
 
+  it('uninstall forgets the model and deletes its chunks, not the other models', async () => {
+    const area = memArea(), { m, files } = memFiles();
+    const mgr = new ModelManager(area as never, files, server(1).fetchFn);
+    await mgr.install('roformer');
+    await mgr.install('deux');
+    await mgr.uninstall('roformer');
+    expect(area.d[keyInstalled('roformer')]).toBeUndefined();
+    expect(area.d[keyInstalled('deux')]).toBeDefined();
+    expect([...m.keys()].filter((n) => n.includes('roformer'))).toEqual([]);
+    expect([...m.keys()].some((n) => n.includes('deux'))).toBe(true);
+  });
+
   it('refuses a manifest of another format', async () => {
     const area = memArea();
     const { files } = memFiles();
