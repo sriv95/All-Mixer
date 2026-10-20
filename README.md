@@ -27,6 +27,15 @@ Separate mode delays the sound by about 2 seconds; the picture is delayed by the
 
 Everything runs on your computer. The extension only contacts the lyrics service LRCLIB (for lyrics) and Hugging Face (to download the models you choose).
 
+## Report a bug or request a feature
+
+Open an issue on GitHub and pick the form:
+
+- [Report a bug](https://github.com/sriv95/All-Mixer/issues/new?template=bug_report.yml)
+- [Request a feature](https://github.com/sriv95/All-Mixer/issues/new?template=feature_request.yml)
+
+Search [existing issues](https://github.com/sriv95/All-Mixer/issues) first; add a 👍 or a comment if yours is already there.
+
 ## For developers
 
 Build, architecture, model publishing and debug notes are in [src/README.md](src/README.md).
