@@ -114,6 +114,26 @@ describe('watchMainVideo', () => {
   });
 });
 
+describe('watchMainVideo mutations', () => {
+  it('scans the page only when the added nodes hold media', async () => {
+    const cb = vi.fn();
+    const scan = vi.spyOn(document, 'querySelectorAll');
+    const off = watchMainVideo('generic', cb);
+    scan.mockClear();
+
+    document.body.append(document.createElement('div'));
+    await flush();
+    expect(scan).not.toHaveBeenCalled();
+
+    document.body.insertAdjacentHTML('beforeend', '<section><video></video></section>');
+    await flush();
+    expect(scan).toHaveBeenCalled();
+    expect(cb).toHaveBeenCalledTimes(1);
+    scan.mockRestore();
+    off();
+  });
+});
+
 describe('findMainVideo fixtures', () => {
   it.each([
     ['youtube', 'watch'],

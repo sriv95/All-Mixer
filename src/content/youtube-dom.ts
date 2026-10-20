@@ -78,6 +78,8 @@ export function onNavigate(cb: () => void, target: Document = document): () => v
   };
 }
 
+const MEDIA = 'video, audio';
+
 /**
  * Call `cb` with the main <video> whenever it first appears or is replaced.
  * YouTube normally keeps one element across SPA navigation, theater mode and
@@ -105,7 +107,11 @@ export function watchMainVideo(
     queueMicrotask(check);
   };
 
-  const observer = new MutationObserver(schedule);
+  // Most mutations on a busy page add no media: skip the document scan (and, on generic pages, the layout reads) for them.
+  const addsMedia = (n: Node) => n instanceof Element && (n.matches(MEDIA) || n.querySelector(MEDIA) !== null);
+  const observer = new MutationObserver((records) => {
+    if (records.some((r) => Array.from(r.addedNodes).some(addsMedia))) schedule();
+  });
   observer.observe(doc.documentElement, { childList: true, subtree: true });
   const offNav = onNavigate(schedule, doc);
   // Media events do not bubble but can be captured: a player that starts is a new candidate.
