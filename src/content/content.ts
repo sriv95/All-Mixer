@@ -73,6 +73,18 @@ selector.onChange = ({ state }) => {
   warmupSpinner(false);
   warmupHold.release();
 };
+// Playback that starts during the warm-up (a new song, play after a user pause, a video that was paused when it began)
+// would run the original mix behind the spinner: hold it again.
+window.addEventListener(
+  'playing',
+  (e) => {
+    if (e.target !== video || selector.status.state !== 'warming') return;
+    const wasActive = warmupHold.active;
+    warmupHold.hold();
+    if (!wasActive) warmupSpinner(warmupHold.active);
+  },
+  true,
+);
 // A RoFormer model was downloaded or updated in the background: load it if it is the one in use.
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return;
