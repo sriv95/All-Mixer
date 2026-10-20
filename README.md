@@ -1,5 +1,9 @@
 # All Mixer!
 
+[![Bun](https://img.shields.io/badge/Bun-1.4.2-000000?logo=bun&logoColor=white)](https://bun.sh)
+[![uv](https://img.shields.io/badge/uv-0.12.21-DE5FE9?logo=uv&logoColor=white)](https://docs.astral.sh/uv/)
+[![Chrome](https://img.shields.io/badge/Chrome-WebGPU-4285F4?logo=googlechrome&logoColor=white)](https://developer.chrome.com/docs/web-platform/webgpu)
+
 Chrome extension for YouTube and YouTube Music.
 
 - **Boost sound.** Global volume goes up to 600 %, with a limiter that keeps the sound clean.
