@@ -17,3 +17,5 @@ scripts/qa-*.mjs*
 .DS_Store
 out/
 models-out/
+# bench output
+spike/bench/results/
