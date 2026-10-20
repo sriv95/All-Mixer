@@ -329,7 +329,7 @@ const MODEL_CHOICES: readonly Choice<MlModel>[] = [
   { value: 'mdx', label: 'Default' },
   { value: 'roformer', label: 'High quality', hint: 'Optional download' },
   { value: 'deux', label: 'Best Vocal', hint: 'Needs a good GPU, optional download' },
-  { value: 'sw', label: 'Focus Instrumental Splitting', hint: 'Drums, guitar, bass and piano in one pass. Needs a good GPU, optional download' },
+  { value: 'sw', label: 'Focus Instrumental Splitting', hint: 'Needs a good GPU, optional download' },
 ];
 
 type Levels = Pick<MixerSettings, 'vocalPct' | 'instrumentalPct' | 'drumsPct' | 'guitarPct' | 'bassPct' | 'pianoPct' | 'othersPct'>;
