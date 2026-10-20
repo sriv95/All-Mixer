@@ -160,8 +160,14 @@ export function findTimeElements(site: Site, doc: ParentNode = document): TimeEl
     fills: [...doc.querySelectorAll<HTMLElement>(s.fills)],
     knob: doc.querySelector<HTMLElement>(s.knob),
     bar: doc.querySelector<HTMLElement>(s.bar),
-    dragging: s.dragging !== null && doc.querySelector(s.dragging) !== null,
+    dragging: isSeekDragging(site, doc),
   };
+}
+
+/** The user drags the seek bar (cheap enough to ask every frame). */
+export function isSeekDragging(site: Site, doc: ParentNode = document): boolean {
+  const { dragging } = TIME_SELECTORS[site];
+  return dragging !== null && doc.querySelector(dragging) !== null;
 }
 
 /** The player's own buffering spinner (both sites): hidden by an inline `display: none`, shown by setting `display: block`. */
