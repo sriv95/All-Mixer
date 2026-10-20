@@ -3,6 +3,9 @@ import { findTimeElements, type Site } from './youtube-dom';
 /** A bigger gap between currentTime and the presented time is a seek in flight, not the picture delay. */
 const MAX_SHIFT_S = 10;
 
+/** On an ended video, a presented time this close to the end counts as the end. */
+const END_SNAP_S = 0.5;
+
 const SCALE_RE = /^scaleX\(([\d.e-]+)\)$/;
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -42,8 +45,10 @@ export class TimeDisplay {
   }
 
   update(): void {
-    const p = this.presentedTime();
     const dur = this.video.duration;
+    let p = this.presentedTime();
+    // The last frame sits a few ms short of the end: the readout would stop on 0:18 of 0:19 with the bar full.
+    if (p !== null && this.video.ended && dur - p < END_SNAP_S) p = dur;
     const shift = this.video.currentTime - (p ?? NaN);
     if (p === null || !(dur > 0) || !(shift >= -0.05 && shift <= MAX_SHIFT_S)) return;
     const { text, fills, knob, bar, dragging } = findTimeElements(this.site);
