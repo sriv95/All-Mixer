@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { HIDE_CAPTIONS_STYLE_ID, findSettingsButton, findSettingsMainMenu, findSettingsPopup, findControlBar, findPlayer, setYtCaptionsHidden, NAVIGATION_EVENTS, onCaptionsButtonOn, detectSite, findMainVideo, getVideoId, onNavigate, watchMainVideo } from './youtube-dom';
+import { HIDE_CAPTIONS_STYLE_ID, findSettingsButton, findSettingsMainMenu, findSettingsPopup, findControlBar, findPlayer, setYtCaptionsHidden, NAVIGATION_EVENTS, onCaptionsButtonOn, detectSite, findMainVideo, getVideoId, onNavigate, watchMainVideo, touchesYtmPlayerPage } from './youtube-dom';
 
 const fixture = (name: string) => readFileSync(`src/content/__fixtures__/${name}.html`, 'utf8');
 
@@ -281,5 +281,29 @@ describe('settings menu hooks', () => {
     expect(findSettingsPopup()).toBeNull();
     expect(findSettingsButton()).toBeNull();
     expect(findSettingsMainMenu(document.createElement('div'), 'data-own')).toBeNull();
+  });
+});
+
+describe('touchesYtmPlayerPage', () => {
+  const records = (mutate: () => void) => {
+    const obs = new MutationObserver(() => {});
+    obs.observe(document.documentElement, { subtree: true, childList: true, attributes: true });
+    mutate();
+    const r = obs.takeRecords();
+    obs.disconnect();
+    return r;
+  };
+
+  it('ignores churn outside the player page and notices changes inside or of it', () => {
+    document.body.innerHTML = '<ytmusic-player-bar></ytmusic-player-bar><div id="shelf"></div><ytmusic-player-page><div id="tab-renderer"></div></ytmusic-player-page>';
+    const add = (parent: string) => () => document.querySelector(parent)!.append(document.createElement('span'));
+    expect(touchesYtmPlayerPage(records(add('ytmusic-player-bar')))).toBe(false);
+    expect(touchesYtmPlayerPage(records(add('#shelf')))).toBe(false);
+    expect(touchesYtmPlayerPage(records(add('#tab-renderer')))).toBe(true);
+    expect(touchesYtmPlayerPage(records(() => document.querySelector('#tab-renderer')!.setAttribute('aria-selected', 'true')))).toBe(true);
+    expect(touchesYtmPlayerPage(records(() => document.querySelector('ytmusic-player-page')!.remove()))).toBe(true);
+    const wrap = document.createElement('div');
+    wrap.innerHTML = '<ytmusic-player-page></ytmusic-player-page>';
+    expect(touchesYtmPlayerPage(records(() => document.body.append(wrap)))).toBe(true);
   });
 });

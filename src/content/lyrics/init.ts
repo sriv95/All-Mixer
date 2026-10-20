@@ -1,7 +1,7 @@
 import type { FetchLyrics, PinLyrics, SearchLyrics, UnpinLyrics } from '../../shared/messages';
 import type { FoundLyrics, LrclibRecord } from '../../lyrics/lrclib-types';
 import { toFound } from '../../lyrics/lrclib';
-import { CC_BUTTON_SELECTOR, clickCaptionsButton, findLyricsControls, getCaptionsButtonState, findPlayer, getVideoId, onCaptionsButtonOn, onNavigate, setYtCaptionsHidden, type Site } from '../youtube-dom';
+import { CC_BUTTON_SELECTOR, clickCaptionsButton, findLyricsControls, getCaptionsButtonState, findPlayer, getVideoId, onCaptionsButtonOn, onNavigate, setYtCaptionsHidden, touchesYtmPlayerPage, type Site } from '../youtube-dom';
 import { linesToLrc, lyricsToText } from '../../lyrics/export';
 import { getPlayerInfo, getTimedText, onCaptionsAvailable } from './bridge-client';
 import { LyricsController, type LyricsState } from './controller';
@@ -223,8 +223,8 @@ export function initLyrics(site: Site, presentedTime: () => number | null, prese
     controller.addSurface(surface);
     // Tab clicks flip aria-selected; YT Music also re-renders the tab content.
     let queued = false;
-    new MutationObserver(() => {
-      if (queued) return;
+    new MutationObserver((records) => {
+      if (queued || !touchesYtmPlayerPage(records)) return;
       queued = true;
       requestAnimationFrame(() => {
         queued = false;
