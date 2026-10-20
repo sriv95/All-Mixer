@@ -21,6 +21,12 @@ CI builds the extension, creates tag `vx.y.z` and a GitHub release with this sec
 - Model menu: "Best quality" is now called "Best Vocal".
 - Separate mode: the audio and picture are about 23 ms later than before (the pitch stage). A pitch shift in Default mode adds the same delay.
 
+### Fixed
+
+- Popup: the Separate banner sometimes did not show on pages with several frames (embeds, ads); it now reads the frame that plays the media.
+- Popup: the banner follows a stop or failure while the popup is open, and shows "Separation unavailable" when the engine gave up while the separator was still loading.
+- Toolbar badge: shows the red "!" when the separator fails after Separate mode went live.
+
 ## [0.4.0] - 2026-10-19
 
 ### Added
