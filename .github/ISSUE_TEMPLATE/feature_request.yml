@@ -1,0 +1,16 @@
+name: Feature request
+description: Suggest an idea for All Mixer!
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What do you want to do?
+      description: Describe the problem or use case, not only the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Idea
+      description: How could it work? Any alternatives you considered?
