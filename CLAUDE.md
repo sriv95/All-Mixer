@@ -27,7 +27,7 @@ bun run dev                           # watch build of the content script only
 - `bun run build` fails if `public/ml/vocals.onnx` / `mdx.onnx` are missing. `mdx.onnx` conversion uses `.venv/bin/python` from `uv sync` (override with `PY=/path/to/python`). The RoFormer models ("High quality" = `roformer`, "Best quality" = `deux`) are not packed into the build: the user downloads the selected one from a public Hugging Face repo (`MODEL_BASE_URL` in `src/shared/model-store.ts`) into OPFS; `src/background/model-manager.ts` downloads and checks for newer versions (manifest.json, one version per model), the popup shows the button, the ML worker reads the chunks. `chrome.storage.local['debug.modelBaseUrl']` points it at a local server for QA.
 - Build is 4 separate vite runs because the artifacts differ: main (popup, `ml.html`, background service worker, ES), content script (single IIFE), MAIN-world page bridge (IIFE, `ENTRY=page`), separator AudioWorklet (one ES module). After a rebuild, reload the extension in `chrome://extensions` and reload the YouTube tab.
 - CI (`.github/workflows/ci.yml`) runs only lint + typecheck + test, and only after a PR merges to `main` (or a `package.json` push). It never builds, since the models are not in git.
-- Release: add `## [x.y.z] - date` to `CHANGELOG.md` and bump `version` in `package.json` (single source; the build stamps it into `dist/manifest.json`, so do not edit the version in `public/manifest.json`). Changelog entries describe user-visible behavior in plain language, under `## [Unreleased]` until released. See README "Release".
+- Release: add `## [x.y.z] - date` to `CHANGELOG.md` and bump `version` in `package.json` (single source; the build stamps it into `dist/manifest.json`, so do not edit the version in `public/manifest.json`). Changelog entries describe user-visible behavior in plain language, under `## [Unreleased]` until released. See src/README.md "Release".
 - Commit style: `type(scope, SRI-NNN): message` (Linear ticket ids appear in code comments and commits too).
 - Python parity tests (`scripts/parity-mdx.test.mjs`) are skipped unless `PARITY_DIR` is set; see the file header.
 
@@ -59,4 +59,4 @@ Pure modules (LRC parse, LRCLIB client/match, caption parse, word alignment, lin
 
 - `spike/`: Python/JS research benches for the ML pipeline (reference implementations the TS code is checked against; has its own `package.json`, incl. Playwright). Not linted.
 - `scripts/qa-*`, `scripts/sri*/`, `qa/`, `docs/`: QA harness output (screenshots/JSON) and write-ups per ticket. `scripts/qa-*.mjs` are gitignored local harnesses; the other committed `scripts/*.mjs` (`fetch-*`, `onnx-dyn-dim`, `smoke-*`) are real tooling. `smoke-*.mjs` load `dist/` in Playwright with network access.
-- Debug hooks (`debug.mlStallMs`, `debug.mlTiming`) are described in README "Debug".
+- Debug hooks (`debug.mlStallMs`, `debug.mlTiming`) are described in src/README.md "Debug".
