@@ -43,6 +43,17 @@ describe('TimeDisplay (youtube)', () => {
     expect(q('.ytp-time-current').textContent).toBe('1:40');
   });
 
+  it('shows the full duration once the ended video has played out', () => {
+    Object.defineProperty(video, 'ended', { value: true });
+    Object.defineProperty(video, 'currentTime', { value: 200 });
+    presented = 199.9;
+    td.update();
+    expect(q('.ytp-time-current').textContent).toBe('3:20');
+    presented = 197; // the delayed tail is still playing
+    td.update();
+    expect(q('.ytp-time-current').textContent).toBe('3:17');
+  });
+
   it('leaves the player alone without a presented time', () => {
     td.destroy();
     document.body.innerHTML = '<div id="movie_player"><span class="ytp-time-current">1:40</span></div>';

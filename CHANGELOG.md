@@ -26,6 +26,8 @@ CI builds the extension, creates tag `vx.y.z` and a GitHub release with this sec
 - Popup: the Separate banner sometimes did not show on pages with several frames (embeds, ads); it now reads the frame that plays the media.
 - Popup: the banner follows a stop or failure while the popup is open, and shows "Separation unavailable" when the engine gave up while the separator was still loading.
 - Toolbar badge: shows the red "!" when the separator fails after Separate mode went live.
+- Separate mode: playback that starts while the vocal separation is still preparing (a new song, play after a pause, a seek) no longer runs the original sound behind the spinner. It waits for the separation like the first play does.
+- Separate mode: at the end of a video the time shows the full length (0:19 of 0:19) instead of stopping one second short.
 
 ## [0.4.0] - 2026-10-19
 
