@@ -10,6 +10,12 @@ Chrome extension for YouTube and YouTube Music.
 - **Pitch.** Shift the pitch up or down by up to 6 semitones. The speed stays the same.
 - **Synced lyrics.** Lyrics follow the song on YouTube and YouTube Music, as a floating panel, a karaoke overlay, or the native Lyrics tab.
 
+<p align="center"><img src="docs/screenshots/popup-default.png" alt="The All Mixer! popup in Default mode: global volume and pitch" width="260"></p>
+
+| Separate mode | Advanced | Focus Instrumental Splitting |
+| :---: | :---: | :---: |
+| <img src="docs/screenshots/popup.png" alt="The popup in Separate mode" width="260"> | <img src="docs/screenshots/popup-advanced.png" alt="The Advanced section: model, GPU, delay limit, pitch and Split instrumental" width="260"> | <img src="docs/screenshots/popup-focus.png" alt="Focus Instrumental Splitting model: Drums, Guitar, Bass, Piano and Others sliders" width="260"> |
+
 ## Install
 
 1. Download `all-mixer-vX.Y.Z.zip` from the [latest release](../../releases/latest) and unzip it.
