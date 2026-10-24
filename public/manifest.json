@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "All Mixer!",
+  "name": "All Mixer! - Karaoke and Live Vocal/Instrumental Separation",
   "version": "0.2.0",
   "description": "Volume boost and vocal/instrumental mixing on any site, plus synced lyrics on YouTube and YouTube Music.",
   "minimum_chrome_version": "120",
