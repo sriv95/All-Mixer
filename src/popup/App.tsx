@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { AudioLines, AudioWaveform, Cpu, Download, Drum, Guitar, LoaderCircle, Maximize2, Mic, Minimize2, MicOff, Music, Piano, RefreshCw, RotateCcw, Settings2, SlidersVertical, Timer, TriangleAlert, Undo2, Volume2, Waves, Zap } from 'lucide-react';
+import { AudioLines, AudioWaveform, Cpu, Download, Drum, ExternalLink, Guitar, LoaderCircle, Maximize2, Mic, Minimize2, MicOff, Music, Piano, RefreshCw, RotateCcw, Settings2, SlidersVertical, Timer, TriangleAlert, Undo2, Volume2, Waves, Zap } from 'lucide-react';
 import type { ContentStatus, GetStatus, GetTabSettings, SetTabSettings } from '../shared/messages';
 import { clampDelayS, clampOthersPct, clampPct, clampPitch, masterPctAt, masterPosOf, MASTER_POS_MAX, normalizeSettings, PITCH_MAX, type MixerSettings, type Mode } from '../shared/settings';
 import { separationView, type SepView } from '../shared/separation-view';
@@ -21,6 +21,8 @@ const ADVANCED_KEY = 'advancedOpen';
 
 // The compact view (no presets, no banner text) is remembered too.
 const COMPACT_KEY = 'compact';
+
+const REPO_URL = 'https://github.com/sriv95/All-Mixer';
 
 function readCompact(): boolean {
   try {
@@ -189,6 +191,9 @@ export function App() {
           </>
         )}
         <p id="status" role="status" className="m-0 text-[13px] leading-snug text-muted empty:hidden">{note}</p>
+        <a href={REPO_URL} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-1.5 text-xs text-muted underline">
+          <ExternalLink size={13} aria-hidden />sriv95/All-Mixer
+        </a>
       </main>
     </Blocked.Provider>
     </MotionConfig>
