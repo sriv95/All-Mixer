@@ -1,8 +1,7 @@
 # All Mixer!
 
-![Bun](https://img.shields.io/badge/Bun-1.4.2-000000?logo=bun&logoColor=white)
-![uv](https://img.shields.io/badge/uv-0.12.21-DE5FE9?logo=uv&logoColor=white)
-
+[![Bun](https://img.shields.io/badge/Bun-1.4.2-000000?logo=bun&logoColor=white)](https://bun.sh)
+[![uv](https://img.shields.io/badge/uv-0.12.21-DE5FE9?logo=uv&logoColor=white)](https://docs.astral.sh/uv/)
 
 Chrome extension for YouTube and YouTube Music.
 
