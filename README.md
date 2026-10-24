@@ -3,7 +3,7 @@
 [![Bun](https://img.shields.io/badge/Bun-1.4.2-000000?logo=bun&logoColor=white)](https://bun.sh)
 [![uv](https://img.shields.io/badge/uv-0.12.21-DE5FE9?logo=uv&logoColor=white)](https://docs.astral.sh/uv/)
 
-Chrome extension for YouTube and YouTube Music.
+Chrome extension for turning browser into Karaoke (live vocal/instrumental separation)
 
 - **Boost sound.** Global volume goes up to 600 %, with a limiter that keeps the sound clean.
 - **Separate mode.** Mix the vocal and the instrumental of any song live: turn the singer down for karaoke, or turn the band down to hear the voice. Optional Split instrumental gives drums, guitar, bass and piano their own levels.
