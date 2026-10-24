@@ -43,3 +43,7 @@ Search [existing issues](https://github.com/sriv95/All-Mixer/issues) first; add 
 ## For developers
 
 Build, architecture, model publishing and debug notes are in [src/README.md](src/README.md).
+
+## License
+
+[MIT with Commons Clause](LICENSE): free to use, modify and share, but you may not sell the software.
