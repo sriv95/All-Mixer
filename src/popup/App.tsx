@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { AudioLines, AudioWaveform, Cpu, Download, Drum, Guitar, LoaderCircle, Maximize2, Mic, Minimize2, MicOff, Music, Piano, RefreshCw, RotateCcw, Settings2, SlidersVertical, Timer, TriangleAlert, Undo2, Volume2, Waves, Zap } from 'lucide-react';
+import { AudioLines, AudioWaveform, Cpu, Download, Drum, Guitar, LoaderCircle, Maximize2, Mic, Minimize2, MicOff, Music, Piano, RefreshCw, RotateCcw, Settings2, Timer, TriangleAlert, Undo2, Volume2, Waves, Zap } from 'lucide-react';
 import type { ContentStatus, GetStatus, GetTabSettings, SetTabSettings } from '../shared/messages';
 import { clampDelayS, clampOthersPct, clampPct, clampPitch, masterPctAt, masterPosOf, MASTER_POS_MAX, normalizeSettings, PITCH_MAX, type MixerSettings, type Mode } from '../shared/settings';
 import { separationView, type SepView } from '../shared/separation-view';
@@ -141,7 +141,7 @@ export function App() {
       <main className="flex flex-col gap-3.5">
         <header className="flex items-center justify-between gap-2.5">
           <span className="flex items-center gap-2.5 text-[17px] font-extrabold tracking-tight">
-            <span className="grid size-8 place-items-center rounded-[10px] bg-brand text-white"><SlidersVertical size={18} aria-hidden /></span>
+            <img src="/icons/icon-128.png" alt="" className="size-8 rounded-[10px]" />
             All Mixer!
           </span>
           {!noContent && (
