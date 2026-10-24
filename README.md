@@ -42,3 +42,18 @@ Search [existing issues](https://github.com/sriv95/All-Mixer/issues) first; add 
 ## For developers
 
 Build, architecture, model publishing and debug notes are in [src/README.md](src/README.md).
+
+## License
+
+[MIT with Commons Clause](LICENSE): free to use, modify and share, but you may not sell the software.
+
+## Credits
+
+- [Spleeter](https://github.com/deezer/spleeter) (Deezer)
+- Default Model: [MDX-Net](https://github.com/Anjok07/ultimatevocalremovergui) 
+- High-Quality Model: [Kim-Mel-Band-Roformer-FT](https://huggingface.co/pcunwa/Kim-Mel-Band-Roformer-FT)
+- Best-Vocal Model: [mel-band-roformer-deux](https://huggingface.co/becruily/mel-band-roformer-deux)
+- Drum Splitting Model: [SCNet](https://github.com/starrytong/SCNet) , ( Tran Small checkpoint from [ZFTurbo](https://github.com/ZFTurbo/Music-Source-Separation-Training) )
+- Focus Instrumental Splitting Model: [BS-RoFormer-SW-6stem](https://huggingface.co/FractalSurfer/BS-RoFormer-SW-6stem)
+
+Licenses of the bundled models are in [THIRD_PARTY_NOTICES.txt](public/ml/THIRD_PARTY_NOTICES.txt).
