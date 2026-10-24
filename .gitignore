@@ -19,3 +19,12 @@ out/
 models-out/
 # bench output
 spike/bench/results/
+# local vocal-model bench scratch
+spike/bench/VOCAL_CANDIDATES.md
+spike/bench/engine_bench.mjs
+spike/bench/export_cand.py
+spike/bench/mini_eval.py
+spike/bench/rof_prof.mjs
+spike/bench/shim/
+spike/bench/vocal_*.py
+spike/bench/vocal_stream_*.mjs
