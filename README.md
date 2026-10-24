@@ -1,5 +1,7 @@
 # All Mixer!
 
+<p align="center"><img src="docs/store/promo-small-440x280.png" alt="All Mixer! - Karaoke and live vocal / instrumental separation" width="440"></p>
+
 [![Bun](https://img.shields.io/badge/Bun-1.4.2-000000?logo=bun&logoColor=white)](https://bun.sh)
 [![uv](https://img.shields.io/badge/uv-0.12.21-DE5FE9?logo=uv&logoColor=white)](https://docs.astral.sh/uv/)
 
@@ -34,7 +36,7 @@ Separate mode delays the sound by about 2 seconds; the picture is delayed by the
 
 ## Privacy
 
-Everything runs on your computer. The extension only contacts the lyrics service LRCLIB (for lyrics) and Hugging Face (to download the models you choose).
+Everything runs on your computer. The extension only contacts the lyrics service LRCLIB (for lyrics) and Hugging Face (to download the models you choose). Read the full [Privacy Policy](PRIVACY.md).
 
 ## Report a bug or request a feature
 
