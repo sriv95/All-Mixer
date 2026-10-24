@@ -8,6 +8,28 @@ CI builds the extension, creates tag `vx.y.z` and a GitHub release with this sec
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-25
+
+First official release. This sums up everything built in 0.1.0 to 0.5.0, plus the new look below.
+
+### Added
+
+- **Volume boost.** Global Volume goes from 0 % to 600 % in Default and Separate mode, with a limiter that keeps the sound clean. The page's audio is not touched until you move the slider. It works on any site with a video or audio player, not only YouTube.
+- **Pitch.** A − / + control shifts the pitch up or down by up to 6 semitones with the speed unchanged. Separate mode can shift the vocal and the instrumental separately.
+- **Separate mode (live vocal / instrumental mixing).** Vocal and Instrumental sliders from 0 to 100 %, with Karaoke, Half karaoke, A cappella and Reset presets and a five-second Undo. The separation runs on your GPU (WebGPU) and adds about 2 seconds of delay. The video is delayed by the same time so picture and sound stay in sync, and the time and seek bar show what you hear. If your device cannot keep up, or has no WebGPU, the original sound plays and the popup says why, with buttons to fix it (Default model, higher delay limit, retry).
+- **Four separation models.** Default (MDX-Net and Spleeter, built in), High quality (RoFormer, Kim fine-tune), Best Vocal (Deux RoFormer) and Focus Instrumental Splitting (vocal, drums, guitar, bass, piano and others, each with its own level). The RoFormer models are a one-time download from Hugging Face. The popup offers updates and an Uninstall model link.
+- **Split instrumental.** Optional Drums and Guitar switches take those instruments out of the instrumental, each with its own level. They add delay on top of the Delay limit.
+- **Advanced settings.** Model, GPU (Automatic, High performance or Low power), Delay limit (2 to 15 s; a longer limit gives a cleaner split) and Change pitch separately. Warm-up remembers your GPU speed, and turning Separate mode off and on within 3 minutes restarts at once.
+- **Synced lyrics on YouTube and YouTube Music.** Lyrics come from LRCLIB, with the video's own captions (manual, then auto-generated) as a fallback. On YouTube Music they show in the player's Lyrics tab; on YouTube in a floating panel or as karaoke text over the video. You can pick the lyrics source and the caption language, shift the lyrics timing (−2 s to +2 s, or the `[` and `]` keys), search other lyrics, paste your own, copy them or save them as `.lrc`.
+- **Karaoke text.** The sung line fills with colour from left to right. Colour, size, font, outline, background, line transition, position and style presets are yours to change, with a right-click menu and a Lyrics-only view.
+- **Toolbar badge.** It shows the state of Separate mode: gray dots while warming up, "ON" while separating, and a red "!" when it stops. The tooltip says the same.
+- **Popup.** Default and Separate tabs, dark mode that follows the system, hints, a compact view, animations that follow "Reduce motion", and a link to the GitHub repository at the bottom. Settings are kept per browser tab and survive page navigation and reloads.
+
+### Changed
+
+- New app icon
+- The extension name in the manifest is now "All Mixer! - Karaoke and Live Vocal/Instrumental Separation".
+
 ## [0.5.0] - 2026-10-20
 
 ### Added
