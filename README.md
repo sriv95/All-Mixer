@@ -1,8 +1,8 @@
 # All Mixer!
 
-[![Bun](https://img.shields.io/badge/Bun-1.4.2-000000?logo=bun&logoColor=white)](https://bun.sh)
-[![uv](https://img.shields.io/badge/uv-0.12.21-DE5FE9?logo=uv&logoColor=white)](https://docs.astral.sh/uv/)
-[![Chrome](https://img.shields.io/badge/Chrome-WebGPU-4285F4?logo=googlechrome&logoColor=white)](https://developer.chrome.com/docs/web-platform/webgpu)
+![Bun](https://img.shields.io/badge/Bun-1.4.2-000000?logo=bun&logoColor=white)
+![uv](https://img.shields.io/badge/uv-0.12.21-DE5FE9?logo=uv&logoColor=white)
+
 
 Chrome extension for YouTube and YouTube Music.
 
@@ -47,3 +47,14 @@ Build, architecture, model publishing and debug notes are in [src/README.md](src
 ## License
 
 [MIT with Commons Clause](LICENSE): free to use, modify and share, but you may not sell the software.
+
+## Credits
+
+- [Spleeter](https://github.com/deezer/spleeter) (Deezer)
+- Default Model: [MDX-Net](https://github.com/Anjok07/ultimatevocalremovergui) 
+- High-Quality Model: [Kim-Mel-Band-Roformer-FT](https://huggingface.co/pcunwa/Kim-Mel-Band-Roformer-FT)
+- Best-Vocal Model: [mel-band-roformer-deux](https://huggingface.co/becruily/mel-band-roformer-deux)
+- Drum Splitting Model: [SCNet](https://github.com/starrytong/SCNet) , ( Tran Small checkpoint from [ZFTurbo](https://github.com/ZFTurbo/Music-Source-Separation-Training) )
+- Focus Instrumental Splitting Model: [BS-RoFormer-SW-6stem](https://huggingface.co/FractalSurfer/BS-RoFormer-SW-6stem)
+
+Licenses of the bundled models are in [THIRD_PARTY_NOTICES.txt](public/ml/THIRD_PARTY_NOTICES.txt).
