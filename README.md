@@ -20,6 +20,14 @@ Chrome extension for turning browser into Karaoke (live vocal/instrumental separ
 
 ## Install
 
+### Chrome Web Store (recommended)
+
+<p align="center"><a href="https://chromewebstore.google.com/detail/all-mixer-karaoke-and-liv/ofgehjbnbibfpedhledkheidigolohpc?authuser=0&hl=en"><b>Download from the Chrome Web Store</b></a></p>
+
+Click **Add to Chrome**, then reload any open YouTube tabs and click the toolbar icon.
+
+### GitHub Releases
+
 1. Download `all-mixer-vX.Y.Z.zip` from the [latest release](../../releases/latest) and unzip it.
 2. Open `chrome://extensions` and turn on **Developer mode**.
 3. Click **Load unpacked** and pick the unzipped folder.
