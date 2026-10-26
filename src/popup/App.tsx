@@ -492,6 +492,7 @@ function SeparateControls({ settings, update, ready, compact, advancedOpen, setA
                     <Switch id="split-guitar" checked={settings.splitGuitar} onChange={(on) => update({ splitGuitar: on })} />
                   </div>
                   <p className="m-0 text-xs leading-snug text-muted">Each extra split uses more GPU and adds more delay over the Delay limit.</p>
+                  <Btn id="split-focus-model" onClick={() => update({ mlModel: 'sw' })}><Cpu size={16} aria-hidden />Focus Instrumental Model</Btn>
                   <Collapse show={!!models.drums}>{models.drums && <ModelRow idPrefix="drums" line={models.drums} />}</Collapse>
                   <Collapse show={!!models.guitar}>{models.guitar && <ModelRow idPrefix="guitar" line={models.guitar} />}</Collapse>
                 </>
