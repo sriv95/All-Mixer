@@ -776,6 +776,18 @@ describe('popup', () => {
         expect(has('act-fast-gpu')).toBe(false);
       });
 
+      it('hides the high performance GPU button when the current GPU is already the fastest', async () => {
+        const adapter = { info: { description: 'Only GPU' } };
+        vi.stubGlobal('navigator', Object.assign(Object.create(navigator), { gpu: { requestAdapter: async () => adapter } }));
+        try {
+          await load({ stored: { mode: 'separate' }, status: stopped });
+          await settle();
+          expect(has('act-fast-gpu')).toBe(false);
+        } finally {
+          vi.unstubAllGlobals();
+        }
+      });
+
       it('Try again turns Separate off and on again', async () => {
         await load({ stored: { mode: 'separate' }, status: stopped });
         el('act-retry').click();

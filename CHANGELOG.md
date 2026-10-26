@@ -8,6 +8,10 @@ CI builds the extension, creates tag `vx.y.z` and a GitHub release with this sec
 
 ## [Unreleased]
 
+### Fixed
+
+- The "Try the high performance GPU" button no longer shows when the GPU in use is already the fastest one.
+
 ## [1.0.0] - 2026-10-25
 
 First official release. This sums up everything built in 0.1.0 to 0.5.0, plus the new look below.
