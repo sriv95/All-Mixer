@@ -503,6 +503,15 @@ describe('popup', () => {
         expect(el('split-all').textContent).toMatch(/already splits the drums, guitar, bass and piano/);
       });
 
+      it('the Split section has a Focus Instrumental Model button that switches to this model, and none once it is on', async () => {
+        await load({ stored: { mode: 'separate', splitInstrumental: true } });
+        expect(el('split-focus-model').textContent).toBe('Focus Instrumental Model');
+        el('split-focus-model').click();
+        await settle();
+        expect(sent().at(-1).settings.mlModel).toBe('sw');
+        expect(has('split-focus-model')).toBe(false);
+      });
+
       it('the bass and piano sliders are only there with this model', async () => {
         await load({ stored: { mode: 'separate', splitInstrumental: true, splitGuitar: true } });
         expect(has('bass')).toBe(false);
