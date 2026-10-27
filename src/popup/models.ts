@@ -26,6 +26,7 @@ function modelLine(id: ModelId, s: ModelState): Omit<ModelLine, 'id'> {
   const label = MODEL_LABEL[id];
   switch (s.kind) {
     case 'missing':
+      if (id === 'compat') return { text: `This GPU has no fp16 support. The Default model for it is a one-time download${s.size ? ` (${mb(s.size)})` : ''}.`, button: 'Download supported models' };
       return { text: `${label} is a one-time download${s.size ? ` (${mb(s.size)})` : ''}.`, button: 'Download' };
     case 'downloading':
       return { text: `Downloading… ${Math.floor((100 * s.done) / s.total)}% (${mb(s.done)} of ${mb(s.total)})`, progress: (100 * s.done) / s.total };
@@ -42,8 +43,8 @@ function modelLine(id: ModelId, s: ModelState): Omit<ModelLine, 'id'> {
 
 /** The state of the downloadable models, kept live from chrome.storage.local. */
 /** `split`: which split stages are on. */
-export function useModels(selected: string, split: { drums: boolean; guitar: boolean }, enabled: boolean): { model?: ModelLine; drums?: ModelLine; guitar?: ModelLine } {
-  const [records, setRecords] = useState<AllRecords>({ roformer: {}, deux: {}, sw: {}, drums: {}, guitar: {} });
+export function useModels(selected: string, split: { drums: boolean; guitar: boolean }, enabled: boolean, noF16 = false): { model?: ModelLine; drums?: ModelLine; guitar?: ModelLine } {
+  const [records, setRecords] = useState<AllRecords>({ roformer: {}, deux: {}, sw: {}, drums: {}, guitar: {}, compat: {} });
   const [, tick] = useReducer((n: number) => n + 1, 0);
 
   useEffect(() => {
@@ -87,8 +88,11 @@ export function useModels(selected: string, split: { drums: boolean; guitar: boo
 
   const out: { model?: ModelLine; drums?: ModelLine; guitar?: ModelLine } = {};
   // Shown for the selected downloadable model, and for any model with an update on offer or a download running.
-  const id = isModelId(selected) ? selected : VOCAL_MODEL_IDS.find((m) => states[m].kind === 'update' || states[m].kind === 'downloading');
+  // A GPU without shader-f16 runs only the fp32 Default model ('compat', its own download); the other models are not supported there.
+  const id = noF16 ? undefined : isModelId(selected) ? selected : VOCAL_MODEL_IDS.find((m) => states[m].kind === 'update' || states[m].kind === 'downloading');
   if (id) out.model = { id, ...modelLine(id, states[id]) };
+  else if (noF16 && selected === 'mdx') out.model = { id: 'compat', ...modelLine('compat', states.compat) };
+  else if (noF16 && isModelId(selected)) out.model = { id: selected, text: `${MODEL_LABEL[selected]} is not supported on this GPU (no fp16). Use the Default model.` };
   // A split model: shown while the split is on with it, or when an update is on offer or a download is running.
   for (const sid of ['drums', 'guitar'] as const) {
     const s = states[sid];

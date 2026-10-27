@@ -62,6 +62,11 @@ async function start(init: MlWorkerInit): Promise<void> {
   }
   if (!adapter) return unavailable('no WebGPU adapter');
   if (adapter.isFallbackAdapter) return unavailable('only a fallback (software) WebGPU adapter');
+  // The packed Default models, the RoFormers and the guitar model are fp16: ORT's WebGPU EP then emits f16 shaders and
+  // session creation throws without this feature (e.g. Polaris / RX 590). Only the downloaded fp32 Default ('compat') and SCNet run there.
+  const f16 = !!adapter.features?.has('shader-f16');
+  if (!f16 && init.model !== 'mdx') return unavailable(`${MODEL_LABEL[init.model as ModelId]} is not supported on this GPU (no fp16)`);
+  if (!f16 && init.guitar) return unavailable(`${MODEL_LABEL.guitar} is not supported on this GPU (no fp16)`);
   const info = adapter.info ?? {};
   const adapterName = nameOfAdapter(info);
   if (init.model !== 'mdx') return startRoformer(init, adapterName);
@@ -77,7 +82,15 @@ async function start(init: MlWorkerInit): Promise<void> {
     if (init.gpu && init.gpu !== 'auto') ort.env.webgpu.powerPreference = init.gpu; // ORT requests its own adapter
     ort.env.logLevel = 'error'; // models declare a dynamic dim; ORT warns VerifyOutputSizes per run
     const opts = { executionProviders: ['webgpu'], graphOptimizationLevel: 'all', logSeverityLevel: 3 } as const;
-    const [mdxModel, splBuf] = await Promise.all([init.mdxUrl, init.modelUrl].map(async (u) => (await fetch(u)).arrayBuffer()));
+    let mdxModel: ArrayBuffer, splBuf: ArrayBuffer;
+    if (f16) {
+      [mdxModel, splBuf] = await Promise.all([init.mdxUrl, init.modelUrl].map(async (u) => (await fetch(u)).arrayBuffer()));
+    } else {
+      const inst = init.installed;
+      if (!inst || inst.format !== MODEL_FORMAT) return unavailable('this GPU has no fp16 support: download the Default model for this GPU');
+      const [mdxFile, splFile] = modelFileNames('compat');
+      [mdxModel, splBuf] = await Promise.all([mdxFile, splFile].map((f) => readModelFile(opfsFiles(), inst.version, f, inst.files[f]).then((x) => x.arrayBuffer())));
+    }
     mdxBuf = mdxModel;
     mdxSession = await ort.InferenceSession.create(mdxBuf, opts);
     session = await ort.InferenceSession.create(splBuf, opts);
@@ -490,6 +503,7 @@ function serve(port: MessagePort, engine: BlockEngine, dbg: StallOpts, timing: M
 
 interface GPUAdapterLike {
   isFallbackAdapter?: boolean;
+  features?: { has(name: string): boolean };
   info?: { vendor?: string; architecture?: string; description?: string };
 }
 

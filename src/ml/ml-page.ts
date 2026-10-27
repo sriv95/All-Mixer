@@ -50,7 +50,7 @@ window.addEventListener('message', (e: MessageEvent) => {
     const w = worker;
     // Debug stall hook (off by default): see src/README.md, Debug.
     void chrome.storage.local
-      .get([SPEEDS_KEY, 'debug.mlStallMs', 'debug.mlStallAfterMs', 'debug.mlTiming', ...(model === 'mdx' ? [] : [keyInstalled(model)]), ...(drums ? [keyInstalled('drums')] : []), ...(guitar ? [keyInstalled('guitar')] : [])])
+      .get([SPEEDS_KEY, 'debug.mlStallMs', 'debug.mlStallAfterMs', 'debug.mlTiming', keyInstalled(model === 'mdx' ? 'compat' : model), ...(drums ? [keyInstalled('drums')] : []), ...(guitar ? [keyInstalled('guitar')] : [])])
       .catch(() => ({}) as Record<string, unknown>)
       .then((o) => {
         const stallMs = Number(o['debug.mlStallMs']) > 0 ? Number(o['debug.mlStallMs']) : 0;
@@ -67,7 +67,7 @@ window.addEventListener('message', (e: MessageEvent) => {
             port,
             modelUrl: chrome.runtime.getURL('ml/vocals.onnx'),
             mdxUrl: chrome.runtime.getURL('ml/mdx.onnx'),
-            installed: model === 'mdx' ? undefined : (o[keyInstalled(model)] as InstalledModel | undefined),
+            installed: o[keyInstalled(model === 'mdx' ? 'compat' : model)] as InstalledModel | undefined, // for 'mdx': the fp32 files, used only on a GPU without shader-f16
             drums,
             guitar,
             gpu,

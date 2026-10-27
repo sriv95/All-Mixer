@@ -10,7 +10,7 @@ export interface GpuInfoLike {
 export const adapterName = (info: GpuInfoLike | undefined): string =>
   [info?.vendor, info?.architecture, info?.description].filter(Boolean).join(' ') || 'unknown';
 
-type Gpu = { requestAdapter(o?: { powerPreference: string }): Promise<{ isFallbackAdapter?: boolean; info?: GpuInfoLike } | null> };
+type Gpu = { requestAdapter(o?: { powerPreference: string }): Promise<{ isFallbackAdapter?: boolean; info?: GpuInfoLike; features?: { has(name: string): boolean } } | null> };
 
 /** What each GPU preference resolves to on this machine (a preference with no real adapter is left out). */
 export async function probeGpuNames(gpu: Gpu | undefined = (navigator as Navigator & { gpu?: Gpu }).gpu): Promise<Partial<Record<GpuPreference, string>>> {
@@ -27,6 +27,16 @@ export async function probeGpuNames(gpu: Gpu | undefined = (navigator as Navigat
     }),
   );
   return out;
+}
+
+/** False when the GPU for this preference lacks WebGPU shader-f16, which the fp16 models need. True when unknown (no adapter: Separate mode says why). */
+export async function hasShaderF16(pref: GpuPreference, gpu: Gpu | undefined = (navigator as Navigator & { gpu?: Gpu }).gpu): Promise<boolean> {
+  try {
+    const a = await gpu?.requestAdapter(pref === 'auto' ? undefined : { powerPreference: pref });
+    return !a || !!a.features?.has('shader-f16');
+  } catch {
+    return true;
+  }
 }
 
 export type GpuNames = Partial<Record<GpuPreference, string>>;

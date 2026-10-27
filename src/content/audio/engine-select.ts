@@ -199,8 +199,9 @@ export class EngineSelector {
   reload(id: ModelId): void {
     // A kept host runs the old files: drop it.
     const stage = id === 'drums' || id === 'guitar';
-    if (this.warm && !this.on && (stage ? (id === 'drums' ? this.warm.drums : this.warm.guitar) : this.warm.model === id)) this.disposeHost();
-    if (!this.on || (stage ? !(id === 'drums' ? this.drums : this.guitar) : this.model !== id)) return;
+    const vocal = id === 'compat' ? 'mdx' : id; // the fp32 Default files serve the 'mdx' model
+    if (this.warm && !this.on && (stage ? (id === 'drums' ? this.warm.drums : this.warm.guitar) : this.warm.model === vocal)) this.disposeHost();
+    if (!this.on || (stage ? !(id === 'drums' ? this.drums : this.guitar) : this.model !== vocal)) return;
     if (this.mlActive) this.chain.setEngine('bypass', 'auto');
     this.disposeHost();
     this.mlActive = false;

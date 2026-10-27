@@ -5,7 +5,7 @@ import { clampDelayS, clampOthersPct, clampPct, clampPitch, masterPctAt, masterP
 import { separationView, type SepView } from '../shared/separation-view';
 import { MAX_DELAY_S, MIN_DELAY_S } from '../ml/rof-plan';
 import type { MlModel } from '../worklet/protocol';
-import { gpuOptions, gpuSelected, probeGpuNames, type GpuNames } from '../shared/gpu';
+import { gpuOptions, gpuSelected, hasShaderF16, probeGpuNames, type GpuNames } from '../shared/gpu';
 import { installModel, uninstallModel, useModels, type ModelLine } from './models';
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
 import { Blocked, Btn, Card, Collapse, Disclosure, PitchStepper, Rise, Roll, Select, Skeleton, Slider, SliderRow, Switch, Tip, fade, slide, useGlide, type Choice } from './ui';
@@ -375,7 +375,9 @@ function SeparateControls({ settings, update, ready, compact, advancedOpen, setA
 }) {
   // The all-stems model splits the drums, guitar, bass and piano itself: the split switches (and their models) are not available then.
   const all = settings.mlModel === 'sw';
-  const models = useModels(settings.mlModel, { drums: settings.splitInstrumental && !all, guitar: settings.splitGuitar && !all }, ready);
+  const [noF16, setNoF16] = useState(false);
+  useEffect(() => { void hasShaderF16(settings.gpu).then((ok) => setNoF16(!ok)); }, [settings.gpu]);
+  const models = useModels(settings.mlModel, { drums: settings.splitInstrumental && !all, guitar: settings.splitGuitar && !all }, ready, noF16);
   const [gpuNames, setGpuNames] = useState<GpuNames>({});
   useEffect(() => { void probeGpuNames().then(setGpuNames); }, []);
   const [delayDraft, setDelayDraft] = useState(settings.mlDelayS);
