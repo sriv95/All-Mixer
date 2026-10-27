@@ -42,6 +42,15 @@ Click **Add to Chrome**, then reload any open YouTube tabs and click the toolbar
 
 Separate mode delays the sound by about 2 seconds; the picture is delayed by the same time so they stay in sync. A longer delay limit gives a cleaner split.
 
+## Requirements for Separate mode
+
+- Chrome 120 or newer, with WebGPU on a real GPU (software rendering does not work).
+- **Default model:** any such GPU. If it has no fp16 support, the popup offers a one-time **Download supported models**.
+- **Other models and Split Instrumental:** the GPU must support **fp16**.
+    - Listed as supported (fp16): Apple Silicon, NVIDIA RTX series, AMD Vega and AMD RX 5000 series or newer
+
+To check your GPU, open [webgpureport.org](https://webgpureport.org) and look for `shader-f16` under features.
+
 ## Privacy
 
 Everything runs on your computer. The extension only contacts the lyrics service LRCLIB (for lyrics) and Hugging Face (to download the models you choose). Read the full [Privacy Policy](PRIVACY.md).
