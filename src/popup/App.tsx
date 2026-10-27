@@ -1,19 +1,24 @@
 import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { AudioLines, AudioWaveform, Cpu, Download, Drum, Guitar, LoaderCircle, Maximize2, Mic, Minimize2, MicOff, Music, Piano, RefreshCw, RotateCcw, Settings2, Timer, TriangleAlert, Undo2, Volume2, Waves, Zap } from 'lucide-react';
-import type { ContentStatus, GetStatus, GetTabSettings, SetTabSettings } from '../shared/messages';
+import { AudioLines, AudioWaveform, Cpu, Drum, Guitar, LoaderCircle, Maximize2, Mic, Minimize2, MicOff, Music, Piano, RefreshCw, RotateCcw, Settings2, Timer, TriangleAlert, Undo2, Volume2, Waves, Zap } from 'lucide-react';
+import type { ContentStatus, ExportAnswer, ExportCancel, ExportStart, GetStatus, GetTabSettings, SetTabSettings } from '../shared/messages';
+import type { ExportOptions } from '../shared/export';
 import { clampDelayS, clampOthersPct, clampPct, clampPitch, masterPctAt, masterPosOf, MASTER_POS_MAX, normalizeSettings, PITCH_MAX, type MixerSettings, type Mode } from '../shared/settings';
 import { separationView, type SepView } from '../shared/separation-view';
 import { MAX_DELAY_S, MIN_DELAY_S } from '../ml/rof-plan';
 import type { MlModel } from '../worklet/protocol';
 import { gpuOptions, gpuSelected, hasShaderF16, probeGpuNames, type GpuNames } from '../shared/gpu';
-import { installModel, uninstallModel, useModels, type ModelLine } from './models';
+import { useModels } from './models';
+import { MODEL_CHOICES, ModelRow } from './model-row';
+import { ExportSection, type ExportApi } from './ExportSection';
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
-import { Blocked, Btn, Card, Collapse, Disclosure, PitchStepper, Rise, Roll, Select, Skeleton, Slider, SliderRow, Switch, Tip, fade, slide, useGlide, type Choice } from './ui';
+import { Blocked, Btn, Card, Collapse, Disclosure, PitchStepper, Rise, Roll, Select, Skeleton, Slider, SliderRow, Switch, Tip, fade, slide, useGlide } from './ui';
 
 type Update = (patch: Partial<MixerSettings>) => void;
 
 const LOADING_POLL_MS = 500;
 const LIVE_POLL_MS = 2000;
+/** While an export runs the popup reads its progress this often. */
+const EXPORT_POLL_MS = 500;
 /** One click on "Raise delay limit" adds this many seconds. */
 const DELAY_STEP_S = 4;
 // The Advanced section stays open between popup openings, and opens by itself when a non-default model is in use.
@@ -114,7 +119,8 @@ export function App() {
 
   const view = separationView(settings.mode, loaded?.s);
   // While the separator starts or ML warms up, poll so the banner moves on by itself; while live, slowly, to catch a stop.
-  const pollMs = view.kind === 'warming' ? LOADING_POLL_MS : view.kind === 'live' ? LIVE_POLL_MS : null;
+  const exporting = loaded?.s?.export?.state === 'running';
+  const pollMs = exporting ? EXPORT_POLL_MS : view.kind === 'warming' ? LOADING_POLL_MS : view.kind === 'live' ? LIVE_POLL_MS : null;
   useEffect(() => {
     if (pollMs === null) return;
     const t = setTimeout(() => void refresh(), pollMs);
@@ -127,6 +133,25 @@ export function App() {
     const off: SetTabSettings = { type: 'set-tab-settings', tabId: tabId.current, settings: { ...latest.current, mode: 'default' } };
     await chrome.runtime.sendMessage(off);
     update({ mode: 'separate' });
+  };
+
+  // Export: the options live in the section; the tab does the work and reports the progress through `get-status`.
+  const exportApi: ExportApi = {
+    settings,
+    ready,
+    status: loaded?.s && { site: loaded.s.site, videoFound: loaded.s.videoFound, duration: loaded.s.duration, lyricsSynced: loaded.s.lyricsSynced, progress: loaded.s.export },
+    async start(options: ExportOptions) {
+      if (tabId.current === null) return 'Open a video page first.';
+      const req: ExportStart = { type: 'export-start', options };
+      const answer: ExportAnswer | undefined = await chrome.tabs.sendMessage(tabId.current, req).catch(() => undefined);
+      await refresh();
+      return answer?.ok ? undefined : (answer?.error ?? 'Reload this tab, then try again.');
+    },
+    cancel() {
+      if (tabId.current === null) return;
+      const req: ExportCancel = { type: 'export-cancel' };
+      void chrome.tabs.sendMessage(tabId.current, req).catch(() => undefined).then(refresh);
+    },
   };
 
   // Until the tab's settings are read the popup would show the defaults, then jump to the real ones.
@@ -176,7 +201,7 @@ export function App() {
             <AnimatePresence mode="wait" initial={false}>
               {view.kind !== 'off' && <Banner key="banner" compact={compact} view={view} settings={settings} update={update} retry={retry} />}
             </AnimatePresence>
-            <SeparateControls settings={settings} update={update} ready={ready} compact={compact} advancedOpen={advancedOpen} setAdvancedOpen={setAdvancedOpen} splitOpen={splitOpen} setSplitOpen={setSplitOpen} />
+            <SeparateControls settings={settings} update={update} ready={ready} compact={compact} advancedOpen={advancedOpen} setAdvancedOpen={setAdvancedOpen} splitOpen={splitOpen} setSplitOpen={setSplitOpen} exportApi={exportApi} />
           </motion.div>
         ) : (
           <motion.div key="default" custom={-1} variants={slide} initial="enter" animate="center" exit="exit" transition={{ duration: 0.2 }} className="flex flex-col gap-3.5">
@@ -342,13 +367,6 @@ function Banner({ view, settings, update, retry, compact }: { compact: boolean; 
   );
 }
 
-const MODEL_CHOICES: readonly Choice<MlModel>[] = [
-  { value: 'mdx', label: 'Default' },
-  { value: 'roformer', label: 'High quality', hint: 'Optional download' },
-  { value: 'deux', label: 'Best Vocal', hint: 'Needs a good GPU, optional download' },
-  { value: 'sw', label: 'Focus Instrumental Splitting', hint: 'Needs a good GPU, optional download' },
-];
-
 type Levels = Pick<MixerSettings, 'vocalPct' | 'instrumentalPct' | 'drumsPct' | 'guitarPct' | 'bassPct' | 'pianoPct' | 'othersPct'>;
 const LEVEL_KEYS: readonly (keyof Levels)[] = ['vocalPct', 'instrumentalPct', 'drumsPct', 'guitarPct', 'bassPct', 'pianoPct', 'othersPct'];
 const levelsOf = (s: MixerSettings): Levels => Object.fromEntries(LEVEL_KEYS.map((k) => [k, s[k]])) as Levels;
@@ -363,7 +381,7 @@ const PRESETS = [
   { id: 'preset-reset', label: 'Reset', tip: 'Vocal, instrumental and the split levels back to 100%', vocal: 100, instrumental: 100, icon: <RotateCcw size={15} aria-hidden /> },
 ];
 
-function SeparateControls({ settings, update, ready, compact, advancedOpen, setAdvancedOpen, splitOpen, setSplitOpen }: {
+function SeparateControls({ settings, update, ready, compact, advancedOpen, setAdvancedOpen, splitOpen, setSplitOpen, exportApi }: {
   settings: MixerSettings;
   update: Update;
   ready: boolean;
@@ -372,6 +390,7 @@ function SeparateControls({ settings, update, ready, compact, advancedOpen, setA
   setAdvancedOpen: (open: boolean) => void;
   splitOpen: boolean;
   setSplitOpen: (open: boolean) => void;
+  exportApi: ExportApi;
 }) {
   // The all-stems model splits the drums, guitar, bass and piano itself: the split switches (and their models) are not available then.
   const all = settings.mlModel === 'sw';
@@ -506,6 +525,9 @@ function SeparateControls({ settings, update, ready, compact, advancedOpen, setA
         </div>
       </Disclosure>
       </Rise>
+      <Rise i={4}>
+        <ExportSection api={exportApi} />
+      </Rise>
     </>
   );
 }
@@ -517,30 +539,4 @@ function persistAdvanced(open: boolean, set: (open: boolean) => void): void {
   } catch {
     /* storage blocked */
   }
-}
-
-function ModelRow({ idPrefix, line }: { idPrefix: 'model' | 'drums' | 'guitar'; line: ModelLine }) {
-  return (
-    <div id={`${idPrefix}-row`} className="flex flex-col gap-2">
-      <p className="m-0 flex items-center justify-between gap-3 text-xs leading-snug text-muted">
-        <span id={`${idPrefix}-text`}>{line.text}</span>
-        {line.button && (
-          <Btn id={`${idPrefix}-btn`} tone="small" onClick={() => installModel(line.id)}>
-            {line.button === 'Update' ? <RefreshCw size={13} aria-hidden /> : <Download size={13} aria-hidden />}
-            {line.button}
-          </Btn>
-        )}
-        {line.uninstall && (
-          <button id={`${idPrefix}-uninstall`} type="button" onClick={() => uninstallModel(line.id)} className="shrink-0 cursor-pointer border-0 bg-transparent p-0 text-xs text-muted underline">
-            Uninstall model
-          </button>
-        )}
-      </p>
-      {line.progress !== undefined && (
-        <div role="progressbar" aria-label="Download" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.floor(line.progress)} className="h-2 overflow-hidden rounded-full bg-well shadow-pressed">
-          <motion.div initial={false} animate={{ width: `${line.progress}%` }} transition={{ duration: 0.4, ease: 'easeOut' }} className="h-full rounded-full bg-linear-to-r from-[#f2505a] to-[#d3101c]" />
-        </div>
-      )}
-    </div>
-  );
 }

@@ -23,7 +23,7 @@ window.addEventListener('message', (e: MessageEvent) => {
   if (e.source !== window.parent || !ALLOWED.includes(e.origin)) return;
   const origin = parentOrigin();
   if (origin !== null && origin !== e.origin) return;
-  const msg = e.data as { type?: string; model?: unknown; delayMs?: unknown; drums?: unknown; guitar?: unknown; gpu?: unknown } | null;
+  const msg = e.data as { type?: string; model?: unknown; delayMs?: unknown; drums?: unknown; guitar?: unknown; gpu?: unknown; offline?: unknown } | null;
   if (msg?.type === ML_INIT) {
     const port = e.ports[0];
     if (!port || worker) return;
@@ -31,6 +31,7 @@ window.addEventListener('message', (e: MessageEvent) => {
     const delayMs = typeof msg.delayMs === 'number' && msg.delayMs > 0 ? msg.delayMs : null;
     const drums = msg.drums === true;
     const guitar = msg.guitar === true;
+    const offline = msg.offline === true;
     const gpu: GpuPreference = GPU_PREFERENCES.includes(msg.gpu as GpuPreference) ? (msg.gpu as GpuPreference) : 'auto';
     target = e.origin;
     worker = new Worker(new URL('./ml-worker.ts', import.meta.url), { type: 'module' });
@@ -71,6 +72,7 @@ window.addEventListener('message', (e: MessageEvent) => {
             drums,
             guitar,
             gpu,
+            offline,
             drumsInstalled: drums ? (o[keyInstalled('drums')] as InstalledModel | undefined) : undefined,
             guitarInstalled: guitar ? (o[keyInstalled('guitar')] as InstalledModel | undefined) : undefined,
             wasmBase: chrome.runtime.getURL('ml/'),

@@ -314,3 +314,18 @@ SOFTWARE.
    downloaded by the user from a Hugging Face repo at run time (src/shared/model-store.ts), not packed in the extension. The licence of the unwa weights was not verified when this was added (a secondary source says MIT):
    read the LICENSE of the upstream repository before publishing the converted model file.
 ================================================================
+
+================================================================
+Export section (MP3 / MP4 export, loaded from export/engine.js only when an export starts)
+================================================================
+
+6. Mediabunny (MP4 muxing and WebCodecs encoding)
+   Copyright (c) 2025-present, Vanilagy and contributors. Mozilla Public License 2.0.
+   https://github.com/Vanilagy/mediabunny
+   Used unmodified (npm package "mediabunny"). The MPL 2.0 source form of this file's code is available at the repository above.
+
+7. lamejs (MP3 encoder, "@breezystack/lamejs" fork of zhuker/lamejs)
+   LAME 3.98.2 ported to JavaScript. GNU Lesser General Public License 3.0 (LAME: LGPL 2.0 or later).
+   https://github.com/zhuker/lamejs, https://github.com/breezystack/lamejs, https://lame.sourceforge.io/
+   Used unmodified, as a separate ES module chunk in the build (dist/export/engine.js), so it can be replaced with another build of lamejs by
+   rebuilding the extension from this repository (bun run build).

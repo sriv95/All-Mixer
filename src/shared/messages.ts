@@ -8,6 +8,7 @@ import type { SeparationState } from '../content/audio/master-chain';
 import type { EngineChoice } from '../content/audio/engine-select';
 import type { LatencyInfo } from '../content/audio/latency';
 import type { SepView } from './separation-view';
+import type { ExportOptions, ExportProgress } from './export';
 
 /** Content script → background: "what are my settings?" (tab id comes from sender). */
 export interface GetMyTabSettings {
@@ -37,6 +38,19 @@ export interface ApplySettings {
 export interface GetStatus {
   type: 'get-status';
 }
+
+/** Popup → content script: start an export of the video in this tab (src/export/engine.ts). Answer: ExportAnswer. */
+export interface ExportStart {
+  type: 'export-start';
+  options: ExportOptions;
+}
+
+/** Popup → content script: stop the running export. */
+export interface ExportCancel {
+  type: 'export-cancel';
+}
+
+export type ExportAnswer = { ok: true } | { ok: false; error: string };
 
 export type AudioState =
   | 'idle' // no boost requested yet, page audio untouched
@@ -97,6 +111,12 @@ export interface ContentStatus {
   error?: string;
   /** Only when localStorage['allMixer.avProbe'] === '1'. */
   avProbe?: AvProbeStatus;
+  /** The running or last export of this tab; absent before the first one. */
+  export?: ExportProgress;
+  /** The video's length in seconds (NaN / absent: unknown or live), for the export section. */
+  duration?: number;
+  /** Synced lyrics are on screen: the karaoke text of the MP4 has something to show. */
+  lyricsSynced?: boolean;
 }
 
 /** Content script → background: fetch lyrics from LRCLIB (cached). Response: FoundLyrics | null. */
@@ -170,4 +190,4 @@ interface DebugVideoDelay {
   budgetBytes?: number | null;
 }
 
-export type ContentRequest = ApplySettings | GetStatus | DebugVideoDelay;
+export type ContentRequest = ApplySettings | GetStatus | ExportStart | ExportCancel | DebugVideoDelay;
