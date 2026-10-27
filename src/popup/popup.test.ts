@@ -518,6 +518,15 @@ describe('popup', () => {
         expect(el('split-all').textContent).toMatch(/already splits the drums, guitar, bass and piano/);
       });
 
+      it('the Split section has a Focus Instrumental Model button that switches to this model, and none once it is on', async () => {
+        await load({ stored: { mode: 'separate', splitInstrumental: true } });
+        expect(el('split-focus-model').textContent).toBe('Focus Instrumental Model');
+        el('split-focus-model').click();
+        await settle();
+        expect(sent().at(-1).settings.mlModel).toBe('sw');
+        expect(has('split-focus-model')).toBe(false);
+      });
+
       it('the bass and piano sliders are only there with this model', async () => {
         await load({ stored: { mode: 'separate', splitInstrumental: true, splitGuitar: true } });
         expect(has('bass')).toBe(false);
@@ -789,6 +798,18 @@ describe('popup', () => {
         expect(sent().at(-1).settings.gpu).toBe('high-performance');
         await load({ stored: { mode: 'separate', gpu: 'high-performance' }, status: stopped });
         expect(has('act-fast-gpu')).toBe(false);
+      });
+
+      it('hides the high performance GPU button when the current GPU is already the fastest', async () => {
+        const adapter = { info: { description: 'Only GPU' } };
+        vi.stubGlobal('navigator', Object.assign(Object.create(navigator), { gpu: { requestAdapter: async () => adapter } }));
+        try {
+          await load({ stored: { mode: 'separate' }, status: stopped });
+          await settle();
+          expect(has('act-fast-gpu')).toBe(false);
+        } finally {
+          vi.unstubAllGlobals();
+        }
       });
 
       it('Try again turns Separate off and on again', async () => {

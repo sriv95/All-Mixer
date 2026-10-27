@@ -280,6 +280,8 @@ function WaveBars() {
 const bannerIcon = 'grid size-9 shrink-0 place-items-center rounded-full';
 
 function Banner({ view, settings, update, retry, compact }: { compact: boolean; view: SepView; settings: MixerSettings; update: Update; retry: () => Promise<void> }) {
+  const [gpuNames, setGpuNames] = useState<GpuNames>({});
+  useEffect(() => { void probeGpuNames().then(setGpuNames); }, []);
   if (view.kind === 'off') return null;
   const stopped = view.kind === 'stopped' || view.kind === 'error' || view.kind === 'unavailable';
   const tooSlow = view.kind === 'stopped' || (view.kind === 'unavailable' && /too slow/.test(view.cause));
@@ -332,7 +334,7 @@ function Banner({ view, settings, update, retry, compact }: { compact: boolean; 
         <div className="flex flex-col gap-2.5 pt-0.5">
           {settings.mlModel !== 'mdx' && <Btn tone="primary" id="act-default-model" onClick={() => update({ mlModel: 'mdx' as MlModel })}><Cpu size={16} aria-hidden />Switch to Default model</Btn>}
           {settings.mlDelayS < MAX_DELAY_S && <Btn id="act-raise-delay" onClick={() => update({ mlDelayS: nextDelay })}><Timer size={16} aria-hidden />Raise delay limit to {nextDelay} s</Btn>}
-          {settings.gpu !== 'high-performance' && <Btn id="act-fast-gpu" onClick={() => update({ gpu: 'high-performance' })}><Zap size={16} aria-hidden />Try the high performance GPU</Btn>}
+          {gpuSelected(gpuNames, settings.gpu) !== 'high-performance' && <Btn id="act-fast-gpu" onClick={() => update({ gpu: 'high-performance' })}><Zap size={16} aria-hidden />Try the high performance GPU</Btn>}
           <Btn id="act-retry" onClick={() => void retry()}><RefreshCw size={16} aria-hidden />Try again</Btn>
         </div>
       </Collapse>
@@ -494,6 +496,7 @@ function SeparateControls({ settings, update, ready, compact, advancedOpen, setA
                     <Switch id="split-guitar" checked={settings.splitGuitar} onChange={(on) => update({ splitGuitar: on })} />
                   </div>
                   <p className="m-0 text-xs leading-snug text-muted">Each extra split uses more GPU and adds more delay over the Delay limit.</p>
+                  <Btn id="split-focus-model" onClick={() => update({ mlModel: 'sw' })}><Cpu size={16} aria-hidden />Focus Instrumental Model</Btn>
                   <Collapse show={!!models.drums}>{models.drums && <ModelRow idPrefix="drums" line={models.drums} />}</Collapse>
                   <Collapse show={!!models.guitar}>{models.guitar && <ModelRow idPrefix="guitar" line={models.guitar} />}</Collapse>
                 </>
