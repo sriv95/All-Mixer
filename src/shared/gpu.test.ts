@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { adapterName, gpuOptions, gpuSelected, probeGpuNames } from './gpu';
+import { adapterName, gpuOptions, gpuSelected, hasShaderF16, probeGpuNames } from './gpu';
 
 describe('gpu names', () => {
   it('joins what WebGPU reports and falls back to unknown', () => {
@@ -18,6 +18,17 @@ describe('gpu names', () => {
     expect(await probeGpuNames(gpu)).toEqual({ auto: 'A', 'high-performance': 'B' });
     expect(await probeGpuNames({ requestAdapter: async () => { throw new Error('x'); } })).toEqual({});
     expect(await probeGpuNames(undefined)).toEqual({});
+  });
+});
+
+describe('shader-f16', () => {
+  const adapter = (f16: boolean) => ({ requestAdapter: async () => ({ features: new Set(f16 ? ['shader-f16'] : []) }) });
+  it('is false only for a real adapter without the feature', async () => {
+    expect(await hasShaderF16('auto', adapter(true))).toBe(true);
+    expect(await hasShaderF16('auto', adapter(false))).toBe(false);
+    expect(await hasShaderF16('auto', { requestAdapter: async () => null })).toBe(true);
+    expect(await hasShaderF16('auto', { requestAdapter: async () => { throw new Error('x'); } })).toBe(true);
+    expect(await hasShaderF16('auto', undefined)).toBe(true);
   });
 });
 

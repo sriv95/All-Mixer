@@ -8,6 +8,14 @@ CI builds the extension, creates tag `vx.y.z` and a GitHub release with this sec
 
 ## [Unreleased]
 
+### Added
+
+- Separate mode now works on GPUs without fp16 support (for example AMD RX 590): the popup offers "Download supported models", a one-time download of the Default model in a form those GPUs can run. The High quality, Best Vocal, Focus Instrumental Splitting and Guitar split models are not supported on such GPUs, and the popup says so.
+
+### Fixed
+
+- Separate mode on a GPU without fp16 support no longer shows a shader error; it says what is missing.
+
 ## [1.0.0] - 2026-10-25
 
 First official release. This sums up everything built in 0.1.0 to 0.5.0, plus the new look below.

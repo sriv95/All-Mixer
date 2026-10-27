@@ -21,6 +21,10 @@ describe('parseManifest', () => {
     expect(parseManifest({ format: 2, models: { drums: { version: 1, files: drums } } })).toEqual({ drums: { format: 2, version: 1, files: drums } });
     expect(parseManifest({ format: 2, models: { drums: { version: 1, files: { 'other.onnx': 1 } } } })).toBeNull();
   });
+  it('the compat model is the fp32 Default pair and not a Model menu entry', () => {
+    expect(modelFileNames('compat')).toEqual(['compat-mdx.onnx', 'compat-vocals.onnx']);
+    expect(VOCAL_MODEL_IDS).not.toContain('compat');
+  });
   it('the guitar model has the RoFormer files', () => {
     expect(modelFileNames('guitar')).toEqual(['guitar.onnx', 'guitar-meta.json']);
   });

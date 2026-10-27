@@ -441,6 +441,21 @@ describe('popup', () => {
       expect(el('drums-btn').textContent).toBe('Update');
     });
 
+    it('a GPU without shader-f16 offers the fp32 Default download, and says the other models are not supported', async () => {
+      vi.stubGlobal('navigator', Object.assign(Object.create(navigator), { gpu: { requestAdapter: async () => ({ features: new Set() }) } }));
+      const cremote = { format: MODEL_FORMAT, version: 1, files: { 'compat-mdx.onnx': 30 * 2 ** 20, 'compat-vocals.onnx': 39 * 2 ** 20 }, checkedAt: 0 };
+      await load({ stored: { mode: 'separate' }, local: { 'modelRemote.compat': cremote } });
+      await settle();
+      expect(el('model-text').textContent).toMatch(/no fp16 support.*\(69 MB\)/);
+      expect(el('model-btn').textContent).toBe('Download supported models');
+      el<HTMLButtonElement>('model-btn').click();
+      expect(sendMessage).toHaveBeenCalledWith({ type: 'model-install', id: 'compat' });
+      await load({ stored: { mode: 'separate', mlModel: 'deux' }, local: { 'modelRemote.compat': cremote } });
+      await settle();
+      expect(el('model-text').textContent).toMatch(/Best Vocal is not supported on this GPU/);
+      expect(has('model-btn')).toBe(false);
+    });
+
     it('the Guitar switch has its own slider, model row and download; Drums and Guitar can be on together', async () => {
       const gremote = { format: MODEL_FORMAT, version: 1, files: { 'guitar.onnx': 45 * 2 ** 20, 'guitar-meta.json': 19000 }, checkedAt: 0 };
       await load({ stored: { mode: 'separate' }, local: { 'modelRemote.guitar': gremote } });
