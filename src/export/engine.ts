@@ -17,10 +17,12 @@ import { VIDEO_FPS, mp3Sink, mp4Sink, pictureSize, type ExportFile, type Sink } 
 import { drawKaraoke, karaokeRows } from './karaoke-render';
 import { mixSlice, type StemSlice } from './mix';
 import { openMlSession, type MlSession, type OpenMlSession } from './ml-session';
+import { fastAudio, type AudioTap, type Pcm } from './fast-audio';
 import { chunkAt, planChunks } from './plan';
 import { Resampler } from './resample';
 
 export type { ExportFile } from './encode';
+export type { AudioTap } from './fast-audio';
 export { stemsOfSlice } from './mix';
 
 export interface ExportDeps {
@@ -33,6 +35,8 @@ export interface ExportDeps {
   report(p: ExportProgress): void;
   /** Called while recording: a message when the recording went wrong (an ad, another video). */
   problem?: () => string | null;
+  /** The audio the player already downloaded (src/page/audio-tap.ts): when it holds all of it, MP3 and preload skip the real-time recording. */
+  tap?: AudioTap;
   /** Tests. */
   openSession?: OpenMlSession;
 }
@@ -143,6 +147,7 @@ async function record(d: ExportDeps, onSlice?: SliceSink): Promise<ExportFile | 
   let stage: ExportStage = 'preparing';
   let note = '';
   let recorded = 0; // samples
+  let fetched = 0; // 0–1 of the audio read from the player
   let processed = 0; // chunks
   let lastReport = 0;
   const report = (force = false): void => {
@@ -155,7 +160,9 @@ async function record(d: ExportDeps, onSlice?: SliceSink): Promise<ExportFile | 
     const detail =
       stage === 'model'
         ? note
-        : stage === 'recording'
+        : stage === 'fetching'
+          ? `Reading the audio from the player… ${Math.floor(100 * fetched)}%`
+          : stage === 'recording'
           ? mp4 && document.hidden
             ? 'Paused: bring this tab to the front to go on (the picture needs a visible tab)'
             : `Chunk ${chunk}/${plan.count} · ${clock(t)} / ${clock(dur)} · ${processed} of ${plan.count} processed`
@@ -218,21 +225,40 @@ async function record(d: ExportDeps, onSlice?: SliceSink): Promise<ExportFile | 
     if (!onSlice) sink = mp4 ? await mp4Sink(tracks, name, size) : await mp3Sink(tracks, name);
     check();
 
-    // ---- 3. record from the start, muted, at normal speed
-    v.pause();
-    v.muted = true;
-    v.playbackRate = 1;
-    await seekToStart(v);
-    check();
-    capture = openCapture(v);
-    frames = mp4 ? new FrameStore() : null;
+    // ---- 3a. the audio the player already downloaded (not for an MP4: its picture needs the video to play)
+    let fast: Pcm | null = null;
+    onChanged = () => stop(new Error('The video changed during the export'));
+    if (d.tap && !mp4) {
+      at('fetching');
+      v.addEventListener('emptied', onChanged, { once: true });
+      v.playbackRate = 1;
+      try {
+        fast = await fastAudio({ video: v, tap: d.tap, signal: ac.signal, progress: (f) => ((fetched = f), report()), problem: d.problem });
+      } finally {
+        v.removeEventListener('emptied', onChanged);
+      }
+      check();
+      // The video gets its place back now; a failed read falls through to the recording below.
+      if (fast) restore();
+    }
+
+    // ---- 3b. otherwise record from the start, muted, at normal speed
+    if (!fast) {
+      v.pause();
+      v.muted = true;
+      v.playbackRate = 1;
+      await seekToStart(v);
+      check();
+    }
+    const cap = fast ? null : (capture = openCapture(v));
+    frames = !fast && mp4 ? new FrameStore() : null;
     stopPicture = frames ? watchPicture(v, frames, size.w, size.h) : null;
-    const cap = capture;
     const out = sink;
     const store = frames;
-    onChanged = () => stop(new Error('The video changed during the export'));
-    v.addEventListener('emptied', onChanged, { once: true });
-    await v.play();
+    if (!fast) {
+      v.addEventListener('emptied', onChanged, { once: true });
+      await v.play();
+    }
     at('recording');
 
     const fail = (e: unknown) => stop(e instanceof Error ? e : new Error(String(e)));
@@ -244,6 +270,7 @@ async function record(d: ExportDeps, onSlice?: SliceSink): Promise<ExportFile | 
     // The picture of a hidden tab is not produced (requestVideoFrameCallback stops): the MP4 waits for the tab.
     const hiddenForPicture = (): boolean => mp4 && document.hidden;
     const holdOrResume = (): void => {
+      if (fast) return room.notify(); // nothing plays: the feed waits for the model by itself
       if (!pausedByUs && !recordingDone && (queue.length >= MAX_QUEUE || renderLag() > MAX_RENDER_LAG_S || hiddenForPicture())) {
         pausedByUs = true;
         v.pause();
@@ -253,6 +280,7 @@ async function record(d: ExportDeps, onSlice?: SliceSink): Promise<ExportFile | 
       }
     };
     let recordingDone = false;
+    const room = new Wake();
     const newAudio = new Wake();
     const newJob = new Wake();
     onVisible = () => holdOrResume();
@@ -285,8 +313,29 @@ async function record(d: ExportDeps, onSlice?: SliceSink): Promise<ExportFile | 
       }
     };
 
-    // audio: read, resample, cut in chunks
+    // fast: the sound is all there; it is cut in chunks as fast as the model takes them
+    const feedLoop = async (pcm: Pcm): Promise<void> => {
+      const step = rate;
+      for (let from = 0; from < Math.min(pcm.l.length, plan.total); from += step) {
+        check();
+        while (queue.length >= MAX_QUEUE) {
+          await room.wait();
+          check();
+        }
+        append(pcm.l.subarray(from, from + step), pcm.r.subarray(from, from + step));
+        newAudio.notify();
+      }
+      enqueue(true);
+      recordingDone = true;
+      newAudio.notify();
+      newJob.notify();
+      stage = 'finishing';
+      report(true);
+    };
+
+    // recording: read, resample, cut in chunks
     const audioLoop = async (): Promise<void> => {
+      if (!cap) return;
       const audio = new Puller(cap.audio);
       let resampler: Resampler | null = null;
       let lastData = performance.now();
@@ -396,7 +445,7 @@ async function record(d: ExportDeps, onSlice?: SliceSink): Promise<ExportFile | 
     };
 
     const run = (f: () => Promise<void>) => f().catch(fail);
-    await Promise.all([run(audioLoop), run(renderLoop), run(chunkLoop)]);
+    await Promise.all([run(() => (fast ? feedLoop(fast) : audioLoop())), run(renderLoop), run(chunkLoop)]);
     check();
 
     // ---- 4. assemble

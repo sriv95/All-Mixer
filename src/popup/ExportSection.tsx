@@ -299,7 +299,7 @@ function ProgressBlock({ progress: p, cancel }: { progress: ExportProgress; canc
     <div id="export-progress-block" data-state={p.state} className="flex flex-col gap-2">
       {running && (
         <div id="export-progress" role="progressbar" aria-label="Export" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.floor(p.percent)} className="h-2 overflow-hidden rounded-full bg-well shadow-pressed">
-          {p.stage === 'model' || p.stage === 'preparing' ? (
+          {p.stage === 'model' || p.stage === 'preparing' || p.stage === 'fetching' ? (
             <motion.span animate={{ x: ['-100%', '300%'] }} transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }} className="block h-full w-1/3 rounded-full bg-brand" />
           ) : (
             <motion.div initial={false} animate={{ width: `${p.percent}%` }} transition={{ duration: 0.4, ease: 'easeOut' }} className="h-full rounded-full bg-linear-to-r from-[#f2505a] to-[#d3101c]" />

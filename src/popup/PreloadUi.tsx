@@ -40,7 +40,7 @@ export function PreloadBanner({ api, settings, update, compact }: { api: Preload
     case 'loading':
       head = <span className={`${icon} bg-white text-brand`}><motion.span animate={{ rotate: 360 }} transition={{ repeat: Infinity, ease: 'linear', duration: 1 }} className="grid"><LoaderCircle size={20} aria-hidden /></motion.span></span>;
       title = 'Preloading audio';
-      text = 'Separating the whole video first. It takes about as long as the video; keep this tab open.';
+      text = 'Separating the whole video first. Keep this tab open.';
       break;
     case 'ready':
       head = <span className={`${icon} bg-brand text-white`}><CircleCheck size={20} aria-hidden /></span>;
@@ -75,7 +75,7 @@ export function PreloadBanner({ api, settings, update, compact }: { api: Preload
     default:
       head = <span className={`${icon} bg-brand text-white`}><HardDriveDownload size={20} aria-hidden /></span>;
       title = s.state === 'cancelled' ? 'Preloading cancelled' : 'Not preloaded yet';
-      text = 'The original audio plays. Preload separates this video up front (it takes about as long as the video).';
+      text = 'The original audio plays. Preload separates this video up front.';
       actions = (
         <>
           <Btn tone="primary" id="preload-start" onClick={() => void api.start()}><HardDriveDownload size={16} aria-hidden />Preload audio</Btn>
@@ -93,7 +93,7 @@ export function PreloadBanner({ api, settings, update, compact }: { api: Preload
           {s.state === 'loading' && p && (
             <div className="mt-2.5 flex flex-col gap-2">
               <div id="preload-progress" role="progressbar" aria-label="Preload" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.floor(p.percent)} className="h-1.5 overflow-hidden rounded-full bg-surface">
-                {p.stage === 'model' || p.stage === 'preparing' ? (
+                {p.stage === 'model' || p.stage === 'preparing' || p.stage === 'fetching' ? (
                   <motion.span animate={{ x: ['-100%', '300%'] }} transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }} className="block h-full w-1/3 rounded-full bg-brand" />
                 ) : (
                   <motion.div initial={false} animate={{ width: `${p.percent}%` }} transition={{ duration: 0.4, ease: 'easeOut' }} className="h-full rounded-full bg-brand" />
@@ -122,7 +122,7 @@ export function ProcessingRow({ settings, update }: { settings: MixerSettings; u
         <Btn id="processing-preload" tone="preset" aria-pressed={settings.preload} onClick={() => update({ preload: true })}><HardDriveDownload size={15} aria-hidden />Preload audio</Btn>
       </div>
       <p id="processing-note" className="m-0 text-xs leading-snug text-muted">
-        {settings.preload ? 'Separates the whole video first (about as long as the video), then plays it from memory. For a GPU that cannot keep up live. Pitch shift does not apply.' : 'Separates while it plays. A GPU that is too slow stops it: then switch to Preload audio.'}
+        {settings.preload ? 'Separates the whole video first, then plays it from memory. For a GPU that cannot keep up live. Pitch shift does not apply.' : 'Separates while it plays. A GPU that is too slow stops it: then switch to Preload audio.'}
       </p>
     </div>
   );

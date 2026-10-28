@@ -5,6 +5,7 @@ import { PRELOAD_MAX_BYTES, preloadBytes, preloadSignature, type PreloadStatus }
 import type { MixerSettings } from '../shared/settings';
 import { StemCache } from './audio/stem-cache';
 import { PreloadPlayer } from './audio/preload-player';
+import { pageTap } from './page-tap';
 import { findPlayer, isAdShowing, type PageSite } from './youtube-dom';
 
 /** The export engine carries the recording and the model session; the preload shares it (loaded on first use). */
@@ -101,6 +102,7 @@ export class PreloadRunner {
     try {
       const engine = (await import(/* @vite-ignore */ chrome.runtime.getURL(ENGINE_PATH))) as typeof import('../export/engine');
       const player = site === 'generic' ? null : findPlayer(site);
+      const tap = await pageTap(site);
       const options = { ...defaultExportOptions(settings, DEFAULT_LYRICS_PREFS), tracks: 'separate' as const }; // the model always runs
       const cache = new StemCache(key, preloadSignature(settings), video.duration, stemsOf(settings));
       await engine.runPreload(
@@ -111,6 +113,7 @@ export class PreloadRunner {
           title: '',
           signal: abort.signal,
           report,
+          tap,
           problem: () => (player && isAdShowing(player) ? 'An ad interrupted the recording. Try again when the video plays without ads.' : null),
         },
         (s) => cache.add(engine.stemsOfSlice(settings, s), s.start),

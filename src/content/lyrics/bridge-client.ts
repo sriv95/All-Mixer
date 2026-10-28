@@ -1,4 +1,4 @@
-import { BRIDGE_TAG, type BridgeEventMsg, type BridgeRequest, type BridgeResponseMsg, type CaptionTrack, type PlayerInfo } from '../../shared/bridge';
+import { BRIDGE_TAG, type BridgeEventMsg, type BridgeRequest, type BridgeResponseMsg, type CaptionTrack, type PlayerInfo, type TapData, type TapStatus } from '../../shared/bridge';
 
 let nextId = 1;
 const pending = new Map<number, (data: unknown) => void>();
@@ -54,4 +54,14 @@ export async function getTimedText(videoId: string, track: CaptionTrack): Promis
 export function onCaptionsAvailable(cb: (videoId: string) => void): () => void {
   captionListeners.add(cb);
   return () => captionListeners.delete(cb);
+}
+
+/** What the page holds of the audio the player appended to the media element whose `currentSrc` is `url`; null = nothing (not YouTube's MSE, or no tap). */
+export async function tapStatus(url: string): Promise<TapStatus | null> {
+  return (await ask({ kind: 'audio-tap', op: 'status', url }, 3000)) as TapStatus | null;
+}
+
+/** The held audio as one file; null = nothing usable. */
+export async function tapTake(url: string): Promise<TapData | null> {
+  return (await ask({ kind: 'audio-tap', op: 'take', url }, 30_000)) as TapData | null;
 }

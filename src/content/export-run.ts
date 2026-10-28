@@ -1,6 +1,7 @@
 import { needsSeparation, normalizeExportOptions, type ExportOptions, type ExportProgress } from '../shared/export';
 import type { ExportAnswer } from '../shared/messages';
 import type { LyricLine } from '../lyrics/types';
+import { pageTap } from './page-tap';
 import { findPlayer, isAdShowing, type PageSite } from './youtube-dom';
 
 /** The export engine is its own module (it carries the encoders): web-accessible, loaded when the first export starts. */
@@ -55,6 +56,7 @@ export class ExportRunner {
     try {
       const engine = (await import(/* @vite-ignore */ chrome.runtime.getURL(ENGINE_PATH))) as typeof import('../export/engine');
       const player = site === 'generic' ? null : findPlayer(site);
+      const tap = await pageTap(site);
       const file = await engine.runExport({
         video,
         options,
@@ -62,6 +64,7 @@ export class ExportRunner {
         title: titleOf(document.title),
         signal: abort.signal,
         report: (p) => (this.progress = p),
+        tap,
         problem: () => (player && isAdShowing(player) ? 'An ad interrupted the recording. Try again when the video plays without ads.' : null),
       });
       save(file.blob, file.name);

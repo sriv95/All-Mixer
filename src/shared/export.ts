@@ -106,7 +106,7 @@ export function normalizeExportOptions(raw: unknown): ExportOptions {
   };
 }
 
-export type ExportStage = 'preparing' | 'model' | 'recording' | 'finishing';
+export type ExportStage = 'preparing' | 'model' | 'fetching' | 'recording' | 'finishing';
 
 /** What the popup shows: a bar, and a small line under it. */
 export interface ExportProgress {

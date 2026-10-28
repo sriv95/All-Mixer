@@ -30,9 +30,29 @@ export interface PlayerInfo {
   defaultCaptionLang?: string;
 }
 
+/** The audio the player appended to the MediaSource of a media element (src/page/audio-tap.ts): what is held and what it covers. */
+export interface TapStatus {
+  usable: boolean;
+  /** Why it is not usable. */
+  reason?: string;
+  mime: string;
+  /** Time ranges (s) that were in the player's buffer at some moment. */
+  covered: [number, number][];
+  /** Start (s) of every segment that was cut short (a seek during its download). */
+  incomplete: number[];
+  bytes: number;
+}
+
+/** The held audio as one file (init segment and segments in time order). */
+export interface TapData {
+  mime: string;
+  data: ArrayBuffer;
+}
+
 export type BridgeRequest =
   | { kind: 'player-info'; videoId: string }
-  | { kind: 'timedtext'; videoId: string; track: CaptionTrack };
+  | { kind: 'timedtext'; videoId: string; track: CaptionTrack }
+  | { kind: 'audio-tap'; op: 'status' | 'take'; url: string };
 
 export interface BridgeRequestMsg {
   [BRIDGE_TAG]: 'req';

@@ -5,6 +5,7 @@
  * captions on), because direct timedtext requests can come back empty when
  * YouTube requires a proof-of-origin token.
  */
+import { installAudioTap, tapStatus, tapTake } from './audio-tap';
 import { BRIDGE_TAG, PAUSE_REQUEST_EVENT, type BridgeEventMsg, type BridgeRequestMsg, type BridgeResponseMsg, type CaptionTrack, type PlayerInfo } from '../shared/bridge';
 
 interface PlayerApi extends HTMLElement {
@@ -159,14 +160,20 @@ export async function timedText(videoId: string, track: CaptionTrack): Promise<s
 window.addEventListener('message', (e: MessageEvent) => {
   const msg = e.data as BridgeRequestMsg | null;
   if (e.source !== window || !msg || msg[BRIDGE_TAG] !== 'req') return;
-  const reply = (data: unknown) => {
+  const reply = (data: unknown, transfer: Transferable[] = []) => {
     const out: BridgeResponseMsg = { [BRIDGE_TAG]: 'res', id: msg.id, data };
-    window.postMessage(out, location.origin);
+    window.postMessage(out, location.origin, transfer);
   };
   const req = msg.req;
   if (req.kind === 'player-info') reply(playerInfo(req.videoId));
   else if (req.kind === 'timedtext') void timedText(req.videoId, req.track).then(reply);
+  else if (req.kind === 'audio-tap') {
+    const data = req.op === 'take' ? tapTake(req.url) : tapStatus(req.url);
+    reply(data, data && 'data' in data ? [data.data] : []);
+  }
 });
+
+installAudioTap();
 
 // Two cases where the player thinks it is playing but the element is not (src/content/deferred-end.ts holds the end of
 // a video, src/content/warmup-hold.ts holds a video for the ML warm-up): a pause click calls pause() on an element that
