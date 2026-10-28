@@ -1,4 +1,5 @@
 import type { ContentRequest, ContentStatus, GetMyTabSettings, SetBadge } from '../shared/messages';
+import { ExportRunner } from './export-run';
 import { separationView } from '../shared/separation-view';
 import { DEFAULT_SETTINGS, masterGainFor, mlDelayMsFor, normalizeSettings, separationFor, type MixerSettings } from '../shared/settings';
 import { EngineSelector } from './audio/engine-select';
@@ -96,7 +97,17 @@ watchDelayGap(() => video, () => overlay?.delayMs ?? 0, (cb) => chain.whenAudibl
 // Lyrics follow what the user sees and hears, which trails currentTime by the picture delay (D1).
 const lyrics: LyricsFeature = lyricsSite
   ? initLyrics(lyricsSite, () => overlay?.presentedTime() ?? null, () => overlay?.presentedBusy() ?? false)
-  : { setVideo() {}, togglePanel() {}, modeChanged() {} };
+  : { setVideo() {}, togglePanel() {}, current: () => null, modeChanged() {} };
+
+// Export (src/export/engine.ts): while it records, the live separation is off so the GPU and the picture are the export's.
+const exporter = new ExportRunner({
+  site,
+  video: () => video,
+  lyrics: () => lyrics.current(),
+  onChange: () => {
+    if (video) push();
+  },
+});
 
 // D1: the picture trails by the graph's total audio delay (processing + device).
 const wantedDelayMs = (videoDelayMs = chain.latency.videoDelayMs): number => debugDelayMs ?? overlayDelayMs(settings.mode, videoDelayMs);
@@ -119,7 +130,7 @@ let modeKnown = false; // the first settings load is not a toggle
 // Nothing starts (audio context, ML host) in a frame or page until it has media: most frames have none.
 const push = () => {
   chain.setGain(masterGainFor(settings));
-  const sep = separationFor(settings);
+  const sep = separationFor(exporter.running ? { ...settings, mode: 'default' } : settings);
   chain.setSeparation(sep);
   selector.update({ on: sep.on, model: settings.mlModel, delayMs: mlDelayMsFor(settings), drums: settings.splitInstrumental && settings.mlModel !== 'sw', guitar: settings.splitGuitar && settings.mlModel !== 'sw', gpu: settings.gpu }); // the all-stems model has its own splits
   syncDelay();
@@ -166,6 +177,9 @@ function status(): ContentStatus {
     separation: { state: chain.separationState, latency: chain.latency, choice: selector.status, error: chain.separationError },
     error: chain.error,
     avProbe: probe.on ? probe.status : undefined,
+    export: exporter.progress,
+    duration: video?.duration,
+    lyricsSynced: lyrics.current() !== null,
   };
 }
 
@@ -179,6 +193,16 @@ chrome.runtime.onMessage.addListener((msg: ContentRequest, _sender, sendResponse
     debugBudget = msg.budgetBytes ?? null;
     overlay?.setBudget(debugBudget);
     syncDelay(true);
+    sendResponse({ ok: true });
+  } else if (msg.type === 'export-start') {
+    // Like get-status: the frame that plays the media answers; the top frame says so when there is none.
+    if (video) sendResponse(exporter.start(msg.options));
+    else if (window === window.top) {
+      setTimeout(() => sendResponse({ ok: false, error: 'There is no video to export on this page.' }), NO_MEDIA_REPLY_MS);
+      return true;
+    }
+  } else if (msg.type === 'export-cancel') {
+    exporter.cancel();
     sendResponse({ ok: true });
   } else if (msg.type === 'get-status') {
     // Every frame hears this and the popup takes the first answer: a frame without media stays quiet, and the top frame

@@ -208,7 +208,7 @@ describe('popup', () => {
     await load({ stored: { mode: 'separate', separationQuality: 'light' } });
     expect(has('separation-quality')).toBe(false);
     expect(document.querySelectorAll('select')).toHaveLength(0);
-    expect(document.querySelectorAll('[role=combobox]')).toHaveLength(2); // model and GPU
+    expect(document.querySelectorAll('#advanced [role=combobox]')).toHaveLength(2); // model and GPU
   });
 
   describe('model dropdown', () => {

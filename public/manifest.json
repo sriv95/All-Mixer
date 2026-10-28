@@ -11,7 +11,7 @@
   "host_permissions": ["<all_urls>"],
   "content_security_policy": { "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'" },
   "web_accessible_resources": [
-    { "resources": ["worklet/separator-worklet.js", "ml/ml.html"], "matches": ["<all_urls>"] }
+    { "resources": ["worklet/separator-worklet.js", "ml/ml.html", "export/engine.js"], "matches": ["<all_urls>"] }
   ],
   "content_scripts": [
     {

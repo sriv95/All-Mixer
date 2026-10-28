@@ -137,11 +137,12 @@ async function start(init: MlWorkerInit): Promise<void> {
   let stages: Split[] = [];
   let geometry: MlGeometry | undefined;
   if (init.drums || init.guitar) {
-    if (wu.p90 >= ML_WARMUP_P90_MS) return unavailable(`too slow on this device (p90 ${wu.p90.toFixed(1)} ms)`);
+    if (wu.p90 >= ML_WARMUP_P90_MS && !init.offline) return unavailable(`too slow on this device (p90 ${wu.p90.toFixed(1)} ms)`);
     const d = await loadStages(ort, init);
     if (typeof d === 'string') return unavailable(d);
     stages = d;
-    geometry = planMdxDrums(wu.p90, stages.map(costOf)) ?? undefined;
+    // An export does not have to keep up with real time: only the block shape matters, so the plan is made for a fast GPU.
+    geometry = (init.offline ? planMdxDrums(1, stages.map((s) => ({ ...costOf(s), ms: 1 }))) : planMdxDrums(wu.p90, stages.map(costOf))) ?? undefined;
     if (!geometry) return unavailable(`too slow for the split (the vocal model takes ${wu.p90.toFixed(0)} ms per block, ${stages.map((s) => `the ${s.id} model ${s.ms.toFixed(0)} ms per run`).join(', ')})`);
     geometry.drums = init.drums === true;
     geometry.guitar = init.guitar === true;
@@ -273,7 +274,7 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
   };
   // 1. Speed of this GPU: a step at the 2 s geometry (remembered from an earlier warm-up when there is one: the plan is timed and gated below anyway).
   // 2. Plan a chunk for the delay budget. 3. Time the plan itself; when it is slower than predicted, correct the speed and plan again.
-  const wantMs = init.delayMs ?? MIN_DELAY_S * 1000;
+  let wantMs = init.delayMs ?? MIN_DELAY_S * 1000;
   let chosen = null as Run | null; // set in `search`
   let stages: Split[] = [];
   let note = '';
@@ -295,7 +296,7 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
       }
       try {
         const r = await measure(g, w);
-        if (r.wu.p90 + stages.reduce((sum, s) => sum + drumRuns(g.block, s.shape.stride) * s.ms, 0) <= gateMs(g)) {
+        if (init.offline || r.wu.p90 + stages.reduce((sum, s) => sum + drumRuns(g.block, s.shape.stride) * s.ms, 0) <= gateMs(g)) {
           chosen = r;
           planBaseMs = baseMs;
         } else {
@@ -304,6 +305,7 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
         }
       } catch (e) {
         baseMs *= 1.5; // most likely out of GPU memory at this chunk length
+        if (init.offline) wantMs = Math.max(MIN_DELAY_S * 1000, wantMs * 0.6); // an export has no speed to correct: a shorter chunk instead
         note = `chunk of ${g.frames} frames failed: ${String(e)}`;
       }
     }
@@ -315,7 +317,8 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
       if (typeof d === 'string') return unavailable(d);
       stages = d;
     }
-    if (remembered !== null) await search(remembered, { skip: 1, n: 3 });
+    if (init.offline) await search(1, { skip: 0, n: 1 }); // an export is not bound to real time: plan for the longest chunk that fits the delay limit and the GPU memory
+    else if (remembered !== null) await search(remembered, { skip: 1, n: 3 });
     // Nothing remembered, or it no longer holds (another load on the GPU): measure now.
     if (!chosen) {
       note = '';
@@ -329,7 +332,7 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
   const geometry: MlGeometry = { block: g.block, resultOffset: g.overlap + g.extra, latency: g.latency, warmupP90Ms: gateMs(g), ...(sw ? { drums: true, guitar: true, bass: true, piano: true } : {}), ...(init.drums && !sw ? { drums: true } : {}), ...(init.guitar && !sw ? { guitar: true } : {}), ...(stages.length ? { pool: poolFor(runsMs(stages), (g.block / ML_SAMPLE_RATE) * 1000) } : {}) };
   const createMs = performance.now() - t0;
   if (init.timing) console.info(`[all-mixer ml] ${id} chunk ${g.frames} frames (${((g.chunk / ML_SAMPLE_RATE)).toFixed(2)} s), block ${(g.block / ML_SAMPLE_RATE).toFixed(2)} s, overlap ${(g.overlap / ML_SAMPLE_RATE).toFixed(2)} s, delay ${(g.latency / ML_SAMPLE_RATE).toFixed(2)} s; warm-up p50 ${wu.p50.toFixed(1)} p90 ${wu.p90.toFixed(1)} p95 ${wu.p95.toFixed(1)} (gate ${geometry.warmupP90Ms.toFixed(1)}), ready after ${createMs.toFixed(0)} ms, ${adapterName}`);
-  ctx.postMessage({ type: 'ready', p50: wu.p50, p90: wu.p90, p95: wu.p95, createMs, adapter: adapterName, geometry, speed: { key: speedKeyOf, baseMs: planBaseMs } });
+  ctx.postMessage({ type: 'ready', p50: wu.p50, p90: wu.p90, p95: wu.p95, createMs, adapter: adapterName, geometry, ...(init.offline ? {} : { speed: { key: speedKeyOf, baseMs: planBaseMs } }) }); // an export's plan is not a measured speed
 
   const vocalEngine: BlockEngine = {
     block: g.block,
