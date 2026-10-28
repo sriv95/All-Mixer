@@ -24,6 +24,7 @@ vi.mock('./audio/master-chain', () => ({
     setVideo() {}
     setGain() {}
     setSeparation() {}
+    setPreloadActive() {}
     onLatencyChange() {}
     whenAudible() {}
   },

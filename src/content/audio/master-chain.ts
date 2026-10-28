@@ -106,6 +106,9 @@ export class MasterChain {
   private gain: GainNode | null = null;
   private direct: GainNode | null = null;
   private sepOut: GainNode | null = null;
+  /** Where the Preload Audio player plays into (src/content/audio/preload-player.ts); the page's own audio is silenced while it is the source. */
+  private preloadOut: GainNode | null = null;
+  private preloadOn = false;
   private sep: AudioWorkletNode | null = null;
   private sepLoading = false;
   private sepError: string | undefined;
@@ -322,6 +325,8 @@ export class MasterChain {
       this.sepOut = new GainNode(ctx, { gain: 0 });
       this.direct.connect(gain);
       this.sepOut.connect(gain);
+      this.preloadOut = new GainNode(ctx, { gain: 0 });
+      this.preloadOut.connect(gain);
       this.ctx = ctx;
       this.gain = gain;
       ctx.addEventListener('statechange', () => {
@@ -331,6 +336,7 @@ export class MasterChain {
       });
       // outputLatency changes at run time, e.g. when Bluetooth headphones connect.
       setInterval(() => this.checkDeviceLatency(), DEVICE_POLL_MS);
+      this.applyPreload();
     } catch (e) {
       this.fail(e);
       return;
@@ -391,7 +397,32 @@ export class MasterChain {
         this.workletOn = false;
       }, offMs);
     }
+    this.applyPreload();
     this.onStateChange();
+  }
+
+  /** The Preload Audio player's context and input, once the graph exists (`setPreloadActive` builds it). */
+  get preloadBus(): { ctx: AudioContext; out: AudioNode } | null {
+    return this.ctx && this.preloadOut ? { ctx: this.ctx, out: this.preloadOut } : null;
+  }
+
+  /**
+   * The preloaded audio plays instead of the video's own sound (on) or not (off). The caller turns the live separator off first.
+   * Needs the graph: this builds it, and the page's audio is then routed through it for good (like a gain change).
+   */
+  setPreloadActive(on: boolean): void {
+    this.preloadOn = on;
+    if (on && !this.engaged) this.engage();
+    this.applyPreload();
+  }
+
+  private applyPreload(): void {
+    const { ctx, direct, preloadOut } = this;
+    if (!ctx || !direct || !preloadOut) return;
+    const now = ctx.currentTime;
+    preloadOut.gain.setTargetAtTime(this.preloadOn ? 1 : 0, now, FADE_TAU);
+    if (this.preloadOn) direct.gain.setTargetAtTime(0, now, FADE_TAU);
+    else if (!this.separating) direct.gain.setTargetAtTime(1, now, FADE_TAU);
   }
 
   private crossfade(fadeIn: GainNode, fadeOut: GainNode, start: number): void {

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { defaultExportOptions, tracksOf, type ExportOptions } from '../shared/export';
 import { DEFAULT_LYRICS_PREFS } from '../shared/lyrics-prefs';
 import { DEFAULT_SETTINGS } from '../shared/settings';
-import { mixSlice, type Pair, type StemSlice } from './mix';
+import { mixSlice, stemsOfSlice, type Pair, type StemSlice } from './mix';
 
 const opts = (audio: Partial<ExportOptions['audio']>, tracks: ExportOptions['tracks'] = 'single'): ExportOptions => ({
   ...defaultExportOptions({ ...DEFAULT_SETTINGS, ...audio }, DEFAULT_LYRICS_PREFS),
@@ -57,5 +57,31 @@ describe('mixSlice', () => {
   it('without a model the slice is the recording at the master level', () => {
     const t = mixSlice(opts({ masterPct: 200 }), { start: 0, length: 2, dry: fill(0.25) });
     expect(first(t.mix)).toBeCloseTo(0.5, 6);
+  });
+});
+
+describe('stemsOfSlice', () => {
+  const a = (over: Partial<ExportOptions['audio']> = {}) => ({ ...DEFAULT_SETTINGS, ...over });
+  it('without parts: the vocal and the instrumental (dry − vk)', () => {
+    const s = stemsOfSlice(a(), slice());
+    expect(Object.keys(s)).toEqual(['vocals', 'instrumental']);
+    expect(first(s.vocals)).toBeCloseTo(0.15, 6);
+    expect(first(s.instrumental)).toBeCloseTo(0.35, 6);
+  });
+  it('with a split part: the part, and the rest of the instrumental without it', () => {
+    const s = stemsOfSlice(a({ splitInstrumental: true }), slice());
+    expect(Object.keys(s)).toEqual(['vocals', 'drums', 'others']);
+    expect(first(s.drums)).toBeCloseTo(0.1, 6);
+    expect(first(s.others)).toBeCloseTo(0.25, 6);
+  });
+  it('the stems at their own level add up to the mix of mixSlice', () => {
+    const o = opts({ vocalPct: 50, instrumentalPct: 80, drumsPct: 25, othersPct: 60, splitInstrumental: true });
+    const s = stemsOfSlice(o.audio, slice());
+    const g = { v: 0.5, i: 0.8, d: 0.25, o: 0.6 };
+    const sum = g.v * first(s.vocals) + g.i * (g.d * first(s.drums) + g.o * first(s.others));
+    expect(first(mixSlice(o, slice()).mix)).toBeCloseTo(sum, 6);
+  });
+  it('a slice without a model has no stems', () => {
+    expect(stemsOfSlice(a(), { start: 0, length: 2, dry: fill(0.5) })).toEqual({});
   });
 });

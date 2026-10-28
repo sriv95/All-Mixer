@@ -39,6 +39,8 @@ export interface MixerSettings {
   vocalPitch: number;
   /** Instrumental pitch, semitones. Used when pitchSplit is on. */
   instrPitch: number;
+  /** Separate mode (Advanced): Preload Audio instead of Live. The whole video is separated up front and plays from memory, so a GPU that misses the live deadline still works. */
+  preload: boolean;
 }
 
 const GAIN_MIN_PCT = 0;
@@ -63,6 +65,7 @@ export const DEFAULT_SETTINGS: Readonly<MixerSettings> = Object.freeze({
   pitchSplit: false,
   vocalPitch: 0,
   instrPitch: 0,
+  preload: false,
 });
 
 /** Pitch range, semitones either way: a key change for singing; wider shifts sound rough. */
@@ -133,6 +136,7 @@ export function normalizeSettings(raw: unknown): MixerSettings {
     pitchSplit: r.pitchSplit === true,
     vocalPitch: clampPitch(r.vocalPitch),
     instrPitch: clampPitch(r.instrPitch),
+    preload: r.preload === true,
   };
 }
 

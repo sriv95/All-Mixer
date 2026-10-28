@@ -40,6 +40,7 @@ describe('normalizeSettings', () => {
       pitchSplit: false,
       vocalPitch: 0,
       instrPitch: 0,
+      preload: false,
     });
     expect(normalizeSettings({ mode: 'weird' }).mode).toBe('default');
   });

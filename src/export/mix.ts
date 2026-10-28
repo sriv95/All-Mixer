@@ -1,6 +1,6 @@
 import { softClip } from '../content/audio/limiter';
 import { PARTS } from '../worklet/protocol';
-import { TRACK_LABEL, tracksOf, type ExportOptions, type Part, type TrackId } from '../shared/export';
+import { TRACK_LABEL, partsOf, tracksOf, type ExportOptions, type Part, type Stem, type TrackId } from '../shared/export';
 import { masterGainFor, separationFor, type MixerSettings } from '../shared/settings';
 
 export type Pair = [Float32Array, Float32Array];
@@ -72,3 +72,25 @@ export function mixSlice(options: Pick<ExportOptions, 'tracks' | 'audio'>, s: St
 
 /** File name of a track inside the zip or the stream name inside the MP4: `01-mix`, `02-vocals`. */
 export const trackFile = (id: TrackId, index: number): string => `${String(index + 1).padStart(2, '0')}-${TRACK_LABEL[id].toLowerCase()}`;
+
+/**
+ * The raw stems of one slice, named like the Separate tracks of an export (`stemsOf`): the vocal, each part, and the rest of the
+ * instrumental (`instrumental` when no part is split out). No gain and no limit: the player applies the levels live.
+ */
+export function stemsOfSlice(audio: Pick<MixerSettings, 'mlModel' | 'splitInstrumental' | 'splitGuitar'>, s: StemSlice): Partial<Record<Stem, Pair>> {
+  const out: Partial<Record<Stem, Pair>> = {};
+  if (!s.vk || !s.vocal) return out;
+  const parts = partsOf(audio).filter((p) => s.parts?.[p]);
+  const rest: Pair = [new Float32Array(s.length), new Float32Array(s.length)];
+  for (let c = 0; c < 2; c++) {
+    for (let i = 0; i < s.length; i++) {
+      let x = s.dry[c][i] - s.vk[c][i];
+      for (const p of parts) x -= s.parts![p]![c][i];
+      rest[c][i] = x;
+    }
+  }
+  out.vocals = s.vocal;
+  for (const p of parts) out[p] = s.parts![p]!;
+  out[parts.length ? 'others' : 'instrumental'] = rest;
+  return out;
+}

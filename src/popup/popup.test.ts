@@ -812,6 +812,14 @@ describe('popup', () => {
         }
       });
 
+      it('offers Switch to Preload Audio', async () => {
+        await load({ stored: { mode: 'separate' }, status: stopped });
+        expect(el('act-preload').textContent).toBe('Switch to Preload Audio');
+        el('act-preload').click();
+        await settle();
+        expect(sent().at(-1).settings.preload).toBe(true);
+      });
+
       it('Try again turns Separate off and on again', async () => {
         await load({ stored: { mode: 'separate' }, status: stopped });
         el('act-retry').click();
@@ -829,6 +837,82 @@ describe('popup', () => {
       await load({ stored: { mode: 'separate' } });
       expect(banner()).toBeNull();
       expect(el('status').textContent).toBe('');
+    });
+
+    describe('Preload Audio', () => {
+      const pre = (preload: object): ContentStatus => ({ ...okStatus, preload } as ContentStatus);
+      const box = () => document.getElementById('preload-banner');
+      const messages = () => (chrome.tabs.sendMessage as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[1]?.type);
+      const progress = { state: 'running', stage: 'recording', chunk: 2, chunks: 14, percent: 31, detail: 'Chunk 2/14 · 1:05 / 3:30 · 1 of 14 processed' };
+
+      it('the Advanced Processing switch picks Live or Preload audio', async () => {
+        await load({ stored: { mode: 'separate' } });
+        el('advanced-toggle').click();
+        await settle();
+        expect(el('processing-live').getAttribute('aria-pressed')).toBe('true');
+        el('processing-preload').click();
+        await settle();
+        expect(sent().at(-1).settings.preload).toBe(true);
+        expect(el('processing-preload').getAttribute('aria-pressed')).toBe('true');
+        el('processing-live').click();
+        await settle();
+        expect(sent().at(-1).settings.preload).toBe(false);
+      });
+
+      it('loading shows the bar, the small detail text and Cancel, which stops the preload', async () => {
+        await load({ stored: { mode: 'separate', preload: true }, status: pre({ state: 'loading', progress }) });
+        expect(box()!.dataset.state).toBe('loading');
+        expect(el('preload-progress').getAttribute('aria-valuenow')).toBe('31');
+        expect(el('preload-detail').textContent).toBe('31% · Chunk 2/14 · 1:05 / 3:30 · 1 of 14 processed');
+        expect(banner()).toBeNull(); // the live banner is not shown in this mode
+        el('preload-cancel').click();
+        await settle();
+        expect(messages()).toContain('preload-cancel');
+      });
+
+      it('nothing preloaded yet offers to preload and to go back to Live', async () => {
+        await load({ stored: { mode: 'separate', preload: true }, status: pre({ state: 'idle' }) });
+        expect(box()!.textContent).toMatch(/Not preloaded yet/);
+        el('preload-start').click();
+        await settle();
+        expect(messages()).toContain('preload-start');
+        el('preload-live').click();
+        await settle();
+        expect(sent().at(-1).settings.preload).toBe(false);
+      });
+
+      it('ready says it plays from memory; with other model settings it offers to preload again', async () => {
+        await load({ stored: { mode: 'separate', preload: true }, status: pre({ state: 'ready', bytes: 170e6 }) });
+        expect(box()!.textContent).toMatch(/Playing the preloaded audio.*170 MB in memory/);
+        expect(has('preload-again')).toBe(false);
+        await load({ stored: { mode: 'separate', preload: true }, status: pre({ state: 'ready', bytes: 170e6, stale: true }) });
+        expect(el('preload-text').textContent).toMatch(/another model or split/);
+        expect(has('preload-again')).toBe(true);
+      });
+
+      it('ready: says when the original audio plays instead, and that pitch is not applied', async () => {
+        await load({ stored: { mode: 'separate', preload: true }, status: pre({ state: 'ready', bytes: 1e6, holding: 'another clip (an ad?) is playing' }) });
+        expect(el('preload-text').textContent).toBe('The original audio plays now: another clip (an ad?) is playing.');
+        await load({ stored: { mode: 'separate', preload: true, pitch: 2 }, status: pre({ state: 'ready', bytes: 1e6 }) });
+        expect(el('preload-text').textContent).toMatch(/Pitch shift does not apply/);
+      });
+
+      it('an error shows the reason, Try again and Use Live mode', async () => {
+        await load({ stored: { mode: 'separate', preload: true }, status: pre({ state: 'error', progress: { ...progress, state: 'error', error: 'The model did not start in time' } }) });
+        expect(el('preload-text').textContent).toBe('The model did not start in time. The original audio plays.');
+        expect(has('preload-retry') && has('preload-live')).toBe(true);
+      });
+
+      it('opens the Export section in Preload mode', async () => {
+        await load({ stored: { mode: 'separate', preload: true }, status: pre({ state: 'idle' }) });
+        expect(isOpen('export')).toBe(true);
+        expect(has('export-start')).toBe(true);
+      });
+
+      it('the Default tab has no Preload banner', async () => {
+        await load({ stored: { mode: 'default', preload: true }, status: pre({ state: 'idle' }) });
+        expect(box()).toBeNull();
+      });
     });
   });
 });

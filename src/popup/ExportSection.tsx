@@ -92,7 +92,8 @@ function Field({ id, label, children }: { id: string; label: string; children: R
   );
 }
 
-export function ExportSection({ api }: { api: ExportApi }) {
+/** `reveal`: Preload Audio is the mode; the section opens (once, when it turns on) so a file is one click away. */
+export function ExportSection({ api, reveal = false }: { api: ExportApi; reveal?: boolean }) {
   const { settings, status } = api;
   const progress = status?.progress;
   const running = progress?.state === 'running';
@@ -112,8 +113,8 @@ export function ExportSection({ api }: { api: ExportApi }) {
     if (!touched.current) setOptions((o) => ({ ...defaultExportOptions(settings, prefs, o.format), tracks: o.tracks, height: o.height }));
   }, [settings, prefs]);
   useEffect(() => {
-    if (running) setOpen(true);
-  }, [running]);
+    if (running || reveal) setOpen(true);
+  }, [running, reveal]);
 
   const change = (patch: Partial<ExportOptions>) => {
     touched.current = true;
