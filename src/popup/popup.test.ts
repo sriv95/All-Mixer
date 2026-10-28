@@ -903,6 +903,17 @@ describe('popup', () => {
         expect(has('preload-retry') && has('preload-live')).toBe(true);
       });
 
+      it('a video too long for the memory offers Export instead of Try again, and opens the Export section', async () => {
+        await load({ stored: { mode: 'separate', preload: true }, status: pre({ state: 'error', tooBig: true, progress: { ...progress, state: 'error', error: 'This video is too long to keep in memory' } }) });
+        expect(has('preload-retry')).toBe(false);
+        el('export-toggle').click();
+        await settle();
+        expect(isOpen('export')).toBe(false);
+        el('preload-export').click();
+        await settle();
+        expect(isOpen('export')).toBe(true);
+      });
+
       it('opens the Export section in Preload mode', async () => {
         await load({ stored: { mode: 'separate', preload: true }, status: pre({ state: 'idle' }) });
         expect(isOpen('export')).toBe(true);

@@ -1,4 +1,4 @@
-import { CircleCheck, HardDriveDownload, LoaderCircle, Radio, RefreshCw, Square, TriangleAlert } from 'lucide-react';
+import { CircleCheck, Download, HardDriveDownload, LoaderCircle, Radio, RefreshCw, Square, TriangleAlert } from 'lucide-react';
 import { motion } from 'motion/react';
 import type { ReactNode } from 'react';
 import type { PreloadStatus } from '../shared/preload';
@@ -13,6 +13,12 @@ export interface PreloadApi {
 }
 
 const icon = 'grid size-9 shrink-0 place-items-center rounded-full';
+// The Export section is open in Preload mode unless the user closed it: open it and bring it into view.
+const showExport = (): void => {
+  const t = document.getElementById('export-toggle');
+  if (t?.getAttribute('aria-expanded') !== 'true') t?.click();
+  document.getElementById('export')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+};
 const mb = (n: number): string => `${Math.round(n / 1e6)} MB`;
 
 /** Under the Separate tab while Preload Audio is the mode: the progress of the preload, then what plays. */
@@ -57,7 +63,11 @@ export function PreloadBanner({ api, settings, update, compact }: { api: Preload
       text = `${(p?.error ?? 'Something went wrong').replace(/[.\s]*$/, '.')} The original audio plays.`;
       actions = (
         <>
-          <Btn tone="primary" id="preload-retry" onClick={() => void api.start()}><RefreshCw size={16} aria-hidden />Try again</Btn>
+          {s.tooBig ? (
+            <Btn tone="primary" id="preload-export" onClick={showExport}><Download size={16} aria-hidden />Export instead</Btn>
+          ) : (
+            <Btn tone="primary" id="preload-retry" onClick={() => void api.start()}><RefreshCw size={16} aria-hidden />Try again</Btn>
+          )}
           {live}
         </>
       );

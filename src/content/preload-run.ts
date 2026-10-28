@@ -34,7 +34,7 @@ export const videoKey = (href: string = location.href): string => {
  */
 export class PreloadRunner {
   private cache: StemCache | null = null;
-  private last: { key: string; progress: ExportProgress } | null = null;
+  private last: { key: string; progress: ExportProgress; tooBig?: boolean } | null = null;
   private abort: AbortController | null = null;
 
   constructor(private readonly deps: Deps) {}
@@ -53,8 +53,8 @@ export class PreloadRunner {
     const video = this.deps.video();
     if (this.abort) return { ok: false, error: 'Preloading is already running in this tab.' };
     // The popup shows why a start was refused, also when it did not send the start itself (the Advanced switch).
-    const refuse = (error: string): ExportAnswer => {
-      this.last = { key: videoKey(), progress: { state: 'error', stage: 'preparing', chunk: 0, chunks: 0, percent: 0, detail: 'Preloading did not start.', error } };
+    const refuse = (error: string, tooBig = false): ExportAnswer => {
+      this.last = { key: videoKey(), tooBig, progress: { state: 'error', stage: 'preparing', chunk: 0, chunks: 0, percent: 0, detail: 'Preloading did not start.', error } };
       this.deps.onChange();
       return { ok: false, error };
     };
@@ -67,7 +67,7 @@ export class PreloadRunner {
     if (player && isAdShowing(player)) return refuse('An ad is playing. Preload when the video itself plays.');
     const bytes = preloadBytes(settings, video.duration);
     if (bytes > PRELOAD_MAX_BYTES) {
-      return refuse(`This video is too long to keep in memory with ${stemsOf(settings).length} stems (about ${Math.round(bytes / 1e6)} MB, the limit is ${Math.round(PRELOAD_MAX_BYTES / 1e6)} MB). Use Live mode, or Export.`);
+      return refuse(`This video is too long to keep in memory with ${stemsOf(settings).length} stems (about ${Math.round(bytes / 1e6)} MB, the limit is ${Math.round(PRELOAD_MAX_BYTES / 1e6)} MB). Use Export, or Live mode.`, true);
     }
     const abort = (this.abort = new AbortController());
     const key = videoKey();
@@ -91,7 +91,7 @@ export class PreloadRunner {
     if (this.abort && this.last) return { state: 'loading', progress: this.last.progress };
     const cache = this.ready(key);
     if (cache) return { state: 'ready', stale: cache.signature !== preloadSignature(settings), holding, bytes: cache.bytes, playing };
-    if (this.last?.key === key && this.last.progress.state !== 'running') return { state: this.last.progress.state === 'cancelled' ? 'cancelled' : 'error', progress: this.last.progress };
+    if (this.last?.key === key && this.last.progress.state !== 'running') return { state: this.last.progress.state === 'cancelled' ? 'cancelled' : 'error', progress: this.last.progress, tooBig: this.last.tooBig };
     return { state: 'idle' };
   }
 

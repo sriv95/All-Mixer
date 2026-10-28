@@ -18,6 +18,8 @@ export interface PreloadStatus {
   /** idle = no cache for this video; loading = being made (see `progress`); ready = in memory; error / cancelled = the last attempt. */
   state: 'idle' | 'loading' | 'ready' | 'error' | 'cancelled';
   progress?: ExportProgress;
+  /** error: the video is too long to keep in memory (`PRELOAD_MAX_BYTES`); Export still works, it does not keep the stems. */
+  tooBig?: boolean;
   /** ready: made with a model or split switches other than the current ones. */
   stale?: boolean;
   /** ready but not what plays right now (an ad, a playback speed other than 1×); the original audio plays meanwhile. */

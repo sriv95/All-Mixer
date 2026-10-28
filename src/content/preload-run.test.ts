@@ -48,6 +48,7 @@ describe('PreloadRunner', () => {
     const st = r.status(DEFAULT_SETTINGS);
     expect(st.state).toBe('error');
     expect(st.progress?.error).toMatch(reason);
+    expect(st.tooBig === true).toBe(/too long/.test(String(reason)));
     expect(onChange).toHaveBeenCalled();
   });
 });
