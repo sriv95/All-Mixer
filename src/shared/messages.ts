@@ -9,6 +9,7 @@ import type { EngineChoice } from '../content/audio/engine-select';
 import type { LatencyInfo } from '../content/audio/latency';
 import type { SepView } from './separation-view';
 import type { ExportOptions, ExportProgress } from './export';
+import type { PreloadStatus } from './preload';
 
 /** Content script → background: "what are my settings?" (tab id comes from sender). */
 export interface GetMyTabSettings {
@@ -48,6 +49,16 @@ export interface ExportStart {
 /** Popup → content script: stop the running export. */
 export interface ExportCancel {
   type: 'export-cancel';
+}
+
+/** Popup → content script: preload the audio of this video (Preload Audio mode, src/content/preload-run.ts). Answer: ExportAnswer. */
+export interface PreloadStart {
+  type: 'preload-start';
+}
+
+/** Popup → content script: stop the running preload. */
+export interface PreloadCancel {
+  type: 'preload-cancel';
 }
 
 export type ExportAnswer = { ok: true } | { ok: false; error: string };
@@ -113,6 +124,8 @@ export interface ContentStatus {
   avProbe?: AvProbeStatus;
   /** The running or last export of this tab; absent before the first one. */
   export?: ExportProgress;
+  /** Preload Audio of the video that is open (absent from content scripts older than this mode). */
+  preload?: PreloadStatus;
   /** The video's length in seconds (NaN / absent: unknown or live), for the export section. */
   duration?: number;
   /** Synced lyrics are on screen: the karaoke text of the MP4 has something to show. */
@@ -190,4 +203,4 @@ interface DebugVideoDelay {
   budgetBytes?: number | null;
 }
 
-export type ContentRequest = ApplySettings | GetStatus | ExportStart | ExportCancel | DebugVideoDelay;
+export type ContentRequest = ApplySettings | GetStatus | ExportStart | ExportCancel | PreloadStart | PreloadCancel | DebugVideoDelay;

@@ -1,6 +1,6 @@
 import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { AudioLines, AudioWaveform, Cpu, Drum, Guitar, LoaderCircle, Maximize2, Mic, Minimize2, MicOff, Music, Piano, RefreshCw, RotateCcw, Settings2, Timer, TriangleAlert, Undo2, Volume2, Waves, Zap } from 'lucide-react';
-import type { ContentStatus, ExportAnswer, ExportCancel, ExportStart, GetStatus, GetTabSettings, SetTabSettings } from '../shared/messages';
+import { AudioLines, AudioWaveform, Cpu, Drum, Guitar, HardDriveDownload, LoaderCircle, Maximize2, Mic, Minimize2, MicOff, Music, Piano, RefreshCw, RotateCcw, Settings2, Timer, TriangleAlert, Undo2, Volume2, Waves, Zap } from 'lucide-react';
+import type { ContentStatus, ExportAnswer, ExportCancel, ExportStart, GetStatus, GetTabSettings, PreloadCancel, PreloadStart, SetTabSettings } from '../shared/messages';
 import type { ExportOptions } from '../shared/export';
 import { clampDelayS, clampOthersPct, clampPct, clampPitch, masterPctAt, masterPosOf, MASTER_POS_MAX, normalizeSettings, PITCH_MAX, type MixerSettings, type Mode } from '../shared/settings';
 import { separationView, type SepView } from '../shared/separation-view';
@@ -10,6 +10,7 @@ import { gpuOptions, gpuSelected, hasShaderF16, probeGpuNames, type GpuNames } f
 import { useModels } from './models';
 import { MODEL_CHOICES, ModelRow } from './model-row';
 import { ExportSection, type ExportApi } from './ExportSection';
+import { PreloadBanner, ProcessingRow, type PreloadApi } from './PreloadUi';
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
 import { Blocked, Btn, Card, Collapse, Disclosure, PitchStepper, Rise, Roll, Select, Skeleton, Slider, SliderRow, Switch, Tip, fade, slide, useGlide } from './ui';
 
@@ -119,8 +120,10 @@ export function App() {
 
   const view = separationView(settings.mode, loaded?.s);
   // While the separator starts or ML warms up, poll so the banner moves on by itself; while live, slowly, to catch a stop.
-  const exporting = loaded?.s?.export?.state === 'running';
-  const pollMs = exporting ? EXPORT_POLL_MS : view.kind === 'warming' ? LOADING_POLL_MS : view.kind === 'live' ? LIVE_POLL_MS : null;
+  const exporting = loaded?.s?.export?.state === 'running' || loaded?.s?.preload?.state === 'loading';
+  // Preload mode: the state of the cache can change under the popup (an ad, another video).
+  const preloadMode = settings.mode === 'separate' && settings.preload;
+  const pollMs = exporting ? EXPORT_POLL_MS : view.kind === 'warming' ? LOADING_POLL_MS : view.kind === 'live' || preloadMode ? LIVE_POLL_MS : null;
   useEffect(() => {
     if (pollMs === null) return;
     const t = setTimeout(() => void refresh(), pollMs);
@@ -150,6 +153,23 @@ export function App() {
     cancel() {
       if (tabId.current === null) return;
       const req: ExportCancel = { type: 'export-cancel' };
+      void chrome.tabs.sendMessage(tabId.current, req).catch(() => undefined).then(refresh);
+    },
+  };
+
+  // Preload Audio: the tab does the work (src/content/preload-run.ts) and reports it through `get-status`.
+  const preloadApi: PreloadApi = {
+    status: loaded?.s?.preload,
+    async start() {
+      if (tabId.current === null) return 'Open a video page first.';
+      const req: PreloadStart = { type: 'preload-start' };
+      const answer: ExportAnswer | undefined = await chrome.tabs.sendMessage(tabId.current, req).catch(() => undefined);
+      await refresh();
+      return answer?.ok ? undefined : (answer?.error ?? 'Reload this tab, then try again.');
+    },
+    cancel() {
+      if (tabId.current === null) return;
+      const req: PreloadCancel = { type: 'preload-cancel' };
       void chrome.tabs.sendMessage(tabId.current, req).catch(() => undefined).then(refresh);
     },
   };
@@ -199,7 +219,7 @@ export function App() {
         {separate ? (
           <motion.div key="separate" id="panel-separate" custom={1} variants={slide} initial="enter" animate="center" exit="exit" transition={{ duration: 0.2 }} className="flex flex-col gap-3.5">
             <AnimatePresence mode="wait" initial={false}>
-              {view.kind !== 'off' && <Banner key="banner" compact={compact} view={view} settings={settings} update={update} retry={retry} />}
+              {preloadMode ? <PreloadBanner key="preload-banner" api={preloadApi} settings={settings} update={update} compact={compact} /> : view.kind !== 'off' && <Banner key="banner" compact={compact} view={view} settings={settings} update={update} retry={retry} />}
             </AnimatePresence>
             <SeparateControls settings={settings} update={update} ready={ready} compact={compact} advancedOpen={advancedOpen} setAdvancedOpen={setAdvancedOpen} splitOpen={splitOpen} setSplitOpen={setSplitOpen} exportApi={exportApi} />
           </motion.div>
@@ -357,6 +377,7 @@ function Banner({ view, settings, update, retry, compact }: { compact: boolean; 
       </div>
       <Collapse show={tooSlow}>
         <div className="flex flex-col gap-2.5 pt-0.5">
+          <Btn tone="primary" id="act-preload" onClick={() => update({ preload: true })}><HardDriveDownload size={16} aria-hidden />Switch to Preload Audio</Btn>
           {settings.mlModel !== 'mdx' && <Btn tone="primary" id="act-default-model" onClick={() => update({ mlModel: 'mdx' as MlModel })}><Cpu size={16} aria-hidden />Switch to Default model</Btn>}
           {settings.mlDelayS < MAX_DELAY_S && <Btn id="act-raise-delay" onClick={() => update({ mlDelayS: nextDelay })}><Timer size={16} aria-hidden />Raise delay limit to {nextDelay} s</Btn>}
           {gpuSelected(gpuNames, settings.gpu) !== 'high-performance' && <Btn id="act-fast-gpu" onClick={() => update({ gpu: 'high-performance' })}><Zap size={16} aria-hidden />Try the high performance GPU</Btn>}
@@ -478,6 +499,7 @@ function SeparateControls({ settings, update, ready, compact, advancedOpen, setA
       <Disclosure id="advanced" open={advancedOpen} onOpen={(open) => persistAdvanced(open, setAdvancedOpen)} className="rounded-[20px] bg-card" buttonClassName="p-4"
         title={<span className="flex items-center gap-1.5"><Settings2 size={15} className="text-brand" aria-hidden />Advanced <span className="font-medium text-muted">(model, delay, pitch)</span></span>}>
         <div className="flex flex-col gap-3.5 px-4 pb-4">
+          <ProcessingRow settings={settings} update={update} />
           <div className="flex flex-col gap-1.5">
             <label htmlFor="ml-model" className="text-[13px] font-bold">Model</label>
             <Select id="ml-model" value={settings.mlModel} options={MODEL_CHOICES} onValue={(mlModel) => update({ mlModel })} />
@@ -526,7 +548,7 @@ function SeparateControls({ settings, update, ready, compact, advancedOpen, setA
       </Disclosure>
       </Rise>
       <Rise i={4}>
-        <ExportSection api={exportApi} />
+        <ExportSection api={exportApi} reveal={settings.preload} />
       </Rise>
     </>
   );

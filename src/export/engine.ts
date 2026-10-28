@@ -21,6 +21,7 @@ import { chunkAt, planChunks } from './plan';
 import { Resampler } from './resample';
 
 export type { ExportFile } from './encode';
+export { stemsOfSlice } from './mix';
 
 export interface ExportDeps {
   video: HTMLVideoElement;
@@ -105,7 +106,19 @@ interface Job {
   last: boolean;
 }
 
+/** Receives the stems of every piece of the recording, in order (Preload Audio: they are kept in memory instead of being encoded). */
+export type SliceSink = (s: StemSlice) => void | Promise<void>;
+
 export async function runExport(d: ExportDeps): Promise<ExportFile> {
+  return (await record(d))!;
+}
+
+/** The recording and separation of an export, without the encoders: `onSlice` gets the stems. Resolves when the whole video was handed over. */
+export async function runPreload(d: ExportDeps, onSlice: SliceSink): Promise<void> {
+  await record(d, onSlice);
+}
+
+async function record(d: ExportDeps, onSlice?: SliceSink): Promise<ExportFile | null> {
   const { video: v, options: o } = d;
   const dur = v.duration;
   if (!Number.isFinite(dur) || dur <= 0) throw new Error('This video has no fixed length (a live stream cannot be exported)');
@@ -149,7 +162,9 @@ export async function runExport(d: ExportDeps): Promise<ExportFile> {
           : stage === 'finishing'
             ? processed < plan.count
               ? `Processing the last chunks (${processed} of ${plan.count} done)…`
-              : 'Writing the file…'
+              : onSlice
+                ? 'Finishing…'
+                : 'Writing the file…'
             : 'Getting ready…';
     d.report({ state: 'running', stage, chunk: stage === 'recording' ? chunk : 0, chunks: plan.count, percent, detail });
   };
@@ -163,6 +178,18 @@ export async function runExport(d: ExportDeps): Promise<ExportFile> {
   };
 
   const saved = { src: v.currentSrc, time: v.currentTime, paused: v.paused, muted: v.muted, rate: v.playbackRate };
+  let restored = false;
+  /** Back to what the user had, unless the player moved on to another video. */
+  const restore = (): void => {
+    if (restored) return;
+    restored = true;
+    if (v.currentSrc !== saved.src) return;
+    v.pause();
+    v.muted = saved.muted;
+    v.playbackRate = saved.rate;
+    v.currentTime = saved.time;
+    if (!saved.paused) void v.play().catch(() => {});
+  };
   let session: MlSession | null = null;
   let sink: Sink | null = null;
   let capture: Capture | null = null;
@@ -188,7 +215,7 @@ export async function runExport(d: ExportDeps): Promise<ExportFile> {
 
     // ---- 2. the encoders
     const size = pictureSize(v.videoWidth, v.videoHeight, o.height);
-    sink = mp4 ? await mp4Sink(tracks, name, size) : await mp3Sink(tracks, name);
+    if (!onSlice) sink = mp4 ? await mp4Sink(tracks, name, size) : await mp3Sink(tracks, name);
     check();
 
     // ---- 3. record from the start, muted, at normal speed
@@ -220,7 +247,7 @@ export async function runExport(d: ExportDeps): Promise<ExportFile> {
       if (!pausedByUs && !recordingDone && (queue.length >= MAX_QUEUE || renderLag() > MAX_RENDER_LAG_S || hiddenForPicture())) {
         pausedByUs = true;
         v.pause();
-      } else if (pausedByUs && queue.length <= 1 && renderLag() < MAX_RENDER_LAG_S / 3 && !hiddenForPicture()) {
+      } else if (pausedByUs && !recordingDone && queue.length <= 1 && renderLag() < MAX_RENDER_LAG_S / 3 && !hiddenForPicture()) {
         pausedByUs = false;
         void v.play().catch(() => {});
       }
@@ -302,11 +329,14 @@ export async function runExport(d: ExportDeps): Promise<ExportFile> {
       report(true);
       cap.stop();
       stopPicture?.(); // the frames in the store are enough for the rest
+      // A video left at its end while the last chunks are processed would make the player start the next one (autoplay): it gets
+      // its place back now, not after the encoders are done.
+      restore();
     };
 
     // picture, at a constant rate: frame `k` is the newest source frame at k / fps, plus the karaoke text of that moment
     const renderLoop = async (): Promise<void> => {
-      if (!out.canvas || !out.addFrame || !store) return;
+      if (!out?.canvas || !out.addFrame || !store) return;
       const ctx = out.canvas.getContext('2d')!;
       const { width: W, height: H } = out.canvas;
       const dt = 1 / VIDEO_FPS;
@@ -335,6 +365,8 @@ export async function runExport(d: ExportDeps): Promise<ExportFile> {
 
     // chunks: separate, mix, encode, in order
     const write = async (s: StemSlice): Promise<void> => {
+      if (onSlice) return void (await onSlice(s));
+      if (!out) return;
       const mixed = mixSlice(o, s);
       for (const id of tracks) await out.addAudio(id, mixed[id]![0], mixed[id]![1], s.start);
     };
@@ -369,7 +401,7 @@ export async function runExport(d: ExportDeps): Promise<ExportFile> {
 
     // ---- 4. assemble
     at('finishing');
-    const file = await sink.finish();
+    const file = sink ? await sink.finish() : null;
     sink = null;
     return file;
   } catch (e) {
@@ -384,13 +416,6 @@ export async function runExport(d: ExportDeps): Promise<ExportFile> {
     frames?.close();
     session?.dispose();
     await sink?.cancel();
-    // Back to what the user had, unless the player moved on to another video.
-    if (v.currentSrc === saved.src) {
-      v.pause();
-      v.muted = saved.muted;
-      v.playbackRate = saved.rate;
-      v.currentTime = saved.time;
-      if (!saved.paused) void v.play().catch(() => {});
-    }
+    restore();
   }
 }
