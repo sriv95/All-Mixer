@@ -329,9 +329,9 @@ async function record(d: ExportDeps, onSlice?: SliceSink): Promise<ExportFile | 
       report(true);
       cap.stop();
       stopPicture?.(); // the frames in the store are enough for the rest
-      // A video left at its end while the last chunks are processed would make the player start the next one (autoplay): Preload
-      // Audio needs the page to stay on this video, so it gets its place back now.
-      if (onSlice) restore();
+      // A video left at its end while the last chunks are processed would make the player start the next one (autoplay): it gets
+      // its place back now, not after the encoders are done.
+      restore();
     };
 
     // picture, at a constant rate: frame `k` is the newest source frame at k / fps, plus the karaoke text of that moment
