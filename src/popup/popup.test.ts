@@ -667,7 +667,7 @@ describe('popup', () => {
         el('preset-undo').click();
         await settle();
         expect(sent().at(-1).settings).toMatchObject({ vocalPct: 70, instrumentalPct: 40 });
-        expect(has('preset-undo')).toBe(false);
+        await vi.waitFor(() => expect(has('preset-undo')).toBe(false));
       });
 
       it('is not offered when the preset changes nothing, and goes away when a slider moves', async () => {
@@ -679,8 +679,7 @@ describe('popup', () => {
         await settle();
         expect(has('preset-undo')).toBe(true);
         input('vocal', '40');
-        await settle();
-        expect(has('preset-undo')).toBe(false);
+        await vi.waitFor(() => expect(has('preset-undo')).toBe(false)); // the exit animation unmounts a frame later, slower on CI
       });
     });
 
