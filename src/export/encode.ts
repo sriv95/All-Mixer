@@ -56,7 +56,7 @@ function sample(l: Float32Array, r: Float32Array, start: number, shift = 0): Aud
 /** Samples per call of the MP3 encoder (a multiple of the 1152-sample frame, about 0.8 s): the page gets a breath in between. */
 const MP3_STEP = 1152 * 32;
 /** A turn for the page between two encoder steps. A message, not a timer: a hidden tab runs timers once a second. */
-const breathe = (): Promise<void> =>
+export const breathe = (): Promise<void> =>
   new Promise((resolve) => {
     const { port1, port2 } = new MessageChannel();
     port1.onmessage = () => {
@@ -97,30 +97,29 @@ export async function mp3Sink(tracks: readonly TrackId[], name: string): Promise
   };
 }
 
-/** Even sizes (H.264 needs them) of the picture at `height`, never above the source. */
-export function pictureSize(srcW: number, srcH: number, height: number): { w: number; h: number } {
-  const h = Math.max(2, Math.round(Math.min(height, srcH || height) / 2) * 2);
-  const w = Math.max(2, Math.round(((srcW || (h * 16) / 9) * h) / (srcH || h) / 2) * 2);
-  return { w, h };
+/** Even sizes (H.264 needs them) of the 16:9 picture at `height`. */
+export function pictureSize(height: number): { w: number; h: number } {
+  const h = Math.max(2, Math.round(height / 2) * 2);
+  return { h, w: Math.round((h * 16) / 9 / 2) * 2 };
 }
 
 /**
- * MP4: the picture and one audio stream per track. Stream 0 is the mix and the default stream (what a player plays); the stems follow,
+ * MP4: the picture (the karaoke text) and one audio stream per track, none for a silent one. Stream 0 is the mix and the default stream (what a player plays); the stems follow,
  * each with its name. H.264 + AAC when the browser can encode them, else the best it can (VP9 / AV1, Opus).
  */
 export async function mp4Sink(tracks: readonly TrackId[], name: string, size: { w: number; h: number }): Promise<Sink> {
   const format = new Mp4OutputFormat();
   const videoCodec: VideoCodec | null = await getFirstEncodableVideoCodec(['avc', 'hevc', 'vp9', 'av1'].filter((c) => format.getSupportedVideoCodecs().includes(c as VideoCodec)) as VideoCodec[], { width: size.w, height: size.h });
   if (!videoCodec) throw new Error('This browser cannot encode video for an MP4');
-  const audioCodec: AudioCodec | null = await getFirstEncodableAudioCodec(['aac', 'opus'].filter((c) => format.getSupportedAudioCodecs().includes(c as AudioCodec)) as AudioCodec[], { numberOfChannels: 2, sampleRate: EXPORT_SAMPLE_RATE });
-  if (!audioCodec) throw new Error('This browser cannot encode audio for an MP4');
+  const audioCodec: AudioCodec | null = tracks.length ? await getFirstEncodableAudioCodec(['aac', 'opus'].filter((c) => format.getSupportedAudioCodecs().includes(c as AudioCodec)) as AudioCodec[], { numberOfChannels: 2, sampleRate: EXPORT_SAMPLE_RATE }) : null;
+  if (tracks.length && !audioCodec) throw new Error('This browser cannot encode audio for an MP4');
   const output = new Output({ format, target: new BufferTarget() });
   const canvas = new OffscreenCanvas(size.w, size.h);
   const video = new CanvasSource(canvas, { codec: videoCodec, bitrate: Math.round(size.w * size.h * VIDEO_FPS * BITS_PER_PIXEL) });
   output.addVideoTrack(video, { frameRate: VIDEO_FPS });
   const sources = new Map<TrackId, AudioSampleSource>();
   tracks.forEach((id, i) => {
-    const source = new AudioSampleSource({ codec: audioCodec, bitrate: AUDIO_BITRATE });
+    const source = new AudioSampleSource({ codec: audioCodec!, bitrate: AUDIO_BITRATE });
     sources.set(id, source);
     output.addAudioTrack(source, { name: TRACK_LABEL[id], languageCode: 'und', disposition: { default: i === 0 } });
   });
@@ -136,7 +135,7 @@ export async function mp4Sink(tracks: readonly TrackId[], name: string, size: { 
       }
     },
     addFrame: (seconds, duration) => video.add(seconds, duration),
-    describe: () => `${videoCodec.toUpperCase()} ${size.h}p + ${audioCodec.toUpperCase()}`,
+    describe: () => `${videoCodec.toUpperCase()} ${size.h}p${audioCodec ? ` + ${audioCodec.toUpperCase()}` : ''}`,
     async finish() {
       video.close();
       for (const s of sources.values()) s.close();

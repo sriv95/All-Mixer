@@ -1,10 +1,12 @@
-// The export engine records the playing video in real time, cuts the recording in chunks of at most
-// MAX_CHUNK_S, separates / mixes / encodes each chunk, and assembles the file. Loaded on demand by src/content/export-run.ts
+// The export engine gets the sound of the video (the audio the player already downloaded, else a real-time recording), cuts it in
+// chunks of at most MAX_CHUNK_S, separates / mixes / encodes each chunk, and assembles the file. An MP4 is the karaoke text drawn
+// on a plain background, with or without that sound: the picture of the video is never recorded. Loaded on demand by src/content/export-run.ts
 // as a module of its own (it carries the encoders), never as part of the content script.
 import type { LyricLine } from '../lyrics/types';
 import {
   EXPORT_SAMPLE_RATE,
   clock,
+  hasAudio,
   needsSeparation,
   safeFileName,
   tracksOf,
@@ -12,15 +14,17 @@ import {
   type ExportProgress,
   type ExportStage,
 } from '../shared/export';
-import { openCapture, planar, watchPicture, FrameStore, type Capture } from './capture';
-import { VIDEO_FPS, mp3Sink, mp4Sink, pictureSize, type ExportFile, type Sink } from './encode';
+import { openCapture, planar, type Capture } from './capture';
+import { VIDEO_FPS, breathe, mp3Sink, mp4Sink, pictureSize, type ExportFile, type Sink } from './encode';
 import { drawKaraoke, karaokeRows } from './karaoke-render';
 import { mixSlice, type StemSlice } from './mix';
 import { openMlSession, type MlSession, type OpenMlSession } from './ml-session';
+import { fastAudio, type AudioTap, type Pcm } from './fast-audio';
 import { chunkAt, planChunks } from './plan';
 import { Resampler } from './resample';
 
 export type { ExportFile } from './encode';
+export type { AudioTap } from './fast-audio';
 export { stemsOfSlice } from './mix';
 
 export interface ExportDeps {
@@ -33,6 +37,8 @@ export interface ExportDeps {
   report(p: ExportProgress): void;
   /** Called while recording: a message when the recording went wrong (an ad, another video). */
   problem?: () => string | null;
+  /** The audio the player already downloaded (src/page/audio-tap.ts): when it holds all of it, MP3 and preload skip the real-time recording. */
+  tap?: AudioTap;
   /** Tests. */
   openSession?: OpenMlSession;
 }
@@ -45,12 +51,8 @@ export class ExportCancelled extends Error {
 
 /** Chunks waiting for the model / encoder before the video is paused (the memory of a chunk is 5 MB). */
 const MAX_QUEUE = 3;
-/** The picture of a moment is drawn this long after it was heard, so its frame has arrived. */
-const PICTURE_LAG_S = 0.15;
 /** Without a sample from the player for this long while it should play, the export fails. */
 const STALL_MS = 20_000;
-/** The video waits while the picture is this far behind the sound (the frame store holds about a second of frames). */
-const MAX_RENDER_LAG_S = 0.6;
 const POLL_MS = 400;
 const SEEK_TIMEOUT_MS = 15_000;
 /** The recording ends this close to the end of the video: stopping before `ended` keeps YouTube from starting the next video. */
@@ -126,6 +128,8 @@ async function record(d: ExportDeps, onSlice?: SliceSink): Promise<ExportFile | 
   const tracks = tracksOf(o);
   const name = safeFileName(d.title);
   const mp4 = o.format === 'mp4';
+  /** An MP4 without sound: only the text is drawn, nothing is recorded or separated. */
+  const silent = mp4 && !hasAudio(o);
   const rate = EXPORT_SAMPLE_RATE;
   const ac = new AbortController();
   /** Why the run stopped, when it did not finish: a cancel from the popup is an ExportCancelled, anything else an error. */
@@ -143,22 +147,26 @@ async function record(d: ExportDeps, onSlice?: SliceSink): Promise<ExportFile | 
   let stage: ExportStage = 'preparing';
   let note = '';
   let recorded = 0; // samples
+  let rendered = 0; // seconds of picture written
+  let fetched = 0; // 0–1 of the audio read from the player
   let processed = 0; // chunks
   let lastReport = 0;
   const report = (force = false): void => {
     const now = performance.now();
     if (!force && now - lastReport < 250) return;
     lastReport = now;
-    const t = Math.min(dur, recorded / rate);
-    const percent = stage === 'recording' ? Math.min(98, (100 * recorded) / plan.total) : stage === 'finishing' ? 99 : 0;
+    const t = Math.min(dur, silent ? rendered : recorded / rate);
+    const percent = stage === 'recording' ? Math.min(98, silent ? (100 * rendered) / dur : (100 * recorded) / plan.total) : stage === 'finishing' ? 99 : 0;
     const chunk = chunkAt(plan, Math.min(recorded, plan.total - 1));
     const detail =
       stage === 'model'
         ? note
-        : stage === 'recording'
-          ? mp4 && document.hidden
-            ? 'Paused: bring this tab to the front to go on (the picture needs a visible tab)'
-            : `Chunk ${chunk}/${plan.count} · ${clock(t)} / ${clock(dur)} · ${processed} of ${plan.count} processed`
+        : stage === 'fetching'
+          ? `Reading the audio from the player… ${Math.floor(100 * fetched)}%`
+          : stage === 'recording'
+            ? silent
+              ? `Drawing the text · ${clock(t)} / ${clock(dur)}`
+              : `Chunk ${chunk}/${plan.count} · ${clock(t)} / ${clock(dur)} · ${processed} of ${plan.count} processed`
           : stage === 'finishing'
             ? processed < plan.count
               ? `Processing the last chunks (${processed} of ${plan.count} done)…`
@@ -166,7 +174,7 @@ async function record(d: ExportDeps, onSlice?: SliceSink): Promise<ExportFile | 
                 ? 'Finishing…'
                 : 'Writing the file…'
             : 'Getting ready…';
-    d.report({ state: 'running', stage, chunk: stage === 'recording' ? chunk : 0, chunks: plan.count, percent, detail });
+    d.report({ state: 'running', stage, chunk: stage === 'recording' && !silent ? chunk : 0, chunks: silent ? 0 : plan.count, percent, detail });
   };
   const at = (s: ExportStage, n = ''): void => {
     stage = s;
@@ -178,7 +186,7 @@ async function record(d: ExportDeps, onSlice?: SliceSink): Promise<ExportFile | 
   };
 
   const saved = { src: v.currentSrc, time: v.currentTime, paused: v.paused, muted: v.muted, rate: v.playbackRate };
-  let restored = false;
+  let restored = silent; // a silent MP4 does not touch the video
   /** Back to what the user had, unless the player moved on to another video. */
   const restore = (): void => {
     if (restored) return;
@@ -193,15 +201,12 @@ async function record(d: ExportDeps, onSlice?: SliceSink): Promise<ExportFile | 
   let session: MlSession | null = null;
   let sink: Sink | null = null;
   let capture: Capture | null = null;
-  let frames: FrameStore | null = null;
-  let stopPicture: (() => void) | null = null;
-  let onVisible: (() => void) | null = null;
   let onChanged: () => void = () => {};
   const ticker = setInterval(() => report(), 500);
   try {
     // ---- 1. the model, only when the stems matter
     at('preparing');
-    if (needsSeparation(o)) {
+    if (!silent && needsSeparation(o)) {
       const t0 = performance.now();
       const warm = setInterval(() => at('model', `Starting the model on your GPU… ${Math.round((performance.now() - t0) / 1000)} s (10 to 40 s the first time)`), 1000);
       at('model', 'Starting the model on your GPU…');
@@ -214,49 +219,62 @@ async function record(d: ExportDeps, onSlice?: SliceSink): Promise<ExportFile | 
     }
 
     // ---- 2. the encoders
-    const size = pictureSize(v.videoWidth, v.videoHeight, o.height);
+    const size = pictureSize(o.height);
     if (!onSlice) sink = mp4 ? await mp4Sink(tracks, name, size) : await mp3Sink(tracks, name);
     check();
 
-    // ---- 3. record from the start, muted, at normal speed
-    v.pause();
-    v.muted = true;
-    v.playbackRate = 1;
-    await seekToStart(v);
-    check();
-    capture = openCapture(v);
-    frames = mp4 ? new FrameStore() : null;
-    stopPicture = frames ? watchPicture(v, frames, size.w, size.h) : null;
-    const cap = capture;
-    const out = sink;
-    const store = frames;
+    // ---- 3. the sound (not for a silent MP4)
+    let fast: Pcm | null = null;
+    let cap: Capture | null = null;
     onChanged = () => stop(new Error('The video changed during the export'));
-    v.addEventListener('emptied', onChanged, { once: true });
-    await v.play();
+    if (!silent) {
+      // 3a. the audio the player already downloaded
+      if (d.tap) {
+        at('fetching');
+        v.addEventListener('emptied', onChanged, { once: true });
+        v.playbackRate = 1;
+        try {
+          fast = await fastAudio({ video: v, tap: d.tap, signal: ac.signal, progress: (f) => ((fetched = f), report()), problem: d.problem });
+        } finally {
+          v.removeEventListener('emptied', onChanged);
+        }
+        check();
+        // The video gets its place back now; a failed read falls through to the recording below.
+        if (fast) restore();
+      }
+      // 3b. otherwise record from the start, muted, at normal speed
+      if (!fast) {
+        v.pause();
+        v.muted = true;
+        v.playbackRate = 1;
+        await seekToStart(v);
+        check();
+        cap = capture = openCapture(v);
+        v.addEventListener('emptied', onChanged, { once: true });
+        await v.play();
+      }
+    }
+    const out = sink;
     at('recording');
 
     const fail = (e: unknown) => stop(e instanceof Error ? e : new Error(String(e)));
     const queue: Job[] = [];
     let pausedByUs = false;
-    let rendered = 0; // seconds of picture written
-    const renderLag = (): number => (mp4 ? recorded / rate - rendered : 0);
     // The video waits when the model / encoder is behind, and goes on when they have caught up.
-    // The picture of a hidden tab is not produced (requestVideoFrameCallback stops): the MP4 waits for the tab.
-    const hiddenForPicture = (): boolean => mp4 && document.hidden;
     const holdOrResume = (): void => {
-      if (!pausedByUs && !recordingDone && (queue.length >= MAX_QUEUE || renderLag() > MAX_RENDER_LAG_S || hiddenForPicture())) {
+      if (fast) return room.notify(); // nothing plays: the feed waits for the model by itself
+      if (!pausedByUs && !recordingDone && queue.length >= MAX_QUEUE) {
         pausedByUs = true;
         v.pause();
-      } else if (pausedByUs && !recordingDone && queue.length <= 1 && renderLag() < MAX_RENDER_LAG_S / 3 && !hiddenForPicture()) {
+      } else if (pausedByUs && !recordingDone && queue.length <= 1) {
         pausedByUs = false;
         void v.play().catch(() => {});
       }
     };
-    let recordingDone = false;
+    let recordingDone = silent;
+    const room = new Wake();
     const newAudio = new Wake();
     const newJob = new Wake();
-    onVisible = () => holdOrResume();
-    document.addEventListener('visibilitychange', onVisible);
     let produced = 0; // samples handed to the queue
     let acc = new Float32Array(plan.samples);
     let accR = new Float32Array(plan.samples);
@@ -285,8 +303,29 @@ async function record(d: ExportDeps, onSlice?: SliceSink): Promise<ExportFile | 
       }
     };
 
-    // audio: read, resample, cut in chunks
+    // fast: the sound is all there; it is cut in chunks as fast as the model takes them
+    const feedLoop = async (pcm: Pcm): Promise<void> => {
+      const step = rate;
+      for (let from = 0; from < Math.min(pcm.l.length, plan.total); from += step) {
+        check();
+        while (queue.length >= MAX_QUEUE) {
+          await room.wait();
+          check();
+        }
+        append(pcm.l.subarray(from, from + step), pcm.r.subarray(from, from + step));
+        newAudio.notify();
+      }
+      enqueue(true);
+      recordingDone = true;
+      newAudio.notify();
+      newJob.notify();
+      stage = 'finishing';
+      report(true);
+    };
+
+    // recording: read, resample, cut in chunks
     const audioLoop = async (): Promise<void> => {
+      if (!cap) return;
       const audio = new Puller(cap.audio);
       let resampler: Resampler | null = null;
       let lastData = performance.now();
@@ -328,38 +367,29 @@ async function record(d: ExportDeps, onSlice?: SliceSink): Promise<ExportFile | 
       stage = 'finishing';
       report(true);
       cap.stop();
-      stopPicture?.(); // the frames in the store are enough for the rest
       // A video left at its end while the last chunks are processed would make the player start the next one (autoplay): it gets
       // its place back now, not after the encoders are done.
       restore();
     };
 
-    // picture, at a constant rate: frame `k` is the newest source frame at k / fps, plus the karaoke text of that moment
+    // picture, at a constant rate: the karaoke text of each frame's moment on a black background, as fast as the encoder takes frames
     const renderLoop = async (): Promise<void> => {
-      if (!out?.canvas || !out.addFrame || !store) return;
+      if (!out?.canvas || !out.addFrame) return;
       const ctx = out.canvas.getContext('2d')!;
       const { width: W, height: H } = out.canvas;
       const dt = 1 / VIDEO_FPS;
-      for (let k = 0; ; ) {
+      for (let k = 0; k * dt < dur; k++) {
         check();
         const t = k * dt;
-        const heard = recordingDone ? Infinity : recorded / rate - PICTURE_LAG_S;
-        if (t >= dur) return;
-        if (t >= heard) {
-          await newAudio.wait();
-          continue;
-        }
-        const frame = store.at(t);
-        if (frame) ctx.drawImage(frame, 0, 0, W, H);
-        else {
-          ctx.fillStyle = '#000';
-          ctx.fillRect(0, 0, W, H);
-        }
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, W, H);
         if (d.lyrics) drawKaraoke(ctx, W, H, karaokeRows(d.lyrics.lines, t - d.lyrics.offsetMs / 1000, o.text.karaokeLines), o.text);
         await out.addFrame(t, dt);
         rendered = t + dt;
-        holdOrResume();
-        k++;
+        if (k % 15 === 0) {
+          report();
+          await breathe(); // the page (and the tab's other work) gets its turn
+        }
       }
     };
 
@@ -396,7 +426,7 @@ async function record(d: ExportDeps, onSlice?: SliceSink): Promise<ExportFile | 
     };
 
     const run = (f: () => Promise<void>) => f().catch(fail);
-    await Promise.all([run(audioLoop), run(renderLoop), run(chunkLoop)]);
+    await Promise.all([run(() => (silent ? Promise.resolve() : fast ? feedLoop(fast) : audioLoop())), run(renderLoop), run(chunkLoop)]);
     check();
 
     // ---- 4. assemble
@@ -409,11 +439,8 @@ async function record(d: ExportDeps, onSlice?: SliceSink): Promise<ExportFile | 
   } finally {
     clearInterval(ticker);
     v.removeEventListener('emptied', onChanged);
-    if (onVisible) document.removeEventListener('visibilitychange', onVisible);
     d.signal.removeEventListener('abort', onCancel);
     capture?.stop();
-    stopPicture?.();
-    frames?.close();
     session?.dispose();
     await sink?.cancel();
     restore();

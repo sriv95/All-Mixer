@@ -3,6 +3,7 @@ import { DEFAULT_SETTINGS, normalizeSettings, separationFor, type MixerSettings 
 
 // Options and progress of the Export section Shared by the popup, the content script and the export engine.
 
+/** MP3 = the sound. MP4 = the karaoke text on a plain background, with the sound or without it (the picture of the video is never recorded). */
 export type ExportFormat = 'mp3' | 'mp4';
 /** Single track = one mixed file. Separate tracks = the mix plus one track per stem (a zip of MP3 files, or one MP4 with several audio streams). */
 export type ExportTracks = 'single' | 'separate';
@@ -11,7 +12,7 @@ export type ExportTracks = 'single' | 'separate';
 export const MAX_CHUNK_S = 15;
 /** Output sample rate: the rate of the models, so no resampler is needed after the separation. */
 export const EXPORT_SAMPLE_RATE = 44100;
-/** Output heights of the MP4 (the picture is never scaled up past the source). */
+/** Output heights of the MP4. */
 export const EXPORT_HEIGHTS = [360, 480, 720, 1080] as const;
 export const DEFAULT_EXPORT_HEIGHT = 720;
 /** The popup warns above this length: the file is built in memory. */
@@ -28,6 +29,8 @@ export interface ExportOptions {
   text: ExportText;
   /** MP4 picture height. */
   height: number;
+  /** MP4 only: the file carries the sound. Without it nothing is recorded or separated and the text is drawn as fast as the browser encodes. */
+  withAudio: boolean;
 }
 
 export type Part = 'drums' | 'guitar' | 'bass' | 'piano';
@@ -57,8 +60,14 @@ export function stemsOf(a: Pick<MixerSettings, 'mlModel' | 'splitInstrumental' |
   return parts.length ? ['vocals', ...parts, 'others'] : ['vocals', 'instrumental'];
 }
 
-/** The tracks the export writes, the mix first. */
-export function tracksOf(o: Pick<ExportOptions, 'tracks' | 'audio'>): TrackId[] {
+type AudioFacts = Pick<ExportOptions, 'tracks' | 'audio'> & Partial<Pick<ExportOptions, 'format' | 'withAudio'>>;
+
+/** Whether the file has sound: an MP3 always, an MP4 unless it is asked to be silent. */
+export const hasAudio = (o: Partial<Pick<ExportOptions, 'format' | 'withAudio'>>): boolean => o.format !== 'mp4' || o.withAudio !== false;
+
+/** The tracks the export writes, the mix first (none for an MP4 without sound). */
+export function tracksOf(o: AudioFacts): TrackId[] {
+  if (!hasAudio(o)) return [];
   return o.tracks === 'separate' ? ['mix', ...stemsOf(o.audio)] : ['mix'];
 }
 
@@ -66,7 +75,8 @@ export function tracksOf(o: Pick<ExportOptions, 'tracks' | 'audio'>): TrackId[] 
  * Whether the export needs the model: for the stems, or because a level moves the mix away from the original.
  * A plain recording (all levels at 100 %) is made without the GPU.
  */
-export function needsSeparation(o: Pick<ExportOptions, 'tracks' | 'audio'>): boolean {
+export function needsSeparation(o: AudioFacts): boolean {
+  if (!hasAudio(o)) return false;
   if (o.tracks === 'separate') return true;
   const g = separationFor({ ...o.audio, mode: 'separate', pitchSplit: false });
   return [g.vocal, g.instrumental, g.drums, g.guitar, g.bass, g.piano, g.others].some((v) => v !== 1);
@@ -89,7 +99,7 @@ export function textFromPrefs(p: LyricsPrefs): ExportText {
 
 /** The export options that start from the live settings and the live text look. */
 export function defaultExportOptions(settings: MixerSettings, prefs: LyricsPrefs, format: ExportFormat = 'mp3'): ExportOptions {
-  return { format, tracks: 'single', audio: { ...settings }, text: textFromPrefs(prefs), height: DEFAULT_EXPORT_HEIGHT };
+  return { format, tracks: 'single', audio: { ...settings }, text: textFromPrefs(prefs), height: DEFAULT_EXPORT_HEIGHT, withAudio: true };
 }
 
 /** Any value from a message becomes a valid set of options. */
@@ -103,10 +113,11 @@ export function normalizeExportOptions(raw: unknown): ExportOptions {
     audio: normalizeSettings(r.audio ?? DEFAULT_SETTINGS),
     text: textFromPrefs(normalizeLyricsPrefs(text)),
     height: EXPORT_HEIGHTS.reduce((best, h) => (Math.abs(h - height) < Math.abs(best - height) ? h : best)),
+    withAudio: r.withAudio !== false,
   };
 }
 
-export type ExportStage = 'preparing' | 'model' | 'recording' | 'finishing';
+export type ExportStage = 'preparing' | 'model' | 'fetching' | 'recording' | 'finishing';
 
 /** What the popup shows: a bar, and a small line under it. */
 export interface ExportProgress {

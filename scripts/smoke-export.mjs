@@ -3,6 +3,8 @@
 // Usage: bun run build && node scripts/smoke-export.mjs <format: mp3|mp4> <tracks: single|separate> [page url] [out dir]
 //   env: HEADED=1 to watch, SETTINGS='{"vocalPct":0}' for the audio levels, TEXT='{"karaokeColor":"#ffeb3b"}' for the karaoke text,
 //        MODEL=mdx|roformer|deux|sw (the downloadable ones need MODEL_DIR=<models-out/hf from bun run model-manifest>, served on :8765 and installed through the background),
+//        NOAUDIO=1 makes an MP4 without sound (only the karaoke text is drawn; nothing plays),
+//        NOFAST=1 records in real time instead of reading the audio the player downloaded (src/export/fast-audio.ts),
 //        STALL_MS=400 holds every model block (slow GPU), HEIGHT=360|480|720|1080, SHOTS=1 to save screenshots of the page before and in the middle of the export.
 // The default page is a local file server on :8123 serving a test video (any short mp4 served from a folder); pass a YouTube URL for the real thing.
 import path from 'node:path';
@@ -44,6 +46,7 @@ const ctx = await chromium.launchPersistentContext(fs.mkdtempSync(path.join(os.t
   args: [`--disable-extensions-except=${ext}`, `--load-extension=${ext}`, '--autoplay-policy=no-user-gesture-required', '--mute-audio', '--enable-unsafe-webgpu', '--enable-features=Vulkan'],
 });
 const sw = ctx.serviceWorkers()[0] ?? (await ctx.waitForEvent('serviceworker'));
+await sw.evaluate((v) => chrome.storage.local.set({ 'debug.noFastAudio': v }), !!process.env.NOFAST);
 if (process.env.STALL_MS) await sw.evaluate((ms) => chrome.storage.local.set({ 'debug.mlStallMs': ms, 'debug.mlStallAfterMs': 2000 }), Number(process.env.STALL_MS)); // slow model: the last chunks take long after the recording
 const page = await ctx.newPage();
 if (modelDir) {
@@ -82,6 +85,7 @@ const options = {
   audio: { mlModel: process.env.MODEL || 'mdx', ...settings },
   text: { karaokeColor: prefs.karaokeColor ?? '#ffffff', karaokeFontSize: prefs.karaokeFontSize ?? 100, karaokeFont: prefs.karaokeFont ?? 'default', karaokeOutline: prefs.karaokeOutline ?? 'normal', karaokeBackground: prefs.karaokeBackground ?? 0, karaokeLines: prefs.karaokeLines ?? 1, karaokePosition: prefs.karaokePosition ?? { x: 0.5, y: 0.82 }, ...text },
   height: Number(process.env.HEIGHT || 720),
+  withAudio: !process.env.NOAUDIO,
 };
 const downloaded = new Promise((resolve) => page.once('download', resolve));
 if (process.env.SHOTS) await page.screenshot({ path: path.join(outDir, 'before.png') });
