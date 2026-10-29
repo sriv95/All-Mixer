@@ -122,7 +122,7 @@ export function ProcessingRow({ settings, update }: { settings: MixerSettings; u
         <Btn id="processing-preload" tone="preset" aria-pressed={settings.preload} onClick={() => update({ preload: true })}><HardDriveDownload size={15} aria-hidden />Preload audio</Btn>
       </div>
       <p id="processing-note" className="m-0 text-xs leading-snug text-muted">
-        {settings.preload ? 'Separates the whole video first, then plays it from memory. For a GPU that cannot keep up live. Pitch shift does not apply.' : 'Separates while it plays. A GPU that is too slow stops it: then switch to Preload audio.'}
+        {settings.preload ? 'Processes the whole video first, then plays it. No pitch shift.' : 'Processes while it plays.'}
       </p>
     </div>
   );

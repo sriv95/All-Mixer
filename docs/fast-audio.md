@@ -41,7 +41,7 @@ audio stream instead of playing it.
    used. The video gets its place back (position, speed, muted, playing) as soon as the read is done, so the user can go on
    watching while the model works. If the video changes during the read, the run stops like a recording does.
 
-Not used for MP4 (the picture needs the video to play), for videos over 20 minutes (the whole sound is decoded at once:
+Not used for videos over 20 minutes (the whole sound is decoded at once:
 353 KB per second of Float32 stereo; `FAST_MAX_S`), and on other sites than YouTube / YouTube Music. `chrome.storage.local`
 key `debug.noFastAudio` = `true` turns it off (QA of the recording path).
 
@@ -63,4 +63,4 @@ key `debug.noFastAudio` = `true` turns it off (QA of the recording path).
 * Browser (`scripts/smoke-fast-audio.mjs`, real youtube.com, the built extension): the copy covers the video and decodes to its
   length; its sound sits on the sound the player plays (cross-correlation at 0 s and at 70 % of the video); Preload through the
   popup uses the `fetching` stage and ends in a cache that plays in step; with `COMPARE=1` the same preload with the recording.
-  `scripts/smoke-export.mjs` for MP3 and MP4.
+  `scripts/smoke-export.mjs` for MP3 and MP4 (`NOAUDIO=1` for the silent MP4).

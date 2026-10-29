@@ -118,17 +118,34 @@ describe('Export section', () => {
     expect(msg.options).toMatchObject({ format: 'mp4', height: 480, text: { karaokeColor: '#ffeb3b', karaokeFontSize: 150, karaokeFont: 'serif', karaokeOutline: 'thick', karaokeLines: 2, karaokePosition: { x: 0.5, y: 0.12 } } });
   });
 
-  it('says what the separate tracks are in each container', async () => {
+  it('lists Audio options, Karaoke text, Video options (Quality), then Output', async () => {
     await load();
-    el('export-tracks-separate').click();
-    await settle();
-    expect(el('export-track-note').textContent).toMatch(/\.zip with one MP3 per track.*one track only/);
     el('export-format-mp4').click();
     await settle();
-    expect(el('export-track-note').textContent).toMatch(/several audio streams.*mix first.*many editors.*only the first/);
-    el('export-tracks-single').click();
+    const follows = (a: string, b: string) => !!(el(a).compareDocumentPosition(el(b)) & Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(follows('export-audio', 'export-text')).toBe(true);
+    expect(follows('export-text', 'export-video')).toBe(true);
+    expect(follows('export-video', 'export-tracks-single')).toBe(true);
+    expect(el('export-video').contains(el('export-height'))).toBe(true);
+    expect(el('export-text').contains(el('export-height'))).toBe(false);
+    expect(document.querySelector('label[for="export-height"]')!.textContent).toBe('Quality');
+  });
+
+  it('an MP4 can leave the audio out: its options and the Output choice go, and the export says so', async () => {
+    await load();
+    expect(has('export-with-audio')).toBe(false); // an MP3 always has its sound
+    el('export-format-mp4').click();
     await settle();
-    expect(el('export-track-note').textContent).toBe('One MP4 file with the mixed sound.');
+    expect(el<HTMLInputElement>('export-with-audio').checked).toBe(true);
+    expect(has('export-audio') && has('export-tracks-single')).toBe(true);
+    el('export-with-audio').click();
+    await new Promise((r) => setTimeout(r, 500)); // the groups collapse out
+    expect(has('export-audio') || has('export-tracks-single')).toBe(false);
+    expect(has('export-text') && has('export-video')).toBe(true);
+    el('export-start').click();
+    await settle();
+    const [msg] = exportsSent() as { options: ExportOptions }[];
+    expect(msg.options).toMatchObject({ format: 'mp4', withAudio: false });
   });
 
   it('the split switches add their level sliders; the all-stems model has them all', async () => {

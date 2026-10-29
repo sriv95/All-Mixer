@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AudioLines, Download, Drum, FileAudio, Guitar, Mic, Music, Piano, Square, TriangleAlert, Video, Volume2, Waves } from 'lucide-react';
 import { motion } from 'motion/react';
 import { drawKaraoke } from '../export/karaoke-render';
-import { EXPORT_HEIGHTS, LONG_EXPORT_S, clock, defaultExportOptions, partsOf, stemsOf, TRACK_LABEL, type ExportFormat, type ExportOptions, type ExportProgress, type ExportText } from '../shared/export';
+import { EXPORT_HEIGHTS, LONG_EXPORT_S, defaultExportOptions, hasAudio, partsOf, type ExportFormat, type ExportOptions, type ExportProgress, type ExportText } from '../shared/export';
 import { DEFAULT_LYRICS_PREFS, KARAOKE_BACKGROUNDS, KARAOKE_FONTS, KARAOKE_OUTLINES, loadLyricsPrefs, type LyricsPrefs } from '../shared/lyrics-prefs';
 import { clampOthersPct, clampPct, masterPctAt, masterPosOf, MASTER_POS_MAX, MASTER_STEPS, type MixerSettings } from '../shared/settings';
 import { KARAOKE_SIZES, POSITION_PRESETS } from '../content/lyrics/karaoke-presets';
@@ -100,6 +100,7 @@ export function ExportSection({ api, reveal = false }: { api: ExportApi; reveal?
   const [open, setOpen] = useState(readOpen);
   const [audioOpen, setAudioOpen] = useState(false);
   const [textOpen, setTextOpen] = useState(false);
+  const [videoOpen, setVideoOpen] = useState(false);
   const [prefs, setPrefs] = useState<LyricsPrefs>(DEFAULT_LYRICS_PREFS);
   const [options, setOptions] = useState<ExportOptions>(() => defaultExportOptions(settings, DEFAULT_LYRICS_PREFS));
   // Until the user changes an export control, the options follow the live settings; after that they are the user's own.
@@ -110,7 +111,7 @@ export function ExportSection({ api, reveal = false }: { api: ExportApi; reveal?
     void loadLyricsPrefs(chrome.storage.local).then(setPrefs, () => {});
   }, []);
   useEffect(() => {
-    if (!touched.current) setOptions((o) => ({ ...defaultExportOptions(settings, prefs, o.format), tracks: o.tracks, height: o.height }));
+    if (!touched.current) setOptions((o) => ({ ...defaultExportOptions(settings, prefs, o.format), tracks: o.tracks, height: o.height, withAudio: o.withAudio }));
   }, [settings, prefs]);
   useEffect(() => {
     if (running || reveal) setOpen(true);
@@ -130,7 +131,7 @@ export function ExportSection({ api, reveal = false }: { api: ExportApi; reveal?
   };
   const match = () => {
     touched.current = false;
-    setOptions((o) => ({ ...defaultExportOptions(settings, prefs, o.format), tracks: o.tracks, height: o.height }));
+    setOptions((o) => ({ ...defaultExportOptions(settings, prefs, o.format), tracks: o.tracks, height: o.height, withAudio: o.withAudio }));
   };
 
   const a = options.audio;
@@ -143,21 +144,11 @@ export function ExportSection({ api, reveal = false }: { api: ExportApi; reveal?
   }, [a.gpu]);
   const models = useModels(a.mlModel, { drums: a.splitInstrumental && !all, guitar: a.splitGuitar && !all }, api.ready && open, noF16);
   const mp4 = options.format === 'mp4';
-  const separate = options.tracks === 'separate';
+  const sound = hasAudio(options);
   const duration = status?.duration;
   const longVideo = duration !== undefined && Number.isFinite(duration) && duration > LONG_EXPORT_S;
   const noVideo = !status || !status.videoFound;
   const place = placeChoices(options.text.karaokePosition);
-  const stems = stemsOf(a).map((s) => TRACK_LABEL[s].toLowerCase()).join(', ');
-
-  const trackNote = {
-    mp3: separate
-      ? `A .zip with one MP3 per track: the mix, ${stems}. An MP3 file holds one track only, so the stems come as separate files; put them at 0:00 in your editor.`
-      : 'One MP3 file with the mix.',
-    mp4: separate
-      ? `One MP4 with several audio streams: the mix first (what a player plays), then ${stems}. VLC, mpv and DaVinci Resolve show every stream; many editors and players read only the first one.`
-      : 'One MP4 file with the mixed sound.',
-  }[options.format];
 
   const start = async () => {
     setStartError(undefined);
@@ -193,16 +184,21 @@ export function ExportSection({ api, reveal = false }: { api: ExportApi; reveal?
       <div className="flex flex-col gap-3.5 px-4 pb-4">
         <div className="grid grid-cols-2 gap-2.5" role="group" aria-label="Format">
           {formatBtn('mp3', 'MP3 audio', <FileAudio size={15} aria-hidden />)}
-          {formatBtn('mp4', 'MP4 + text', <Video size={15} aria-hidden />)}
+          {formatBtn('mp4', 'MP4 karaoke text', <Video size={15} aria-hidden />)}
         </div>
 
+        <Collapse show={mp4}>
+          <div className="flex items-center justify-between gap-3">
+            <label htmlFor="export-with-audio" className="flex items-center gap-1.5 text-[13px] font-bold"><Volume2 size={14} className="text-brand" aria-hidden />Include audio</label>
+            <Switch id="export-with-audio" checked={options.withAudio} onChange={(withAudio) => change({ withAudio })} disabled={running} />
+          </div>
+        </Collapse>
+
+        <Collapse show={sound}>
         <Disclosure id="export-audio" open={audioOpen} onOpen={setAudioOpen} className="rounded-2xl bg-surface/70" buttonClassName="p-3"
           title={<span className="flex items-center gap-1.5"><AudioLines size={15} className="text-brand" aria-hidden />Audio options <span className="font-medium text-muted">(this export only)</span></span>}>
           <div className="flex flex-col gap-3 px-3 pb-3">
-            <div className="flex items-center justify-between gap-3">
-              <p className="m-0 text-xs leading-snug text-muted">Starts from your current settings. Changing it here does not change what you hear.</p>
-              <Btn id="export-match" tone="small" className="shrink-0 whitespace-nowrap" onClick={match}>Match live</Btn>
-            </div>
+            <Btn id="export-match" tone="small" className="self-end whitespace-nowrap" onClick={match}>Match live</Btn>
             <Field id="export-model" label="Model">
               <Select id="export-model" value={a.mlModel} options={MODEL_CHOICES} onValue={(mlModel) => audio({ mlModel })} />
             </Field>
@@ -238,15 +234,7 @@ export function ExportSection({ api, reveal = false }: { api: ExportApi; reveal?
             {parts.length > 0 && <SliderRow id="export-others" icon={<AudioLines size={15} />} label="Others" hint="in the instrumental" unit="%" value={a.othersPct} min={0} max={100} step={5} onValue={(v) => audio({ othersPct: clampOthersPct(v) })} />}
           </div>
         </Disclosure>
-
-        <div className="flex flex-col gap-2">
-          <span className="text-[13px] font-bold">Output</span>
-          <div className="grid grid-cols-2 gap-2.5" role="group" aria-label="Output">
-            {tracksBtn('single', 'Single track')}
-            {tracksBtn('separate', 'Separate tracks')}
-          </div>
-          <p id="export-track-note" className="m-0 text-xs leading-snug text-muted">{trackNote}{separate && ' The mix has your levels; the other tracks are the raw stems, for mixing in an editor.'}</p>
-        </div>
+        </Collapse>
 
         <Collapse show={mp4}>
           <Disclosure id="export-text" open={textOpen} onOpen={setTextOpen} className="rounded-2xl bg-surface/70" buttonClassName="p-3"
@@ -265,18 +253,33 @@ export function ExportSection({ api, reveal = false }: { api: ExportApi; reveal?
                 <Field id="export-position" label="Position">
                   <Select id="export-position" value={place.value} options={place.choices} onValue={(id) => { const p = POSITION_PRESETS.find((x) => x.id === id); if (p) text({ karaokePosition: { x: 0.5, y: p.y } }); }} />
                 </Field>
-                <Field id="export-height" label="Picture size"><Select id="export-height" value={`${options.height}`} options={HEIGHT_CHOICES} onValue={(v) => change({ height: Number(v) })} /></Field>
               </div>
               {lyricsNote && <p id="export-lyrics-note" className="m-0 text-xs leading-snug text-muted">{lyricsNote}</p>}
             </div>
           </Disclosure>
         </Collapse>
 
+        <Collapse show={mp4}>
+          <Disclosure id="export-video" open={videoOpen} onOpen={setVideoOpen} className="rounded-2xl bg-surface/70" buttonClassName="p-3"
+            title={<span className="flex items-center gap-1.5"><Video size={15} className="text-brand" aria-hidden />Video options</span>}>
+            <div className="px-3 pb-3">
+              <Field id="export-height" label="Quality"><Select id="export-height" value={`${options.height}`} options={HEIGHT_CHOICES} onValue={(v) => change({ height: Number(v) })} /></Field>
+            </div>
+          </Disclosure>
+        </Collapse>
+
+        <Collapse show={sound}>
+        <div className="flex flex-col gap-2">
+          <span className="text-[13px] font-bold">Output</span>
+          <div className="grid grid-cols-2 gap-2.5" role="group" aria-label="Output">
+            {tracksBtn('single', 'Single track')}
+            {tracksBtn('separate', 'Separate tracks')}
+          </div>
+        </div>
+        </Collapse>
+
         {!running && (
           <>
-            <p id="export-time-note" className="m-0 text-xs leading-snug text-muted">
-              The video is recorded while it plays (muted, from the start){duration && Number.isFinite(duration) ? `, so this takes about ${clock(duration)}` : ''}. {mp4 ? 'Keep this tab open and in front: the picture needs it.' : 'Keep this tab open; it is fastest in front.'} Your place in the video comes back afterwards.
-            </p>
             {longVideo && <p id="export-long-note" className="m-0 text-xs leading-snug text-muted">This video is long: the file is built in memory, so a long export may fail.</p>}
             <Btn id="export-start" tone="primary" disabled={noVideo} onClick={() => void start()}>
               <Download size={16} aria-hidden />

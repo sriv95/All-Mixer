@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_LYRICS_PREFS } from './lyrics-prefs';
 import { DEFAULT_SETTINGS } from './settings';
-import { clock, defaultExportOptions, needsSeparation, normalizeExportOptions, partsOf, safeFileName, stemsOf, tracksOf } from './export';
+import { clock, defaultExportOptions, hasAudio, needsSeparation, normalizeExportOptions, partsOf, safeFileName, stemsOf, tracksOf } from './export';
 
 const audio = (over: object) => ({ ...DEFAULT_SETTINGS, ...over });
 
@@ -28,6 +28,23 @@ describe('export options', () => {
     expect(needsSeparation({ tracks: 'single', audio: audio({ splitInstrumental: true, drumsPct: 50 }) })).toBe(true);
     expect(needsSeparation({ tracks: 'single', audio: audio({ drumsPct: 50 }) })).toBe(false); // the drums switch is off: the level does not apply
     expect(needsSeparation({ tracks: 'separate', audio: audio({}) })).toBe(true);
+  });
+
+  it('an MP4 without audio has no tracks and never needs the model; with audio it is like an MP3', () => {
+    const silent = { format: 'mp4' as const, withAudio: false, tracks: 'separate' as const, audio: audio({ vocalPct: 0 }) };
+    expect(tracksOf(silent)).toEqual([]);
+    expect(needsSeparation(silent)).toBe(false);
+    expect(hasAudio(silent)).toBe(false);
+    expect(tracksOf({ ...silent, withAudio: true })).toEqual(['mix', 'vocals', 'instrumental']);
+    expect(needsSeparation({ ...silent, withAudio: true })).toBe(true);
+    expect(hasAudio({ format: 'mp3', withAudio: false })).toBe(true); // the switch is an MP4 option
+  });
+
+  it('withAudio is on unless a message says false', () => {
+    expect(normalizeExportOptions({}).withAudio).toBe(true);
+    expect(normalizeExportOptions({ withAudio: 'no' }).withAudio).toBe(true);
+    expect(normalizeExportOptions({ format: 'mp4', withAudio: false }).withAudio).toBe(false);
+    expect(defaultExportOptions(audio({}), DEFAULT_LYRICS_PREFS, 'mp4').withAudio).toBe(true);
   });
 
   it('starts from the live settings and the live text look, and keeps them as a copy', () => {
