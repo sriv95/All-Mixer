@@ -8,6 +8,8 @@ CI builds the extension, creates tag `vx.y.z` and a GitHub release with this sec
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-30
+
 ### Added
 
 - Separate mode now works on older GPUs without fp16 support (for example AMD RX 590). The popup offers "Download supported models", a one-time download of the Default model for these GPUs. The other models do not work on them, and the popup says so.
