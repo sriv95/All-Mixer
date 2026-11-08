@@ -277,13 +277,22 @@ function Tabs({ mode, onMode }: { mode: Mode; onMode: (m: Mode) => void }) {
   );
 }
 
+/** A "Pitch" label with its stepper, under a volume slider. */
+function PitchRow({ id, label, labelId, value, disabled, onValue }: { id: string; label: string; labelId?: string; value: number; disabled?: boolean; onValue: (v: number) => void }) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span id={labelId} className="text-[13px] font-bold">Pitch</span>
+      <PitchStepper id={id} label={label} value={value} min={-PITCH_MAX} max={PITCH_MAX} disabled={disabled} onValue={onValue} />
+    </div>
+  );
+}
+
 /** Global volume: a big number on the Default tab, a compact row on the Separate tab. */
 function Master({ settings, update, compact }: { settings: MixerSettings; update: Update; compact?: boolean }) {
   // Reset and the other non-drag changes glide: the number and the thumb together.
   const num = useGlide(settings.masterPct);
   const pos = useGlide(masterPosOf(settings.masterPct));
   const pct = <Roll text={`${Math.round(num.shown)}%`} still={num.gliding} />;
-  const [fxOpen, setFxOpen] = useState(true);
   return (
     <Card className={compact ? 'mx-row' : 'mx-row mx-row-left'}>
       <div className="flex items-center justify-between gap-2">
@@ -304,21 +313,29 @@ function Master({ settings, update, compact }: { settings: MixerSettings; update
       {!compact && (
         <div className="flex justify-between text-xs text-muted"><span>0%</span><span>Boost up to 600%</span></div>
       )}
-      <Disclosure id="fx" open={fxOpen} onOpen={setFxOpen} buttonClassName="py-1"
-        title={<span className="flex items-center gap-1.5"><AudioWaveform size={15} className="text-brand" aria-hidden />Pitch/Reverb/EQ</span>}>
-        <div className="flex flex-col gap-3 pt-2">
-          {/* The stems have their own pitch while "Change pitch separately" is on (Separate tab). */}
-          <div className="flex items-center justify-between gap-2">
-            <span id="pitch-label" className="text-[13px] font-bold">Pitch</span>
-            <PitchStepper id="pitch" label="Pitch" value={settings.pitch} min={-PITCH_MAX} max={PITCH_MAX} disabled={compact && settings.pitchSplit} onValue={(v) => update({ pitch: clampPitch(v) })} />
-          </div>
-          <SliderRow id="reverb" icon={<Waves size={15} />} label="Reverb mix" unit="%" value={settings.reverbMix} min={0} max={100} step={5} onValue={(v) => update({ reverbMix: clampPct(v, 0) })} />
-          <SliderRow id="eq-low" icon={<Volume2 size={15} />} label="EQ Low" unit=" dB" value={settings.eqLow} min={-EQ_MAX_DB} max={EQ_MAX_DB} step={1} onValue={(v) => update({ eqLow: clampEq(v) })} />
-          <SliderRow id="eq-mid" icon={<Volume2 size={15} />} label="EQ Mid" unit=" dB" value={settings.eqMid} min={-EQ_MAX_DB} max={EQ_MAX_DB} step={1} onValue={(v) => update({ eqMid: clampEq(v) })} />
-          <SliderRow id="eq-high" icon={<Volume2 size={15} />} label="EQ High" unit=" dB" value={settings.eqHigh} min={-EQ_MAX_DB} max={EQ_MAX_DB} step={1} onValue={(v) => update({ eqHigh: clampEq(v) })} />
-        </div>
-      </Disclosure>
+      {/* Split off: the one pitch lives in the fx section. Split on: it sits under the volume, and the stems get their own (Separate tab). */}
+      {settings.pitchSplit && <PitchRow id="pitch" label="Pitch" labelId="pitch-label" value={settings.pitch} disabled={compact} onValue={(v) => update({ pitch: clampPitch(v) })} />}
+      {!compact && <FxSection settings={settings} update={update} inCard />}
     </Card>
+  );
+}
+
+/** Closed section: reverb and EQ, plus the one global pitch while "Change pitch separately" is off. Inside the Master card (Default) or a card of its own (Separate). */
+function FxSection({ settings, update, inCard }: { settings: MixerSettings; update: Update; inCard?: boolean }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Disclosure id="fx" open={open} onOpen={setOpen} className={inCard ? undefined : 'rounded-[20px] bg-card'} buttonClassName={inCard ? 'py-1' : 'p-4'}
+      title={<span className="flex items-center gap-1.5"><AudioWaveform size={15} className="text-brand" aria-hidden />Pitch/Reverb/EQ</span>}>
+      <div className={inCard ? 'flex flex-col gap-3 pt-2' : 'flex flex-col gap-3 px-4 pb-4'}>
+        {settings.pitchSplit
+          ? <p id="fx-note" className="m-0 text-xs leading-snug text-muted">{inCard ? 'Pitch is set under the volume above.' : 'Pitch is set under each volume above.'}</p>
+          : <PitchRow id="pitch" label="Pitch" labelId="pitch-label" value={settings.pitch} onValue={(v) => update({ pitch: clampPitch(v) })} />}
+        <SliderRow id="reverb" icon={<Waves size={15} />} label="Reverb mix" unit="%" value={settings.reverbMix} min={0} max={100} step={5} onValue={(v) => update({ reverbMix: clampPct(v, 0) })} />
+        <SliderRow id="eq-low" icon={<Volume2 size={15} />} label="EQ Low" unit=" dB" value={settings.eqLow} min={-EQ_MAX_DB} max={EQ_MAX_DB} step={1} onValue={(v) => update({ eqLow: clampEq(v) })} />
+        <SliderRow id="eq-mid" icon={<Volume2 size={15} />} label="EQ Mid" unit=" dB" value={settings.eqMid} min={-EQ_MAX_DB} max={EQ_MAX_DB} step={1} onValue={(v) => update({ eqMid: clampEq(v) })} />
+        <SliderRow id="eq-high" icon={<Volume2 size={15} />} label="EQ High" unit=" dB" value={settings.eqHigh} min={-EQ_MAX_DB} max={EQ_MAX_DB} step={1} onValue={(v) => update({ eqHigh: clampEq(v) })} />
+      </div>
+    </Disclosure>
   );
 }
 
@@ -445,7 +462,7 @@ function SeparateControls({ settings, update, ready, compact, advancedOpen, setA
   }, [undo, settings]);
 
   const stemPitch = (id: string, label: string, value: number, onValue: (v: number) => void) =>
-    settings.pitchSplit ? <PitchStepper id={id} label={label} value={value} min={-PITCH_MAX} max={PITCH_MAX} onValue={onValue} /> : undefined;
+    settings.pitchSplit ? <PitchRow id={id} label={label} value={value} onValue={onValue} /> : undefined;
 
   return (
     <>
@@ -506,7 +523,8 @@ function SeparateControls({ settings, update, ready, compact, advancedOpen, setA
           <Btn id="preset-undo" tone="small" onClick={() => { if (undo) update(undo.before); setUndo(null); }}><Undo2 size={13} aria-hidden />Undo</Btn>
         </div>
       </Collapse>
-      <Rise i={3}>
+      <Rise i={3}><FxSection settings={settings} update={update} /></Rise>
+      <Rise i={4}>
       <Disclosure id="advanced" open={advancedOpen} onOpen={(open) => persistAdvanced(open, setAdvancedOpen)} className="rounded-[20px] bg-card" buttonClassName="p-4"
         title={<span className="flex items-center gap-1.5"><Settings2 size={15} className="text-brand" aria-hidden />Advanced <span className="font-medium text-muted">(model, delay, pitch)</span></span>}>
         <div className="flex flex-col gap-3.5 px-4 pb-4">
@@ -558,7 +576,7 @@ function SeparateControls({ settings, update, ready, compact, advancedOpen, setA
         </div>
       </Disclosure>
       </Rise>
-      <Rise i={4}>
+      <Rise i={5}>
         <ExportSection api={exportApi} reveal={settings.preload} />
       </Rise>
     </>

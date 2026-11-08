@@ -585,27 +585,70 @@ describe('popup', () => {
       expect(el<HTMLButtonElement>('pitch-up').disabled).toBe(true);
     });
 
-    it('the "Pitch/Reverb/EQ" section holds the pitch, reverb and EQ controls', async () => {
-      await load();
-      const section = el('fx');
-      expect(section.querySelector('button')!.textContent).toBe('Pitch/Reverb/EQ');
-      for (const id of ['pitch-up', 'reverb', 'eq-low', 'eq-mid', 'eq-high']) expect(section.contains(el(id))).toBe(true);
+    it('in the Separate tab the "Pitch/Reverb/EQ" section sits between the presets and Advanced', async () => {
+      await load({ stored: { mode: 'separate' } });
+      const follows = (a: HTMLElement, b: HTMLElement) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(follows(el('preset-karaoke'), el('fx'))).toBe(true);
+      expect(follows(el('fx'), el('advanced'))).toBe(true);
     });
 
-    it('the Separate tab has the global pitch in the Global volume box and no stem steppers until "Change pitch separately"', async () => {
+    it('the Default tab has a closed "Pitch/Reverb/EQ" section under the Global volume that holds the pitch, reverb and EQ', async () => {
+      await load();
+      const section = el('fx');
+      expect(el('master').closest('.mx-row')!.contains(section)).toBe(true);
+      expect(isOpen('fx')).toBe(false);
+      expect(el('fx-body').inert).toBe(true);
+      expect(section.querySelector('button')!.textContent).toBe('Pitch/Reverb/EQ');
+      for (const id of ['pitch-up', 'reverb', 'eq-low', 'eq-mid', 'eq-high']) expect(section.contains(el(id))).toBe(true);
+      el('fx-toggle').click();
+      await settle();
+      expect(isOpen('fx')).toBe(true);
+      expect(el('fx-body').inert).toBe(false);
+    });
+
+    it('the Default tab puts the global pitch under the Global volume, out of the section, when pitch is split', async () => {
+      await load({ stored: { pitchSplit: true } });
+      expect(el('fx').querySelector('[id^="pitch"]')).toBeNull();
+      expect(el('master').closest('.mx-row')!.lastElementChild).toBe(el('fx'));
+      expect(el('pitch-label').parentElement!.nextElementSibling).toBe(el('fx'));
+      expect(el('fx').contains(el('reverb'))).toBe(true);
+    });
+
+    it('a note in the section says where the pitch went while "Change pitch separately" is on', async () => {
+      await load({ stored: { mode: 'separate', pitchSplit: true } });
+      expect(el('fx').contains(el('fx-note'))).toBe(true);
+      expect(el('fx-note').textContent).toBe('Pitch is set under each volume above.');
+      await load({ stored: { pitchSplit: true } });
+      expect(el('fx-note').textContent).toBe('Pitch is set under the volume above.');
+      await load({ stored: { mode: 'separate' } });
+      expect(has('fx-note')).toBe(false);
+    });
+
+    it('the Separate tab section is closed, holds the global pitch with reverb and EQ, and no stem steppers until "Change pitch separately"', async () => {
       await load({ stored: { mode: 'separate', pitch: 2 } });
-      expect(el('pitch-label').closest('.mx-row')).toBe(el('master').closest('.mx-row'));
+      const section = el('fx');
+      expect(isOpen('fx')).toBe(false);
+      for (const id of ['pitch-up', 'reverb', 'eq-low', 'eq-mid', 'eq-high']) expect(section.contains(el(id))).toBe(true);
+      expect(el('master').closest('.mx-row')!.contains(el('pitch-up'))).toBe(false);
       expect(has('vocal-pitch-up')).toBe(false);
       expect(el<HTMLInputElement>('pitch-split').checked).toBe(false);
     });
 
-    it('"Change pitch separately" starts both stems at the global pitch and moves the steppers into the stem rows', async () => {
+    it('"Change pitch separately" starts both stems at the global pitch and moves every stepper out of the section, under the volumes', async () => {
       await load({ stored: { mode: 'separate', pitch: 2 } });
       el('pitch-split').click();
       await settle();
       expect(sent().at(-1).settings).toMatchObject({ pitchSplit: true, vocalPitch: 2, instrPitch: 2 });
-      expect(el('vocal-pitch-up').closest('.mx-row')).toBe(el('vocal').closest('.mx-row'));
+      for (const [stem, id] of [['vocal', 'vocal-pitch'], ['instrumental', 'instrumental-pitch']]) {
+        const row = el(stem).closest('.mx-row')!;
+        expect(el(`${id}-up`).closest('.mx-row')).toBe(row);
+        expect(row.lastElementChild).toBe(el(`${id}-up`).closest('[role="group"]')!.parentElement);
+        expect(el('fx').contains(el(`${id}-up`))).toBe(false);
+      }
       expect(el<HTMLButtonElement>('pitch-up').disabled).toBe(true);
+      expect(el('master').closest('.mx-row')!.contains(el('pitch-up'))).toBe(true);
+      expect(el('fx').querySelector('[id^="pitch"]')).toBeNull();
+      expect(el('fx').contains(el('reverb'))).toBe(true);
       el('vocal-pitch-down').click();
       el('instrumental-pitch-up').click();
       await settle();
@@ -615,6 +658,7 @@ describe('popup', () => {
       await settle();
       expect(sent().at(-1).settings.pitchSplit).toBe(false);
       expect(has('vocal-pitch-up')).toBe(false);
+      expect(el('fx').contains(el('pitch-up'))).toBe(true);
     });
   });
 

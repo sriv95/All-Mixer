@@ -141,23 +141,23 @@ export function PitchStepper({ id, label, value, min, max, onValue, disabled }: 
   );
 }
 
-/** A labelled slider with its value (and `unit`) on the right; `pitch` (a PitchStepper) goes before the value. */
+/** A labelled slider with its value (and `unit`) on the right; `pitch` (a pitch row) goes under the slider. */
 export function SliderRow({ id, label, icon, unit, hint, pitch, onValue, ...slider }: SliderProps & { label: ReactNode; icon: ReactNode; unit: string; hint?: ReactNode; pitch?: ReactNode }) {
   const { shown, gliding, mine } = useGlide(slider.value);
   return (
     <div className="mx-row flex flex-col gap-3">
-      <div className={cx('flex justify-between gap-2', pitch ? 'items-center' : 'items-baseline')}>
+      <div className="flex items-baseline justify-between gap-2">
         <label htmlFor={id} className="flex items-center gap-1.5 text-[13px] font-bold">
           <span className="text-brand" aria-hidden>{icon}</span>
           {label}
           {hint && <span className="text-xs font-medium text-muted">{hint}</span>}
         </label>
         <div className="flex items-center gap-2">
-          {pitch}
           <output id={`${id}-value`} htmlFor={id} className="min-w-12 text-right text-[15px] font-extrabold tabular-nums"><Roll text={`${Math.round(shown)}${unit}`} still={gliding} /></output>
         </div>
       </div>
       <Slider id={id} {...slider} shown={shown} onValue={(v) => { mine(v); onValue(v); }} />
+      {pitch}
     </div>
   );
 }
