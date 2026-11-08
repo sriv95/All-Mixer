@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { preloadSignature } from '../shared/preload';
 import { DEFAULT_SETTINGS } from '../shared/settings';
+import { StemCache } from './audio/stem-cache';
 import { PreloadRunner, videoKey } from './preload-run';
 
 const videoOf = (duration: number) => {
@@ -50,5 +52,16 @@ describe('PreloadRunner', () => {
     expect(st.progress?.error).toMatch(reason);
     expect(st.tooBig === true).toBe(/too long/.test(String(reason)));
     expect(onChange).toHaveBeenCalled();
+  });
+
+  it('plays the cache only when it matches the current model and split settings', () => {
+    const { r } = runner();
+    const cache = new StemCache(videoKey(), preloadSignature(DEFAULT_SETTINGS), 10, []);
+    r.keep(cache);
+    expect(r.playable(DEFAULT_SETTINGS)).toBe(cache);
+    const other = { ...DEFAULT_SETTINGS, mlModel: DEFAULT_SETTINGS.mlModel === 'deux' ? 'roformer' : 'deux' } as typeof DEFAULT_SETTINGS;
+    expect(preloadSignature(other)).not.toBe(cache.signature);
+    expect(r.playable(other)).toBeNull();
+    expect(r.status(other)).toMatchObject({ state: 'ready', stale: true });
   });
 });

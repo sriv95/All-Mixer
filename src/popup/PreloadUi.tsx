@@ -44,7 +44,7 @@ export function PreloadBanner({ api, settings, update, compact }: { api: Preload
       break;
     case 'ready':
       head = <span className={`${icon} bg-brand text-white`}><CircleCheck size={20} aria-hidden /></span>;
-      title = 'Playing the preloaded audio';
+      title = s.stale ? 'Preloaded with other settings' : 'Playing the preloaded audio';
       text = `Separated up front: no live delay, no deadline (${mb(s.bytes ?? 0)} in memory).`;
       if (s.holding) text = `The original audio plays now: ${s.holding}.`;
       else if (s.stale) text = 'This was preloaded with another model or split setting. Preload again to apply it.';

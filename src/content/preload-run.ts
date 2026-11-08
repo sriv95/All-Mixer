@@ -53,6 +53,12 @@ export class PreloadRunner {
     return this.cache?.key === key ? this.cache : null;
   }
 
+  /** The cache to play now: `ready()` only when it was made with the current model and split settings (a stale one is not played). */
+  playable(settings: MixerSettings): StemCache | null {
+    const cache = this.ready();
+    return cache && cache.signature === preloadSignature(settings) ? cache : null;
+  }
+
   start(settings: MixerSettings): ExportAnswer {
     const { site } = this.deps;
     const video = this.deps.video();

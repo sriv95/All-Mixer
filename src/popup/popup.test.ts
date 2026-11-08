@@ -885,6 +885,8 @@ describe('popup', () => {
         expect(box()!.textContent).toMatch(/Playing the preloaded audio.*170 MB in memory/);
         expect(has('preload-again')).toBe(false);
         await load({ stored: { mode: 'separate', preload: true }, status: pre({ state: 'ready', bytes: 170e6, stale: true }) });
+        expect(box()!.textContent).not.toMatch(/Playing the preloaded audio/);
+        expect(box()!.textContent).toMatch(/Preloaded with other settings/);
         expect(el('preload-text').textContent).toMatch(/another model or split/);
         expect(has('preload-again')).toBe(true);
       });

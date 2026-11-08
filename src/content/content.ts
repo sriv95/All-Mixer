@@ -151,7 +151,7 @@ const push = () => {
   const busy = exporter.running || preloader.running;
   const preloadMode = settings.mode === 'separate' && settings.preload;
   preloader.release();
-  const cache = preloadMode && !busy ? preloader.ready() : null;
+  const cache = preloadMode && !busy ? preloader.playable(settings) : null;
   const cacheOn = !!cache && !!video && PreloadPlayer.fits(cache, video, cache.key);
   // The pitch stage lives in the live worklet: the cache plays at the original pitch (the popup says so).
   const sep = separationFor(busy || preloadMode ? { ...settings, mode: 'default', ...(cacheOn ? { pitch: 0 } : {}) } : settings);
