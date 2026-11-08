@@ -107,6 +107,8 @@ const exporter = new ExportRunner({
   site,
   video: () => video,
   lyrics: () => lyrics.current(),
+  held: (): StemCache | null => preloader.ready(),
+  keep: (cache: StemCache) => preloader.keep(cache),
   onChange: () => {
     if (video) push();
   },

@@ -8,19 +8,24 @@ import {
   clock,
   hasAudio,
   needsSeparation,
+  partsOf,
   safeFileName,
+  stemsOf,
   tracksOf,
   type ExportOptions,
   type ExportProgress,
   type ExportStage,
+  type Part,
 } from '../shared/export';
+import type { StemCache } from '../shared/stem-cache';
+import type { StemSet } from '../shared/stem-store';
 import { openCapture, planar, type Capture } from './capture';
 import { VIDEO_FPS, breathe, mp3Sink, mp4Sink, pictureSize, type ExportFile, type Sink } from './encode';
 import { drawKaraoke, karaokeRows } from './karaoke-render';
-import { mixSlice, type StemSlice } from './mix';
+import { mixSlice, type Pair, type StemSlice } from './mix';
 import { openMlSession, type MlSession, type OpenMlSession } from './ml-session';
 import { fastAudio, type AudioTap, type Pcm } from './fast-audio';
-import { chunkAt, planChunks } from './plan';
+import { chunkAt, planChunks, type ChunkPlan } from './plan';
 import { Resampler } from './resample';
 
 export type { ExportFile } from './encode';
@@ -39,6 +44,12 @@ export interface ExportDeps {
   problem?: () => string | null;
   /** The audio the player already downloaded (src/page/audio-tap.ts): when it holds all of it, MP3 and preload skip the real-time recording. */
   tap?: AudioTap;
+  /** The stems of this video already in memory (Preload Audio): with them, nothing is recorded or separated. */
+  cached?: StemSet | null;
+  /** The persistent stem cache (src/shared/stem-cache.ts) and this video's key: looked up when `cached` is empty. A miss or a failure computes as before. */
+  cache?: { key: string; store: Pick<StemCache, 'get'> };
+  /** Each slice the model separated, in order (a miss only: nothing on a cache hit). The caller copies what it keeps; a cancelled run may have called it for some slices, so keep nothing until the run resolves. */
+  onStems?: (s: StemSlice) => void;
   /** Tests. */
   openSession?: OpenMlSession;
 }
@@ -116,8 +127,46 @@ export async function runExport(d: ExportDeps): Promise<ExportFile> {
 }
 
 /** The recording and separation of an export, without the encoders: `onSlice` gets the stems. Resolves when the whole video was handed over. */
-export async function runPreload(d: ExportDeps, onSlice: SliceSink): Promise<void> {
+export async function runPreload(d: ExportDeps, onSlice: SliceSink): Promise<boolean> {
   await record(d, onSlice);
+  return hitOf.get(d) === true;
+}
+
+/** Whether the stems of a run came from a cache (runPreload returns it: the caller then must not store them again). */
+const hitOf = new WeakMap<ExportDeps, boolean>();
+
+/** The cached stems are usable when they hold the stems these settings name, for about the length of the video. */
+function usable(set: StemSet | null | undefined, o: ExportOptions, plan: ChunkPlan): set is StemSet {
+  return (
+    !!set &&
+    set.sampleRate === EXPORT_SAMPLE_RATE &&
+    Math.abs(set.length - plan.total) <= EXPORT_SAMPLE_RATE &&
+    stemsOf(o.audio).every((id) => set.stems[id]?.length === 2 && set.stems[id].every((c) => c.length >= set.length))
+  );
+}
+
+/**
+ * The pieces of the recording as separation would have given them, cut from cached stems: the instrumental is `dry` (the "vocal for
+ * the instrumental" is silence), so `mixSlice` and `stemsOfSlice` give back the cached stems.
+ */
+function* slicesOf(set: StemSet, o: ExportOptions, plan: ChunkPlan): Generator<StemSlice> {
+  const parts = partsOf(o.audio);
+  for (let start = 0; start < plan.total; start += plan.samples) {
+    const n = Math.min(plan.samples, plan.total - start);
+    const pair = (id: string): Pair =>
+      [0, 1].map((c) => {
+        const x = new Float32Array(n);
+        x.set(set.stems[id]![c]!.subarray(start, Math.min(start + n, set.length)));
+        return x;
+      }) as Pair;
+    const dry = pair(parts.length ? 'others' : 'instrumental');
+    const found: Partial<Record<Part, Pair>> = {};
+    for (const p of parts) {
+      const x = (found[p] = pair(p));
+      for (let c = 0; c < 2; c++) for (let i = 0; i < n; i++) dry[c]![i]! += x[c]![i]!;
+    }
+    yield { start, length: n, dry, vk: [new Float32Array(n), new Float32Array(n)], vocal: pair('vocals'), parts: found };
+  }
 }
 
 async function record(d: ExportDeps, onSlice?: SliceSink): Promise<ExportFile | null> {
@@ -206,7 +255,15 @@ async function record(d: ExportDeps, onSlice?: SliceSink): Promise<ExportFile | 
   try {
     // ---- 1. the model, only when the stems matter
     at('preparing');
+    let hit: StemSet | null = null;
     if (!silent && needsSeparation(o)) {
+      const found = d.cached ?? (d.cache ? await d.cache.store.get(d.cache.key).catch(() => null) : null);
+      check();
+      if (usable(found, o, plan)) hit = found;
+    }
+    hitOf.set(d, hit !== null);
+    if (hit) restored = true; // the video is not touched
+    if (!silent && !hit && needsSeparation(o)) {
       const t0 = performance.now();
       const warm = setInterval(() => at('model', `Starting the model on your GPU… ${Math.round((performance.now() - t0) / 1000)} s (10 to 40 s the first time)`), 1000);
       at('model', 'Starting the model on your GPU…');
@@ -227,7 +284,7 @@ async function record(d: ExportDeps, onSlice?: SliceSink): Promise<ExportFile | 
     let fast: Pcm | null = null;
     let cap: Capture | null = null;
     onChanged = () => stop(new Error('The video changed during the export'));
-    if (!silent) {
+    if (!silent && !hit) {
       // 3a. the audio the player already downloaded
       if (d.tap) {
         at('fetching');
@@ -271,7 +328,7 @@ async function record(d: ExportDeps, onSlice?: SliceSink): Promise<ExportFile | 
         void v.play().catch(() => {});
       }
     };
-    let recordingDone = silent;
+    let recordingDone = silent || hit !== null;
     const room = new Wake();
     const newAudio = new Wake();
     const newJob = new Wake();
@@ -394,6 +451,18 @@ async function record(d: ExportDeps, onSlice?: SliceSink): Promise<ExportFile | 
     };
 
     // chunks: separate, mix, encode, in order
+    // cached stems: the pieces are cut from them and go straight to `write`
+    const cachedLoop = async (set: StemSet): Promise<void> => {
+      for (const s of slicesOf(set, o, plan)) {
+        check();
+        await write(s);
+        recorded = s.start + s.length;
+        processed++;
+        report();
+      }
+      stage = 'finishing';
+      report(true);
+    };
     const write = async (s: StemSlice): Promise<void> => {
       if (onSlice) return void (await onSlice(s));
       if (!out) return;
@@ -411,10 +480,16 @@ async function record(d: ExportDeps, onSlice?: SliceSink): Promise<ExportFile | 
         }
         if (session) {
           const s = await session.separator.push(job.l, job.r);
-          if (s) await write(s);
+          if (s) {
+            d.onStems?.(s);
+            await write(s);
+          }
           if (job.last) {
             const tail = await session.separator.finish();
-            if (tail) await write(tail);
+            if (tail) {
+              d.onStems?.(tail);
+              await write(tail);
+            }
           }
         } else {
           await write({ start: job.start, length: job.l.length, dry: [job.l, job.r] });
@@ -426,7 +501,7 @@ async function record(d: ExportDeps, onSlice?: SliceSink): Promise<ExportFile | 
     };
 
     const run = (f: () => Promise<void>) => f().catch(fail);
-    await Promise.all([run(() => (silent ? Promise.resolve() : fast ? feedLoop(fast) : audioLoop())), run(renderLoop), run(chunkLoop)]);
+    await Promise.all([run(() => (hit ? cachedLoop(hit) : silent ? Promise.resolve() : fast ? feedLoop(fast) : audioLoop())), run(renderLoop), run(chunkLoop)]);
     check();
 
     // ---- 4. assemble

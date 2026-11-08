@@ -23,9 +23,14 @@ Preload mode also points to the Export section.
 | Complexity | Low code, but two codecs and a round trip for nothing | Low: one sink replaced by a callback | High, and not possible (below) |
 | Works on YouTube | Yes | Yes | **No**: the player feeds MSE (`blob:` URL); the stream URLs are signed and rotating, and fetching them is both fragile and against the site's terms |
 
-Other ideas rejected: caching the already mixed result (levels would need a re-run), persisting the cache to OPFS/IndexedDB
-(not asked; the page-memory cache dies with the tab, which is what "cache" means here), driving the existing worklet from the
+Other ideas rejected: caching the already mixed result (levels would need a re-run), driving the existing worklet from the
 cache (keeps its 2 s delay, needs a media-time to stream-position map that seeks and pauses would break).
+
+Persistence (reversed: it was first rejected): the stems are also kept in OPFS of the extension origin (`src/shared/stem-store.ts`,
+reached through the ml.html iframe, `src/shared/stem-cache.ts`), 1 GB with least-recently-used eviction and a 3-day maximum age.
+Key: video id, rounded duration, model and split switches (`stemKey`). Preload and Export look in memory (current song only),
+then in OPFS, then compute; a hit skips the recording and the model. Export does not store its own stems. Any cache failure
+falls back to computing.
 
 ## Decision: B
 

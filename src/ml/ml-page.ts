@@ -2,9 +2,11 @@
 // itself has no WebGPU worker restrictions the YouTube page has: a Worker started here gets a real
 // WebGPU adapter. The page only wires things up: ML_INIT + port from the parent → worker, and the
 // worker's ready/unavailable → parent. Blocks then flow worklet ↔ worker without touching this page.
-import { ML_INIT, GPU_PREFERENCES, ML_MODELS, type GpuPreference, type FromMlWorker, type MlModel, type MlWorkerInit, type ToMlWorker } from '../worklet/protocol';
+import { ML_INIT, STEM_INIT, GPU_PREFERENCES, ML_MODELS, type GpuPreference, type FromMlWorker, type MlModel, type MlWorkerInit, type ToMlWorker } from '../worklet/protocol';
 
 import { keyInstalled, type InstalledModel } from '../shared/model-store';
+import { serveStemCache } from '../shared/stem-cache';
+import { openStemStore } from '../shared/stem-store';
 import { rememberSpeed, type SpeedCache } from './plan-cache';
 
 const SPEEDS_KEY = 'mlSpeeds';
@@ -24,7 +26,10 @@ window.addEventListener('message', (e: MessageEvent) => {
   const origin = parentOrigin();
   if (origin !== null && origin !== e.origin) return;
   const msg = e.data as { type?: string; model?: unknown; delayMs?: unknown; drums?: unknown; guitar?: unknown; gpu?: unknown; offline?: unknown } | null;
-  if (msg?.type === ML_INIT) {
+  if (msg?.type === STEM_INIT) {
+    // The store lives in this extension-origin page (the content script only has the YouTube origin's OPFS).
+    if (e.ports[0]) serveStemCache(e.ports[0], openStemStore);
+  } else if (msg?.type === ML_INIT) {
     const port = e.ports[0];
     if (!port || worker) return;
     const model: MlModel = ML_MODELS.includes(msg.model as MlModel) ? (msg.model as MlModel) : 'mdx';

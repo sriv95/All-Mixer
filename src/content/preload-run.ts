@@ -1,9 +1,10 @@
 import { defaultExportOptions, stemsOf, type ExportProgress } from '../shared/export';
 import { DEFAULT_LYRICS_PREFS } from '../shared/lyrics-prefs';
 import type { ExportAnswer } from '../shared/messages';
+import { createStemCache, stemKey, type StemCache as PersistentCache } from '../shared/stem-cache';
 import { PRELOAD_MAX_BYTES, preloadBytes, preloadSignature, type PreloadStatus } from '../shared/preload';
 import type { MixerSettings } from '../shared/settings';
-import { StemCache } from './audio/stem-cache';
+import { StemCache, persistStems } from './audio/stem-cache';
 import { PreloadPlayer } from './audio/preload-player';
 import { pageTap } from './page-tap';
 import { findPlayer, isAdShowing, type PageSite } from './youtube-dom';
@@ -18,6 +19,9 @@ interface Deps {
   onChange(): void;
   /** An export records the same video: only one of the two runs. */
   exporting(): boolean;
+  /** Tests: the engine module and the persistent stem cache. */
+  loadEngine?(): Promise<typeof import('../export/engine')>;
+  persistent?(): PersistentCache;
 }
 
 /** One video = one id: `v=` on YouTube and YouTube Music, else the address. */
@@ -82,6 +86,11 @@ export class PreloadRunner {
     this.abort?.abort();
   }
 
+  /** Keeps `cache` (the stems an export just separated) as the one song in memory, instead of any other. */
+  keep(cache: StemCache): void {
+    this.cache = cache;
+  }
+
   /** Frees the memory of a cache whose video is no longer open. */
   release(): void {
     if (this.cache && this.cache.key !== videoKey()) this.cache = null;
@@ -99,13 +108,22 @@ export class PreloadRunner {
   private async run(settings: MixerSettings, video: HTMLVideoElement, key: string, abort: AbortController): Promise<void> {
     const { site } = this.deps;
     const report = (progress: ExportProgress) => (this.last = { key, progress });
+    const store = (this.deps.persistent ?? createStemCache)();
     try {
-      const engine = (await import(/* @vite-ignore */ chrome.runtime.getURL(ENGINE_PATH))) as typeof import('../export/engine');
+      // Memory holds the stems of the current song only.
+      if (this.cache && this.cache.key !== key) this.cache = null;
+      const signature = preloadSignature(settings);
+      if (this.cache && this.cache.signature === signature && Math.abs(this.cache.duration - video.duration) < 0.5) {
+        report({ state: 'done', stage: 'finishing', chunk: 0, chunks: 0, percent: 100, detail: 'Ready' });
+        return;
+      }
+      const engine = await (this.deps.loadEngine?.() ?? (import(/* @vite-ignore */ chrome.runtime.getURL(ENGINE_PATH)) as Promise<typeof import('../export/engine')>));
       const player = site === 'generic' ? null : findPlayer(site);
       const tap = await pageTap(site);
       const options = { ...defaultExportOptions(settings, DEFAULT_LYRICS_PREFS), tracks: 'separate' as const }; // the model always runs
       const cache = new StemCache(key, preloadSignature(settings), video.duration, stemsOf(settings));
-      await engine.runPreload(
+      const stored = stemKey(key, video.duration, settings);
+      const hit = await engine.runPreload(
         {
           video,
           options,
@@ -114,12 +132,18 @@ export class PreloadRunner {
           signal: abort.signal,
           report,
           tap,
+          cache: { key: stored, store },
           problem: () => (player && isAdShowing(player) ? 'An ad interrupted the recording. Try again when the video plays without ads.' : null),
         },
         (s) => cache.add(engine.stemsOfSlice(settings, s), s.start),
       );
       this.cache = cache;
       report({ state: 'done', stage: 'finishing', chunk: 0, chunks: 0, percent: 100, detail: 'Ready' });
+      if (!hit) {
+        this.abort = null; // the stems are ready; saving them does not block the popup
+        this.deps.onChange();
+        await persistStems(store, stored, cache);
+      }
     } catch (e) {
       const cancelled = e instanceof Error && e.message === 'Export cancelled';
       const was = this.last?.progress;
@@ -134,6 +158,7 @@ export class PreloadRunner {
       });
       if (!cancelled) console.warn('[All Mixer!] preload failed:', e);
     } finally {
+      store.dispose();
       this.abort = null;
       this.deps.onChange();
     }

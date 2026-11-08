@@ -1,6 +1,8 @@
 import { EXPORT_SAMPLE_RATE, type Stem } from '../../shared/export';
 import { separationFor, type MixerSettings } from '../../shared/settings';
 import type { Pair } from '../../export/mix';
+import type { StemCache as PersistentCache } from '../../shared/stem-cache';
+import type { StemSet } from '../../shared/stem-store';
 
 /** The stems of a whole video in memory (Preload Audio): one stereo AudioBuffer per stem, at the sample rate of the models. */
 export class StemCache {
@@ -22,12 +24,26 @@ export class StemCache {
     }
   }
 
+  /** The stems as a StemSet for the persistent cache. `copy`: fresh arrays (storing transfers, i.e. detaches, the arrays it is given). */
+  toSet(copy = false): StemSet {
+    const stems: StemSet['stems'] = {};
+    let length = 0;
+    for (const [id, b] of this.buffers) {
+      length = b.length;
+      stems[id] = [0, 1].map((c) => (copy ? b.getChannelData(c).slice() : b.getChannelData(c)));
+    }
+    return { sampleRate: EXPORT_SAMPLE_RATE, length, stems };
+  }
+
   get bytes(): number {
     let n = 0;
     for (const b of this.buffers.values()) n += b.length * 2 * 4;
     return n;
   }
 }
+
+/** Saves the stems in the persistent cache from a copy (it transfers, i.e. detaches, its arrays: memory keeps its own). A failure only means no persistent copy. */
+export const persistStems = (store: Pick<PersistentCache, 'put'>, key: string, cache: StemCache): Promise<boolean> => store.put(key, cache.toSet(true)).catch(() => false);
 
 /**
  * Linear gain of each stem for the live sliders: the formula of the separator worklet and `mixSlice`,

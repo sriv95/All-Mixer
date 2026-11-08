@@ -1,4 +1,8 @@
-import { needsSeparation, normalizeExportOptions, type ExportOptions, type ExportProgress } from '../shared/export';
+import { createStemCache, stemKey, type StemCache as PersistentCache } from '../shared/stem-cache';
+import { PRELOAD_MAX_BYTES, preloadBytes, preloadSignature } from '../shared/preload';
+import { StemCache, persistStems } from './audio/stem-cache';
+import { videoKey } from './preload-run';
+import { needsSeparation, normalizeExportOptions, stemsOf, type ExportOptions, type ExportProgress } from '../shared/export';
 import type { ExportAnswer } from '../shared/messages';
 import type { LyricLine } from '../lyrics/types';
 import { pageTap } from './page-tap';
@@ -13,6 +17,13 @@ interface Deps {
   lyrics(): { lines: LyricLine[]; offsetMs: number } | null;
   /** The export started or ended: the live engine makes room for it or comes back. */
   onChange(): void;
+  /** The preloaded stems of the video that is open (memory), if any. */
+  held?(): StemCache | null;
+  /** The stems this export separated (a miss): they replace the memory of any other song. */
+  keep?(cache: StemCache): void;
+  /** Tests: the engine module and the persistent stem cache. */
+  loadEngine?(): Promise<typeof import('../export/engine')>;
+  persistent?(): PersistentCache;
 }
 
 /** "(3) Song - Artist - YouTube" → "Song - Artist". */
@@ -53,10 +64,18 @@ export class ExportRunner {
 
   private async run(options: ExportOptions, video: HTMLVideoElement, abort: AbortController): Promise<void> {
     const { site } = this.deps;
+    const store = (this.deps.persistent ?? createStemCache)();
     try {
-      const engine = (await import(/* @vite-ignore */ chrome.runtime.getURL(ENGINE_PATH))) as typeof import('../export/engine');
+      const engine = await (this.deps.loadEngine?.() ?? (import(/* @vite-ignore */ chrome.runtime.getURL(ENGINE_PATH)) as Promise<typeof import('../export/engine')>));
       const player = site === 'generic' ? null : findPlayer(site);
       const tap = await pageTap(site);
+      const memory = this.deps.held?.() ?? null;
+      const key = videoKey();
+      const stored = stemKey(key, video.duration, options.audio);
+      const signature = preloadSignature(options.audio);
+      // A song too big for the memory cap is not kept (the preload refuses it too).
+      const keepable = preloadBytes(options.audio, video.duration) <= PRELOAD_MAX_BYTES;
+      let fresh: StemCache | null = null;
       const file = await engine.runExport({
         video,
         options,
@@ -65,10 +84,25 @@ export class ExportRunner {
         signal: abort.signal,
         report: (p) => (this.progress = p),
         tap,
+        // memory first (the preloaded song), then the persistent cache; the engine computes when both miss
+        cached: memory && memory.key === key && memory.signature === signature ? memory.toSet() : null,
+        cache: { key: stored, store },
+        // a miss: the separated stems pile up here and are saved once the export is done (a cancel or failure throws before that)
+        onStems: keepable
+          ? (s) => (fresh ??= new StemCache(key, signature, video.duration, stemsOf(options.audio))).add(engine.stemsOfSlice(options.audio, s), s.start)
+          : undefined,
         problem: () => (player && isAdShowing(player) ? 'An ad interrupted the recording. Try again when the video plays without ads.' : null),
       });
       save(file.blob, file.name);
       this.progress = { state: 'done', stage: 'finishing', chunk: 0, chunks: 0, percent: 100, detail: `Saved ${file.name}`, file: { name: file.name, bytes: file.blob.size } };
+      const kept = fresh as StemCache | null;
+      if (kept) {
+        fresh = null;
+        this.deps.keep?.(kept);
+        this.abort = null; // the file is saved; storing the stems does not block the popup
+        this.deps.onChange();
+        await persistStems(store, stored, kept);
+      }
     } catch (e) {
       const cancelled = e instanceof Error && e.message === 'Export cancelled';
       this.progress = {
@@ -82,6 +116,7 @@ export class ExportRunner {
       };
       if (!cancelled) console.warn('[All Mixer!] export failed:', e);
     } finally {
+      store.dispose();
       this.abort = null;
       this.deps.onChange();
     }

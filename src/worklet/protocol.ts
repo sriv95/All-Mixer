@@ -91,6 +91,8 @@ export const ML_BUFFER_BYTES = ML_HEADER_BYTES + 4 * ML_BLOCK * 4;
 /** Control messages between the content script and the ML worker (via the ml.html iframe). */
 export const ML_PAGE_PATH = 'ml/ml.html';
 export const ML_INIT = 'all-mixer-ml-init';
+/** Sent to a bare ml.html iframe (no worker) with one port: the stem cache requests then flow on that port (src/shared/stem-cache.ts). */
+export const STEM_INIT = 'all-mixer-stem-init';
 /** The ML_INIT message also carries `model: MlModel`, `delayMs` (the delay budget: it sets the RoFormer chunk and the MDX segment; null = the 2 s default) and `drums` / `guitar` (split the drums / the guitar out of the instrumental), `gpu: GpuPreference` and `offline` (an export: no real-time speed gate). */
 /** Warm-up gate: p90 of 20 timed runs (ignores the two slowest) of one MDX block step (analyze + model + synthesize) must leave ≥ 1.5× in the 319 ms compute slack (~213 ms). The runtime deadline-miss fallback is the final guard. */
 export const ML_WARMUP_P90_MS = (ML_SLACK_SAMPLES / ML_SAMPLE_RATE) * 1000 / 1.5;
