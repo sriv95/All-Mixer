@@ -585,6 +585,13 @@ describe('popup', () => {
       expect(el<HTMLButtonElement>('pitch-up').disabled).toBe(true);
     });
 
+    it('the "Pitch/Reverb/EQ" section holds the pitch, reverb and EQ controls', async () => {
+      await load();
+      const section = el('fx');
+      expect(section.querySelector('button')!.textContent).toBe('Pitch/Reverb/EQ');
+      for (const id of ['pitch-up', 'reverb', 'eq-low', 'eq-mid', 'eq-high']) expect(section.contains(el(id))).toBe(true);
+    });
+
     it('the Separate tab has the global pitch in the Global volume box and no stem steppers until "Change pitch separately"', async () => {
       await load({ stored: { mode: 'separate', pitch: 2 } });
       expect(el('pitch-label').closest('.mx-row')).toBe(el('master').closest('.mx-row'));

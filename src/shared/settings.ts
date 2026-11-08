@@ -1,4 +1,5 @@
 import { GPU_PREFERENCES, ML_MODELS, type GpuPreference, type MlModel } from '../worklet/protocol';
+import { EQ_MAX_DB, type EffectsParams } from './effects';
 import { MAX_DELAY_S, MIN_DELAY_S } from '../ml/rof-plan';
 
 export type Mode = 'default' | 'separate';
@@ -39,6 +40,12 @@ export interface MixerSettings {
   vocalPitch: number;
   /** Instrumental pitch, semitones. Used when pitchSplit is on. */
   instrPitch: number;
+  /** Whole-mix reverb, dry/wet percent (0–100). */
+  reverbMix: number;
+  /** Whole-mix EQ gains in dB (−EQ_MAX_DB to +EQ_MAX_DB): low shelf (250 Hz), mid peak (1 kHz), high shelf (4 kHz). */
+  eqLow: number;
+  eqMid: number;
+  eqHigh: number;
   /** Separate mode (Advanced): Preload Audio instead of Live. The whole video is separated up front and plays from memory, so a GPU that misses the live deadline still works. */
   preload: boolean;
 }
@@ -65,6 +72,10 @@ export const DEFAULT_SETTINGS: Readonly<MixerSettings> = Object.freeze({
   pitchSplit: false,
   vocalPitch: 0,
   instrPitch: 0,
+  reverbMix: 0,
+  eqLow: 0,
+  eqMid: 0,
+  eqHigh: 0,
   preload: false,
 });
 
@@ -75,6 +86,12 @@ export function clampPitch(value: unknown): number {
   const n = typeof value === 'string' ? Number(value) : value;
   if (typeof n !== 'number' || !Number.isFinite(n)) return 0;
   return Math.min(PITCH_MAX, Math.max(-PITCH_MAX, Math.round(n)));
+}
+
+export function clampEq(value: unknown): number {
+  const n = typeof value === 'string' ? Number(value) : value;
+  if (typeof n !== 'number' || !Number.isFinite(n)) return 0;
+  return Math.min(EQ_MAX_DB, Math.max(-EQ_MAX_DB, Math.round(n)));
 }
 
 export function clampPct(value: unknown, fallback = 100, min = GAIN_MIN_PCT, max = GAIN_MAX_PCT): number {
@@ -136,6 +153,10 @@ export function normalizeSettings(raw: unknown): MixerSettings {
     pitchSplit: r.pitchSplit === true,
     vocalPitch: clampPitch(r.vocalPitch),
     instrPitch: clampPitch(r.instrPitch),
+    reverbMix: clampPct(r.reverbMix, DEFAULT_SETTINGS.reverbMix),
+    eqLow: clampEq(r.eqLow),
+    eqMid: clampEq(r.eqMid),
+    eqHigh: clampEq(r.eqHigh),
     preload: r.preload === true,
   };
 }
@@ -153,6 +174,14 @@ export const mlDelayMsFor = (settings: MixerSettings): number => settings.mlDela
 export function masterGainFor(settings: MixerSettings): number {
   return settings.masterPct / 100;
 }
+
+/** The whole-mix effects stage for these settings. */
+export const effectsFor = (settings: MixerSettings): EffectsParams => ({
+  reverb: settings.reverbMix / 100,
+  low: settings.eqLow,
+  mid: settings.eqMid,
+  high: settings.eqHigh,
+});
 
 /** What the audio engine's separator should do for these settings (gains linear, 0–6). */
 export function separationFor(settings: MixerSettings): {

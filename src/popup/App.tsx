@@ -2,7 +2,8 @@ import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } 
 import { AudioLines, AudioWaveform, Cpu, Drum, Guitar, HardDriveDownload, LoaderCircle, Maximize2, Mic, Minimize2, MicOff, Music, Piano, RefreshCw, RotateCcw, Settings2, Timer, TriangleAlert, Undo2, Volume2, Waves, Zap } from 'lucide-react';
 import type { ContentStatus, ExportAnswer, ExportCancel, ExportStart, GetStatus, GetTabSettings, PreloadCancel, PreloadStart, SetTabSettings } from '../shared/messages';
 import type { ExportOptions } from '../shared/export';
-import { clampDelayS, clampOthersPct, clampPct, clampPitch, masterPctAt, masterPosOf, MASTER_POS_MAX, normalizeSettings, PITCH_MAX, type MixerSettings, type Mode } from '../shared/settings';
+import { EQ_MAX_DB } from '../shared/effects';
+import { clampDelayS, clampEq, clampOthersPct, clampPct, clampPitch, masterPctAt, masterPosOf, MASTER_POS_MAX, normalizeSettings, PITCH_MAX, type MixerSettings, type Mode } from '../shared/settings';
 import { separationView, type SepView } from '../shared/separation-view';
 import { MAX_DELAY_S, MIN_DELAY_S } from '../ml/rof-plan';
 import type { MlModel } from '../worklet/protocol';
@@ -282,6 +283,7 @@ function Master({ settings, update, compact }: { settings: MixerSettings; update
   const num = useGlide(settings.masterPct);
   const pos = useGlide(masterPosOf(settings.masterPct));
   const pct = <Roll text={`${Math.round(num.shown)}%`} still={num.gliding} />;
+  const [fxOpen, setFxOpen] = useState(true);
   return (
     <Card className={compact ? 'mx-row' : 'mx-row mx-row-left'}>
       <div className="flex items-center justify-between gap-2">
@@ -302,11 +304,20 @@ function Master({ settings, update, compact }: { settings: MixerSettings; update
       {!compact && (
         <div className="flex justify-between text-xs text-muted"><span>0%</span><span>Boost up to 600%</span></div>
       )}
-      {/* The stems have their own pitch while "Change pitch separately" is on (Separate tab). */}
-      <div className="flex items-center justify-between gap-2">
-        <span id="pitch-label" className="flex items-center gap-1.5 text-[13px] font-bold"><AudioWaveform size={15} className="text-brand" aria-hidden />Pitch</span>
-        <PitchStepper id="pitch" label="Pitch" value={settings.pitch} min={-PITCH_MAX} max={PITCH_MAX} disabled={compact && settings.pitchSplit} onValue={(v) => update({ pitch: clampPitch(v) })} />
-      </div>
+      <Disclosure id="fx" open={fxOpen} onOpen={setFxOpen} buttonClassName="py-1"
+        title={<span className="flex items-center gap-1.5"><AudioWaveform size={15} className="text-brand" aria-hidden />Pitch/Reverb/EQ</span>}>
+        <div className="flex flex-col gap-3 pt-2">
+          {/* The stems have their own pitch while "Change pitch separately" is on (Separate tab). */}
+          <div className="flex items-center justify-between gap-2">
+            <span id="pitch-label" className="text-[13px] font-bold">Pitch</span>
+            <PitchStepper id="pitch" label="Pitch" value={settings.pitch} min={-PITCH_MAX} max={PITCH_MAX} disabled={compact && settings.pitchSplit} onValue={(v) => update({ pitch: clampPitch(v) })} />
+          </div>
+          <SliderRow id="reverb" icon={<Waves size={15} />} label="Reverb mix" unit="%" value={settings.reverbMix} min={0} max={100} step={5} onValue={(v) => update({ reverbMix: clampPct(v, 0) })} />
+          <SliderRow id="eq-low" icon={<Volume2 size={15} />} label="EQ Low" unit=" dB" value={settings.eqLow} min={-EQ_MAX_DB} max={EQ_MAX_DB} step={1} onValue={(v) => update({ eqLow: clampEq(v) })} />
+          <SliderRow id="eq-mid" icon={<Volume2 size={15} />} label="EQ Mid" unit=" dB" value={settings.eqMid} min={-EQ_MAX_DB} max={EQ_MAX_DB} step={1} onValue={(v) => update({ eqMid: clampEq(v) })} />
+          <SliderRow id="eq-high" icon={<Volume2 size={15} />} label="EQ High" unit=" dB" value={settings.eqHigh} min={-EQ_MAX_DB} max={EQ_MAX_DB} step={1} onValue={(v) => update({ eqHigh: clampEq(v) })} />
+        </div>
+      </Disclosure>
     </Card>
   );
 }

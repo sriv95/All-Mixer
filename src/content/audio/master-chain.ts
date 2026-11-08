@@ -22,12 +22,13 @@ import {
 } from '../../worklet/protocol';
 import { toPerformanceTime, type EngineReason, type LatencyInfo, type LatencyListener } from './latency';
 import type { AvProbe } from '../av-probe';
+import { createEffects, hasEffects, NO_EFFECTS, type EffectsParams, type EffectsStage } from '../../shared/effects';
 import { createLimiter } from './limiter';
 
 /**
  * Audio graph for both modes:
  *
- *   <video> → MediaElementSource ─┬─ direct (gain) ───────────────────────┬→ master (0–6×) → limiter → destination
+ *   <video> → MediaElementSource ─┬─ direct (gain) ───────────────────────┬→ effects (EQ + reverb) → master (0–6×) → limiter → destination
  *                                 └─ separator worklet (vocal/inst 0–6×) ─ sepOut (gain) ┘
  *
  * Default mode plays through `direct` with no added delay, until a pitch shift is asked for: then it runs through the
@@ -104,6 +105,8 @@ export function isOpaqueMedia(el: HTMLMediaElement): boolean {
 export class MasterChain {
   private ctx: AudioContext | null = null;
   private gain: GainNode | null = null;
+  private fx: EffectsStage | null = null;
+  private effects: EffectsParams = NO_EFFECTS;
   private direct: GainNode | null = null;
   private sepOut: GainNode | null = null;
   /** Where the Preload Audio player plays into (src/content/audio/preload-player.ts); the page's own audio is silenced while it is the source. */
@@ -300,6 +303,13 @@ export class MasterChain {
     }
   }
 
+  /** Whole-mix EQ and reverb; anything but flat routes the audio through the graph, like a gain change. */
+  setEffects(p: EffectsParams): void {
+    this.effects = p;
+    if (!this.engaged && hasEffects(p)) this.engage();
+    this.fx?.set(p);
+  }
+
   setSeparation(req: SeparationRequest): void {
     this.separation = { ...req };
     if (!req.on) {
@@ -319,15 +329,18 @@ export class MasterChain {
       const ctx = new AudioContext({ latencyHint: 'interactive', sampleRate: ML_SAMPLE_RATE });
       const gain = new GainNode(ctx, { gain: this.targetGain });
       const limiter = createLimiter(ctx);
+      const fx = createEffects(ctx, this.effects);
+      fx.output.connect(gain);
       gain.connect(limiter.input);
       limiter.output.connect(ctx.destination);
       this.direct = new GainNode(ctx, { gain: 1 });
       this.sepOut = new GainNode(ctx, { gain: 0 });
-      this.direct.connect(gain);
-      this.sepOut.connect(gain);
+      this.direct.connect(fx.input);
+      this.sepOut.connect(fx.input);
       this.preloadOut = new GainNode(ctx, { gain: 0 });
-      this.preloadOut.connect(gain);
+      this.preloadOut.connect(fx.input);
       this.ctx = ctx;
+      this.fx = fx;
       this.gain = gain;
       ctx.addEventListener('statechange', () => {
         this.connectIfReady();

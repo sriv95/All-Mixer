@@ -24,6 +24,17 @@ class FakeParam {
   }
   cancelScheduledValues() {}
 }
+class FakeBiquad extends FakeNode {
+  gain = new FakeParam(0);
+  constructor(_ctx: unknown, readonly opts: { type: string; frequency: number }) {
+    super();
+  }
+}
+class FakeConvolver extends FakeNode {
+  constructor(_ctx: unknown, readonly opts: { buffer: unknown }) {
+    super();
+  }
+}
 class FakeGain extends FakeNode {
   gain: FakeParam;
   constructor(_ctx: unknown, opts: { gain: number }) {
@@ -62,6 +73,9 @@ class FakeContext extends EventTarget {
   sources: { el: HTMLMediaElement; node: FakeNode }[] = [];
   allowResume = false;
   sampleRate = 48000;
+  createBuffer(_channels: number, length: number) {
+    return { length, getChannelData: () => new Float32Array(length) };
+  }
   modules: string[] = [];
   loadFails = false;
   audioWorklet = {
@@ -95,6 +109,8 @@ beforeEach(() => {
   vi.stubGlobal('AudioContext', FakeContext);
   vi.stubGlobal('AudioWorkletNode', FakeWorklet);
   vi.stubGlobal('GainNode', FakeGain);
+  vi.stubGlobal('BiquadFilterNode', FakeBiquad);
+  vi.stubGlobal('ConvolverNode', FakeConvolver);
   vi.stubGlobal('DynamicsCompressorNode', FakeNode);
   vi.stubGlobal('WaveShaperNode', FakeNode);
 });
@@ -121,6 +137,42 @@ describe('MasterChain', () => {
     expect(chain.deviceLatencyMs).toBe(0);
     chain.setGain(2);
     expect(chain.deviceLatencyMs).toBeCloseTo(50, 5);
+  });
+
+  it('puts the EQ and reverb in front of the master gain, and updates them live', () => {
+    vi.stubGlobal(
+      'AudioContext',
+      class extends FakeContext {
+        state: AudioContextState = 'running';
+      },
+    );
+    const chain = new MasterChain();
+    chain.setVideo(video());
+    chain.setEffects({ reverb: 0.25, low: 6, mid: -3, high: 40 });
+    const [ctx] = contexts;
+    const fx = { biquads: [] as FakeBiquad[], convolvers: [] as FakeConvolver[] };
+    // Walk the graph from the source: every node reachable before the limiter.
+    const seen = new Set<FakeNode>();
+    const walk = (n: FakeNode) => {
+      if (seen.has(n)) return;
+      seen.add(n);
+      if (n instanceof FakeBiquad) fx.biquads.push(n);
+      if (n instanceof FakeConvolver) fx.convolvers.push(n);
+      n.connected.forEach(walk);
+    };
+    walk(ctx.sources[0].node);
+    expect(fx.biquads.map((b) => [b.opts.type, b.opts.frequency])).toEqual([['lowshelf', 250], ['peaking', 1000], ['highshelf', 4000]]);
+    expect(fx.convolvers).toHaveLength(1);
+    expect(fx.biquads.map((b) => b.gain.value)).toEqual([6, -3, 12]);
+    chain.setEffects({ reverb: 0, low: 0, mid: 0, high: -2 });
+    expect(fx.biquads.map((b) => b.gain.value)).toEqual([0, 0, -2]);
+  });
+
+  it('does not engage for flat, dry effects', () => {
+    const chain = new MasterChain();
+    chain.setVideo(video());
+    chain.setEffects({ reverb: 0, low: 0, mid: 0, high: 0 });
+    expect(contexts).toHaveLength(0);
   });
 
   it('leaves page audio alone at 100%', () => {

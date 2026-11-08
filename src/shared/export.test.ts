@@ -27,6 +27,8 @@ describe('export options', () => {
     expect(needsSeparation({ tracks: 'single', audio: audio({ instrumentalPct: 95 }) })).toBe(true);
     expect(needsSeparation({ tracks: 'single', audio: audio({ splitInstrumental: true, drumsPct: 50 }) })).toBe(true);
     expect(needsSeparation({ tracks: 'single', audio: audio({ drumsPct: 50 }) })).toBe(false); // the drums switch is off: the level does not apply
+    expect(needsSeparation({ tracks: 'single', audio: audio({ pitch: 3 }) })).toBe(false); // one pitch for the whole mix needs no stems
+    expect(needsSeparation({ tracks: 'single', audio: audio({ mode: 'separate', pitchSplit: true, vocalPitch: 2 }) })).toBe(true);
     expect(needsSeparation({ tracks: 'separate', audio: audio({}) })).toBe(true);
   });
 

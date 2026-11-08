@@ -24,7 +24,7 @@ export type ExportText = KaraokeStyle & Pick<LyricsPrefs, 'karaokeLines' | 'kara
 export interface ExportOptions {
   format: ExportFormat;
   tracks: ExportTracks;
-  /** Export-local copy of the mix: model, split switches and levels. Pitch, mode and delay are not part of an export. */
+  /** Export-local copy of the mix: model, split switches, levels, pitch (own pitches per stem as live: Separate mode with pitchSplit), EQ and reverb. The delay is not part of an export. */
   audio: MixerSettings;
   text: ExportText;
   /** MP4 picture height. */
@@ -72,14 +72,15 @@ export function tracksOf(o: AudioFacts): TrackId[] {
 }
 
 /**
- * Whether the export needs the model: for the stems, or because a level moves the mix away from the original.
+ * Whether the export needs the model: for the stems, or because a level or an own pitch per stem moves the mix away from the original.
  * A plain recording (all levels at 100 %) is made without the GPU.
  */
 export function needsSeparation(o: AudioFacts): boolean {
   if (!hasAudio(o)) return false;
   if (o.tracks === 'separate') return true;
   const g = separationFor({ ...o.audio, mode: 'separate', pitchSplit: false });
-  return [g.vocal, g.instrumental, g.drums, g.guitar, g.bass, g.piano, g.others].some((v) => v !== 1);
+  const { pitchVocal, pitchInstrumental } = separationFor(o.audio); // live resolution: own pitches only in Separate mode with pitchSplit
+  return pitchVocal !== pitchInstrumental || [g.vocal, g.instrumental, g.drums, g.guitar, g.bass, g.piano, g.others].some((v) => v !== 1);
 }
 
 const num = (v: unknown, fallback: number): number => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);

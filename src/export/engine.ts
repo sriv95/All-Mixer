@@ -22,7 +22,7 @@ import type { StemSet } from '../shared/stem-store';
 import { openCapture, planar, type Capture } from './capture';
 import { VIDEO_FPS, breathe, mp3Sink, mp4Sink, pictureSize, type ExportFile, type Sink } from './encode';
 import { drawKaraoke, karaokeRows } from './karaoke-render';
-import { mixSlice, type Pair, type StemSlice } from './mix';
+import { ExportMixer, type MixedPiece, type Pair, type StemSlice } from './mix';
 import { openMlSession, type MlSession, type OpenMlSession } from './ml-session';
 import { fastAudio, type AudioTap, type Pcm } from './fast-audio';
 import { chunkAt, planChunks, type ChunkPlan } from './plan';
@@ -463,11 +463,13 @@ async function record(d: ExportDeps, onSlice?: SliceSink): Promise<ExportFile | 
       stage = 'finishing';
       report(true);
     };
+    const mixer = new ExportMixer(o);
+    const put = async (piece: MixedPiece | null): Promise<void> => {
+      if (piece && out) for (const id of tracks) await out.addAudio(id, piece.tracks[id]![0], piece.tracks[id]![1], piece.start);
+    };
     const write = async (s: StemSlice): Promise<void> => {
       if (onSlice) return void (await onSlice(s));
-      if (!out) return;
-      const mixed = mixSlice(o, s);
-      for (const id of tracks) await out.addAudio(id, mixed[id]![0], mixed[id]![1], s.start);
+      await put(await mixer.mix(s));
     };
     const chunkLoop = async (): Promise<void> => {
       for (;;) {
@@ -503,6 +505,7 @@ async function record(d: ExportDeps, onSlice?: SliceSink): Promise<ExportFile | 
     const run = (f: () => Promise<void>) => f().catch(fail);
     await Promise.all([run(() => (hit ? cachedLoop(hit) : silent ? Promise.resolve() : fast ? feedLoop(fast) : audioLoop())), run(renderLoop), run(chunkLoop)]);
     check();
+    if (!onSlice && !silent) await put(await mixer.flush()); // the pitch shifters' last samples
 
     // ---- 4. assemble
     at('finishing');

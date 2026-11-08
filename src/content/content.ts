@@ -2,7 +2,7 @@ import type { ContentRequest, ContentStatus, GetMyTabSettings, SetBadge } from '
 import { ExportRunner } from './export-run';
 import { PreloadRunner, holdingReason } from './preload-run';
 import { separationView } from '../shared/separation-view';
-import { DEFAULT_SETTINGS, masterGainFor, mlDelayMsFor, normalizeSettings, separationFor, type MixerSettings } from '../shared/settings';
+import { DEFAULT_SETTINGS, effectsFor, masterGainFor, mlDelayMsFor, normalizeSettings, separationFor, type MixerSettings } from '../shared/settings';
 import { EngineSelector } from './audio/engine-select';
 import { MasterChain } from './audio/master-chain';
 import { PreloadPlayer } from './audio/preload-player';
@@ -147,6 +147,7 @@ let modeKnown = false; // the first settings load is not a toggle
 // Nothing starts (audio context, ML host) in a frame or page until it has media: most frames have none.
 const push = () => {
   chain.setGain(masterGainFor(settings));
+  chain.setEffects(effectsFor(settings));
   // Live separation is off while an export or a preload records (the GPU and the picture are theirs), and in Preload mode.
   const busy = exporter.running || preloader.running;
   const preloadMode = settings.mode === 'separate' && settings.preload;

@@ -275,9 +275,10 @@ export function Select<T extends string>({ id, value, options, onValue }: { id: 
 
 /** A section that slides open: a button (aria-expanded) over a body whose height animates. The body stays mounted, inert while closed. */
 export function Disclosure({ id, open, onOpen, title, className, buttonClassName, children }: { id: string; open: boolean; onOpen: (open: boolean) => void; title: ReactNode; className?: string; buttonClassName?: string; children: ReactNode }) {
+  const blocked = useContext(Blocked);
   return (
     <section id={id} className={className}>
-      <button id={`${id}-toggle`} type="button" aria-expanded={open} aria-controls={`${id}-body`} onClick={() => onOpen(!open)} className={cx('flex w-full cursor-pointer items-center justify-between border-0 bg-transparent text-left text-[13px] font-bold text-ink focus-visible:outline-2 focus-visible:outline-brand', buttonClassName)}>
+      <button id={`${id}-toggle`} type="button" disabled={blocked} aria-expanded={open} aria-controls={`${id}-body`} onClick={() => onOpen(!open)} className={cx('flex w-full cursor-pointer items-center justify-between border-0 bg-transparent text-left text-[13px] font-bold text-ink focus-visible:outline-2 focus-visible:outline-brand', buttonClassName)}>
         {title}
         <motion.span animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.2 }} className="grid"><ChevronDown size={16} aria-hidden /></motion.span>
       </button>

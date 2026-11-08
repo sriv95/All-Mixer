@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SETTINGS, PITCH_MAX, clampPct, masterGainFor, mlDelayMsFor, normalizeSettings, separationFor } from './settings';
+import { DEFAULT_SETTINGS, PITCH_MAX, clampPct, effectsFor, masterGainFor, mlDelayMsFor, normalizeSettings, separationFor } from './settings';
 
 describe('clampPct', () => {
   it('clamps to 0–100 and rounds', () => {
@@ -40,6 +40,10 @@ describe('normalizeSettings', () => {
       pitchSplit: false,
       vocalPitch: 0,
       instrPitch: 0,
+      reverbMix: 0,
+      eqLow: 0,
+      eqMid: 0,
+      eqHigh: 0,
       preload: false,
     });
     expect(normalizeSettings({ mode: 'weird' }).mode).toBe('default');
@@ -88,6 +92,14 @@ describe('normalizeSettings', () => {
     expect(out).toEqual({ ...DEFAULT_SETTINGS, mode: 'separate', masterPct: 200 });
     expect('separationQuality' in out).toBe(false);
     expect('separationQuality' in DEFAULT_SETTINGS).toBe(false);
+  });
+});
+
+describe('effects settings', () => {
+  it('default flat and dry, clamped to 0–100 % and ±12 dB, whole dB', () => {
+    expect(effectsFor(DEFAULT_SETTINGS)).toEqual({ reverb: 0, low: 0, mid: 0, high: 0 });
+    expect(normalizeSettings({ reverbMix: 250, eqLow: -99, eqMid: 3.6, eqHigh: 'x' })).toMatchObject({ reverbMix: 100, eqLow: -12, eqMid: 4, eqHigh: 0 });
+    expect(effectsFor(normalizeSettings({ reverbMix: 40, eqLow: 5, eqMid: -2, eqHigh: 12 }))).toEqual({ reverb: 0.4, low: 5, mid: -2, high: 12 });
   });
 });
 
