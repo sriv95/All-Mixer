@@ -1,7 +1,15 @@
 import { readFileSync } from 'node:fs';
+import { act } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ExportOptions, ExportProgress } from '../shared/export';
 import type { ContentStatus } from '../shared/messages';
+
+// Record every React root so afterEach can unmount it: each load() re-imports ./popup, and old roots keep polling.
+const roots = vi.hoisted(() => [] as { unmount(): void }[]);
+vi.mock('react-dom/client', async (orig) => {
+  const real = await orig<typeof import('react-dom/client')>();
+  return { ...real, createRoot: ((...a: Parameters<typeof real.createRoot>) => { const r = real.createRoot(...a); roots.push(r); return r; }) as typeof real.createRoot };
+});
 
 const html = readFileSync('src/popup/popup.html', 'utf8');
 const body = /<body[^>]*>([\s\S]*)<\/body>/.exec(html)![1].replace(/<script[\s\S]*?<\/script>/g, '');
@@ -55,6 +63,7 @@ async function load(o: { stored?: unknown; status?: ContentStatus; local?: Recor
 
 beforeEach(() => vi.useRealTimers());
 afterEach(async () => {
+  await act(async () => { roots.splice(0).forEach((r) => r.unmount()); });
   await (window as unknown as { happyDOM: { waitUntilComplete(): Promise<void> } }).happyDOM.waitUntilComplete(); // drain pending popup work while the chrome mock still exists
   localStorage.clear();
   vi.unstubAllGlobals();
@@ -115,7 +124,7 @@ describe('Export section', () => {
     el('export-format-mp4').click();
     await settle();
     expect(el('export-start').textContent).toContain('MP4');
-    expect(el<HTMLInputElement>('export-color').value).toBe('#ffeb3b');
+    await vi.waitFor(() => expect(el<HTMLInputElement>('export-color').value).toBe('#ffeb3b'));
     expect(el('export-size').textContent).toContain('150%');
     expect(el('export-font').textContent).toContain('Serif');
     expect(el('export-lines').textContent).toContain('2 lines');

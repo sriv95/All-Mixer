@@ -346,6 +346,7 @@ describe('MasterChain separation', () => {
   });
 
   it('routes the video into the separator, which starts on the original mix with no delay', async () => {
+    const before = performance.now();
     const { chain, ctx, source, sep, direct, sepOut, changes } = await separating();
     expect(ctx.modules).toEqual(['chrome-extension://x/worklet.js']);
     expect(sep.name).toBe('all-mixer-separator');
@@ -363,7 +364,7 @@ describe('MasterChain separation', () => {
     expect(chain.latency.videoDelayMs).toBeCloseTo(30 + chain.latency.processingMs, 2);
     expect(changes).toHaveLength(1);
     expect(changes[0][0]).toBe(PITCH_LATENCY_SAMPLES);
-    expect(changes[0][1]).toBeGreaterThan(performance.now());
+    expect(changes[0][1]).toBeGreaterThan(before);
   });
 
   it('changes stem gains without another crossfade or latency change', async () => {

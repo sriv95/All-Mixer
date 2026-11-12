@@ -1,7 +1,15 @@
 import { readFileSync } from 'node:fs';
+import { act } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ContentStatus } from '../shared/messages';
 import { MODEL_FORMAT } from '../shared/model-store';
+
+// Record every React root so afterEach can unmount it: each load() re-imports ./popup, and old roots keep polling.
+const roots = vi.hoisted(() => [] as { unmount(): void }[]);
+vi.mock('react-dom/client', async (orig) => {
+  const real = await orig<typeof import('react-dom/client')>();
+  return { ...real, createRoot: ((...a: Parameters<typeof real.createRoot>) => { const r = real.createRoot(...a); roots.push(r); return r; }) as typeof real.createRoot };
+});
 
 const html = readFileSync('src/popup/popup.html', 'utf8');
 const body = /<body[^>]*>([\s\S]*)<\/body>/.exec(html)![1].replace(/<script[\s\S]*?<\/script>/g, '');
@@ -45,6 +53,8 @@ function choose(id: string, v: string): void {
   el(`${id}-option-${v}`).click();
 }
 
+const unmountRoots = () => act(async () => { roots.splice(0).forEach((r) => r.unmount()); });
+
 let sendMessage: ReturnType<typeof vi.fn>;
 
 async function load(o: Opts = {}) {
@@ -82,6 +92,7 @@ const sent = () =>
 
 beforeEach(() => vi.useRealTimers());
 afterEach(async () => {
+  await unmountRoots();
   await (window as unknown as { happyDOM: { waitUntilComplete(): Promise<void> } }).happyDOM.waitUntilComplete(); // drain pending popup work while the chrome mock still exists
   localStorage.clear();
   vi.unstubAllGlobals();
@@ -869,6 +880,7 @@ describe('popup', () => {
           await settle();
           expect(has('act-fast-gpu')).toBe(false);
         } finally {
+          await unmountRoots(); // effect cleanups still need the chrome stub
           vi.unstubAllGlobals();
         }
       });
