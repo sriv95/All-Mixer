@@ -2,7 +2,7 @@
   roformer  Unwa's Kim fine-tune `mel_band_roformer_kim_ft_unwa` (menu: High quality)
   deux      becruily's 2-stem `mel-band-roformer-deux` (CC BY-NC 4.0); only its vocal stem is exported (menu: Best Vocal)
   sw        BS-RoFormer SW (jarredou, 6 stems: bass, drums, other, vocals, guitar, piano; hop 512, 62 bands of 2 to 129 bins, depth 12;
-            licence not stated), all stems exported (menu: Focus Instrumental Splitting)
+            licence not stated), all stems exported (menu: Best Instrumental)
 Writes models-out/<name>.onnx + <name>-meta.json. They are not part of the extension build: `bun run model-manifest`
 prepares them for upload to the Hugging Face repo that the extension downloads from (src/shared/model-store.ts).
 

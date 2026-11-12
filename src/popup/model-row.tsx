@@ -8,7 +8,7 @@ export const MODEL_CHOICES: readonly Choice<MlModel>[] = [
   { value: 'mdx', label: 'Default' },
   { value: 'roformer', label: 'High quality', hint: 'Optional download' },
   { value: 'deux', label: 'Best Vocal', hint: 'Needs a good GPU, optional download' },
-  { value: 'sw', label: 'Focus Instrumental Splitting', hint: 'Needs a good GPU, optional download' },
+  { value: 'sw', label: 'Best Instrumental', hint: 'Needs a good GPU, optional download' },
 ];
 
 export function ModelRow({ idPrefix, line }: { idPrefix: string; line: ModelLine }) {

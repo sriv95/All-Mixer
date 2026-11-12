@@ -1,6 +1,6 @@
 import { GPU_PREFERENCES, ML_MODELS, type GpuPreference, type MlModel } from '../worklet/protocol';
 import { EQ_MAX_DB, type EffectsParams } from './effects';
-import { MAX_DELAY_S, MIN_DELAY_S } from '../ml/rof-plan';
+import { DELAY_ENVELOPE, DELAY_RANGE } from '../ml/rof-plan';
 
 export type Mode = 'default' | 'separate';
 
@@ -13,7 +13,7 @@ export interface MixerSettings {
   vocalPct: number;
   /** Separate mode instrumental volume, percent (0–100). Used once separation lands. */
   instrumentalPct: number;
-  /** Separate mode ML model: 'mdx' (MDX-Net 9482 + Spleeter, the default) or a downloaded RoFormer: 'roformer' (Kim fine-tune, High quality), 'deux' (Best Vocal) or 'sw' (Focus Instrumental Splitting: six stems in one pass; the Drums, Guitar, Bass and Piano levels apply and the split switches are off). */
+  /** Separate mode ML model: 'mdx' (MDX-Net 9482 + Spleeter, the default) or a downloaded RoFormer: 'roformer' (Kim fine-tune, High quality), 'deux' (Best Vocal) or 'sw' (Best Instrumental: six stems in one pass; the Drums, Guitar, Bass and Piano levels apply and the split switches are off). */
   mlModel: MlModel;
   /** Split instrumental (Advanced): a second model takes the drums out of the instrumental, which then has a Drums and an Others gain. Costs GPU time and delay. */
   splitInstrumental: boolean;
@@ -28,7 +28,7 @@ export interface MixerSettings {
   pianoPct: number;
   /** Gain of the rest of the instrumental (everything but the drums, guitar, bass and piano that are split out), percent (0–100). */
   othersPct: number;
-  /** Delay limit, seconds (MIN_DELAY_S to MAX_DELAY_S): the audio delay stays below it (the drum split adds its own wait on top); a longer limit gives the model a longer chunk. */
+  /** Delay limit, seconds (DELAY_RANGE of the model; the model's range is applied when it is used, not stored): the audio delay stays below it (the drum split adds its own wait on top); a longer limit gives the model a longer chunk. */
   mlDelayS: number;
   /** Which GPU Separate mode prefers: the browser's choice, the fast one or the power-saving one. */
   gpu: GpuPreference;
@@ -66,7 +66,7 @@ export const DEFAULT_SETTINGS: Readonly<MixerSettings> = Object.freeze({
   bassPct: 100,
   pianoPct: 100,
   othersPct: 100,
-  mlDelayS: MIN_DELAY_S,
+  mlDelayS: DELAY_RANGE.mdx.min,
   gpu: 'auto',
   pitch: 0,
   pitchSplit: false,
@@ -161,14 +161,19 @@ export function normalizeSettings(raw: unknown): MixerSettings {
   };
 }
 
-export function clampDelayS(value: unknown): number {
+/** Clamp to the range of `model`; without a model, to the widest range (stored values). */
+export function clampDelayS(value: unknown, model?: MlModel): number {
   const n = typeof value === 'string' ? Number(value) : value;
   if (typeof n !== 'number' || !Number.isFinite(n)) return DEFAULT_SETTINGS.mlDelayS;
-  return Math.min(MAX_DELAY_S, Math.max(MIN_DELAY_S, Math.round(n)));
+  const { min, max } = model ? DELAY_RANGE[model] : DELAY_ENVELOPE;
+  return Math.min(max, Math.max(min, Math.round(n)));
 }
 
+/** The delay limit in use: the stored value within the selected model's range. */
+export const effectiveDelayS = (settings: Pick<MixerSettings, 'mlDelayS' | 'mlModel'>): number => clampDelayS(settings.mlDelayS, settings.mlModel);
+
 /** RoFormer delay limit for the engine selector, ms. */
-export const mlDelayMsFor = (settings: MixerSettings): number => settings.mlDelayS * 1000;
+export const mlDelayMsFor = (settings: Pick<MixerSettings, 'mlDelayS' | 'mlModel'>): number => effectiveDelayS(settings) * 1000;
 
 /** Linear gain for the master stage: the global volume, in both modes (Separate mode adds its per-stem gains before it). */
 export function masterGainFor(settings: MixerSettings): number {

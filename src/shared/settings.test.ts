@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SETTINGS, PITCH_MAX, clampPct, effectsFor, masterGainFor, mlDelayMsFor, normalizeSettings, separationFor } from './settings';
+import { DEFAULT_SETTINGS, PITCH_MAX, clampDelayS, clampPct, effectsFor, masterGainFor, mlDelayMsFor, normalizeSettings, separationFor } from './settings';
 
 describe('clampPct', () => {
   it('clamps to 0–100 and rounds', () => {
@@ -70,15 +70,26 @@ describe('normalizeSettings', () => {
     expect(normalizeSettings({ mlModel: 'nope' }).mlModel).toBe('mdx');
     expect(normalizeSettings({ mlModel: 3 }).mlModel).toBe('mdx');
   });
-  it('keeps the RoFormer delay limit between 2 and 15 s (default 2) and converts it to ms', () => {
+  it('keeps the stored delay limit between 2 and 10 s (default 2) and converts it to ms', () => {
     expect(normalizeSettings({ mlDelayS: 9 }).mlDelayS).toBe(9);
     expect(normalizeSettings({ mlDelayS: '7' }).mlDelayS).toBe(7);
     expect(normalizeSettings({ mlDelayS: 1 }).mlDelayS).toBe(2);
-    expect(normalizeSettings({ mlDelayS: 99 }).mlDelayS).toBe(15);
+    expect(normalizeSettings({ mlDelayS: 99 }).mlDelayS).toBe(10);
     expect(normalizeSettings({ mlDelayS: 'x' }).mlDelayS).toBe(2);
     expect(normalizeSettings({}).mlDelayS).toBe(2);
     expect('mlAuto' in normalizeSettings({ mlAuto: true })).toBe(false); // the removed Auto setting is dropped
-    expect(mlDelayMsFor(normalizeSettings({ mlDelayS: 6 }))).toBe(6000);
+    expect(mlDelayMsFor(normalizeSettings({ mlDelayS: 6, mlModel: 'roformer' }))).toBe(6000);
+  });
+  it('the delay limit in use is the stored value within the selected model range, which is not rewritten', () => {
+    expect(clampDelayS(9, 'mdx')).toBe(4);
+    expect(clampDelayS(1, 'roformer')).toBe(2);
+    expect(clampDelayS(99, 'roformer')).toBe(8);
+    expect(clampDelayS(2, 'deux')).toBe(3);
+    expect(clampDelayS(99, 'sw')).toBe(10);
+    const stored = normalizeSettings({ mlModel: 'mdx', mlDelayS: 2 });
+    expect(mlDelayMsFor({ ...stored, mlModel: 'deux' })).toBe(3000); // Default at 2 s -> Best Vocal uses 3 s
+    expect(mlDelayMsFor(stored)).toBe(2000); // back on Default: 2 s again
+    expect(mlDelayMsFor({ mlModel: 'mdx', mlDelayS: 9 })).toBe(4000);
   });
   it('keeps the split instrumental switch (off unless exactly true) and its two gains', () => {
     expect(normalizeSettings({}).splitInstrumental).toBe(false);

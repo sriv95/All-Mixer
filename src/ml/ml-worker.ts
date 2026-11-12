@@ -26,7 +26,7 @@ import { adapterName as nameOfAdapter } from '../shared/gpu';
 import { opfsFiles, readModelFile } from '../shared/model-files';
 import { MODEL_FORMAT, MODEL_LABEL, modelFileNames, type InstalledModel, type ModelId } from '../shared/model-store';
 import { RoformerStream, DEFAULT_ROF_GEOMETRY, SW_BASE_GEOMETRY, type RoformerMeta } from './roformer';
-import { BASE_FRAMES, DRUM_STAGE, MAX_DELAY_S, MIN_DELAY_S, drumRuns, gateMs, planMdxDrums, planRof, poolFor, stepMs, type RofGeometry, type StageCost, type StageShape } from './rof-plan';
+import { BASE_FRAMES, DELAY_RANGE, DRUM_STAGE, drumRuns, gateMs, planMdxDrums, planRof, poolFor, stepMs, type RofGeometry, type StageCost, type StageShape } from './rof-plan';
 import { withStages, type BlockEngine, type SplitStage } from './drum-engine';
 import { GuitarStage, guitarGeometry, stageShape } from './guitar-stage';
 import { lookupSpeed, speedKey } from './plan-cache';
@@ -154,7 +154,7 @@ async function start(init: MlWorkerInit): Promise<void> {
   // when it is slower than predicted or does not fit the GPU.
   let baseMs = wu.p90;
   for (let attempt = 0; attempt < 3 && !stages.length; attempt++) {
-    const plan = planMdx(((init.delayMs ?? MIN_DELAY_S * 1000) / 1000) * ML_SAMPLE_RATE, baseMs);
+    const plan = planMdx(((init.delayMs ?? DELAY_RANGE[init.model].min * 1000) / 1000) * ML_SAMPLE_RATE, baseMs);
     if (!plan || plan.frames === MDX_T_MIN) break;
     try {
       const s = await ort.InferenceSession.create(mdxBuf, { executionProviders: ['webgpu'], graphOptimizationLevel: 'all', logSeverityLevel: 3, freeDimensionOverrides: { T: plan.frames } });
@@ -274,7 +274,7 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
   };
   // 1. Speed of this GPU: a step at the 2 s geometry (remembered from an earlier warm-up when there is one: the plan is timed and gated below anyway).
   // 2. Plan a chunk for the delay budget. 3. Time the plan itself; when it is slower than predicted, correct the speed and plan again.
-  let wantMs = init.delayMs ?? MIN_DELAY_S * 1000;
+  let wantMs = init.delayMs ?? DELAY_RANGE[init.model].min * 1000;
   let chosen = null as Run | null; // set in `search`
   let stages: Split[] = [];
   let note = '';
@@ -291,7 +291,7 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
     for (let attempt = 0; attempt < 3 && !chosen; attempt++) {
       const g = planRof((wantMs / 1000) * ML_SAMPLE_RATE, baseMs, stages.map(costOf), meta.hop);
       if (!g) {
-        note = `too slow for a ${Math.round(wantMs / 1000)} s delay (a step takes ${baseMs.toFixed(0)} ms for ${((BASE_FRAMES * meta.hop) / ML_SAMPLE_RATE).toFixed(1)} s of audio${stages.map((s) => `, a ${s.id} run ${s.ms.toFixed(0)} ms`).join('')})${wantMs < MAX_DELAY_S * 1000 ? ': try a longer delay limit' : ''}`;
+        note = `too slow for a ${Math.round(wantMs / 1000)} s delay (a step takes ${baseMs.toFixed(0)} ms for ${((BASE_FRAMES * meta.hop) / ML_SAMPLE_RATE).toFixed(1)} s of audio${stages.map((s) => `, a ${s.id} run ${s.ms.toFixed(0)} ms`).join('')})${wantMs < DELAY_RANGE[init.model].max * 1000 ? ': try a longer delay limit' : ''}`;
         break;
       }
       try {
@@ -305,7 +305,7 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
         }
       } catch (e) {
         baseMs *= 1.5; // most likely out of GPU memory at this chunk length
-        if (init.offline) wantMs = Math.max(MIN_DELAY_S * 1000, wantMs * 0.6); // an export has no speed to correct: a shorter chunk instead
+        if (init.offline) wantMs = Math.max(DELAY_RANGE[init.model].min * 1000, wantMs * 0.6); // an export has no speed to correct: a shorter chunk instead
         note = `chunk of ${g.frames} frames failed: ${String(e)}`;
       }
     }

@@ -1,6 +1,6 @@
 import { MlHost } from '../content/audio/ml-host';
 import { GEOMETRY, type FromMlWorker, type MlModel } from '../worklet/protocol';
-import type { MixerSettings } from '../shared/settings';
+import { mlDelayMsFor, type MixerSettings } from '../shared/settings';
 import { OfflineSeparator } from './separator';
 
 /** The model warm-up takes 10 to 40 s; the model download is not part of it. */
@@ -22,7 +22,7 @@ export type OpenMlSession = (audio: MixerSettings, signal: AbortSignal) => Promi
 export const openMlSession: OpenMlSession = (audio, signal) =>
   new Promise<MlSession>((resolve, reject) => {
     const all = audio.mlModel === 'sw'; // the all-stems model splits the drums, guitar, bass and piano itself
-    const host = new MlHost(undefined, document, audio.mlModel as MlModel, audio.mlDelayS * 1000, audio.splitInstrumental && !all, audio.gpu, audio.splitGuitar && !all, true);
+    const host = new MlHost(undefined, document, audio.mlModel as MlModel, mlDelayMsFor(audio), audio.splitInstrumental && !all, audio.gpu, audio.splitGuitar && !all, true);
     let port: MessagePort | null = null;
     const done = (fn: () => void) => {
       clearTimeout(timer);

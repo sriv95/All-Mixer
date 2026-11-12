@@ -102,7 +102,7 @@ export const ML_WARMUP_P90_MS = (ML_SLACK_SAMPLES / ML_SAMPLE_RATE) * 1000 / 1.5
  * RoFormers (fp16), downloaded on request (src/shared/model-store.ts ModelId): one big model each, no Spleeter mask,
  * short chunks so they fit the delay. 'roformer' = unwa's mel_band_roformer_kim_ft_unwa (menu: High quality),
  * 'deux' = becruily's 2-stem model, vocal stem (menu: Best Vocal, needs a good GPU). 'sw' = BS-RoFormer SW, one pass for
- * six stems (vocals, drums, bass, guitar, piano, other; menu: Focus Instrumental Splitting): it replaces the vocal model and the
+ * six stems (vocals, drums, bass, guitar, piano, other; menu: Best Instrumental): it replaces the vocal model and the
  * split stages, and its reply carries the drums, guitar, bass and piano planes.
  */
 export type MlModel = 'mdx' | 'roformer' | 'deux' | 'sw';

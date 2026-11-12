@@ -3,9 +3,9 @@ import { AudioLines, AudioWaveform, Cpu, Drum, Guitar, HardDriveDownload, Loader
 import type { ContentStatus, ExportAnswer, ExportCancel, ExportStart, GetStatus, GetTabSettings, PreloadCancel, PreloadStart, SetTabSettings } from '../shared/messages';
 import type { ExportOptions } from '../shared/export';
 import { EQ_MAX_DB } from '../shared/effects';
-import { clampDelayS, clampEq, clampOthersPct, clampPct, clampPitch, masterPctAt, masterPosOf, MASTER_POS_MAX, normalizeSettings, PITCH_MAX, type MixerSettings, type Mode } from '../shared/settings';
+import { clampDelayS, clampEq, effectiveDelayS, clampOthersPct, clampPct, clampPitch, masterPctAt, masterPosOf, MASTER_POS_MAX, normalizeSettings, PITCH_MAX, type MixerSettings, type Mode } from '../shared/settings';
 import { separationView, type SepView } from '../shared/separation-view';
-import { MAX_DELAY_S, MIN_DELAY_S } from '../ml/rof-plan';
+import { DELAY_RANGE } from '../ml/rof-plan';
 import type { MlModel } from '../worklet/protocol';
 import { gpuOptions, gpuSelected, hasShaderF16, probeGpuNames, type GpuNames } from '../shared/gpu';
 import { useModels } from './models';
@@ -358,7 +358,8 @@ function Banner({ view, settings, update, retry, compact }: { compact: boolean; 
   if (view.kind === 'off') return null;
   const stopped = view.kind === 'stopped' || view.kind === 'error' || view.kind === 'unavailable';
   const tooSlow = view.kind === 'stopped' || (view.kind === 'unavailable' && /too slow/.test(view.cause));
-  const nextDelay = Math.min(MAX_DELAY_S, settings.mlDelayS + DELAY_STEP_S);
+  const maxDelay = DELAY_RANGE[settings.mlModel].max;
+  const nextDelay = Math.min(maxDelay, effectiveDelayS(settings) + DELAY_STEP_S);
   let icon: ReactNode;
   let title: string;
   let text: string;
@@ -407,7 +408,7 @@ function Banner({ view, settings, update, retry, compact }: { compact: boolean; 
         <div className="flex flex-col gap-2.5 pt-0.5">
           <Btn tone="primary" id="act-preload" onClick={() => update({ preload: true })}><HardDriveDownload size={16} aria-hidden />Switch to Preload Audio</Btn>
           {settings.mlModel !== 'mdx' && <Btn tone="primary" id="act-default-model" onClick={() => update({ mlModel: 'mdx' as MlModel })}><Cpu size={16} aria-hidden />Switch to Default model</Btn>}
-          {settings.mlDelayS < MAX_DELAY_S && <Btn id="act-raise-delay" onClick={() => update({ mlDelayS: nextDelay })}><Timer size={16} aria-hidden />Raise delay limit to {nextDelay} s</Btn>}
+          {effectiveDelayS(settings) < maxDelay && <Btn id="act-raise-delay" onClick={() => update({ mlDelayS: nextDelay })}><Timer size={16} aria-hidden />Raise delay limit to {nextDelay} s</Btn>}
           {gpuSelected(gpuNames, settings.gpu) !== 'high-performance' && <Btn id="act-fast-gpu" onClick={() => update({ gpu: 'high-performance' })}><Zap size={16} aria-hidden />Try the high performance GPU</Btn>}
           <Btn id="act-retry" onClick={() => void retry()}><RefreshCw size={16} aria-hidden />Try again</Btn>
         </div>
@@ -448,10 +449,10 @@ function SeparateControls({ settings, update, ready, compact, advancedOpen, setA
   const models = useModels(settings.mlModel, { drums: settings.splitInstrumental && !all, guitar: settings.splitGuitar && !all }, ready, noF16);
   const [gpuNames, setGpuNames] = useState<GpuNames>({});
   useEffect(() => { void probeGpuNames().then(setGpuNames); }, []);
-  const [delayDraft, setDelayDraft] = useState(settings.mlDelayS);
+  const [delayDraft, setDelayDraft] = useState(effectiveDelayS(settings));
   // The preset that was pressed last (n counts presses, so pressing it again replays the ring).
   const [ripple, setRipple] = useState<{ id: string; n: number } | null>(null);
-  useEffect(() => setDelayDraft(settings.mlDelayS), [settings.mlDelayS]);
+  useEffect(() => setDelayDraft(effectiveDelayS(settings)), [settings.mlDelayS, settings.mlModel]);
   // After a preset: the levels it replaced, for a few seconds, until something else moves them.
   const [undo, setUndo] = useState<{ before: Levels; after: Levels } | null>(null);
   useEffect(() => {
@@ -539,10 +540,10 @@ function SeparateControls({ settings, update, ready, compact, advancedOpen, setA
             <Select id="ml-gpu" value={gpuSelected(gpuNames, settings.gpu)} options={gpuOptions(gpuNames)} onValue={(gpu) => update({ gpu })} />
           </div>
           <div id="chunk-row" className="flex flex-col gap-3">
-            <SliderRow id="ml-delay" icon={<Timer size={15} />} label="Delay limit" unit=" s" value={delayDraft} min={MIN_DELAY_S} max={MAX_DELAY_S} step={1} onValue={(v) => setDelayDraft(clampDelayS(v))} />
+            <SliderRow id="ml-delay" icon={<Timer size={15} />} label="Delay limit" unit=" s" value={delayDraft} min={DELAY_RANGE[settings.mlModel].min} max={DELAY_RANGE[settings.mlModel].max} step={1} onValue={(v) => setDelayDraft(clampDelayS(v, settings.mlModel))} />
             <div className="flex items-center justify-between gap-3">
               <p className="m-0 text-xs leading-snug text-muted">More audio delay gives more quality but uses more GPU.</p>
-              <Btn id="ml-delay-apply" tone="small" disabled={delayDraft === settings.mlDelayS} onClick={() => update({ mlDelayS: clampDelayS(delayDraft) })}>Apply</Btn>
+              <Btn id="ml-delay-apply" tone="small" disabled={delayDraft === effectiveDelayS(settings)} onClick={() => update({ mlDelayS: clampDelayS(delayDraft, settings.mlModel) })}>Apply</Btn>
             </div>
           </div>
           <div className="flex items-center justify-between gap-3">
@@ -554,7 +555,7 @@ function SeparateControls({ settings, update, ready, compact, advancedOpen, setA
             title={<span className="flex items-center gap-1.5"><Drum size={15} className="text-brand" aria-hidden />Split instrumental</span>}>
             <div className="flex flex-col gap-3 px-3 pb-3">
               {all ? (
-                <p id="split-all" className="m-0 text-xs leading-snug text-muted">Focus Instrumental Splitting already splits the drums, guitar, bass and piano, each with its own level. Pick another model to use the switches here.</p>
+                <p id="split-all" className="m-0 text-xs leading-snug text-muted">Best Instrumental already splits the drums, guitar, bass and piano, each with its own level. Pick another model to use the switches here.</p>
               ) : (
                 <>
                   <div className="flex items-center justify-between gap-3">

@@ -4,7 +4,7 @@
 //   bun run export-scnet                              -> models-out/drums.onnx
 //   bun run export-roformer guitar                    -> models-out/guitar.onnx + -meta.json
 //   bun run export-compat                             -> models-out/compat-mdx.onnx + compat-vocals.onnx (fp32 Default, for GPUs without shader-f16)
-//   bun run export-roformer sw                        -> models-out/sw.onnx + -meta.json (Focus Instrumental Splitting, 6 stems)
+//   bun run export-roformer sw                        -> models-out/sw.onnx + -meta.json (Best Instrumental, 6 stems)
 //   bun run model-manifest roformer=1 deux=1 drums=1  -> models-out/hf/manifest.json + models-out/hf/v<version>/...
 //   hf upload <owner>/<repo> models-out/hf .
 // List every model with its version (an unchanged model keeps its number; its files are only used for the sizes).

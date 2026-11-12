@@ -305,30 +305,36 @@ describe('popup', () => {
   });
 
   describe('chunk length', () => {
-    it('is shown for every model, as a 2 to 15 s slider in 1 s steps starting at 2 s', async () => {
+    it('is shown for every model, as a slider in 1 s steps whose range follows the model', async () => {
       await load({ stored: { mode: 'separate', mlModel: 'mdx' } });
       expect(has('chunk-row')).toBe(true);
       choose('ml-model', 'roformer');
       await settle();
       expect(has('chunk-row')).toBe(true);
       const slider = el<HTMLInputElement>('ml-delay');
-      expect([slider.min, slider.max, slider.step, slider.value]).toEqual(['2', '15', '1', '2']);
+      expect([slider.min, slider.max, slider.step, slider.value]).toEqual(['2', '8', '1', '2']);
       expect(slider.disabled).toBe(false);
       expect(el<HTMLOutputElement>('ml-delay-value').value).toBe('2 s');
+      choose('ml-model', 'deux');
+      await settle();
+      expect([slider.min, slider.max]).toEqual(['3', '10']);
+      choose('ml-model', 'mdx');
+      await settle();
+      expect([slider.min, slider.max]).toEqual(['2', '4']);
       expect(has('ml-auto')).toBe(false);
     });
 
     it('dragging only moves the label; Apply sends the delay limit once', async () => {
       await load({ stored: { mode: 'separate', mlModel: 'roformer', mlDelayS: 4 } });
       const before = sent().length;
-      input('ml-delay', '9');
+      input('ml-delay', '7');
       await settle();
-      expect(el<HTMLOutputElement>('ml-delay-value').value).toBe('9 s');
+      expect(el<HTMLOutputElement>('ml-delay-value').value).toBe('7 s');
       expect(sent()).toHaveLength(before);
       expect(el<HTMLButtonElement>('ml-delay-apply').disabled).toBe(false);
       el('ml-delay-apply').click();
       await settle();
-      expect(sent().at(-1).settings.mlDelayS).toBe(9);
+      expect(sent().at(-1).settings.mlDelayS).toBe(7);
       expect(el<HTMLButtonElement>('ml-delay-apply').disabled).toBe(true);
       expect(sent()).toHaveLength(before + 1);
     });
@@ -508,14 +514,14 @@ describe('popup', () => {
       expect(sent().at(-1).settings.guitarPct).toBe(35);
     });
 
-    describe('Focus Instrumental Splitting (all stems)', () => {
+    describe('Best Instrumental (all stems)', () => {
       const swFiles = { 'sw.onnx': 343 * 2 ** 20, 'sw-meta.json': 13000 };
       const sw = (extra: Record<string, unknown> = {}) => ({ mode: 'separate', mlModel: 'sw', ...extra });
 
       it('is the fourth Model entry and has its own download row', async () => {
         await load({ stored: sw(), local: { 'modelRemote.sw': { format: MODEL_FORMAT, version: 1, files: swFiles, checkedAt: 0 } } });
-        expect(el('ml-model').textContent).toMatch(/Focus Instrumental Splitting/);
-        expect(el('model-text').textContent).toMatch(/Focus Instrumental Splitting is a one-time download \(343 MB\)/);
+        expect(el('ml-model').textContent).toMatch(/Best Instrumental/);
+        expect(el('model-text').textContent).toMatch(/Best Instrumental is a one-time download \(343 MB\)/);
         el<HTMLButtonElement>('model-btn').click();
         expect(sendMessage).toHaveBeenCalledWith({ type: 'model-install', id: 'sw' });
       });
@@ -849,10 +855,10 @@ describe('popup', () => {
       it('on the Default model offers a longer delay limit and a retry, not a model switch', async () => {
         await load({ stored: { mode: 'separate', mlDelayS: 2 }, status: stopped });
         expect(has('act-default-model')).toBe(false);
-        expect(el('act-raise-delay').textContent).toBe('Raise delay limit to 6 s');
+        expect(el('act-raise-delay').textContent).toBe('Raise delay limit to 4 s');
         el('act-raise-delay').click();
         await settle();
-        expect(sent().at(-1).settings.mlDelayS).toBe(6);
+        expect(sent().at(-1).settings.mlDelayS).toBe(4);
       });
 
       it('on another model offers to switch to the Default model', async () => {

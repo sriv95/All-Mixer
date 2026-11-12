@@ -50,7 +50,7 @@ falls back to computing.
 
 * Preload takes about the length of the clip (the recording is real time, muted, from 0:00; the model keeps up or the video waits).
   It cannot be faster on YouTube (option C). The export has the same cost.
-* Memory: `stems × length × 0.35 MB/s` (2 stems, 4 min = 170 MB; Focus Instrumental Splitting has 6 stems). Above
+* Memory: `stems × length × 0.35 MB/s` (2 stems, 4 min = 170 MB; Best Instrumental has 6 stems). Above
   `PRELOAD_MAX_BYTES` (900 MB) the start is refused with the numbers; the banner then offers **Export instead** (opens the Export section, which does not keep the stems in memory) and Use Live mode.
 * Pitch shift does not apply to the cache (shortcut: the pitch stage lives in the live worklet). Speeds other than 1× play the
   original audio. An ad (different length) plays the original audio. Both are shown in the popup when they happen.

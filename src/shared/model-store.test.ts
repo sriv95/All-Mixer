@@ -28,10 +28,10 @@ describe('parseManifest', () => {
   it('the guitar model has the RoFormer files', () => {
     expect(modelFileNames('guitar')).toEqual(['guitar.onnx', 'guitar-meta.json']);
   });
-  it('the all-stems model is a Model menu entry with the RoFormer files, and the menu names are Best Vocal and Focus Instrumental Splitting', () => {
+  it('the all-stems model is a Model menu entry with the RoFormer files, and the menu names are Best Vocal and Best Instrumental', () => {
     expect(modelFileNames('sw')).toEqual(['sw.onnx', 'sw-meta.json']);
     expect(VOCAL_MODEL_IDS).toEqual(['roformer', 'deux', 'sw']);
-    expect(MODEL_LABEL).toMatchObject({ roformer: 'High quality', deux: 'Best Vocal', sw: 'Focus Instrumental Splitting' });
+    expect(MODEL_LABEL).toMatchObject({ roformer: 'High quality', deux: 'Best Vocal', sw: 'Best Instrumental' });
     const sw = { 'sw.onnx': 359, 'sw-meta.json': 13 };
     expect(parseManifest({ format: 2, models: { sw: { version: 1, files: sw } } })).toEqual({ sw: { format: 2, version: 1, files: sw } });
   });

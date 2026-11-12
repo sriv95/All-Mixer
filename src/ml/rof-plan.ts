@@ -5,7 +5,7 @@
 // delayed by H + R + slack + one quantum (src/worklet/protocol.ts MlGeometry.latency), where `slack` is the time a step
 // may take. A longer H means fewer joins between chunks and more context for the samples in the middle of a chunk,
 // but the step takes longer, and the delay grows with H and with the step time.
-import { ML_BLOCK, ML_QUANTUM, ML_RESULT_OFFSET, ML_SAMPLE_RATE, type MlGeometry } from '../worklet/protocol';
+import { ML_BLOCK, ML_QUANTUM, ML_RESULT_OFFSET, ML_SAMPLE_RATE, type MlGeometry, type MlModel } from '../worklet/protocol';
 import { SC_LAG, SC_STRIDE } from './scnet';
 
 export const HOP = 441;
@@ -17,9 +17,15 @@ export const MARGIN = 1.15;
 export const BASE_FRAMES = 112;
 /** Longest chunk: attention memory grows with its square. */
 export const MAX_FRAMES = 900;
-/** Delay budgets the popup offers, seconds (the slider; MIN_DELAY_S is the default). */
-export const MIN_DELAY_S = 2;
-export const MAX_DELAY_S = 15;
+/** Delay limit range per vocal model, seconds (the slider; min is the default). Add-on models (drums, guitar) follow the vocal model. */
+export const DELAY_RANGE: Readonly<Record<MlModel, { min: number; max: number }>> = {
+  mdx: { min: 2, max: 4 },
+  roformer: { min: 2, max: 8 },
+  deux: { min: 3, max: 10 },
+  sw: { min: 3, max: 10 },
+};
+/** Widest range over all models (what a stored value is checked against, so a model switch never rewrites it). */
+export const DELAY_ENVELOPE = { min: 2, max: 10 };
 /** Smallest block worth running: 0.5 s. */
 const MIN_BLOCK = 172 * ML_QUANTUM;
 const SAMPLES_PER_MS = ML_SAMPLE_RATE / 1000;

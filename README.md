@@ -14,9 +14,9 @@ Chrome extension for turning browser into Karaoke (live vocal/instrumental separ
 
 <p align="center"><img src="docs/screenshots/popup-default.png" alt="The All Mixer! popup in Default mode: global volume and pitch" width="260"></p>
 
-| Separate mode | Advanced | Focus Instrumental Splitting |
+| Separate mode | Advanced | Best Instrumental |
 | :---: | :---: | :---: |
-| <img src="docs/screenshots/popup.png" alt="The popup in Separate mode" width="260"> | <img src="docs/screenshots/popup-advanced.png" alt="The Advanced section: model, GPU, delay limit, pitch and Split instrumental" width="260"> | <img src="docs/screenshots/popup-focus.png" alt="Focus Instrumental Splitting model: Drums, Guitar, Bass, Piano and Others sliders" width="260"> |
+| <img src="docs/screenshots/popup.png" alt="The popup in Separate mode" width="260"> | <img src="docs/screenshots/popup-advanced.png" alt="The Advanced section: model, GPU, delay limit, pitch and Split instrumental" width="260"> | <img src="docs/screenshots/popup-focus.png" alt="Best Instrumental model: Drums, Guitar, Bass, Piano and Others sliders" width="260"> |
 
 ## Install
 
@@ -79,6 +79,6 @@ Build, architecture, model publishing and debug notes are in [src/README.md](src
 - High-Quality Model: [Kim-Mel-Band-Roformer-FT](https://huggingface.co/pcunwa/Kim-Mel-Band-Roformer-FT)
 - Best-Vocal Model: [mel-band-roformer-deux](https://huggingface.co/becruily/mel-band-roformer-deux)
 - Drum Splitting Model: [SCNet](https://github.com/starrytong/SCNet) , ( Tran Small checkpoint from [ZFTurbo](https://github.com/ZFTurbo/Music-Source-Separation-Training) )
-- Focus Instrumental Splitting Model: [BS-RoFormer-SW-6stem](https://huggingface.co/FractalSurfer/BS-RoFormer-SW-6stem)
+- Best Instrumental Model: [BS-RoFormer-SW-6stem](https://huggingface.co/FractalSurfer/BS-RoFormer-SW-6stem)
 
 Licenses of the bundled models are in [THIRD_PARTY_NOTICES.txt](public/ml/THIRD_PARTY_NOTICES.txt).
