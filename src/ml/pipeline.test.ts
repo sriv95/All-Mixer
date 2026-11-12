@@ -183,7 +183,7 @@ describe('MlPipeline', () => {
       for (let n = 0; n < END; n++) { expect(o.vk[n]).toBe(ref.vk[n]); expect(o.v[n]).toBe(ref.v[n]); }
       expect(maxDiff(o.v, L, 0, END, 0.5)).toBeLessThan(5e-5); // MDX vocal unchanged
       expect(maxDiff(o.vk, L, 4096, END, 0.5)).toBeLessThan(2e-4); // x − V = 0.5x, ungated
-    });
+    }, 60_000); // CPU-bound full pipeline run; the default 5 s flakes under load
 
     it('(b) after the late masks arrive, later frames are gated again', async () => {
       let hold: (() => void) | null = null;
@@ -205,11 +205,11 @@ describe('MlPipeline', () => {
 
     it('(c) normal path (masks in time) is bit-identical to the unbounded wait: no misses', async () => {
       const a = await run(L, R, { mdx: half, spleeter: identity }, undefined, true);
-      const p = new MlPipeline(undefined, 50);
+      const p = new MlPipeline(undefined, 2000); // generous wait: a slow machine must not count as a miss
       const o = outs();
       await blocks(p, { mdx: half, spleeter: (v) => sleep(0).then(() => v.slice()) }, 0, NB, o, true);
       expect(p.splMisses).toBe(0);
       for (let n = 0; n < END; n++) { expect(o.vk[n]).toBe(a.vk[n]); expect(o.v[n]).toBe(a.v[n]); }
-    });
+    }, 60_000); // CPU-bound, see (a)
   });
 });

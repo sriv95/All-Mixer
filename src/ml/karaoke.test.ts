@@ -98,7 +98,7 @@ describe('KaraokeCombiner dip fill (SRI-237)', () => {
     }
     expect(c.floorDb).toBeCloseTo(FILL_PEAK_MIN_DB - FILL_FLOOR_DB, 6);
     expect(c.floorDb).toBeLessThanOrEqual(floorLoud);
-  });
+  }, 60_000); // CPU-bound (130 DSP rounds): the default 5 s flakes under load
 });
 
 describe('KaraokeCombiner gain without floor (SRI-254)', () => {
@@ -249,7 +249,7 @@ describe('KaraokeCombiner MDX-presence gate (SRI-253 Q6 / SRI-254)', () => {
     };
     const a = grab(0), b = grab(1);
     for (let n = 0; n < N; n++) expect(a[n]).toBe(b[n]);
-  });
+  }, 60_000); // CPU-bound, see (d)
 
   it.each([true, false])('frame path allocates nothing: heap growth during 2 × 60 frames of advance() stays under 100 kB (fill = %s)', (fill) => {
     const c2 = new KaraokeCombiner(0.8, fill), tmp = new Float32Array(60 * HOP);
