@@ -11,7 +11,11 @@ const status = (over: Partial<ContentStatus> = {}): ContentStatus => ({ site: 'y
 
 const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const has = (id: string) => document.getElementById(id) !== null;
-const settle = () => new Promise((r) => setTimeout(r, 50));
+// A timer lets queued work start; the immediates let React render and run effects after it.
+const settle = async () => {
+  await new Promise((r) => setTimeout(r, 50));
+  for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r));
+};
 function choose(id: string, v: string): void {
   el(id).click();
   el(`${id}-option-${v}`).click();
@@ -38,12 +42,20 @@ async function load(o: { stored?: unknown; status?: ContentStatus; local?: Recor
   });
   (await import('motion/react')).MotionGlobalConfig.skipAnimations = true;
   await import('./popup');
-  await vi.waitFor(() => expect(tabMessage).toHaveBeenCalled(), { timeout: 2000 });
-  await new Promise((r) => setTimeout(r, 150));
+  // Ready = skeleton gone, status requested, model records requested (only the separate panel reads them); then let their results render.
+  await vi.waitFor(() => {
+    expect(document.getElementById('root')!.firstChild).not.toBeNull();
+    expect(document.querySelector('[aria-busy]')).toBeNull();
+    if (YT.url?.startsWith('http')) expect(chrome.tabs.sendMessage).toHaveBeenCalled();
+    if (document.querySelector('#panel-separate')) expect(chrome.storage.local.get).toHaveBeenCalled();
+  }, { timeout: 5000 });
+  await Promise.allSettled([...vi.mocked(chrome.tabs.sendMessage).mock.results, ...vi.mocked(chrome.storage.local.get).mock.results].map((r) => r.value));
+  await settle();
 }
 
 beforeEach(() => vi.useRealTimers());
-afterEach(() => {
+afterEach(async () => {
+  await (window as unknown as { happyDOM: { waitUntilComplete(): Promise<void> } }).happyDOM.waitUntilComplete(); // drain pending popup work while the chrome mock still exists
   localStorage.clear();
   vi.unstubAllGlobals();
   document.body.innerHTML = '';
@@ -187,8 +199,8 @@ describe('Export section', () => {
     expect(el('export-failure').textContent).toContain('no WebGPU adapter');
     expect(has('export-start')).toBe(true);
     await load({ status: status({ export: { state: 'done', stage: 'finishing', chunk: 0, chunks: 0, percent: 100, detail: 'Saved Song.mp3', file: { name: 'Song.mp3', bytes: 3_400_000 } } }) });
-    expect(el('export-detail').textContent).toContain('Saved Song.mp3');
     expect(el('export-detail').textContent).toContain('3.4 MB');
+    expect(el('export-detail').textContent).toContain('Saved Song.mp3');
   });
 
   it('shows the reason when the tab refuses to start', async () => {

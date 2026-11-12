@@ -22,7 +22,11 @@ interface Opts {
 
 const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const has = (id: string) => document.getElementById(id) !== null;
-const settle = () => new Promise((r) => setTimeout(r, 50));
+// A timer lets queued work start; the immediates let React render and run effects after it.
+const settle = async () => {
+  await new Promise((r) => setTimeout(r, 50));
+  for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r));
+};
 const banner = () => document.getElementById('separation-banner');
 /** A Disclosure (Advanced, Split instrumental) is open when its button says so. */
 const isOpen = (id: string) => el(`${id}-toggle`).getAttribute('aria-expanded') === 'true';
@@ -62,16 +66,23 @@ async function load(o: Opts = {}) {
   // Animations finish at once, so panels that leave are gone after one settle.
   (await import('motion/react')).MotionGlobalConfig.skipAnimations = true;
   await import('./popup');
-  // The popup reads the tab, its settings, the status and the model records one after another: wait for the first reads, then let the renders land (a busy parallel run needs more than one settle).
-  if ((o.tab ?? YT).url?.startsWith('http')) await vi.waitFor(() => expect(chrome.tabs.sendMessage).toHaveBeenCalled(), { timeout: 2000 });
-  await new Promise((r) => setTimeout(r, 150));
+  // Ready = skeleton gone, status requested, model records requested (only the separate panel reads them); then let their results render.
+  await vi.waitFor(() => {
+    expect(document.getElementById('root')!.firstChild).not.toBeNull();
+    expect(document.querySelector('[aria-busy]')).toBeNull();
+    if ((o.tab ?? YT).url?.startsWith('http')) expect(chrome.tabs.sendMessage).toHaveBeenCalled();
+    if (document.querySelector('#panel-separate')) expect(chrome.storage.local.get).toHaveBeenCalled();
+  }, { timeout: 5000 });
+  await Promise.allSettled([...vi.mocked(chrome.tabs.sendMessage).mock.results, ...vi.mocked(chrome.storage.local.get).mock.results].map((r) => r.value));
+  await settle();
 }
 
 const sent = () =>
   sendMessage.mock.calls.map((c) => c[0]).filter((m: { type: string }) => m.type === 'set-tab-settings');
 
 beforeEach(() => vi.useRealTimers());
-afterEach(() => {
+afterEach(async () => {
+  await (window as unknown as { happyDOM: { waitUntilComplete(): Promise<void> } }).happyDOM.waitUntilComplete(); // drain pending popup work while the chrome mock still exists
   localStorage.clear();
   vi.unstubAllGlobals();
   document.body.innerHTML = '';
@@ -103,7 +114,7 @@ describe('popup', () => {
     expect(document.querySelector('[aria-busy=true]')).not.toBeNull();
     expect(has('master')).toBe(false);
     release({ mode: 'separate' });
-    await new Promise((r) => setTimeout(r, 150));
+    await vi.waitFor(() => expect(has('panel-separate')).toBe(true), { timeout: 5000 });
     expect(document.querySelector('[aria-busy=true]')).toBeNull();
     expect(has('panel-separate')).toBe(true); // straight to the stored tab, no flash of Default
   });
