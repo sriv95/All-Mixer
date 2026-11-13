@@ -28,3 +28,5 @@ spike/bench/rof_prof.mjs
 spike/bench/shim/
 spike/bench/vocal_*.py
 spike/bench/vocal_stream_*.mjs
+# local ZFTurbo MSST checkout (manual clone, not vendored; export scripts use .cache/*/msst)
+/msst/
