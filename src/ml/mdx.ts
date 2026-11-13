@@ -10,15 +10,13 @@
 // half of this segment plus the second half of the previous one. So a cross-fade region waits for N input
 // samples (= 2 H) after its first sample: that is the algorithmic delay, before inference.
 import { FFT } from './fft.js';
-import { mdxSegment } from './mdx-plan';
+import { MDX_COMPAT, mdxSegment, type MdxConfig } from './mdx-plan';
 
-const MDX_N_FFT = 4096;
-const MDX_HOP = 1024;
-export const MDX_BINS = 2048;
+export const MDX_BINS = MDX_COMPAT.bins;
 /** Default segment: 64 frames. Longer ones (a multiple of 32, src/ml/mdx-plan.ts) buy more context for a longer delay. */
-export const MDX_T = 64;
+export const MDX_T = MDX_COMPAT.frames;
 
-/** Model call: reads `x` ([1, 4, 2048, 64]), returns the vocal in the same layout. */
+/** Model call: reads `x` ([1, 4, bins, frames]), returns the vocal in the same layout. */
 export type MdxModelFn = (x: Float32Array) => Promise<Float32Array> | Float32Array;
 
 export class MdxStream {
@@ -30,10 +28,11 @@ export class MdxStream {
   /** Model input, owned by the stream and refreshed in place by `analyze`. */
   readonly x: Float32Array;
 
-  private readonly fft = new FFT(MDX_N_FFT);
-  private readonly win = new Float64Array(MDX_N_FFT);
-  private readonly re = new Float64Array(MDX_N_FFT);
-  private readonly im = new Float64Array(MDX_N_FFT);
+  readonly cfg: MdxConfig;
+  private readonly fft: FFT;
+  private readonly win: Float64Array;
+  private readonly re: Float64Array;
+  private readonly im: Float64Array;
   /** Current segment, [L: N][R: N]; the first half is the previous block. */
   private readonly seg: Float32Array;
   /** iSTFT overlap-add of one segment. */
@@ -45,20 +44,26 @@ export class MdxStream {
   /** Windowed second half of the previous segment's output, [L: H][R: H]. */
   private readonly tail: Float32Array;
 
-  constructor(frames: number = MDX_T) {
-    const N = mdxSegment(frames);
+  constructor(frames: number = MDX_T, cfg: MdxConfig = MDX_COMPAT) {
+    const N = mdxSegment(frames, cfg);
+    const { nFft } = cfg;
+    this.cfg = cfg;
+    this.fft = new FFT(nFft);
+    this.win = new Float64Array(nFft);
+    this.re = new Float64Array(nFft);
+    this.im = new Float64Array(nFft);
     this.frames = frames;
     this.segment = N;
     this.block = N / 2;
-    this.x = new Float32Array(4 * MDX_BINS * frames);
+    this.x = new Float32Array(4 * cfg.bins * frames);
     this.seg = new Float32Array(2 * N);
     this.acc = new Float64Array(2 * N);
     this.norm = new Float64Array(N);
     this.cw = new Float64Array(N);
     this.tail = new Float32Array(N);
-    for (let i = 0; i < MDX_N_FFT; i++) this.win[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / MDX_N_FFT);
+    for (let i = 0; i < nFft; i++) this.win[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / nFft);
     const env = new Float64Array(N);
-    for (let t = 0; t < frames; t++) for (let n = 0; n < MDX_N_FFT; n++) env[t * MDX_HOP + n] += this.win[n] * this.win[n];
+    for (let t = 0; t < frames; t++) for (let n = 0; n < nFft; n++) env[t * cfg.hop + n] += this.win[n] * this.win[n];
     for (let i = 0; i < N; i++) {
       this.norm[i] = env[i] > 1e-10 ? 1 / env[i] : 1;
       this.cw[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / N);
@@ -75,25 +80,26 @@ export class MdxStream {
   analyze(inL: Float32Array, inR: Float32Array): void {
     const { frames: T, segment: N, block: H } = this;
     const { x, re, im, win, fft, seg } = this;
+    const { nFft, hop, bins } = this.cfg;
     seg.copyWithin(0, H, N);
     seg.copyWithin(N, N + H, 2 * N);
     seg.set(inL.subarray(0, H), H);
     seg.set(inR.subarray(0, H), N + H);
     for (let t = 0; t < T; t++) {
-      const s = t * MDX_HOP;
-      for (let n = 0; n < MDX_N_FFT; n++) {
+      const s = t * hop;
+      for (let n = 0; n < nFft; n++) {
         re[n] = seg[s + n] * win[n];
         im[n] = seg[N + s + n] * win[n];
       }
       fft.transform(re, im);
-      for (let k = 0; k < MDX_BINS; k++) {
-        const nk = (MDX_N_FFT - k) & (MDX_N_FFT - 1);
+      for (let k = 0; k < bins; k++) {
+        const nk = k ? nFft - k : 0;
         // two real signals in one complex FFT
         const i = k * T + t;
         x[i] = 0.5 * (re[k] + re[nk]); // Re L
-        x[MDX_BINS * T + i] = 0.5 * (im[k] - im[nk]); // Im L
-        x[2 * MDX_BINS * T + i] = 0.5 * (im[k] + im[nk]); // Re R
-        x[3 * MDX_BINS * T + i] = -0.5 * (re[k] - re[nk]); // Im R
+        x[bins * T + i] = 0.5 * (im[k] - im[nk]); // Im L
+        x[2 * bins * T + i] = 0.5 * (im[k] + im[nk]); // Re R
+        x[3 * bins * T + i] = -0.5 * (re[k] - re[nk]); // Im R
       }
     }
   }
@@ -105,27 +111,28 @@ export class MdxStream {
   synthesize(v: Float32Array, outL: Float32Array, outR: Float32Array): void {
     const { frames: T, segment: N, block: H } = this;
     const { re, im, win, fft, acc, norm, cw, tail } = this;
-    const P = MDX_BINS * T;
+    const { nFft, hop, bins, compensate: comp } = this.cfg;
+    const P = bins * T;
     acc.fill(0);
     for (let t = 0; t < T; t++) {
       re.fill(0);
       im.fill(0);
-      for (let k = 0; k < MDX_BINS; k++) {
+      for (let k = 0; k < bins; k++) {
         const i = k * T + t;
-        const a = v[i], b = k > 0 ? v[P + i] : 0; // DC is real (irfft drops its imaginary part)
-        const c = v[2 * P + i], d = k > 0 ? v[3 * P + i] : 0;
+        const a = v[i] * comp, b = k > 0 ? v[P + i] * comp : 0; // DC is real (irfft drops its imaginary part)
+        const c = v[2 * P + i] * comp, d = k > 0 ? v[3 * P + i] * comp : 0;
         re[k] = a - d;
         im[k] = b + c;
         if (k > 0) {
-          re[MDX_N_FFT - k] = a + d;
-          im[MDX_N_FFT - k] = c - b;
+          re[nFft - k] = a + d;
+          im[nFft - k] = c - b;
         }
       }
       fft.transform(re, im, true);
-      const s = t * MDX_HOP;
-      for (let n = 0; n < MDX_N_FFT; n++) {
-        acc[s + n] += (re[n] * win[n]) / MDX_N_FFT;
-        acc[N + s + n] += (im[n] * win[n]) / MDX_N_FFT;
+      const s = t * hop;
+      for (let n = 0; n < nFft; n++) {
+        acc[s + n] += (re[n] * win[n]) / nFft;
+        acc[N + s + n] += (im[n] * win[n]) / nFft;
       }
     }
     for (let i = 0; i < H; i++) {
