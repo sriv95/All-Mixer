@@ -40,7 +40,7 @@ Click **Add to Chrome**, then reload any open YouTube tabs and click the toolbar
 3. Tick **Separate mode** to mix vocal and instrumental. The first time, the popup offers a one-time model download for the higher quality models. Separate mode needs a computer with a GPU (WebGPU).
 4. Under **Advanced** you can change the model, the delay limit, the GPU and Split instrumental.
 
-Separate mode delays the sound by about 2 seconds; the picture is delayed by the same time so they stay in sync. A longer delay limit gives a cleaner split.
+Separate mode delays the sound by about 2 seconds (3 seconds with High quality, its minimum); the picture is delayed by the same time so they stay in sync. A longer delay limit gives a cleaner split.
 
 ## Requirements for Separate mode
 
@@ -76,7 +76,7 @@ Build, architecture, model publishing and debug notes are in [src/README.md](src
 
 - [Spleeter](https://github.com/deezer/spleeter) (Deezer)
 - Default Model: [MDX-Net](https://github.com/Anjok07/ultimatevocalremovergui) 
-- High-Quality Model: [Kim-Mel-Band-Roformer-FT](https://huggingface.co/pcunwa/Kim-Mel-Band-Roformer-FT)
+- High-Quality Model: [Kim Vocal 2](https://github.com/TRvlvr/model_repo/releases/tag/all_public_uvr_models) (UVR MDX-Net model by KimberleyJensen). Licence: not stated by the author.
 - Best-Vocal Model: [mel-band-roformer-deux](https://huggingface.co/becruily/mel-band-roformer-deux)
 - Drum Splitting Model: [SCNet](https://github.com/starrytong/SCNet) , ( Tran Small checkpoint from [ZFTurbo](https://github.com/ZFTurbo/Music-Source-Separation-Training) )
 - Best Instrumental Model: [BS-RoFormer-SW-6stem](https://huggingface.co/FractalSurfer/BS-RoFormer-SW-6stem)

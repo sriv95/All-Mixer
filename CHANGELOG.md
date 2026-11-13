@@ -8,6 +8,12 @@ CI builds the extension, creates tag `vx.y.z` and a GitHub release with this sec
 
 ## [Unreleased]
 
+### Changed
+
+- **High quality now uses Kim Vocal 2.** It gives cleaner vocals, runs faster and is a much smaller download (about 33 MB).
+- The minimum delay for High quality is now 3 seconds (it was 2 seconds).
+- On update, the old High quality model is removed automatically. If you had it installed, the new one downloads on its own.
+
 ## [1.1.0] - 2026-10-30
 
 ### Added
