@@ -19,7 +19,7 @@ uv sync                               # Python env (.venv) for the model scripts
 bun run fetch-model                   # downloads public/ml/vocals.onnx + mdx.onnx (gitignored)
 bun run export-roformer               # optional: builds models-out/{deux,sw,guitar}.onnx (gitignored, not part of the extension; name/--force args)
 bun run export-scnet                  # optional: builds models-out/drums.onnx (SCNet Tran Small, the Split instrumental model)
-bun run model-manifest kim2=1 deux=1 drums=1  # models-out/hf/ = what to upload to the Hugging Face model repo (see scripts/model-manifest.mjs)
+bun run model-manifest kim2=1 deux=2 sw=1 drums=1 guitar=1 compat=1  # models-out/hf/ = what to upload to the Hugging Face model repo (see scripts/model-manifest.mjs)
 bun run build                         # typecheck + 4 vite builds -> dist/
 bun run dev                           # watch build of the content script only
 ```

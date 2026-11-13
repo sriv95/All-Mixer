@@ -61,7 +61,7 @@ The models (`kim2` = High quality, `deux` = Best Vocal, `sw` = Best Instrumental
 uvx --from huggingface_hub hf auth login          # once; needs a token with write access
 bun run export-roformer [deux|sw|guitar] [--force] # models-out/<name>.onnx + <name>-meta.json (new weights: edit the checkpoint in scripts/export-roformer.py)
 bun run export-kim2 [--force]  # models-out/kim2.onnx + kim2-meta.json (High quality; UVR weights, see scripts/export-kim2.py)
-bun run model-manifest kim2=1 deux=2 sw=1 drums=1 guitar=1  # every model with its version (the new one bumped) -> models-out/hf/manifest.json + v<n>/ (the drum model is one file, drums.onnx; bun run export-scnet makes it)
+bun run model-manifest kim2=1 deux=2 sw=1 drums=1 guitar=1 compat=1  # every model with its version (the new one bumped) -> models-out/hf/manifest.json + v<n>/ (the drum model is one file, drums.onnx; bun run export-scnet makes it)
 uvx --from huggingface_hub hf upload sriv95/all-mixer-models models-out/hf/v2 v2    # new version folder first
 uvx --from huggingface_hub hf upload sriv95/all-mixer-models models-out/hf/manifest.json manifest.json   # manifest last
 ```

@@ -6,7 +6,7 @@
 //   bun run export-roformer guitar                    -> models-out/guitar.onnx + -meta.json
 //   bun run export-compat                             -> models-out/compat-mdx.onnx + compat-vocals.onnx (fp32 Default, for GPUs without shader-f16)
 //   bun run export-roformer sw                        -> models-out/sw.onnx + -meta.json (Best Instrumental, 6 stems)
-//   bun run model-manifest kim2=1 deux=1 drums=1  -> models-out/hf/manifest.json + models-out/hf/v<version>/...
+//   bun run model-manifest kim2=1 deux=2 sw=1 drums=1 guitar=1 compat=1  -> models-out/hf/manifest.json + models-out/hf/v<version>/...
 //   hf upload <owner>/<repo> models-out/hf .
 // List every model with its version (an unchanged model keeps its number; its files are only used for the sizes).
 // Upload the version folders first and manifest.json last: the extension offers an update as soon as the manifest names it.
@@ -24,6 +24,11 @@ const args = Object.fromEntries(process.argv.slice(2).map((a) => a.split('=')));
 const bad = Object.entries(args).filter(([id, v]) => !IDS.includes(id) || !Number.isSafeInteger(Number(v)) || Number(v) < 1);
 if (bad.length || !Object.keys(args).length) {
   console.error(`usage: node scripts/model-manifest.mjs ${IDS.map((id) => `${id}=<version, integer >= 1>`).join(' ')}`);
+  process.exit(1);
+}
+const missing = IDS.filter((id) => !(id in args)); // a manifest without an id drops that model for users on update
+if (missing.length) {
+  console.error(`missing version for: ${missing.join(', ')} (list every model, an unchanged one keeps its number)`);
   process.exit(1);
 }
 const src = process.env.MODELS_OUT || resolve(import.meta.dirname, '../models-out');
