@@ -20,6 +20,7 @@ export const MAX_FRAMES = 900;
 /** Delay limit range per vocal model, seconds (the slider; min is the default). Add-on models (drums, guitar) follow the vocal model. */
 export const DELAY_RANGE: Readonly<Record<MlModel, { min: number; max: number }>> = {
   mdx: { min: 2, max: 4 },
+  kim2: { min: 3, max: 8 },
   roformer: { min: 2, max: 8 },
   deux: { min: 3, max: 10 },
   sw: { min: 3, max: 10 },

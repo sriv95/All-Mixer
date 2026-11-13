@@ -105,11 +105,11 @@ export const ML_WARMUP_P90_MS = (ML_SLACK_SAMPLES / ML_SAMPLE_RATE) * 1000 / 1.5
  * six stems (vocals, drums, bass, guitar, piano, other; menu: Best Instrumental): it replaces the vocal model and the
  * split stages, and its reply carries the drums, guitar, bass and piano planes.
  */
-export type MlModel = 'mdx' | 'roformer' | 'deux' | 'sw';
+export type MlModel = 'mdx' | 'kim2' | 'roformer' | 'deux' | 'sw';
 /** Which GPU the ML worker asks WebGPU for. Chrome cannot list adapters, only prefer one: 'auto' leaves the choice to the browser. */
 export type GpuPreference = 'auto' | 'high-performance' | 'low-power';
 export const GPU_PREFERENCES: readonly GpuPreference[] = ['auto', 'high-performance', 'low-power'];
-export const ML_MODELS: readonly MlModel[] = ['mdx', 'roformer', 'deux', 'sw'];
+export const ML_MODELS: readonly MlModel[] = ['mdx', 'kim2', 'roformer', 'deux', 'sw'];
 
 /** Block geometry of one model: what the worklet, the worker and the delay math must agree on. */
 export interface MlGeometry {
@@ -156,6 +156,7 @@ const ROF_GEOMETRY: MlGeometry = {
 
 export const GEOMETRY: Readonly<Record<MlModel, MlGeometry>> = {
   mdx: { block: ML_BLOCK, resultOffset: ML_RESULT_OFFSET, latency: ML_LATENCY_SAMPLES, warmupP90Ms: ML_WARMUP_P90_MS },
+  kim2: ROF_GEOMETRY, // placeholder until the worker's plan (src/ml/mdx-plan.ts) arrives with `ready`
   roformer: ROF_GEOMETRY,
   deux: ROF_GEOMETRY,
   sw: ROF_GEOMETRY,

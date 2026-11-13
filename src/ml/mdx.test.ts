@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MDX_BINS, MDX_T, MdxStream, type MdxModelFn } from './mdx';
+import { MDX_KIM2 } from './mdx-plan';
 import { MDX_SEGMENT, ML_BLOCK } from '../worklet/protocol';
 
 function signal(n: number, seed: number): Float32Array {
@@ -57,6 +58,23 @@ describe('MdxStream', () => {
     let d = 0;
     for (let n = 0; n < (nb - 1) * H; n++) d = Math.max(d, Math.abs(out[n] - l[n]));
     expect(d).toBeLessThan(2e-5);
+  });
+
+  it('Kim Vocal 2 config: shapes, and an identity model gives the input back times the 1.009 compensation (below the 3072 bins)', async () => {
+    const st = new MdxStream(64, MDX_KIM2);
+    expect(st.segment).toBe(63 * 1024 + 7680);
+    expect(st.x.length).toBe(4 * 3072 * 64);
+    const H = st.block, nb = 4;
+    const l = new Float32Array(nb * H).map((_, j) => 0.3 * Math.sin((2 * Math.PI * 1000 * j) / 44100)), r = l;
+    const out = new Float32Array(nb * H);
+    const oL = new Float32Array(H), oR = new Float32Array(H);
+    for (let b = 0; b < nb; b++) {
+      await st.process(l.subarray(b * H, (b + 1) * H), r.subarray(b * H, (b + 1) * H), (x) => x.slice(), oL, oR);
+      if (b > 0) out.set(oL, (b - 1) * H);
+    }
+    let d = 0;
+    for (let n = 4096; n < (nb - 1) * H; n++) d = Math.max(d, Math.abs(out[n] - 1.009 * l[n])); // not the first samples: the wider window leaves the stream start (the left pad) unsettled
+    expect(d).toBeLessThan(2e-4);
   });
 
   it('impulse at P comes back at P (offset exactly 0 in the (b − 1)·H result frame)', async () => {

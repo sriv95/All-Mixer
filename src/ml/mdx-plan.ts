@@ -16,12 +16,12 @@ export const MDX_T_STEP = 32;
 export const MDX_MARGIN = 1.5;
 const SAMPLES_PER_MS = ML_SAMPLE_RATE / 1000;
 
-/** STFT geometry of one MDX-Net model. `compensate` multiplies the output spectrum (UVR's per-model gain). */
-export interface MdxConfig { nFft: number; hop: number; bins: number; frames: number; compensate: number }
+/** STFT geometry of one MDX-Net model. `compensate` multiplies the output spectrum (UVR's per-model gain). `tail`: samples the result waits for the Karaoke combine (0 for a vocal-only model). */
+export interface MdxConfig { nFft: number; hop: number; bins: number; frames: number; compensate: number; tail: number }
 /** The shipped compat model (9482). */
-export const MDX_COMPAT: MdxConfig = { nFft: 4096, hop: 1024, bins: 2048, frames: 64, compensate: 1 };
+export const MDX_COMPAT: MdxConfig = { nFft: 4096, hop: 1024, bins: 2048, frames: 64, compensate: 1, tail: KARAOKE_TAIL };
 /** Kim Vocal 2 (UVR MDX-Net, native dim_t 256): the frames come from the caller / planner, 64 here is a placeholder default. */
-export const MDX_KIM2: MdxConfig = { nFft: 7680, hop: 1024, bins: 3072, frames: 64, compensate: 1.009 };
+export const MDX_KIM2: MdxConfig = { nFft: 7680, hop: 1024, bins: 3072, frames: 64, compensate: 1.009, tail: 0 };
 
 /** Samples of a segment of `frames` frames (no centre padding). */
 export const mdxSegment = (frames: number, cfg: MdxConfig = MDX_COMPAT): number => (frames - 1) * cfg.hop + cfg.nFft;
@@ -33,8 +33,8 @@ export function mdxGeometry(frames: number, slack: number, cfg: MdxConfig = MDX_
   const segment = mdxSegment(frames, cfg);
   return {
     block: segment / 2,
-    resultOffset: segment / 2 + KARAOKE_TAIL,
-    latency: segment + KARAOKE_TAIL + slack + ML_QUANTUM,
+    resultOffset: segment / 2 + cfg.tail,
+    latency: segment + cfg.tail + slack + ML_QUANTUM,
     warmupP90Ms: slack / SAMPLES_PER_MS / MDX_MARGIN,
   };
 }
@@ -47,9 +47,9 @@ export const mdxSlack = (frames: number, baseMs: number): number =>
  * The longest segment whose delay fits `delaySamples` for a GPU whose step at MDX_T_MIN frames takes `baseMs`, or null
  * when even the shipped segment does not fit (the GPU is too slow). latency ≤ delaySamples always.
  */
-export function planMdx(delaySamples: number, baseMs: number): { frames: number; geometry: MlGeometry } | null {
+export function planMdx(delaySamples: number, baseMs: number, cfg: MdxConfig = MDX_COMPAT): { frames: number; geometry: MlGeometry } | null {
   for (let frames = MDX_T_MAX; frames >= MDX_T_MIN; frames -= MDX_T_STEP) {
-    const geometry = mdxGeometry(frames, mdxSlack(frames, baseMs));
+    const geometry = mdxGeometry(frames, mdxSlack(frames, baseMs), cfg);
     if (geometry.latency <= delaySamples) return { frames, geometry };
   }
   return null;
