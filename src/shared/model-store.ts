@@ -4,9 +4,9 @@
 // load). No chrome.* or DOM here.
 //
 // Repo layout (scripts/model-manifest.mjs writes it); every model has its own version:
-//   manifest.json   {"format":2,"models":{"roformer":{"version":1,"files":{"roformer.onnx":457696078,"roformer-meta.json":19712}},"deux":{...},"drums":{"version":1,"files":{"drums.onnx":43105845}}}}
-//   v1/roformer.onnx, v1/roformer-meta.json, v1/deux.onnx, v1/deux-meta.json, v1/drums.onnx
-// A download is split into CHUNK-sized pieces, one OPFS file each (`v1-roformer.onnx.0007`): an interrupted download
+//   manifest.json   {"format":2,"models":{"kim2":{"version":1,"files":{"kim2.onnx":33399716,"kim2-meta.json":179}},"deux":{...},"drums":{"version":1,"files":{"drums.onnx":43105845}}}}
+//   v1/kim2.onnx, v1/kim2-meta.json, v1/deux.onnx, v1/deux-meta.json, v1/drums.onnx
+// A download is split into CHUNK-sized pieces, one OPFS file each (`v1-kim2.onnx.0007`): an interrupted download
 // (the service worker can be stopped at any time) resumes at the first missing piece, and the reader concatenates
 // the pieces as a Blob without copying.
 

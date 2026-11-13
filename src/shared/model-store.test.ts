@@ -48,6 +48,19 @@ describe('parseManifest', () => {
   });
 });
 
+describe('manifest with the legacy roformer entry', () => {
+  const rof = { 'roformer.onnx': 460772871, 'roformer-meta.json': 19685 };
+  const manifest = { format: 2, models: { kim2: { version: 1, files }, roformer: { version: 2, files: rof } } };
+  it('the new client gets kim2 and ignores roformer', () => {
+    expect(Object.keys(parseManifest(manifest) ?? {})).toEqual(['kim2']);
+  });
+  it('a released client (main: roformer in MODEL_IDS, same loop) still gets roformer', () => {
+    const m = manifest.models as Record<string, { version: number; files: Record<string, number> }>;
+    const ids = ['roformer', 'deux'].filter((id) => m[id] && Object.keys(m[id].files).every((f) => f.startsWith(id)));
+    expect(ids).toEqual(['roformer']);
+  });
+});
+
 describe('modelState', () => {
   it('files from an older extension format count as not installed (download again)', () => {
     expect(modelState(inst(1, MODEL_FORMAT - 1), remote(2), undefined, 0)).toEqual({ kind: 'missing', size: 110 });

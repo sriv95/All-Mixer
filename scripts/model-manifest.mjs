@@ -18,6 +18,8 @@ import { resolve } from 'node:path';
 const FORMAT = 2; // MODEL_FORMAT in src/shared/model-store.ts
 const IDS = ['kim2', 'deux', 'sw', 'drums', 'guitar', 'compat']; // MODEL_IDS in src/shared/model-store.ts
 const filesOf = (id) => (id === 'drums' ? ['drums.onnx'] : id === 'compat' ? ['compat-mdx.onnx', 'compat-vocals.onnx'] : [`${id}.onnx`, `${id}-meta.json`]); // modelFileNames there
+// shortcut: remove once old extension versions are gone. Extensions before kim2 download High quality as `roformer`; they skip ids they do not know, so listing it keeps them working and new ones ignore it. Its files stay hosted at v2 (not copied here).
+export const LEGACY = { roformer: { version: 2, files: ['roformer.onnx', 'roformer-meta.json'] } };
 const args = Object.fromEntries(process.argv.slice(2).map((a) => a.split('=')));
 const bad = Object.entries(args).filter(([id, v]) => !IDS.includes(id) || !Number.isSafeInteger(Number(v)) || Number(v) < 1);
 if (bad.length || !Object.keys(args).length) {
@@ -36,6 +38,9 @@ for (const [id, v] of Object.entries(args)) {
     files[f] = statSync(resolve(dir, f)).size;
   }
   models[id] = { version: Number(v), files };
+}
+for (const [id, { version, files }] of Object.entries(LEGACY)) {
+  models[id] = { version, files: Object.fromEntries(files.map((f) => [f, statSync(resolve(out, `v${version}`, f)).size])) };
 }
 writeFileSync(resolve(out, 'manifest.json'), JSON.stringify({ format: FORMAT, models }) + '\n');
 console.log(`wrote ${out}/manifest.json`, JSON.stringify(models));

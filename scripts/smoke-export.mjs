@@ -2,7 +2,7 @@
 // polls the progress the popup shows, saves the download and prints what ffprobe says about it.
 // Usage: bun run build && node scripts/smoke-export.mjs <format: mp3|mp4> <tracks: single|separate> [page url] [out dir]
 //   env: HEADED=1 to watch, SETTINGS='{"vocalPct":0}' for the audio levels, TEXT='{"karaokeColor":"#ffeb3b"}' for the karaoke text,
-//        MODEL=mdx|roformer|deux|sw (the downloadable ones need MODEL_DIR=<models-out/hf from bun run model-manifest>, served on :8765 and installed through the background),
+//        MODEL=mdx|kim2|deux|sw (the downloadable ones need MODEL_DIR=<models-out/hf from bun run model-manifest>, served on :8765 and installed through the background),
 //        NOAUDIO=1 makes an MP4 without sound (only the karaoke text is drawn; nothing plays),
 //        NOFAST=1 records in real time instead of reading the audio the player downloaded (src/export/fast-audio.ts),
 //        STALL_MS=400 holds every model block (slow GPU), HEIGHT=360|480|720|1080, SHOTS=1 to save screenshots of the page before and in the middle of the export.
