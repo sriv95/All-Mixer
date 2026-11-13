@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MODEL_FORMAT, MODEL_LABEL, VOCAL_MODEL_IDS, modelFileNames, modelState, parseManifest, STALL_MS, type InstalledModel, type Progress, type RemoteRecord } from './model-store';
 
-const files = { 'roformer.onnx': 100, 'roformer-meta.json': 10 };
+const files = { 'kim2.onnx': 100, 'kim2-meta.json': 10 };
 const inst = (version: number, format = MODEL_FORMAT): InstalledModel => ({ format, version, files });
 const remote = (version: number, format = MODEL_FORMAT): RemoteRecord => ({ format, version, files, checkedAt: 0 });
 const prog = (p: Partial<Progress>): Progress => ({ phase: 'downloading', version: 2, done: 5, total: 110, at: 1000, ...p });
@@ -10,9 +10,9 @@ const dfiles = { 'deux.onnx': 200, 'deux-meta.json': 10 };
 
 describe('parseManifest', () => {
   it('accepts a valid manifest with one or two models', () => {
-    const roformer = { format: 1, version: 2, files };
-    expect(parseManifest({ format: 1, models: { roformer: { version: 2, files } } })).toEqual({ roformer });
-    expect(parseManifest({ format: 1, models: { roformer: { version: 2, files }, deux: { version: 1, files: dfiles }, other: { version: 1, files } } })).toEqual({ roformer, deux: { format: 1, version: 1, files: dfiles } });
+    const kim2 = { format: 1, version: 2, files };
+    expect(parseManifest({ format: 1, models: { kim2: { version: 2, files } } })).toEqual({ kim2 });
+    expect(parseManifest({ format: 1, models: { kim2: { version: 2, files }, deux: { version: 1, files: dfiles }, other: { version: 1, files } } })).toEqual({ kim2, deux: { format: 1, version: 1, files: dfiles } });
   });
   it('the drum model is a single file, with no STFT metadata', () => {
     expect(modelFileNames('drums')).toEqual(['drums.onnx']);
@@ -30,20 +30,20 @@ describe('parseManifest', () => {
   });
   it('the all-stems model is a Model menu entry with the RoFormer files, and the menu names are Best Vocal and Best Instrumental', () => {
     expect(modelFileNames('sw')).toEqual(['sw.onnx', 'sw-meta.json']);
-    expect(VOCAL_MODEL_IDS).toEqual(['roformer', 'deux', 'sw']);
-    expect(MODEL_LABEL).toMatchObject({ roformer: 'High quality', deux: 'Best Vocal', sw: 'Best Instrumental' });
+    expect(VOCAL_MODEL_IDS).toEqual(['kim2', 'deux', 'sw']);
+    expect(MODEL_LABEL).toMatchObject({ kim2: 'High quality', deux: 'Best Vocal', sw: 'Best Instrumental' });
     const sw = { 'sw.onnx': 359, 'sw-meta.json': 13 };
     expect(parseManifest({ format: 2, models: { sw: { version: 1, files: sw } } })).toEqual({ sw: { format: 2, version: 1, files: sw } });
   });
   it('drops a bad model entry but keeps the good ones', () => {
-    expect(parseManifest({ format: 1, models: { roformer: { version: 0, files }, deux: { version: 1, files: dfiles } } })).toEqual({ deux: { format: 1, version: 1, files: dfiles } });
+    expect(parseManifest({ format: 1, models: { kim2: { version: 0, files }, deux: { version: 1, files: dfiles } } })).toEqual({ deux: { format: 1, version: 1, files: dfiles } });
     expect(parseManifest({ format: 1, models: { deux: { version: 1, files } } })).toBeNull(); // files of another model
   });
   it('rejects missing files, bad sizes and non-objects', () => {
     expect(parseManifest(null)).toBeNull();
-    expect(parseManifest({ format: 1, models: { roformer: { version: 1, files: { 'roformer.onnx': 1 } } } })).toBeNull();
-    expect(parseManifest({ format: 1, models: { roformer: { version: 1, files: { ...files, 'roformer.onnx': -1 } } } })).toBeNull();
-    expect(parseManifest({ models: { roformer: { version: 1, files } } })).toBeNull();
+    expect(parseManifest({ format: 1, models: { kim2: { version: 1, files: { 'kim2.onnx': 1 } } } })).toBeNull();
+    expect(parseManifest({ format: 1, models: { kim2: { version: 1, files: { ...files, 'kim2.onnx': -1 } } } })).toBeNull();
+    expect(parseManifest({ models: { kim2: { version: 1, files } } })).toBeNull();
     expect(parseManifest({ format: 1, version: 1, files })).toBeNull(); // the old single-model shape
   });
 });

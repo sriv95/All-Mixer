@@ -100,16 +100,16 @@ export const ML_WARMUP_P90_MS = (ML_SLACK_SAMPLES / ML_SAMPLE_RATE) * 1000 / 1.5
 /**
  * ML models the engine can run. 'mdx' is the shipped MDX-Net 9482 + Spleeter pipeline. The others are Mel-Band
  * RoFormers (fp16), downloaded on request (src/shared/model-store.ts ModelId): one big model each, no Spleeter mask,
- * short chunks so they fit the delay. 'roformer' = unwa's mel_band_roformer_kim_ft_unwa (menu: High quality),
+ * short chunks so they fit the delay. 'kim2' = Kim Vocal 2 (menu: High quality),
  * 'deux' = becruily's 2-stem model, vocal stem (menu: Best Vocal, needs a good GPU). 'sw' = BS-RoFormer SW, one pass for
  * six stems (vocals, drums, bass, guitar, piano, other; menu: Best Instrumental): it replaces the vocal model and the
  * split stages, and its reply carries the drums, guitar, bass and piano planes.
  */
-export type MlModel = 'mdx' | 'kim2' | 'roformer' | 'deux' | 'sw';
+export type MlModel = 'mdx' | 'kim2' | 'deux' | 'sw';
 /** Which GPU the ML worker asks WebGPU for. Chrome cannot list adapters, only prefer one: 'auto' leaves the choice to the browser. */
 export type GpuPreference = 'auto' | 'high-performance' | 'low-power';
 export const GPU_PREFERENCES: readonly GpuPreference[] = ['auto', 'high-performance', 'low-power'];
-export const ML_MODELS: readonly MlModel[] = ['mdx', 'kim2', 'roformer', 'deux', 'sw'];
+export const ML_MODELS: readonly MlModel[] = ['mdx', 'kim2', 'deux', 'sw'];
 
 /** Block geometry of one model: what the worklet, the worker and the delay math must agree on. */
 export interface MlGeometry {
@@ -157,7 +157,6 @@ const ROF_GEOMETRY: MlGeometry = {
 export const GEOMETRY: Readonly<Record<MlModel, MlGeometry>> = {
   mdx: { block: ML_BLOCK, resultOffset: ML_RESULT_OFFSET, latency: ML_LATENCY_SAMPLES, warmupP90Ms: ML_WARMUP_P90_MS },
   kim2: ROF_GEOMETRY, // placeholder until the worker's plan (src/ml/mdx-plan.ts) arrives with `ready`
-  roformer: ROF_GEOMETRY,
   deux: ROF_GEOMETRY,
   sw: ROF_GEOMETRY,
 };

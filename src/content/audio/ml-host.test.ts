@@ -22,12 +22,12 @@ describe('MlHost', () => {
   });
 
   it('tells the iframe to run the drum stage when asked', () => {
-    const host = new MlHost(URL_, document, 'roformer', 6000, true);
+    const host = new MlHost(URL_, document, 'kim2', 6000, true);
     host.start(() => {});
     const f = document.querySelector('iframe')!;
     const post = vi.spyOn(f.contentWindow!, 'postMessage').mockImplementation(() => {});
     f.dispatchEvent(new Event('load'));
-    expect(post.mock.calls[0][0]).toEqual({ type: ML_INIT, model: 'roformer', delayMs: 6000, drums: true, guitar: false, gpu: 'auto', offline: false });
+    expect(post.mock.calls[0][0]).toEqual({ type: ML_INIT, model: 'kim2', delayMs: 6000, drums: true, guitar: false, gpu: 'auto', offline: false });
     host.dispose();
   });
 

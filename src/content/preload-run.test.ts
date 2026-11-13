@@ -59,7 +59,7 @@ describe('PreloadRunner', () => {
     const cache = new StemCache(videoKey(), preloadSignature(DEFAULT_SETTINGS), 10, []);
     r.keep(cache);
     expect(r.playable(DEFAULT_SETTINGS)).toBe(cache);
-    const other = { ...DEFAULT_SETTINGS, mlModel: DEFAULT_SETTINGS.mlModel === 'deux' ? 'roformer' : 'deux' } as typeof DEFAULT_SETTINGS;
+    const other = { ...DEFAULT_SETTINGS, mlModel: DEFAULT_SETTINGS.mlModel === 'deux' ? 'kim2' : 'deux' } as typeof DEFAULT_SETTINGS;
     expect(preloadSignature(other)).not.toBe(cache.signature);
     expect(r.playable(other)).toBeNull();
     expect(r.status(other)).toMatchObject({ state: 'ready', stale: true });

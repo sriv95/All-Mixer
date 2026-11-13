@@ -60,17 +60,17 @@ describe('EngineSelector', () => {
 
   it('reload probes the model in use again (new model files), and does nothing for another model, the default or when off', () => {
     const { sel, hosts } = setup();
-    sel.reload('roformer');
+    sel.reload('kim2');
     expect(hosts).toHaveLength(0);
     sel.update(req(true, 'mdx'));
-    sel.reload('roformer');
+    sel.reload('kim2');
     expect(hosts).toHaveLength(1);
-    sel.update(req(true, 'roformer'));
+    sel.update(req(true, 'kim2'));
     hosts[1].onStatus!({ type: 'unavailable', reason: 'the High quality model is not downloaded' });
     expect(sel.status.state).toBe('unavailable');
     sel.reload('deux');
     expect(hosts).toHaveLength(2);
-    sel.reload('roformer');
+    sel.reload('kim2');
     expect(hosts).toHaveLength(3);
     expect(hosts[1].disposed).toBe(true);
     expect(sel.status).toEqual({ state: 'warming' });
@@ -94,10 +94,10 @@ describe('EngineSelector', () => {
 
   it('reload of the drum model probes again only while the split is on', () => {
     const { sel, hosts } = setup();
-    sel.update(req(true, 'roformer'));
+    sel.update(req(true, 'kim2'));
     sel.reload('drums');
     expect(hosts).toHaveLength(1);
-    sel.update(req(true, 'roformer', 4000, true));
+    sel.update(req(true, 'kim2', 4000, true));
     expect(hosts).toHaveLength(2);
     hosts[1].onStatus!({ type: 'unavailable', reason: 'the Drum split model is not downloaded' });
     sel.reload('drums');
@@ -228,14 +228,14 @@ describe('EngineSelector', () => {
       vi.useFakeTimers();
       const { sel, hosts, chain } = setup();
       const seen: string[] = [];
-      sel.update(req(true, 'roformer', 4000));
+      sel.update(req(true, 'kim2', 4000));
       hosts[0].onStatus!(ready(20, planned));
-      sel.update(req(false, 'roformer', 4000));
+      sel.update(req(false, 'kim2', 4000));
       vi.advanceTimersByTime(KEEP_WARM_MS - 1000);
       sel.onChange = (c) => seen.push(c.state);
       chain.setMlGeometry.mockClear();
       chain.setEngine.mockClear();
-      sel.update(req(true, 'roformer', 4000));
+      sel.update(req(true, 'kim2', 4000));
       expect(hosts).toHaveLength(1);
       expect(seen).toEqual(['on']); // never "warming": no pause, no spinner
       expect(chain.setMlGeometry).toHaveBeenCalledWith(planned);
@@ -264,7 +264,7 @@ describe('EngineSelector', () => {
       sel.update(req(true, 'mdx'));
       hosts[0].onStatus!(ready(20));
       sel.update(req(false));
-      sel.update(req(true, 'roformer'));
+      sel.update(req(true, 'kim2'));
       expect(hosts[0].disposed).toBe(true);
       expect(hosts).toHaveLength(2);
       expect(sel.status).toEqual({ state: 'warming' });
@@ -272,12 +272,12 @@ describe('EngineSelector', () => {
 
     it('new model files while it is kept drop the host', () => {
       const { sel, hosts } = setup();
-      sel.update(req(true, 'roformer'));
+      sel.update(req(true, 'kim2'));
       hosts[0].onStatus!(ready(20, planned));
-      sel.update(req(false, 'roformer'));
+      sel.update(req(false, 'kim2'));
       sel.reload('deux');
       expect(hosts[0].disposed).toBe(false);
-      sel.reload('roformer');
+      sel.reload('kim2');
       expect(hosts[0].disposed).toBe(true);
     });
 
@@ -301,15 +301,15 @@ describe('EngineSelector', () => {
 
   it('hands the model to the host, and the default geometry to the chain before the port', () => {
     const { sel, chain, models } = setup();
-    sel.update(req(true, 'roformer'));
-    expect(models).toEqual(['roformer']);
-    expect(chain.setMlGeometry).toHaveBeenCalledWith(GEOMETRY.roformer);
+    sel.update(req(true, 'kim2'));
+    expect(models).toEqual(['kim2']);
+    expect(chain.setMlGeometry).toHaveBeenCalledWith(GEOMETRY.kim2);
     expect(chain.setMlGeometry.mock.invocationCallOrder[0]).toBeLessThan(chain.setMlPort.mock.invocationCallOrder[0]);
   });
 
   it('a RoFormer worker plans the chunk: its geometry reaches the chain before ML starts, and the selector adds no gate', () => {
     const { sel, hosts, chain } = setup();
-    sel.update(req(true, 'roformer'));
+    sel.update(req(true, 'kim2'));
     hosts[0].onStatus!(ready(5000, planned)); // far over any fixed gate: the worker already checked it
     expect(chain.setMlGeometry).toHaveBeenLastCalledWith(planned);
     expect(chain.setMlGeometry.mock.invocationCallOrder.at(-1)).toBeLessThan(chain.setEngine.mock.invocationCallOrder[0]);
@@ -329,10 +329,10 @@ describe('EngineSelector', () => {
   });
   it('the delay budget goes to the host; a change restarts the probe, for the default model too', () => {
     const { sel, hosts, delays, chain } = setup();
-    sel.update(req(true, 'roformer', null));
-    sel.update(req(true, 'roformer', null));
+    sel.update(req(true, 'kim2', null));
+    sel.update(req(true, 'kim2', null));
     expect(hosts).toHaveLength(1);
-    sel.update(req(true, 'roformer', 6000));
+    sel.update(req(true, 'kim2', 6000));
     expect(hosts).toHaveLength(2);
     expect(hosts[0].disposed).toBe(true);
     expect(delays).toEqual([null, 6000]);
@@ -352,10 +352,10 @@ describe('EngineSelector', () => {
     hosts[0].onStatus!(ready(50));
     expect(sel.status.state).toBe('on');
     chain.setEngine.mockClear();
-    sel.update(req(true, 'roformer'));
+    sel.update(req(true, 'kim2'));
     expect(chain.setEngine).toHaveBeenCalledWith('bypass', 'auto');
     expect(hosts[0].disposed).toBe(true);
-    expect(models).toEqual(['mdx', 'roformer']);
+    expect(models).toEqual(['mdx', 'kim2']);
     expect(sel.status).toEqual({ state: 'warming' });
     hosts[1].onStatus!(ready(100, planned));
     expect(sel.status).toEqual({ state: 'on' });
@@ -363,14 +363,14 @@ describe('EngineSelector', () => {
 
   it('an unchanged model does not restart the probe', () => {
     const { sel, hosts } = setup();
-    sel.update(req(true, 'roformer'));
-    sel.update(req(true, 'roformer'));
+    sel.update(req(true, 'kim2'));
+    sel.update(req(true, 'kim2'));
     expect(hosts).toHaveLength(1);
   });
 
   it('a model change after the runtime stop retries', () => {
     const { sel, hosts, miss } = setup();
-    sel.update(req(true, 'roformer'));
+    sel.update(req(true, 'kim2'));
     hosts[0].onStatus!(ready(100, planned));
     miss();
     expect(sel.status.state).toBe('stopped');

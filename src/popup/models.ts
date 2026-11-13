@@ -44,7 +44,7 @@ function modelLine(id: ModelId, s: ModelState): Omit<ModelLine, 'id'> {
 /** The state of the downloadable models, kept live from chrome.storage.local. */
 /** `split`: which split stages are on. */
 export function useModels(selected: string, split: { drums: boolean; guitar: boolean }, enabled: boolean, noF16 = false): { model?: ModelLine; drums?: ModelLine; guitar?: ModelLine } {
-  const [records, setRecords] = useState<AllRecords>({ kim2: {}, roformer: {}, deux: {}, sw: {}, drums: {}, guitar: {}, compat: {} });
+  const [records, setRecords] = useState<AllRecords>({ kim2: {}, deux: {}, sw: {}, drums: {}, guitar: {}, compat: {} });
   const [, tick] = useReducer((n: number) => n + 1, 0);
 
   useEffect(() => {

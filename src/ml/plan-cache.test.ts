@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SPEED_TTL_MS, lookupSpeed, rememberSpeed, speedKey } from './plan-cache';
 
-const key = speedKey({ model: 'roformer', modelVersion: 2, appVersion: '0.3.0', adapter: 'apple metal-3' });
+const key = speedKey({ model: 'kim2', modelVersion: 2, appVersion: '0.3.0', adapter: 'apple metal-3' });
 
 describe('speed cache', () => {
   it('finds what was remembered, until it is old', () => {
@@ -13,7 +13,7 @@ describe('speed cache', () => {
   it('another GPU, model version or app version is a different key', () => {
     const c = rememberSpeed(undefined, key, 790);
     for (const other of [{ adapter: 'nvidia' }, { modelVersion: 3 }, { appVersion: '0.4.0' }, { model: 'deux' }]) {
-      expect(lookupSpeed(c, speedKey({ model: 'roformer', modelVersion: 2, appVersion: '0.3.0', adapter: 'apple metal-3', ...other }))).toBeNull();
+      expect(lookupSpeed(c, speedKey({ model: 'kim2', modelVersion: 2, appVersion: '0.3.0', adapter: 'apple metal-3', ...other }))).toBeNull();
     }
   });
 

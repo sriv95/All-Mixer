@@ -3,6 +3,8 @@ import { TabStore } from './tab-store';
 import { LyricsCache } from './lyrics-cache';
 import { findLyrics, searchLyrics } from '../lyrics/lrclib';
 import { ModelManager } from './model-manager';
+import { migrateModels } from './migrate';
+import { opfsFiles } from '../shared/model-files';
 import { Badges } from './badge';
 import type { ModelId } from '../shared/model-store';
 
@@ -12,10 +14,15 @@ const models = new ModelManager(chrome.storage.local);
 const badges = new Badges();
 
 // A stopped service worker would end the download: any extension API call resets its idle timer.
-function install(id: ModelId): void {
+function install(id: ModelId): Promise<void> {
   const t = setInterval(() => void chrome.runtime.getPlatformInfo(), 20_000);
-  void models.install(id).finally(() => clearInterval(t));
+  return models.install(id).finally(() => clearInterval(t));
 }
+
+// The dropped High quality model (RoFormer) is replaced by Kim Vocal 2: clean up and reinstall (migrate.ts). Idempotent.
+const migrate = () => void migrateModels(chrome.storage.local, opfsFiles(), install).catch((e) => console.error('[All Mixer!] model migration', e));
+chrome.runtime.onInstalled.addListener(migrate);
+chrome.runtime.onStartup.addListener(migrate);
 
 async function handle(msg: BackgroundRequest, sender: chrome.runtime.MessageSender): Promise<unknown> {
   switch (msg.type) {
@@ -48,7 +55,7 @@ async function handle(msg: BackgroundRequest, sender: chrome.runtime.MessageSend
     case 'model-check':
       return models.check();
     case 'model-install':
-      install(msg.id);
+      void install(msg.id);
       return null;
     case 'model-uninstall':
       await models.uninstall(msg.id);

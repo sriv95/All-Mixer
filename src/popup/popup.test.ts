@@ -239,10 +239,10 @@ describe('popup', () => {
     const key = (k: string) => trigger().dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true }));
 
     it('shows the stored model and sends a change', async () => {
-      await load({ stored: { mode: 'separate', mlModel: 'roformer' } });
+      await load({ stored: { mode: 'separate', mlModel: 'kim2' } });
       expect(trigger().textContent).toMatch(/High quality/);
-      expect(values()).toEqual(['mdx', 'roformer', 'deux', 'sw']);
-      expect(el('ml-model-option-roformer').getAttribute('aria-selected')).toBe('true');
+      expect(values()).toEqual(['mdx', 'kim2', 'deux', 'sw']);
+      expect(el('ml-model-option-kim2').getAttribute('aria-selected')).toBe('true');
       choose('ml-model', 'mdx');
       await settle();
       expect(sent().at(-1).settings.mlModel).toBe('mdx');
@@ -277,10 +277,10 @@ describe('popup', () => {
       await settle();
       key('ArrowDown');
       await settle();
-      expect(trigger().getAttribute('aria-activedescendant')).toBe('ml-model-option-roformer');
+      expect(trigger().getAttribute('aria-activedescendant')).toBe('ml-model-option-kim2');
       trigger().dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 0 }));
       await settle();
-      expect(sent().at(-1).settings.mlModel).toBe('roformer');
+      expect(sent().at(-1).settings.mlModel).toBe('kim2');
     });
   });
   describe('advanced section', () => {
@@ -308,13 +308,13 @@ describe('popup', () => {
     it('is shown for every model, as a slider in 1 s steps whose range follows the model', async () => {
       await load({ stored: { mode: 'separate', mlModel: 'mdx' } });
       expect(has('chunk-row')).toBe(true);
-      choose('ml-model', 'roformer');
+      choose('ml-model', 'kim2');
       await settle();
       expect(has('chunk-row')).toBe(true);
       const slider = el<HTMLInputElement>('ml-delay');
-      expect([slider.min, slider.max, slider.step, slider.value]).toEqual(['2', '8', '1', '2']);
+      expect([slider.min, slider.max, slider.step, slider.value]).toEqual(['3', '8', '1', '3']);
       expect(slider.disabled).toBe(false);
-      expect(el<HTMLOutputElement>('ml-delay-value').value).toBe('2 s');
+      expect(el<HTMLOutputElement>('ml-delay-value').value).toBe('3 s');
       choose('ml-model', 'deux');
       await settle();
       expect([slider.min, slider.max]).toEqual(['3', '10']);
@@ -325,7 +325,7 @@ describe('popup', () => {
     });
 
     it('dragging only moves the label; Apply sends the delay limit once', async () => {
-      await load({ stored: { mode: 'separate', mlModel: 'roformer', mlDelayS: 4 } });
+      await load({ stored: { mode: 'separate', mlModel: 'kim2', mlDelayS: 4 } });
       const before = sent().length;
       input('ml-delay', '7');
       await settle();
@@ -341,7 +341,7 @@ describe('popup', () => {
   });
 
   describe('model download', () => {
-    const files = { 'roformer.onnx': 100 * 2 ** 20, 'roformer-meta.json': 1000 };
+    const files = { 'kim2.onnx': 100 * 2 ** 20, 'kim2-meta.json': 1000 };
     const dfiles = { 'deux.onnx': 50 * 2 ** 20, 'deux-meta.json': 1000 };
     const remote = (version: number, f: Record<string, number> = files) => ({ format: MODEL_FORMAT, version, files: f, checkedAt: 0 });
     const installedV1 = { format: MODEL_FORMAT, version: 1, files };
@@ -349,20 +349,20 @@ describe('popup', () => {
     it('is hidden for the default model and shown for a downloadable one', async () => {
       await load({ stored: { mode: 'separate', mlModel: 'mdx' } });
       expect(has('model-row')).toBe(false);
-      choose('ml-model', 'roformer');
+      choose('ml-model', 'kim2');
       await settle();
       expect(has('model-row')).toBe(true);
     });
 
     it('offers a download when the model is missing and asks the background to install that model', async () => {
-      await load({ stored: { mode: 'separate', mlModel: 'roformer' }, local: { 'modelRemote.roformer': remote(1) } });
+      await load({ stored: { mode: 'separate', mlModel: 'kim2' }, local: { 'modelRemote.kim2': remote(1) } });
       expect(el('model-text').textContent).toMatch(/High quality is a one-time download \(100 MB\)/);
       el<HTMLButtonElement>('model-btn').click();
-      expect(sendMessage).toHaveBeenCalledWith({ type: 'model-install', id: 'roformer' });
+      expect(sendMessage).toHaveBeenCalledWith({ type: 'model-install', id: 'kim2' });
     });
 
     it('shows the state of the selected model (Best Vocal = deux)', async () => {
-      await load({ stored: { mode: 'separate', mlModel: 'deux' }, local: { 'modelInstalled.roformer': installedV1, 'modelRemote.deux': remote(1, dfiles) } });
+      await load({ stored: { mode: 'separate', mlModel: 'deux' }, local: { 'modelInstalled.kim2': installedV1, 'modelRemote.deux': remote(1, dfiles) } });
       expect(el('model-text').textContent).toMatch(/Best Vocal is a one-time download \(50 MB\)/);
       el<HTMLButtonElement>('model-btn').click();
       expect(sendMessage).toHaveBeenCalledWith({ type: 'model-install', id: 'deux' });
@@ -375,8 +375,8 @@ describe('popup', () => {
 
     it('shows download progress without a button', async () => {
       await load({
-        stored: { mode: 'separate', mlModel: 'roformer' },
-        local: { 'modelRemote.roformer': remote(1), 'modelProgress.roformer': { phase: 'downloading', version: 1, done: 50 * 2 ** 20, total: 100 * 2 ** 20, at: Date.now() } },
+        stored: { mode: 'separate', mlModel: 'kim2' },
+        local: { 'modelRemote.kim2': remote(1), 'modelProgress.kim2': { phase: 'downloading', version: 1, done: 50 * 2 ** 20, total: 100 * 2 ** 20, at: Date.now() } },
       });
       expect(el('model-text').textContent).toMatch(/Downloading… 50% \(50 MB of 100 MB\)/);
       expect(has('model-btn')).toBe(false);
@@ -385,19 +385,19 @@ describe('popup', () => {
     });
 
     it('shows no progress bar when nothing is downloading', async () => {
-      await load({ stored: { mode: 'separate', mlModel: 'roformer' }, local: { 'modelRemote.roformer': remote(1) } });
+      await load({ stored: { mode: 'separate', mlModel: 'kim2' }, local: { 'modelRemote.kim2': remote(1) } });
       expect(el('model-row').querySelector('[role=progressbar]')).toBeNull();
     });
 
     it('shows an update button even when the default model is selected', async () => {
-      await load({ stored: { mode: 'separate', mlModel: 'mdx' }, local: { 'modelInstalled.roformer': installedV1, 'modelRemote.roformer': remote(2) } });
+      await load({ stored: { mode: 'separate', mlModel: 'mdx' }, local: { 'modelInstalled.kim2': installedV1, 'modelRemote.kim2': remote(2) } });
       expect(has('model-row')).toBe(true);
       expect(el('model-text').textContent).toMatch(/Update available: High quality model v2/);
       expect(el('model-btn').textContent).toBe('Update');
     });
 
     it('says installed when up to date', async () => {
-      await load({ stored: { mode: 'separate', mlModel: 'roformer' }, local: { 'modelInstalled.roformer': installedV1, 'modelRemote.roformer': remote(1) } });
+      await load({ stored: { mode: 'separate', mlModel: 'kim2' }, local: { 'modelInstalled.kim2': installedV1, 'modelRemote.kim2': remote(1) } });
       expect(el('model-text').textContent).toBe('High quality model v1 installed.');
       expect(has('model-btn')).toBe(false);
       expect(el('model-uninstall').textContent).toBe('Uninstall model');
@@ -429,7 +429,7 @@ describe('popup', () => {
     });
 
     it('the switch sends the setting and leaves the delay limit alone', async () => {
-      await load({ stored: { mode: 'separate', mlModel: 'roformer', mlDelayS: 3 } });
+      await load({ stored: { mode: 'separate', mlModel: 'kim2', mlDelayS: 3 } });
       el('split-on').click();
       await settle();
       expect(sent().at(-1).settings).toMatchObject({ splitInstrumental: true, mlDelayS: 3 });

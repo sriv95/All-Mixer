@@ -64,7 +64,8 @@ describe('normalizeSettings', () => {
     expect(normalizeSettings({ gpu: 'nvidia' }).gpu).toBe('auto');
   });
   it('keeps a known ML model and falls back to mdx otherwise', () => {
-    for (const m of ['roformer', 'deux']) expect(normalizeSettings({ mlModel: m }).mlModel).toBe(m);
+    expect(normalizeSettings({ mlModel: 'roformer' }).mlModel).toBe('kim2'); // the dropped High quality id follows Kim Vocal 2
+    for (const m of ['kim2', 'deux']) expect(normalizeSettings({ mlModel: m }).mlModel).toBe(m);
     expect(normalizeSettings({ mlModel: 'kim' }).mlModel).toBe('mdx');
     expect(normalizeSettings({ mlModel: 'mdx' }).mlModel).toBe('mdx');
     expect(normalizeSettings({ mlModel: 'nope' }).mlModel).toBe('mdx');
@@ -78,12 +79,12 @@ describe('normalizeSettings', () => {
     expect(normalizeSettings({ mlDelayS: 'x' }).mlDelayS).toBe(2);
     expect(normalizeSettings({}).mlDelayS).toBe(2);
     expect('mlAuto' in normalizeSettings({ mlAuto: true })).toBe(false); // the removed Auto setting is dropped
-    expect(mlDelayMsFor(normalizeSettings({ mlDelayS: 6, mlModel: 'roformer' }))).toBe(6000);
+    expect(mlDelayMsFor(normalizeSettings({ mlDelayS: 6, mlModel: 'kim2' }))).toBe(6000);
   });
   it('the delay limit in use is the stored value within the selected model range, which is not rewritten', () => {
     expect(clampDelayS(9, 'mdx')).toBe(4);
-    expect(clampDelayS(1, 'roformer')).toBe(2);
-    expect(clampDelayS(99, 'roformer')).toBe(8);
+    expect(clampDelayS(1, 'kim2')).toBe(3);
+    expect(clampDelayS(99, 'kim2')).toBe(8);
     expect(clampDelayS(2, 'deux')).toBe(3);
     expect(clampDelayS(99, 'sw')).toBe(10);
     const stored = normalizeSettings({ mlModel: 'mdx', mlDelayS: 2 });

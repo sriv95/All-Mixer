@@ -13,7 +13,7 @@ export interface MixerSettings {
   vocalPct: number;
   /** Separate mode instrumental volume, percent (0–100). Used once separation lands. */
   instrumentalPct: number;
-  /** Separate mode ML model: 'mdx' (MDX-Net 9482 + Spleeter, the default) or a downloaded RoFormer: 'roformer' (Kim fine-tune, High quality), 'deux' (Best Vocal) or 'sw' (Best Instrumental: six stems in one pass; the Drums, Guitar, Bass and Piano levels apply and the split switches are off). */
+  /** Separate mode ML model: 'mdx' (MDX-Net 9482 + Spleeter, the default) or a downloaded model: 'kim2' (Kim Vocal 2, High quality), 'deux' (Best Vocal) or 'sw' (Best Instrumental: six stems in one pass; the Drums, Guitar, Bass and Piano levels apply and the split switches are off). */
   mlModel: MlModel;
   /** Split instrumental (Advanced): a second model takes the drums out of the instrumental, which then has a Drums and an Others gain. Costs GPU time and delay. */
   splitInstrumental: boolean;
@@ -139,7 +139,8 @@ export function normalizeSettings(raw: unknown): MixerSettings {
     masterPct: clampMasterPct(r.masterPct),
     vocalPct: clampPct(r.vocalPct, DEFAULT_SETTINGS.vocalPct),
     instrumentalPct: clampPct(r.instrumentalPct, DEFAULT_SETTINGS.instrumentalPct),
-    mlModel: ML_MODELS.includes(r.mlModel as MlModel) ? (r.mlModel as MlModel) : DEFAULT_SETTINGS.mlModel,
+    // 'roformer' was High quality before Kim Vocal 2 took the slot: a stored selection follows it.
+    mlModel: ML_MODELS.includes(r.mlModel as MlModel) ? (r.mlModel as MlModel) : r.mlModel === 'roformer' ? 'kim2' : DEFAULT_SETTINGS.mlModel,
     splitInstrumental: r.splitInstrumental === true,
     splitGuitar: r.splitGuitar === true,
     drumsPct: clampPct(r.drumsPct, DEFAULT_SETTINGS.drumsPct),

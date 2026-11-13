@@ -642,7 +642,7 @@ describe('SeparatorCore, hold / release (pause)', () => {
 });
 
 describe('SeparatorCore, RoFormer geometry', () => {
-  const G = GEOMETRY.roformer;
+  const G = GEOMETRY.kim2;
   const rblocks = (n: number) => (n * G.block) / QUANTUM; // quanta; block 39690 is not a multiple of 128, so round up
   it('latency stays under 2 s', () => {
     expect(G.latency).toBe(ROF_LATENCY_SAMPLES);
@@ -650,7 +650,7 @@ describe('SeparatorCore, RoFormer geometry', () => {
   });
 
   it('with every block back in time, output is the input delayed by the RoFormer latency (stems sum to it)', () => {
-    const r = rig(14, noise, 'roformer');
+    const r = rig(14, noise, 'kim2');
     r.core.setActive(true, 'ml');
     expect(r.core.engine).toBe('ml');
     expect(r.core.latencySamples).toBe(G.latency);
@@ -674,7 +674,7 @@ describe('SeparatorCore, RoFormer geometry', () => {
   });
 
   it('a model change waits for the original mix, then switching back to MDX restores its latency', () => {
-    const r = rig(6, noise, 'roformer');
+    const r = rig(6, noise, 'kim2');
     r.core.setActive(true, 'ml');
     r.core.setModel('mdx'); // engine is ml: waits
     expect(r.core.latencySamples).toBe(G.latency);

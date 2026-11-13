@@ -19,18 +19,18 @@ export const MODEL_FORMAT = 2;
 export const CHUNK = 8 * 2 ** 20;
 
 /**
- * The downloadable models. 'roformer', 'deux' and 'sw' are the Model menu entries (src/worklet/protocol.ts MlModel);
+ * The downloadable models. 'kim2', 'deux' and 'sw' are the Model menu entries (src/worklet/protocol.ts MlModel);
  * 'drums' is SCNet Tran Small, the model of Split instrumental (src/ml/scnet.ts). 'guitar' is becruily's Mel-Band
  * RoFormer guitar stem model, a second stem of Split instrumental next to the drums (src/ml/guitar-stage.ts).
  * 'compat' is the Default model (MDX-Net + Spleeter) in fp32, for GPUs without WebGPU shader-f16 (e.g. AMD Polaris):
  * the packed Default models are fp16 and cannot run there. It is not a menu entry; the popup offers it when the GPU needs it.
  */
-export type ModelId = 'kim2' | 'roformer' | 'deux' | 'sw' | 'drums' | 'guitar' | 'compat';
-export const MODEL_IDS: readonly ModelId[] = ['kim2', 'roformer', 'deux', 'sw', 'drums', 'guitar', 'compat'];
+export type ModelId = 'kim2' | 'deux' | 'sw' | 'drums' | 'guitar' | 'compat';
+export const MODEL_IDS: readonly ModelId[] = ['kim2', 'deux', 'sw', 'drums', 'guitar', 'compat'];
 /** The downloadable Model menu entries. */
-export const VOCAL_MODEL_IDS: readonly ModelId[] = ['roformer', 'deux', 'sw'];
+export const VOCAL_MODEL_IDS: readonly ModelId[] = ['kim2', 'deux', 'sw'];
 /** Menu names. */
-export const MODEL_LABEL: Readonly<Record<ModelId, string>> = { kim2: 'Kim Vocal 2', roformer: 'High quality', deux: 'Best Vocal', sw: 'Best Instrumental', drums: 'Drum split', guitar: 'Guitar split', compat: 'Default (this GPU)' };
+export const MODEL_LABEL: Readonly<Record<ModelId, string>> = { kim2: 'High quality', deux: 'Best Vocal', sw: 'Best Instrumental', drums: 'Drum split', guitar: 'Guitar split', compat: 'Default (this GPU)' };
 /** The files of a model: weights and, for the RoFormers, the STFT metadata. */
 export const modelFileNames = (id: ModelId): string[] =>
   id === 'drums' ? ['drums.onnx'] : id === 'compat' ? ['compat-mdx.onnx', 'compat-vocals.onnx'] : [`${id}.onnx`, `${id}-meta.json`];

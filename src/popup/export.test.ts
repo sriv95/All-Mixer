@@ -82,7 +82,7 @@ describe('Export section', () => {
   });
 
   it('the audio options start from the live settings and changing them leaves the live settings alone', async () => {
-    await load({ stored: { mode: 'separate', vocalPct: 30, instrumentalPct: 80, masterPct: 200, mlModel: 'roformer' } });
+    await load({ stored: { mode: 'separate', vocalPct: 30, instrumentalPct: 80, masterPct: 200, mlModel: 'kim2' } });
     expect(el('export-vocal-value').textContent).toBe('30%');
     expect(el('export-instrumental-value').textContent).toBe('80%');
     expect(el('export-master-value').textContent).toBe('200%');

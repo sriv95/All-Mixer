@@ -1,5 +1,4 @@
 """Export the Mel-Band RoFormer vocal models for the extension (the Model menu in the popup):
-  roformer  Unwa's Kim fine-tune `mel_band_roformer_kim_ft_unwa` (menu: High quality)
   deux      becruily's 2-stem `mel-band-roformer-deux` (CC BY-NC 4.0); only its vocal stem is exported (menu: Best Vocal)
   sw        BS-RoFormer SW (jarredou, 6 stems: bass, drums, other, vocals, guitar, piano; hop 512, 62 bands of 2 to 129 bins, depth 12;
             licence not stated), all stems exported (menu: Best Instrumental)
@@ -29,13 +28,11 @@ from audio_separator.separator.uvr_lib_v5.roformer import mel_band_roformer as m
 from audio_separator.separator.uvr_lib_v5.roformer.mel_band_roformer import MaskEstimator, MelBandRoformer
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-BASE = 'https://github.com/nomadkaraoke/python-audio-separator/releases/download/model-configs'
 DEUX = 'https://huggingface.co/becruily/mel-band-roformer-deux/resolve/main'
 GUITAR = 'https://huggingface.co/becruily/mel-band-roformer-guitar/resolve/main'
 SW = 'https://huggingface.co/FractalSurfer/BS-RoFormer-SW-6stem/resolve/main'  # a mirror: the author's own repo is gone
 # name -> (checkpoint url, SHA-256 or None, config url, index of the vocal stem in the model output)
 MODELS = {
-    'roformer': (f'{BASE}/mel_band_roformer_kim_ft_unwa.ckpt', 'e6bd8d333880191254a6ef6be3cb0ffa4dda9d3282e36b0cce2e88a660e00d39', f'{BASE}/config_mel_band_roformer_kim_ft_unwa.yaml', 0),
     # stems are [Vocals, Instrumental]; stem 0 has ~0 % of its energy below 150 Hz, stem 1 about 65 %
     # debug Split model, not a menu entry: becruily's guitar model, stems [Guitar, Other], one mask estimator; licence unstated
     'guitar': (f'{GUITAR}/becruily_guitar.ckpt', None, f'{GUITAR}/config_guitar_becruily.yaml', 0),
