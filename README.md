@@ -76,7 +76,7 @@ Build, architecture, model publishing and debug notes are in [src/README.md](src
 
 - [Spleeter](https://github.com/deezer/spleeter) (Deezer)
 - Default Model: [MDX-Net](https://github.com/Anjok07/ultimatevocalremovergui) 
-- High-Quality Model: [Kim Vocal 2](https://github.com/TRvlvr/model_repo/releases/tag/all_public_uvr_models) (UVR MDX-Net model by KimberleyJensen). Licence: not stated by the author.
+- High-Quality Model: [Kim Vocal 2](https://github.com/TRvlvr/model_repo/releases/tag/all_public_uvr_models) 
 - Best-Vocal Model: [mel-band-roformer-deux](https://huggingface.co/becruily/mel-band-roformer-deux)
 - Drum Splitting Model: [SCNet](https://github.com/starrytong/SCNet) , ( Tran Small checkpoint from [ZFTurbo](https://github.com/ZFTurbo/Music-Source-Separation-Training) )
 - Best Instrumental Model: [BS-RoFormer-SW-6stem](https://huggingface.co/FractalSurfer/BS-RoFormer-SW-6stem)
