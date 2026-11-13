@@ -122,6 +122,12 @@ describe('planRof with the drum stage', () => {
 });
 
 describe('planMdxDrums', () => {
+  it('takes another MDX model block as the base', () => {
+    const base = { block: 36096, resultOffset: 36096 };
+    const g = planMdxDrums(150, [{ ...DRUM_STAGE, ms: 820 }], base)!;
+    expect(g.block).toBe(base.block);
+    expect(g.resultOffset).toBe(base.resultOffset + SC_LAG);
+  });
   it('keeps the MDX block and adds the drum wait; the slack covers a step with a drum run', () => {
     const g = planMdxDrums(143, [{ ...DRUM_STAGE, ms: 820 }])!; // MDX block step and one SCNet Tran run, measured on an M1
     expect(g).not.toBeNull();

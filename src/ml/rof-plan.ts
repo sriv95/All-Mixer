@@ -111,16 +111,16 @@ export const gateMs = (g: RofGeometry): number => g.slack / SAMPLES_PER_MS / MAR
  * Geometry of the default (MDX) model with the split stages: its fixed block and offset, plus the wait for the longest
  * stage chunk. A step that runs the stage models takes `mdxMs` plus their runs and the block behind it waits for it, so
  * the slack covers them and half a run more. null when they together cannot keep up with the audio (their load per
- * block period, with MARGIN, is over 1). The caller sets the `drums` / `guitar` flags of the stages that are on.
+ * block period, with MARGIN, is over 1). `base`: another MDX model's block and offset (default: the compat model's). The caller sets the `drums` / `guitar` flags of the stages that are on.
  */
-export function planMdxDrums(mdxMs: number, stages: readonly StageCost[]): MlGeometry | null {
-  const periodMs = ML_BLOCK / SAMPLES_PER_MS;
-  const load = stages.reduce((sum, s) => sum + (s.ms * ML_BLOCK) / s.stride, 0);
+export function planMdxDrums(mdxMs: number, stages: readonly StageCost[], base: { block: number; resultOffset: number } = { block: ML_BLOCK, resultOffset: ML_RESULT_OFFSET }): MlGeometry | null {
+  const periodMs = base.block / SAMPLES_PER_MS;
+  const load = stages.reduce((sum, s) => sum + (s.ms * base.block) / s.stride, 0);
   if (MARGIN * (mdxMs + load) > periodMs) return null;
   const runs = stages.reduce((sum, s) => sum + s.ms, 0);
   const slack = alignUp(MARGIN * (mdxMs + 1.5 * runs) * SAMPLES_PER_MS);
-  const resultOffset = ML_RESULT_OFFSET + stagesLag(stages);
-  return { block: ML_BLOCK, resultOffset, latency: ML_BLOCK + resultOffset + slack + ML_QUANTUM, warmupP90Ms: slack / SAMPLES_PER_MS / MARGIN };
+  const resultOffset = base.resultOffset + stagesLag(stages);
+  return { block: base.block, resultOffset, latency: base.block + resultOffset + slack + ML_QUANTUM, warmupP90Ms: slack / SAMPLES_PER_MS / MARGIN };
 }
 
 /**
