@@ -1,4 +1,4 @@
-// App-code stream eval of Kim Vocal 2: bundles src/ml/mdx.ts + mdx-plan.ts from the kim-vocal-hq worktree (read-only), kim2.onnx fp32 I/O.
+// App-code stream eval of Kim Vocal 2: bundles the repo's src/ml/mdx.ts + mdx-plan.ts, kim2.onnx fp32 I/O.
 //   node spike/bench/app_kim2_eval.mjs <T> [clips=5]   appends to results/app_kim2_eval.jsonl
 import http from 'node:http';
 import fs from 'node:fs';
@@ -14,7 +14,7 @@ const work = path.join(root, 'bench/results/fast_work');
 const [Targ, clipsArg = '5'] = process.argv.slice(2); const T = +Targ, name = 'kim2';
 // compat/roformer files in models-out; the app's names differ from the row names
 const alias = { roformer: ['roformer.onnx', 'roformer-meta.json'], compat: ['compat-mdx.onnx', null] };
-const src = '/Users/sriv/Space/worktrees/All-Mixer/kim-vocal-hq/src/ml'; fs.mkdirSync(work, { recursive: true });
+const src = path.resolve(root, '../src/ml'); fs.mkdirSync(work, { recursive: true });
 for (const f of ['mdx', 'mdx-plan']) execFileSync('bun', ['build', `${src}/${f}.ts`, '--outfile', `${work}/app_${f}.bundle.js`, '--target=browser'], { stdio: 'ignore' });
 
 const find = (u) => {
