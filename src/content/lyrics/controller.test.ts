@@ -40,6 +40,7 @@ function deps(over: Partial<LyricsDeps> = {}): LyricsDeps {
     getTimedText: vi.fn(async () => null),
     fetchLyrics: vi.fn(async (): Promise<FoundLyrics | null> => ({ synced: SYNCED, record })),
     fetchYtmLyrics: vi.fn(async (): Promise<string | null> => null),
+    fetchLrcmuxLyrics: vi.fn(async (): Promise<FoundLyrics | null> => null),
     ...over,
   };
 }
@@ -111,6 +112,23 @@ describe('chooseSource', () => {
     expect(kindOf(chooseSource(plain, {}, 'auto', false, 'ytm text'))).toBe('ytm');
     expect(kindOf(chooseSource(synced, {}, 'auto', false, 'ytm text'))).toBe('lrclib-synced');
     expect(kindOf(chooseSource(null, {}, 'auto', false, 'ytm text'))).toBe('ytm');
+  });
+
+  it('puts lrcmux synced after LRCLIB synced and before other captions, lrcmux plain after YouTube Music', () => {
+    const msynced = { synced: SYNCED, record };
+    const mplain = { plain: 'mux plain', record };
+    expect(kindOf(chooseSource(synced, {}, 'auto', false, null, msynced))).toBe('lrclib-synced');
+    expect(kindOf(chooseSource(null, { asr }, 'auto', false, null, msynced))).toBe('lrcmux-synced');
+    expect(kindOf(chooseSource(null, { manual, asr }, 'auto', false, null, msynced))).toBe('captions:manual');
+    expect(kindOf(chooseSource(null, { asr }, 'auto', false, null, mplain))).toBe('captions:asr');
+    expect(kindOf(chooseSource(null, {}, 'auto', false, 'ytm text', mplain))).toBe('ytm');
+    expect(kindOf(chooseSource(plain, {}, 'auto', false, null, mplain))).toBe('lrcmux-plain');
+    expect(kindOf(chooseSource(plain, {}))).toBe('lrclib-plain');
+  });
+
+  it("honours the 'lrcmux' pick", () => {
+    expect(kindOf(chooseSource(synced, { manual }, 'lrcmux', false, null, { plain: 'p', record }))).toBe('lrcmux-plain');
+    expect(chooseSource(plain, {}, 'lrcmux')).toMatchObject({ use: 'lrclib-plain', fellBack: 'lrcmux' });
   });
 
   it("honours the 'ytm' pick", () => {
@@ -212,6 +230,50 @@ describe('LyricsController', () => {
       await flush();
       expect(c.current).toMatchObject({ kind: 'ready', lyrics: { source: 'youtube-music' } });
       expect(d.fetchYtmLyrics).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('lrcmux source', () => {
+    const run = async (d: LyricsDeps, source?: 'lrcmux') => {
+      const c = new LyricsController('youtube', d);
+      if (source) c.applyStored(source, null);
+      const s = new FakeSurface();
+      s.active = true;
+      c.addSurface(s);
+      c.setVideoId('v1');
+      await flush();
+      return c;
+    };
+    const plainOnly = () => vi.fn(async (): Promise<FoundLyrics | null> => ({ plain: 'lrclib plain', record }));
+
+    it('is not fetched when LRCLIB synced wins', async () => {
+      const d = deps({ fetchLrcmuxLyrics: vi.fn(async () => ({ synced: SYNCED, record })) });
+      const c = await run(d);
+      expect(c.current).toMatchObject({ kind: 'ready', lyrics: { source: 'lrclib' } });
+      expect(d.fetchLrcmuxLyrics).not.toHaveBeenCalled();
+    });
+
+    it('is shown, and YouTube Music is skipped, when LRCLIB has only plain text', async () => {
+      const d = deps({ fetchLyrics: plainOnly(), fetchLrcmuxLyrics: vi.fn(async () => ({ synced: SYNCED, record })), fetchYtmLyrics: vi.fn(async () => 'ytm text') });
+      const c = await run(d);
+      expect(c.current).toMatchObject({ kind: 'ready', lyrics: { kind: 'synced', source: 'lrcmux' } });
+      expect(d.fetchYtmLyrics).not.toHaveBeenCalled();
+    });
+
+    it('a miss or rate limit (null) skips to YouTube Music, then LRCLIB plain, and is not retried', async () => {
+      const d = deps({ fetchLyrics: plainOnly(), fetchLrcmuxLyrics: vi.fn(async () => { throw new Error('RateLimited'); }), fetchYtmLyrics: vi.fn(async () => 'ytm text') });
+      const c = await run(d);
+      expect(c.current).toMatchObject({ kind: 'ready', lyrics: { source: 'youtube-music' }, sources: { available: { lrcmux: false } } });
+      c.selectSource('auto');
+      await flush();
+      expect(d.fetchLrcmuxLyrics).toHaveBeenCalledTimes(1);
+    });
+
+    it('is fetched on demand when the user picks it', async () => {
+      const d = deps({ fetchLrcmuxLyrics: vi.fn(async () => ({ plain: 'mux plain', record })) });
+      const c = await run(d, 'lrcmux');
+      expect(c.current).toMatchObject({ kind: 'ready', lyrics: { kind: 'plain', source: 'lrcmux', text: 'mux plain' } });
+      expect(d.fetchLrcmuxLyrics).toHaveBeenCalledTimes(1);
     });
   });
 

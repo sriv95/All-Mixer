@@ -13,10 +13,11 @@ The extension runs on all websites so that it can find the video or audio player
 
 ## What the extension sends over the network
 
-Only two services are contacted:
+Only these services are contacted:
 
 1. **LRCLIB (`lrclib.net`), for synced lyrics.** On YouTube and YouTube Music, the extension sends the title, artist, album (if known) and duration of the current video to look up lyrics. Nothing else is sent, and the request has no account or identifier. LRCLIB is a third-party service with its own policy.
 2. **Hugging Face (`huggingface.co`), to download models.** When you choose a higher quality model, the extension downloads its file once from the project's public model repository. The request is a plain file download. No data about you or your audio is sent.
+3. **lrcmux (`api.lrcmux.dev`), for lyrics LRCLIB does not have.** When earlier sources miss, the extension sends the track title, artist, album (if known) and duration to lrcmux. Nothing else is sent, and the request has no account or identifier. lrcmux is a third-party service with its own policy.
 
 The extension also reads captions from the YouTube page you are watching, to show lyrics when LRCLIB has none. Those captions are read in your browser and not sent anywhere else.
 

@@ -144,6 +144,12 @@ export interface FetchYtmLyrics {
   videoId: string;
 }
 
+/** Content script → background: lyrics from lrcmux (cached). Response: FoundLyrics | null (null on a miss, a rate limit or an error). */
+export interface FetchLrcmuxLyrics {
+  type: 'fetch-lrcmux-lyrics';
+  track: TrackInfo;
+}
+
 /** Content script → background: free-text LRCLIB search. Response: LrclibRecord[] (usable lyrics only). */
 export interface SearchLyrics {
   type: 'search-lyrics';
@@ -192,6 +198,7 @@ export type BackgroundRequest =
   | SetTabSettings
   | FetchLyrics
   | FetchYtmLyrics
+  | FetchLrcmuxLyrics
   | SearchLyrics
   | PinLyrics
   | UnpinLyrics

@@ -7,18 +7,21 @@ const DEFAULT_COOLDOWN_MS = 5 * 60 * 1000;
 export class Backoff {
   private until = 0;
 
-  constructor(private readonly now: () => number = Date.now) {}
+  constructor(
+    private readonly now: () => number = Date.now,
+    private readonly defaultMs = DEFAULT_COOLDOWN_MS,
+  ) {}
 
   /** Throws RateLimited while the cooldown runs. */
   check(): void {
     if (this.now() < this.until) throw new RateLimited('cooling down');
   }
 
-  /** Start a cooldown: the Retry-After header (seconds or an HTTP date), else 5 minutes. */
+  /** Start a cooldown: the Retry-After header (seconds or an HTTP date), else the default (5 minutes). */
   trip(retryAfter: string | null): never {
     const secs = Number(retryAfter);
     const ms = retryAfter && Number.isFinite(secs) ? secs * 1000 : retryAfter ? Date.parse(retryAfter) - this.now() : NaN;
-    this.until = this.now() + (ms > 0 ? ms : DEFAULT_COOLDOWN_MS);
+    this.until = this.now() + (ms > 0 ? ms : this.defaultMs);
     throw new RateLimited('rate limited');
   }
 }

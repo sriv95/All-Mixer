@@ -20,9 +20,9 @@ export type SourcePref = LyricsSource;
 /** What the footer's source menu needs. */
 export interface SourceMenu {
   pref: SourcePref;
-  available: { lrclib: boolean; ytm: boolean; captions: boolean };
+  available: { lrclib: boolean; lrcmux: boolean; ytm: boolean; captions: boolean };
   /** The pick could not be honoured for this video (missing source); the auto order was used instead. */
-  fellBack?: 'lrclib' | 'ytm' | 'captions';
+  fellBack?: 'lrclib' | 'lrcmux' | 'ytm' | 'captions';
   /** Source of the lyrics on screen; the menu shows it next to "Auto". */
   shown?: Lyrics['source'];
 }
@@ -50,6 +50,8 @@ export interface LyricsDeps {
   fetchLyrics(track: TrackInfo): Promise<FoundLyrics | null>;
   /** YouTube Music plain lyrics (a heavy request: only asked for when nothing better wins). Null on a miss or a rate limit. */
   fetchYtmLyrics(videoId: string): Promise<string | null>;
+  /** lrcmux lyrics (cached in the background); null on a miss, a rate limit or an error. */
+  fetchLrcmuxLyrics(track: TrackInfo): Promise<FoundLyrics | null>;
   /** Subscribe to "the player just loaded captions for this video" (user turned CC on). */
   onCaptionsAvailable?(cb: (videoId: string) => void): void;
   /** Media time of the picture on screen (delayed-video overlay, D1); null when there is no overlay. */
@@ -86,21 +88,25 @@ const hasSynced = (found: FoundLyrics | null): boolean => !!found?.synced && par
 const captionCandidate = (c: CaptionSet): FetchedCaptions | undefined => c.display ?? c.manual ?? c.asr ?? c.other;
 
 export interface SourceChoice {
-  use: 'lrclib-synced' | 'lrclib-plain' | 'ytm' | 'captions' | null;
+  use: 'lrclib-synced' | 'lrclib-plain' | 'lrcmux-synced' | 'lrcmux-plain' | 'ytm' | 'captions' | null;
   caption?: FetchedCaptions;
   /** The user's pick had nothing for this video. */
-  fellBack?: 'lrclib' | 'ytm' | 'captions';
+  fellBack?: 'lrclib' | 'lrcmux' | 'ytm' | 'captions';
 }
 
-/** Automatic order: song captions, LRCLIB synced, other captions (ASR first), YouTube Music plain, LRCLIB plain. */
-function autoSource(found: FoundLyrics | null, c: CaptionSet, ytm: string | null): SourceChoice {
-  // A fetched human track in the picked / preferred language counts as song captions, and wins over the default manual track.
-  const song = (c.display && !c.display.asr ? c.display : undefined) ?? c.manual;
+/** A fetched human track in the picked / preferred language counts as song captions, and wins over the default manual track. */
+const songCaption = (c: CaptionSet): FetchedCaptions | undefined => (c.display && !c.display.asr ? c.display : undefined) ?? c.manual;
+
+/** Automatic order: song captions, LRCLIB synced, lrcmux synced, other captions (ASR first), YouTube Music plain, lrcmux plain, LRCLIB plain. */
+function autoSource(found: FoundLyrics | null, c: CaptionSet, ytm: string | null, mux: FoundLyrics | null): SourceChoice {
+  const song = songCaption(c);
   if (song) return { use: 'captions', caption: song };
   if (hasSynced(found)) return { use: 'lrclib-synced' };
+  if (hasSynced(mux)) return { use: 'lrcmux-synced' };
   const caption = captionCandidate(c);
   if (caption) return { use: 'captions', caption };
   if (ytm) return { use: 'ytm' };
+  if (mux?.plain) return { use: 'lrcmux-plain' };
   if (found?.plain) return { use: 'lrclib-plain' };
   return { use: null };
 }
@@ -109,30 +115,38 @@ function autoSource(found: FoundLyrics | null, c: CaptionSet, ytm: string | null
  * Pick the source to show. Pure, exported for tests.
  * `picked`: the user chose a caption language for this video, which means "captions" even in auto mode.
  */
-export function chooseSource(found: FoundLyrics | null, c: CaptionSet, pref: SourcePref = 'auto', picked = false, ytm: string | null = null): SourceChoice {
+export function chooseSource(found: FoundLyrics | null, c: CaptionSet, pref: SourcePref = 'auto', picked = false, ytm: string | null = null, mux: FoundLyrics | null = null): SourceChoice {
   const want = picked ? 'captions' : pref;
   if (want === 'lrclib') {
     if (hasSynced(found)) return { use: 'lrclib-synced' };
     if (found?.plain) return { use: 'lrclib-plain' };
-    return { ...autoSource(found, c, ytm), fellBack: 'lrclib' };
+    return { ...autoSource(found, c, ytm, mux), fellBack: 'lrclib' };
   }
-  if (want === 'ytm') return ytm ? { use: 'ytm' } : { ...autoSource(found, c, ytm), fellBack: 'ytm' };
+  if (want === 'lrcmux') {
+    if (hasSynced(mux)) return { use: 'lrcmux-synced' };
+    if (mux?.plain) return { use: 'lrcmux-plain' };
+    return { ...autoSource(found, c, ytm, mux), fellBack: 'lrcmux' };
+  }
+  if (want === 'ytm') return ytm ? { use: 'ytm' } : { ...autoSource(found, c, ytm, mux), fellBack: 'ytm' };
   if (want === 'captions') {
     const caption = captionCandidate(c);
     if (caption) return { use: 'captions', caption };
-    return { ...autoSource(found, c, ytm), fellBack: 'captions' };
+    return { ...autoSource(found, c, ytm, mux), fellBack: 'captions' };
   }
-  return autoSource(found, c, ytm);
+  return autoSource(found, c, ytm, mux);
 }
 
 /** Build the lyrics for a choice. Pure, exported for tests. */
-function buildLyrics(choice: SourceChoice, found: FoundLyrics | null, captions: CaptionSet, ytm: string | null = null): Lyrics | null {
+function buildLyrics(choice: SourceChoice, found: FoundLyrics | null, captions: CaptionSet, ytm: string | null = null, mux: FoundLyrics | null = null): Lyrics | null {
   if (choice.use === 'ytm' && ytm) return { kind: 'plain', text: ytm, source: 'youtube-music' };
-  if (choice.use === 'lrclib-synced' && found?.synced) {
-    const base: SyncedLyrics = { kind: 'synced', lines: parseLrc(found.synced), source: 'lrclib', offset: 0, hasWordTiming: false };
+  const syncedFrom = choice.use === 'lrclib-synced' ? found : choice.use === 'lrcmux-synced' ? mux : null;
+  if (syncedFrom?.synced) {
+    const source = choice.use === 'lrcmux-synced' ? 'lrcmux' : 'lrclib';
+    const base: SyncedLyrics = { kind: 'synced', lines: parseLrc(syncedFrom.synced), source, offset: 0, hasWordTiming: false };
     base.hasWordTiming = base.lines.some((l) => l.words);
     return alignWithCaptions(base, captions.asr ?? captions.manual ?? null);
   }
+  if (choice.use === 'lrcmux-plain' && mux?.plain) return { kind: 'plain', text: mux.plain, source: 'lrcmux' };
   if (choice.use === 'lrclib-plain' && found?.plain) return { kind: 'plain', text: found.plain, source: 'lrclib' };
   const shown = choice.caption;
   if (choice.use !== 'captions' || !shown) return null;
@@ -148,8 +162,8 @@ function buildLyrics(choice: SourceChoice, found: FoundLyrics | null, captions: 
 }
 
 /** Turn LRCLIB + caption data into what we show. Pure, exported for tests. */
-export function resolveLyrics(found: FoundLyrics | null, captions: CaptionSet, pref: SourcePref = 'auto', picked = false, ytm: string | null = null): Lyrics | null {
-  return buildLyrics(chooseSource(found, captions, pref, picked, ytm), found, captions, ytm);
+export function resolveLyrics(found: FoundLyrics | null, captions: CaptionSet, pref: SourcePref = 'auto', picked = false, ytm: string | null = null, mux: FoundLyrics | null = null): Lyrics | null {
+  return buildLyrics(chooseSource(found, captions, pref, picked, ytm, mux), found, captions, ytm, mux);
 }
 
 interface LoadedBase {
@@ -159,6 +173,8 @@ interface LoadedBase {
   found: FoundLyrics | null;
   /** YouTube Music text; undefined = not fetched yet. */
   ytm?: string | null;
+  /** lrcmux result; undefined = not fetched yet. */
+  mux?: FoundLyrics | null;
 }
 
 export class LyricsController {
@@ -343,11 +359,12 @@ export class LyricsController {
       if (ctrl.signal.aborted) return;
       const base: LoadedBase = { videoId, info, track, found };
       this.base = base;
+      const mux = await this.muxIfNeeded(base, captions);
       const ytm = await this.ytmIfNeeded(base, captions);
       if (ctrl.signal.aborted) return;
-      const choice = chooseSource(found, captions, this.sourcePref, this.pick?.videoId === videoId, ytm);
-      const lyrics = buildLyrics(choice, found, captions, ytm);
-      this.setState(lyrics ? this.ready(lyrics, choice, info, track, found, captions, base.ytm) : { kind: 'not-found', track });
+      const choice = chooseSource(found, captions, this.sourcePref, this.pick?.videoId === videoId, ytm, mux);
+      const lyrics = buildLyrics(choice, found, captions, ytm, mux);
+      this.setState(lyrics ? this.ready(lyrics, choice, info, track, found, captions, base.ytm, base.mux) : { kind: 'not-found', track });
       if (this.pendingRealign === videoId) {
         this.pendingRealign = null;
         void this.realign(videoId);
@@ -360,11 +377,11 @@ export class LyricsController {
     }
   }
 
-  private ready(lyrics: Lyrics, choice: SourceChoice, info: PlayerInfo, track: TrackInfo, found: FoundLyrics | null, captions: CaptionSet, ytm: string | null | undefined = undefined): LyricsState {
+  private ready(lyrics: Lyrics, choice: SourceChoice, info: PlayerInfo, track: TrackInfo, found: FoundLyrics | null, captions: CaptionSet, ytm: string | null | undefined = undefined, mux: FoundLyrics | null | undefined = undefined): LyricsState {
     const sources: SourceMenu = {
       pref: this.sourcePref,
       shown: lyrics.source,
-      available: { lrclib: !!found && (hasSynced(found) || !!found.plain), ytm: ytm !== null, captions: !!captionCandidate(captions) },
+      available: { lrclib: !!found && (hasSynced(found) || !!found.plain), lrcmux: mux !== null, ytm: ytm !== null, captions: !!captionCandidate(captions) },
       ...(choice.fellBack ? { fellBack: choice.fellBack } : {}),
     };
     const shown = choice.use === 'captions' ? choice.caption : undefined;
@@ -380,12 +397,27 @@ export class LyricsController {
    */
   private async ytmIfNeeded(base: LoadedBase, captions: CaptionSet): Promise<string | null> {
     if (base.ytm === undefined) {
-      const first = chooseSource(base.found, captions, this.sourcePref, this.pick?.videoId === base.videoId);
-      const wanted = this.sourcePref === 'ytm' || (this.sourcePref !== 'lrclib' && (first.use === null || first.use === 'lrclib-plain'));
+      const first = chooseSource(base.found, captions, this.sourcePref, this.pick?.videoId === base.videoId, null, base.mux);
+      const wanted = this.sourcePref === 'ytm' || (this.sourcePref !== 'lrclib' && (first.use === null || first.use === 'lrclib-plain' || first.use === 'lrcmux-plain'));
       if (!wanted) return null;
       base.ytm = await this.deps.fetchYtmLyrics(base.videoId).catch(() => null);
     }
     return base.ytm;
+  }
+
+  /**
+   * lrcmux lyrics, fetched at most once per load and only when they can matter: the user picked them, or in auto mode
+   * neither song captions nor LRCLIB synced won. null = none / not wanted.
+   */
+  private async muxIfNeeded(base: LoadedBase, captions: CaptionSet): Promise<FoundLyrics | null> {
+    if (base.mux === undefined) {
+      const picked = this.pick?.videoId === base.videoId;
+      const first = chooseSource(base.found, captions, this.sourcePref, picked);
+      const wanted = this.sourcePref === 'lrcmux' || (this.sourcePref === 'auto' && !picked && first.use !== 'lrclib-synced' && !songCaption(captions));
+      if (!wanted) return null;
+      base.mux = await this.deps.fetchLrcmuxLyrics(base.track).catch(() => null);
+    }
+    return base.mux;
   }
 
   /** Track to show instead of the default choice: this video's pick, else the tab's preferred language. */
@@ -436,15 +468,16 @@ export class LyricsController {
     }
     const captions = await this.captions(videoId, base.info);
     if (this.base !== base) return false;
+    const mux = await this.muxIfNeeded(base, captions);
     const ytm = await this.ytmIfNeeded(base, captions);
     const fetched = base.ytm;
     if (this.base !== base) return false;
-    const choice = chooseSource(base.found, captions, this.sourcePref, this.pick?.videoId === videoId, ytm);
-    const lyrics = buildLyrics(choice, base.found, captions, ytm);
+    const choice = chooseSource(base.found, captions, this.sourcePref, this.pick?.videoId === videoId, ytm, mux);
+    const lyrics = buildLyrics(choice, base.found, captions, ytm, mux);
     if (!lyrics) return false;
     const cur = this.state.kind === 'ready' ? this.state.lyrics : null;
     if (!force && cur && sameTiming(cur, lyrics)) return false;
-    this.setState(this.ready(lyrics, choice, base.info, base.track, base.found, captions, fetched));
+    this.setState(this.ready(lyrics, choice, base.info, base.track, base.found, captions, fetched, base.mux));
     return true;
   }
 

@@ -3,7 +3,7 @@ import { DEFAULT_LYRICS_PREFS, type LyricsPrefs } from '../../shared/lyrics-pref
 import type { CaptionPicker, SourceMenu } from './controller';
 import { YtSettingsMenu, YtmSettingsPopover, buildMenuRows, type MenuActions, type MenuRow } from './settings-menu';
 
-const sources: SourceMenu = { pref: 'auto', available: { lrclib: false, ytm: false, captions: true } };
+const sources: SourceMenu = { pref: 'auto', available: { lrclib: false, lrcmux: false, ytm: false, captions: true } };
 const captions: CaptionPicker = {
   options: [
     { index: 0, label: 'English' },
@@ -60,7 +60,7 @@ describe('buildMenuRows', () => {
   it('disables unavailable sources and explains a fallback', () => {
     const rows = buildMenuRows({ sources: { ...sources, pref: 'lrclib', fellBack: 'lrclib' }, prefs: prefs() }, actions());
     const row = find(rows, 'source')!;
-    expect(row.options.map((o) => [o.label, !!o.disabled])).toEqual([['Auto', false], ['LRCLIB (not found)', true], ['YouTube Music (not found)', true], ['YouTube captions', false]]);
+    expect(row.options.map((o) => [o.label, !!o.disabled])).toEqual([['Auto', false], ['LRCLIB (not found)', true], ['lrcmux (not found)', true], ['YouTube Music (not found)', true], ['YouTube captions', false]]);
     expect(row.selected).toBe('lrclib');
     expect(row.note).toContain('automatic order');
   });
@@ -171,15 +171,15 @@ describe('buildMenuRows', () => {
     const a = actions();
     const rows = (canEdit?: boolean, site?: 'ytmusic') => buildMenuRows({ sources, prefs: prefs(), canEdit, site }, a);
     const labels = (r: MenuRow[]) => find(r, 'source')!.options.map((o) => o.label);
-    expect(labels(rows())).toEqual(['Auto', 'LRCLIB (not found)', 'YouTube Music (not found)', 'YouTube captions']);
-    // www: after the stored sources, before the YouTube captions.
-    expect(labels(rows(true))).toEqual(['Auto', 'LRCLIB (not found)', 'Find other lyrics…', 'Use my own lyrics…', 'YouTube Music (not found)', 'YouTube captions']);
+    expect(labels(rows())).toEqual(['Auto', 'LRCLIB (not found)', 'lrcmux (not found)', 'YouTube Music (not found)', 'YouTube captions']);
+    // www: after the lyrics databases, before the YouTube captions.
+    expect(labels(rows(true))).toEqual(['Auto', 'LRCLIB (not found)', 'lrcmux (not found)', 'YouTube Music (not found)', 'Find other lyrics…', 'Use my own lyrics…', 'YouTube captions']);
     expect(ids(rows(true), 'sourceSection')).toEqual(['source']);
     // YT Music has selects, so the actions stay separate rows.
     expect(ids(rows(true, 'ytmusic'))).toEqual(['source', 'findLyrics', 'myLyrics']);
     const www = find(rows(true), 'source')!.options;
-    www[2].run!();
-    www[3].run!();
+    www[4].run!();
+    www[5].run!();
     expect(a.findLyrics).toHaveBeenCalled();
     expect(a.myLyrics).toHaveBeenCalled();
     // No source row (lyrics not loaded yet): they are rows of the section.
@@ -416,7 +416,7 @@ describe('YtSettingsMenu', () => {
     m.setRows(buildMenuRows({ sources, prefs: prefs(), canEdit: true }, a));
     go('sourceSection', 'source');
     const labels = [...sub().querySelectorAll('.ytp-menuitem-label')].map((e) => e.textContent);
-    expect(labels).toEqual(['Auto', 'LRCLIB (not found)', 'Find other lyrics…', 'Use my own lyrics…', 'YouTube Music (not found)', 'YouTube captions']);
+    expect(labels).toEqual(['Auto', 'LRCLIB (not found)', 'lrcmux (not found)', 'YouTube Music (not found)', 'Find other lyrics…', 'Use my own lyrics…', 'YouTube captions']);
     sub().querySelector<HTMLElement>('[data-am-row-button="findLyrics"]')!.click();
     sub().querySelector<HTMLElement>('[data-am-row-button="myLyrics"]')!.click();
     expect(a.findLyrics).toHaveBeenCalled();
@@ -520,7 +520,7 @@ describe('YtSettingsMenu', () => {
     opts[1].click();
     expect(a.selectSource).not.toHaveBeenCalled();
     expect(titles()).toEqual(['Source']);
-    opts[3].click();
+    opts[4].click();
     expect(a.selectSource).toHaveBeenCalledWith('captions');
     // Window mode drops the karaoke settings and the reset action.
     sub().querySelector<HTMLElement>('.ytp-panel-back-button')!.click();
@@ -617,7 +617,7 @@ describe('YtmSettingsPopover', () => {
     const sels = root.querySelectorAll('select');
     expect(sels).toHaveLength(13);
     const src = sels[0];
-    expect([...src.options].map((o) => o.disabled)).toEqual([false, true, true, false]);
+    expect([...src.options].map((o) => o.disabled)).toEqual([false, true, true, true, false]);
     src.value = 'captions';
     src.dispatchEvent(new Event('change'));
     expect(a.selectSource).toHaveBeenCalledWith('captions');

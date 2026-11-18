@@ -188,7 +188,7 @@ describe('LyricsView', () => {
   it('has no source or caption language selects in the footer (they live in the player settings menu)', () => {
     const v = new LyricsView({ onSeek });
     document.body.append(v.el);
-    v.setLyrics(synced(), { pref: 'lrclib', available: { lrclib: false, ytm: false, captions: true }, fellBack: 'lrclib' });
+    v.setLyrics(synced(), { pref: 'lrclib', available: { lrclib: false, lrcmux: false, ytm: false, captions: true }, fellBack: 'lrclib' });
     const root = v.el.shadowRoot!;
     expect(root.querySelector('select')).toBeNull();
     expect(root.querySelector('.source')!.textContent).toContain('LRCLIB: not found');

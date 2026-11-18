@@ -2,17 +2,20 @@ import type { ApplySettings, BackgroundRequest } from '../shared/messages';
 import { TabStore } from './tab-store';
 import { LyricsCache } from './lyrics-cache';
 import { findYtmLyrics } from '../lyrics/ytm';
+import { findLrcmuxLyrics } from '../lyrics/lrcmux';
 import { findLyrics, searchLyrics } from '../lyrics/lrclib';
 import { ModelManager } from './model-manager';
 import { migrateModels } from './migrate';
 import { opfsFiles } from '../shared/model-files';
 import { Badges } from './badge';
+import type { FoundLyrics } from '../lyrics/lrclib-types';
 import type { TrackInfo } from '../lyrics/types';
 import type { ModelId } from '../shared/model-store';
 
 const store = new TabStore(chrome.storage.session);
 const lyricsCache = new LyricsCache(chrome.storage.local);
 const ytmCache = new LyricsCache<string>(chrome.storage.local, Date.now, 'ytm-lyrics:');
+const lrcmuxCache = new LyricsCache<FoundLyrics>(chrome.storage.local, Date.now, 'lrcmux-lyrics:');
 const models = new ModelManager(chrome.storage.local);
 const badges = new Badges();
 
@@ -46,6 +49,8 @@ async function handle(msg: BackgroundRequest, sender: chrome.runtime.MessageSend
       return lyricsCache.getOrFetch(msg.track, (t) => findLyrics(t));
     case 'fetch-ytm-lyrics':
       return ytmCache.getOrFetch({ videoId: msg.videoId } as TrackInfo, (t) => findYtmLyrics(t.videoId));
+    case 'fetch-lrcmux-lyrics':
+      return lrcmuxCache.getOrFetch(msg.track, (t) => findLrcmuxLyrics(t));
     case 'search-lyrics':
       return searchLyrics(msg.q);
     case 'pin-lyrics':
@@ -71,7 +76,7 @@ async function handle(msg: BackgroundRequest, sender: chrome.runtime.MessageSend
 chrome.runtime.onMessage.addListener((msg: BackgroundRequest, sender, sendResponse) => {
   handle(msg, sender).then(sendResponse, (e) => {
     // LRCLIB being down is not a bug here: warn, so it stays out of the extension's Errors list.
-    const lyrics = msg.type === 'fetch-lyrics' || msg.type === 'fetch-ytm-lyrics' || msg.type === 'search-lyrics';
+    const lyrics = msg.type === 'fetch-lyrics' || msg.type === 'fetch-ytm-lyrics' || msg.type === 'fetch-lrcmux-lyrics' || msg.type === 'search-lyrics';
     (lyrics ? console.warn : console.error)('[All Mixer!]', e);
     sendResponse(null);
   });
