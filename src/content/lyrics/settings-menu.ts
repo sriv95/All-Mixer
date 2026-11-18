@@ -67,7 +67,7 @@ export interface MenuInput {
   site?: Site;
 }
 
-const SHOWN_LABELS = { lrclib: 'LRCLIB', 'youtube-captions': 'YouTube captions', 'youtube-auto-captions': 'YouTube auto captions' } as const;
+const SHOWN_LABELS = { lrclib: 'LRCLIB', 'youtube-music': 'YouTube Music', 'youtube-captions': 'YouTube captions', 'youtube-auto-captions': 'YouTube auto captions' } as const;
 
 const TIMING_STEPS_MS = [-2000, -1000, -500, -250, 0, 250, 500, 1000, 2000] as const;
 
@@ -88,6 +88,7 @@ const OUTLINE_LABELS: Record<KaraokeOutline, string> = { none: 'None', thin: 'Th
 
 const FALLBACK_NOTES = {
   lrclib: 'LRCLIB has no lyrics for this video, so the automatic order is used.',
+  ytm: 'YouTube Music has no lyrics for this video, so the automatic order is used.',
   captions: 'This video has no usable captions, so the automatic order is used.',
 } as const;
 
@@ -221,6 +222,7 @@ export function buildMenuRows(input: MenuInput, actions: MenuActions): MenuRow[]
     const entries: [SourcePref, string, boolean, string][] = [
       ['auto', sources.shown ? `Auto (${SHOWN_LABELS[sources.shown]})` : 'Auto', true, ''],
       ['lrclib', 'LRCLIB', sources.available.lrclib, ' (not found)'],
+      ['ytm', 'YouTube Music', sources.available.ytm, ' (not found)'],
       ['captions', 'YouTube captions', sources.available.captions, ' (none)'],
     ];
     const options: MenuOption[] = entries.map(([value, label, ok, hint]) => ({ value, label: ok ? label : label + hint, disabled: !ok }));

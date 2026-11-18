@@ -1,4 +1,4 @@
-import type { FetchLyrics, PinLyrics, SearchLyrics, UnpinLyrics } from '../../shared/messages';
+import type { FetchLyrics, FetchYtmLyrics, PinLyrics, SearchLyrics, UnpinLyrics } from '../../shared/messages';
 import type { FoundLyrics, LrclibRecord } from '../../lyrics/lrclib-types';
 import { toFound } from '../../lyrics/lrclib';
 import type { LyricLine } from '../../lyrics/types';
@@ -48,6 +48,7 @@ export function initLyrics(site: Site, presentedTime: () => number | null, prese
         boot.captionsLoaded(id);
         cb(id);
       }),
+    fetchYtmLyrics: (videoId) => chrome.runtime.sendMessage({ type: 'fetch-ytm-lyrics', videoId } satisfies FetchYtmLyrics) as Promise<string | null>,
     fetchLyrics: (track) => chrome.runtime.sendMessage({ type: 'fetch-lyrics', track } satisfies FetchLyrics) as Promise<FoundLyrics | null>,
     presentedTime,
     presentedBusy,

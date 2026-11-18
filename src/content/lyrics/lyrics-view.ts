@@ -22,12 +22,14 @@ const DEFAULT_MESSAGES: Record<LyricsViewStatus, string> = {
 
 const SOURCE_LABELS: Record<LyricsSource, string> = {
   lrclib: 'LRCLIB',
+  'youtube-music': 'YouTube Music',
   'youtube-captions': 'YouTube captions',
   'youtube-auto-captions': 'YouTube auto-generated captions',
 };
 
 const FALLBACK_NOTES = {
   lrclib: 'LRCLIB: not found, using the automatic order',
+  ytm: 'YouTube Music: not found, using the automatic order',
   captions: 'YouTube captions: none, using the automatic order',
 };
 

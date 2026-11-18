@@ -39,6 +39,7 @@ function deps(over: Partial<LyricsDeps> = {}): LyricsDeps {
     getPlayerInfo: vi.fn(async (id: string) => info(id)),
     getTimedText: vi.fn(async () => null),
     fetchLyrics: vi.fn(async (): Promise<FoundLyrics | null> => ({ synced: SYNCED, record })),
+    fetchYtmLyrics: vi.fn(async (): Promise<string | null> => null),
     ...over,
   };
 }
@@ -105,6 +106,18 @@ describe('chooseSource', () => {
     expect(chooseSource(null, {}).use).toBeNull();
   });
 
+  it('puts YouTube Music plain between ASR captions and LRCLIB plain', () => {
+    expect(kindOf(chooseSource(plain, { asr }, 'auto', false, 'ytm text'))).toBe('captions:asr');
+    expect(kindOf(chooseSource(plain, {}, 'auto', false, 'ytm text'))).toBe('ytm');
+    expect(kindOf(chooseSource(synced, {}, 'auto', false, 'ytm text'))).toBe('lrclib-synced');
+    expect(kindOf(chooseSource(null, {}, 'auto', false, 'ytm text'))).toBe('ytm');
+  });
+
+  it("honours the 'ytm' pick", () => {
+    expect(kindOf(chooseSource(synced, { manual }, 'ytm', false, 'ytm text'))).toBe('ytm');
+    expect(chooseSource(plain, {}, 'ytm')).toMatchObject({ use: 'lrclib-plain', fellBack: 'ytm' });
+  });
+
   it('ranks a manual track in the preferred language as song captions', () => {
     expect(kindOf(chooseSource(synced, { asr, display: foreign }))).toBe('captions:foreign');
     // An ASR display is not song captions.
@@ -155,6 +168,51 @@ describe('LyricsController', () => {
     c.setVideoId('v1');
     await flush();
     expect(d.fetchLyrics).toHaveBeenCalledTimes(1);
+  });
+
+  describe('YouTube Music source', () => {
+    const run = async (d: LyricsDeps, source?: 'ytm') => {
+      const c = new LyricsController('youtube', d);
+      if (source) c.applyStored(source, null);
+      const s = new FakeSurface();
+      s.active = true;
+      c.addSurface(s);
+      c.setVideoId('v1');
+      await flush();
+      return c;
+    };
+    const plainOnly = () => vi.fn(async (): Promise<FoundLyrics | null> => ({ plain: 'lrclib plain', record }));
+
+    it('is fetched and shown when only LRCLIB plain would win', async () => {
+      const d = deps({ fetchLyrics: plainOnly(), fetchYtmLyrics: vi.fn(async () => 'ytm text') });
+      const c = await run(d);
+      expect(c.current).toMatchObject({ kind: 'ready', lyrics: { source: 'youtube-music', text: 'ytm text' } });
+    });
+
+    it('is not fetched when an earlier source wins', async () => {
+      const d = deps({ fetchYtmLyrics: vi.fn(async () => 'ytm text') });
+      const c = await run(d);
+      expect(c.current).toMatchObject({ kind: 'ready', lyrics: { source: 'lrclib' } });
+      expect(d.fetchYtmLyrics).not.toHaveBeenCalled();
+    });
+
+    it('a rate limit (miss) skips to LRCLIB plain and is not retried', async () => {
+      const d = deps({ fetchLyrics: plainOnly(), fetchYtmLyrics: vi.fn(async () => null) });
+      const c = await run(d);
+      expect(c.current).toMatchObject({ kind: 'ready', lyrics: { source: 'lrclib' }, sources: { available: { ytm: false } } });
+      c.selectSource('auto');
+      await flush();
+      expect(d.fetchYtmLyrics).toHaveBeenCalledTimes(1);
+    });
+
+    it('is fetched on demand when the user picks it', async () => {
+      const d = deps({ fetchYtmLyrics: vi.fn(async () => 'ytm text') });
+      const c = await run(d);
+      c.selectSource('ytm');
+      await flush();
+      expect(c.current).toMatchObject({ kind: 'ready', lyrics: { source: 'youtube-music' } });
+      expect(d.fetchYtmLyrics).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('reload() fetches the video’s lyrics again', async () => {

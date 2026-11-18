@@ -78,3 +78,13 @@ describe('LyricsCache in-flight', () => {
     expect(load).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('LyricsCache with another prefix (YTM)', () => {
+  it('a cached text prevents a second fetch', async () => {
+    const c = new LyricsCache<string>(memArea() as never, Date.now, 'ytm-lyrics:');
+    const load = vi.fn().mockResolvedValue('la la la');
+    expect(await c.getOrFetch(t('a'), load)).toBe('la la la');
+    expect(await c.getOrFetch(t('a'), load)).toBe('la la la');
+    expect(load).toHaveBeenCalledTimes(1);
+  });
+});

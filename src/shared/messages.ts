@@ -138,6 +138,12 @@ export interface FetchLyrics {
   track: TrackInfo;
 }
 
+/** Content script → background: plain lyrics from YouTube Music (cached). Response: string | null (null on a miss, a rate limit or an error). */
+export interface FetchYtmLyrics {
+  type: 'fetch-ytm-lyrics';
+  videoId: string;
+}
+
 /** Content script → background: free-text LRCLIB search. Response: LrclibRecord[] (usable lyrics only). */
 export interface SearchLyrics {
   type: 'search-lyrics';
@@ -185,6 +191,7 @@ export type BackgroundRequest =
   | GetTabSettings
   | SetTabSettings
   | FetchLyrics
+  | FetchYtmLyrics
   | SearchLyrics
   | PinLyrics
   | UnpinLyrics

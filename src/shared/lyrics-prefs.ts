@@ -1,6 +1,6 @@
 export type LyricsDisplayMode = 'karaoke' | 'window';
 /** Which lyrics source the user wants. */
-export type LyricsSource = 'auto' | 'lrclib' | 'captions';
+export type LyricsSource = 'auto' | 'lrclib' | 'ytm' | 'captions';
 
 export const KARAOKE_FONTS = ['default', 'sans', 'serif', 'mono'] as const;
 export type KaraokeFont = (typeof KARAOKE_FONTS)[number];
@@ -100,7 +100,7 @@ export function normalizeLyricsPrefs(raw: unknown): LyricsPrefs {
   return {
     lyricsVisible: typeof r.lyricsVisible === 'boolean' ? r.lyricsVisible : d.lyricsVisible,
     lyricsDisplayMode: r.lyricsDisplayMode === 'karaoke' || r.lyricsDisplayMode === 'window' ? r.lyricsDisplayMode : d.lyricsDisplayMode,
-    lyricsSource: r.lyricsSource === 'auto' || r.lyricsSource === 'lrclib' || r.lyricsSource === 'captions' ? r.lyricsSource : d.lyricsSource,
+    lyricsSource: r.lyricsSource === 'auto' || r.lyricsSource === 'lrclib' || r.lyricsSource === 'ytm' || r.lyricsSource === 'captions' ? r.lyricsSource : d.lyricsSource,
     captionLang: typeof r.captionLang === 'string' && /^[A-Za-z0-9-]{1,35}$/.test(r.captionLang) ? r.captionLang : d.captionLang,
     karaokeLines: r.karaokeLines === 1 || r.karaokeLines === 2 ? r.karaokeLines : d.karaokeLines,
     karaokeFontSize: Math.round(num(r.karaokeFontSize, d.karaokeFontSize, 50, 200)),
