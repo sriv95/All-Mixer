@@ -22,6 +22,9 @@ describe('YTM parsing', () => {
   it('finds the lyrics browse id and the plain text', () => {
     expect(lyricsBrowseId(NEXT)).toBe('MPLYt_abc');
     expect(lyricsBrowseId({})).toBeNull();
+    const t = tab('MUSIC_PAGE_TYPE_TRACK_LYRICS', 'MPLYt_x');
+    (t.tabRenderer as Record<string, unknown>).unselectable = true;
+    expect(lyricsBrowseId({ contents: { singleColumnMusicWatchNextResultsRenderer: { tabbedRenderer: { watchNextTabbedResultsRenderer: { tabs: [t] } } } } })).toBeNull();
     expect(lyricsText(BROWSE)).toBe(TEXT);
   });
   it('treats "Lyrics not available" as a miss', () => {
@@ -50,7 +53,7 @@ describe('findYtmLyrics', () => {
     expect(await findYtmLyrics('v', asFetch(na), new Backoff())).toBeNull();
   });
 
-  it.each([429, 403])('HTTP %i throws RateLimited and blocks calls until the cooldown ends (Retry-After honoured)', async (status) => {
+  it.each([429])('HTTP %i throws RateLimited and blocks calls until the cooldown ends (Retry-After honoured)', async (status) => {
     let now = 1000;
     const backoff = new Backoff(() => now);
     const f = vi.fn().mockResolvedValueOnce(json({}, status, { 'Retry-After': '30' })).mockResolvedValue(json({}));
@@ -62,6 +65,14 @@ describe('findYtmLyrics', () => {
     now += 2_000;
     expect(await findYtmLyrics('v', asFetch(f), backoff)).toBeNull();
     expect(f).toHaveBeenCalledTimes(2);
+  });
+
+  it('HTTP 403 fails that request only, with no cooldown', async () => {
+    const backoff = new Backoff(() => 0);
+    const f = vi.fn().mockResolvedValueOnce(json({}, 403)).mockResolvedValue(json({}));
+    const err = await findYtmLyrics('v', asFetch(f), backoff).catch((e) => e);
+    expect(err).not.toBeInstanceOf(RateLimited);
+    expect(await findYtmLyrics('v', asFetch(f), backoff)).toBeNull();
   });
 
   it('cools down 5 minutes without Retry-After', async () => {

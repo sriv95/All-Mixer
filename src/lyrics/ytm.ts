@@ -14,6 +14,7 @@ type Json = any; // eslint-disable-line @typescript-eslint/no-explicit-any -- wa
 export function lyricsBrowseId(next: Json): string | null {
   const tabs: Json[] = next?.contents?.singleColumnMusicWatchNextResultsRenderer?.tabbedRenderer?.watchNextTabbedResultsRenderer?.tabs ?? [];
   for (const t of tabs) {
+    if (t?.tabRenderer?.unselectable) continue;
     const e = t?.tabRenderer?.endpoint?.browseEndpoint;
     if (e?.browseEndpointContextSupportedConfigs?.browseEndpointContextMusicConfig?.pageType === 'MUSIC_PAGE_TYPE_TRACK_LYRICS') return e.browseId ?? null;
   }
@@ -40,7 +41,7 @@ async function post(path: string, body: object, fetchFn: typeof fetch, backoff: 
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ context: { client: { clientName: 'WEB_REMIX', clientVersion: CLIENT_VERSION, hl: 'en' } }, ...body }),
     });
-    if (res.status === 429 || res.status === 403) backoff.trip(res.headers.get('Retry-After'));
+    if (res.status === 429) backoff.trip(res.headers.get('Retry-After'));
     if (!res.ok) throw new Error(`YTM ${path} failed: HTTP ${res.status}`);
     return await res.json();
   } finally {
@@ -50,7 +51,7 @@ async function post(path: string, body: object, fetchFn: typeof fetch, backoff: 
 
 /**
  * Plain lyrics of a video from YouTube Music (two innertube calls, the first ~1.8 MB). Null when it has none.
- * Throws RateLimited on 429/403 or during the cooldown.
+ * Throws RateLimited on 429 or during the cooldown.
  * shortcut: YTM timed lyrics not returned by innertube as of 2026-11; add ANDROID_MUSIC timedLyricsData parse if cueRange appears
  */
 export async function findYtmLyrics(videoId: string, fetchFn: typeof fetch = fetch, backoff = ytmBackoff): Promise<string | null> {

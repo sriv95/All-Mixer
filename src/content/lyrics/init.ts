@@ -1,7 +1,9 @@
-import type { FetchLyrics, FetchLrcmuxLyrics, FetchYtmLyrics, PinLyrics, SearchLyrics, UnpinLyrics } from '../../shared/messages';
+import type { FetchLyrics, FetchLrcmuxLyrics, PinLyrics, SearchLyrics, UnpinLyrics } from '../../shared/messages';
 import type { FoundLyrics, LrclibRecord } from '../../lyrics/lrclib-types';
 import { toFound } from '../../lyrics/lrclib';
-import type { LyricLine } from '../../lyrics/types';
+import { findYtmLyrics } from '../../lyrics/ytm';
+import { LyricsCache } from '../../background/lyrics-cache';
+import type { LyricLine, TrackInfo } from '../../lyrics/types';
 import { CC_BUTTON_SELECTOR, clickCaptionsButton, findLyricsControls, getCaptionsButtonState, findPlayer, getVideoId, onCaptionsButtonOn, onNavigate, setYtCaptionsHidden, touchesYtmPlayerPage, type Site } from '../youtube-dom';
 import { linesToLrc, lyricsToText } from '../../lyrics/export';
 import { getPlayerInfo, getTimedText, onCaptionsAvailable } from './bridge-client';
@@ -32,6 +34,7 @@ export interface LyricsFeature {
 export function initLyrics(site: Site, presentedTime: () => number | null, presentedBusy: () => boolean = () => false): LyricsFeature {
   // YT Music shows lyrics in its Lyrics tab only: no karaoke text (the song tab has no video) and no lyrics window.
   const tabOnly = site === 'ytmusic';
+  const ytmCache = new LyricsCache<string>(chrome.storage.local, Date.now, 'ytm-lyrics:');
   // CC at the start of each video (www): see CaptionBoot. Set up below with the caption hiding it drives.
   const boot: CaptionBoot = new CaptionBoot({
     state: () => getCaptionsButtonState(),
@@ -48,7 +51,8 @@ export function initLyrics(site: Site, presentedTime: () => number | null, prese
         boot.captionsLoaded(id);
         cb(id);
       }),
-    fetchYtmLyrics: (videoId) => chrome.runtime.sendMessage({ type: 'fetch-ytm-lyrics', videoId } satisfies FetchYtmLyrics) as Promise<string | null>,
+    // From the page, so the request carries the youtube.com Origin (the service worker's chrome-extension:// Origin gets a 403).
+    fetchYtmLyrics: (videoId) => ytmCache.getOrFetch({ videoId } as TrackInfo, (t) => findYtmLyrics(t.videoId)).catch(() => null),
     fetchLrcmuxLyrics: (track) => chrome.runtime.sendMessage({ type: 'fetch-lrcmux-lyrics', track } satisfies FetchLrcmuxLyrics) as Promise<FoundLyrics | null>,
     fetchLyrics: (track) => chrome.runtime.sendMessage({ type: 'fetch-lyrics', track } satisfies FetchLyrics) as Promise<FoundLyrics | null>,
     presentedTime,
