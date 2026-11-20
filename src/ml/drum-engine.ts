@@ -49,13 +49,14 @@ export function withStages(inner: BlockEngine, stages: readonly StageRun[]): Blo
   const H = inner.block, Ro = inner.resultOffset;
   const lag = stages.reduce((m, s) => Math.max(m, s.stage.lag), 0);
   const xL = new Float32Array(CAP), xR = new Float32Array(CAP); // input, by input sample
-  const planes = Array.from({ length: 4 }, () => new Float32Array(CAP)); // Vk L, R, vocal L, R, by result sample u
+  const P = inner.planes ?? 4; // the inner engine's planes: Vk L, R, vocal L, R, then extras (the backing pair) that go after the stage planes
+  const planes = Array.from({ length: P }, () => new Float32Array(CAP)); // by result sample u
   const instL = new Float32Array(H), instR = new Float32Array(H);
   let n = 0; // result samples so far: block m covers u in [m·H, (m + 1)·H)
   return {
     block: H,
     resultOffset: Ro + lag,
-    planes: 4 + 2 * stages.length,
+    planes: P + 2 * stages.length,
     reset() {
       inner.reset();
       for (const s of stages) s.stage.reset();
@@ -72,7 +73,7 @@ export function withStages(inner: BlockEngine, stages: readonly StageRun[]): Blo
       await inner.process(d);
       for (let i = 0; i < H; i++) {
         const u = n + i, x = u - Ro; // result sample u belongs to input sample u − Ro
-        for (let k = 0; k < 4; k++) planes[k][u & MASK] = d[k * H + i];
+        for (let k = 0; k < P; k++) planes[k][u & MASK] = d[k * H + i];
         instL[i] = (x >= 0 ? xL[x & MASK] : 0) - d[i];
         instR[i] = (x >= 0 ? xR[x & MASK] : 0) - d[H + i];
       }
@@ -80,7 +81,7 @@ export function withStages(inner: BlockEngine, stages: readonly StageRun[]): Blo
       // the reply is for result samples [n − lag, n − lag + H): final in the stages, and still in the rings
       for (let i = 0; i < H; i++) {
         const u = n - lag + i;
-        for (let k = 0; k < 4; k++) d[k * H + i] = u >= 0 ? planes[k][u & MASK] : 0;
+        for (let k = 0; k < P; k++) d[(k < 4 ? k : k + 2 * stages.length) * H + i] = u >= 0 ? planes[k][u & MASK] : 0;
       }
       stages.forEach((s, j) => s.stage.read(n - lag, H, d.subarray((4 + 2 * j) * H, (5 + 2 * j) * H), d.subarray((5 + 2 * j) * H, (6 + 2 * j) * H)));
       n += H;

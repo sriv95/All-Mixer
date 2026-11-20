@@ -78,10 +78,10 @@ export type FromWorklet =
   | { type: 'audible' };
 
 /**
- * Block buffers on the ML port: [epoch f64, start f64, then f32 × block × planes] (4 planes, 2 more for each of the drum and guitar stages).
+ * Block buffers on the ML port: [epoch f64, start f64, then f32 × block × planes] (4 planes, 2 more for each of the drum and guitar stages, bass, piano, and 2 for the backing stem).
  * The worklet sends input L, R at `start`. The worker sends the same buffer back with
  * "vocal for the instrumental" L, R (the Karaoke instrumental is x − this) followed by the MDX vocal
- * L, R (A cappella) and, with the drum stage, the drums L, R, then with the guitar stage the guitar L, R (parts of the instrumental), and `start` moved back by
+ * L, R (A cappella) and, with the drum stage, the drums L, R, then with the guitar stage the guitar L, R (parts of the instrumental), and, after all of those, with a backing split (hasBackingSplit) the backing singers L, R (a part of the vocal), and `start` moved back by
  * the geometry's resultOffset, or `start` = −1 when it has no result.
  * Buffers are transferred both ways, so the pool is reused without allocation.
  */
@@ -129,6 +129,8 @@ export interface MlGeometry {
   bass?: boolean;
   piano?: boolean;
   /** Block buffers in the worklet's pool (default 4): more when a stage run stops the worker for several blocks (rof-plan.ts poolFor). */
+  /** Backing split (kara2's second mask): two more planes, the backing singers' stem, after all the PARTS planes. */
+  backing?: boolean;
   pool?: number;
 }
 
@@ -164,8 +166,8 @@ export const GEOMETRY: Readonly<Record<MlModel, MlGeometry>> = {
 /** The parts of the instrumental a stage or the all-stems model can take out, in the order of the reply planes after the vocal ones. */
 export const PARTS = ['drums', 'guitar', 'bass', 'piano'] as const;
 
-/** Planes of a block buffer: input / Vk L, R, vocal L, R, then a pair for each of the PARTS that is on (drums, guitar, bass, piano). */
-export const planesFor = (g: Pick<MlGeometry, (typeof PARTS)[number]>): number => 4 + 2 * PARTS.filter((p) => g[p]).length;
+/** Planes of a block buffer: input / Vk L, R, vocal L, R, then a pair for each of the PARTS that is on (drums, guitar, bass, piano), then the backing pair if `backing`. */
+export const planesFor = (g: Pick<MlGeometry, (typeof PARTS)[number] | 'backing'>): number => 4 + 2 * PARTS.filter((p) => g[p]).length + (g.backing ? 2 : 0);
 export const bufferBytes = (g: MlGeometry): number => ML_HEADER_BYTES + planesFor(g) * g.block * 4;
 
 export type ToMlWorker = { type: 'dispose' };

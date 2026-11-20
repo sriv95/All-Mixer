@@ -815,6 +815,9 @@ describe('SeparatorCore, all-stems model (drums, guitar, bass and piano planes)'
   it('a block buffer has 12 planes, in the order drums, guitar, bass, piano', () => {
     expect(planesFor(allG)).toBe(12);
     expect(planesFor({ bass: true })).toBe(6);
+    expect(planesFor({ backing: true })).toBe(6);
+    expect(planesFor({ ...allG, backing: true })).toBe(14);
+    expect(bufferBytes({ ...allG, backing: true })).toBe(ML_HEADER_BYTES + 14 * allG.block * 4);
     expect(planesFor({ piano: true, drums: true })).toBe(8);
     expect(bufferBytes(allG)).toBe(ML_HEADER_BYTES + 12 * allG.block * 4);
   });

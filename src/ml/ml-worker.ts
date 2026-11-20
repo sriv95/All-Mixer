@@ -24,7 +24,7 @@ import { makeStall, type StallOpts } from './stall';
 import { MlTiming } from './timing';
 import { adapterName as nameOfAdapter } from '../shared/gpu';
 import { opfsFiles, readModelFile } from '../shared/model-files';
-import { MODEL_FORMAT, MODEL_LABEL, modelFileNames, type InstalledModel, type ModelId } from '../shared/model-store';
+import { MODEL_FORMAT, MODEL_LABEL, hasBackingSplit, modelFileNames, type InstalledModel, type ModelId } from '../shared/model-store';
 import { RoformerStream, DEFAULT_ROF_GEOMETRY, SW_BASE_GEOMETRY, type RoformerMeta } from './roformer';
 import { BASE_FRAMES, DELAY_RANGE, DRUM_STAGE, drumRuns, gateMs, planMdxDrums, planRof, poolFor, stepMs, type RofGeometry, type StageCost, type StageShape } from './rof-plan';
 import { withStages, type BlockEngine, type SplitStage } from './drum-engine';
@@ -241,19 +241,33 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
     process: (l: Float32Array, r: Float32Array) => Promise<void>;
     /** The all-stems model: one block step, the stems into `outs[stem]` = [L, R]. */
     processStems: (l: Float32Array, r: Float32Array, outs: ReadonlyArray<readonly [Float32Array, Float32Array] | undefined>) => Promise<void>;
+    /** The graph has a backing mask (output 1) and `hasBackingSplit(model)`: the stream makes two stems, vocals and backing. */
+    backing: boolean;
     wu: WarmUpResult;
   }
   const measure = async (g: RofGeometry, w: { skip: number; n: number }): Promise<Run> => {
     const session = await ort.InferenceSession.create(buf, { executionProviders: ['webgpu'], graphOptimizationLevel: 'all', logSeverityLevel: 3, freeDimensionOverrides: { frames: g.frames } });
     try {
-      const stream = new RoformerStream(meta, g);
+      const backing = !sw && hasBackingSplit(id) && session.outputNames.length > 1;
+      const stream = new RoformerStream(backing ? { ...meta, stems: ['vocals', 'backing'] } : meta, g);
       const input = new ort.Tensor('float32', stream.x, [1, g.frames, stream.x.length / g.frames]);
+      // With a backing mask the two outputs are interleaved per frame into one buffer ([t][stem][fin]), the layout of a multi-stem graph (preallocated).
+      const fin = stream.x.length / g.frames;
+      const mm = backing ? new Float32Array(2 * stream.x.length) : null;
       const run = async (): Promise<Float32Array> => {
         const out = await session.run({ [session.inputNames[0]]: input });
         const t = out[session.outputNames[0]];
         const data = (await t.getData()) as Float32Array;
         t.dispose();
-        return data;
+        if (!mm) return data;
+        const tb = out[session.outputNames[1]];
+        const back = (await tb.getData()) as Float32Array;
+        tb.dispose();
+        for (let f = 0; f < g.frames; f++) {
+          mm.set(data.subarray(f * fin, (f + 1) * fin), 2 * f * fin);
+          mm.set(back.subarray(f * fin, (f + 1) * fin), (2 * f + 1) * fin);
+        }
+        return mm;
       };
       // Noise in, noise out: the time of a step does not depend on the content.
       const nl = new Float32Array(g.block), nr = new Float32Array(g.block);
@@ -264,9 +278,11 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
       }
       // The stems an all-stems step has to make (the rest of the instrumental is what is left): vocals, drums, guitar, bass, piano.
       const want = (meta.stems ?? []).map((n) => (n in SW_PLANES ? ([new Float32Array(g.block), new Float32Array(g.block)] as const) : undefined));
-      const wu = await warmUp(() => (sw ? stream.processStems(nl, nr, run, want) : stream.process(nl, nr, run, ol, or)), w);
+      const pair = () => [new Float32Array(g.block), new Float32Array(g.block)] as const;
+      const wantB = backing ? [pair(), pair()] : want;
+      const wu = await warmUp(() => (sw || backing ? stream.processStems(nl, nr, run, wantB) : stream.process(nl, nr, run, ol, or)), w);
       stream.reset();
-      return { g, session, stream, process: (l, r) => stream.process(l, r, run, l, r), processStems: (l, r, outs) => stream.processStems(l, r, run, outs), wu };
+      return { g, session, stream, process: (l, r) => stream.process(l, r, run, l, r), processStems: (l, r, outs) => stream.processStems(l, r, run, outs), backing, wu };
     } catch (e) {
       void session.release();
       throw e;
@@ -329,7 +345,7 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
   }
   if (!chosen) return unavailable(note || 'too slow on this device');
   const { g, wu } = chosen;
-  const geometry: MlGeometry = { block: g.block, resultOffset: g.overlap + g.extra, latency: g.latency, warmupP90Ms: gateMs(g), ...(sw ? { drums: true, guitar: true, bass: true, piano: true } : {}), ...(init.drums && !sw ? { drums: true } : {}), ...(init.guitar && !sw ? { guitar: true } : {}), ...(stages.length ? { pool: poolFor(runsMs(stages), (g.block / ML_SAMPLE_RATE) * 1000) } : {}) };
+  const geometry: MlGeometry = { block: g.block, resultOffset: g.overlap + g.extra, latency: g.latency, warmupP90Ms: gateMs(g), ...(sw ? { drums: true, guitar: true, bass: true, piano: true } : {}), ...(init.drums && !sw ? { drums: true } : {}), ...(init.guitar && !sw ? { guitar: true } : {}), ...(chosen.backing ? { backing: true } : {}), ...(stages.length ? { pool: poolFor(runsMs(stages), (g.block / ML_SAMPLE_RATE) * 1000) } : {}) };
   const createMs = performance.now() - t0;
   if (init.timing) console.info(`[all-mixer ml] ${id} chunk ${g.frames} frames (${((g.chunk / ML_SAMPLE_RATE)).toFixed(2)} s), block ${(g.block / ML_SAMPLE_RATE).toFixed(2)} s, overlap ${(g.overlap / ML_SAMPLE_RATE).toFixed(2)} s, delay ${(g.latency / ML_SAMPLE_RATE).toFixed(2)} s; warm-up p50 ${wu.p50.toFixed(1)} p90 ${wu.p90.toFixed(1)} p95 ${wu.p95.toFixed(1)} (gate ${geometry.warmupP90Ms.toFixed(1)}), ready after ${createMs.toFixed(0)} ms, ${adapterName}`);
   ctx.postMessage({ type: 'ready', p50: wu.p50, p90: wu.p90, p95: wu.p95, createMs, adapter: adapterName, geometry, ...(init.offline ? {} : { speed: { key: speedKeyOf, baseMs: planBaseMs } }) }); // an export's plan is not a measured speed
@@ -337,11 +353,14 @@ async function startRoformer(init: MlWorkerInit, adapterName: string): Promise<v
   const vocalEngine: BlockEngine = {
     block: g.block,
     resultOffset: g.overlap,
+    ...(chosen.backing ? { planes: 6 } : {}),
     reset: () => chosen!.stream.reset(),
     process: async (d) => {
       const l = d.subarray(0, g.block), r = d.subarray(g.block, 2 * g.block);
       const rmsIn = init.timing ? rms(l) : 0;
-      await chosen!.process(l, r);
+      // The analysis reads the input planes whole before the vocal stem is written over them; the backing stem goes to planes 4, 5.
+      if (chosen!.backing) await chosen!.processStems(l, r, [[l, r], [d.subarray(4 * g.block, 5 * g.block), d.subarray(5 * g.block, 6 * g.block)]]);
+      else await chosen!.process(l, r);
       if (init.timing) console.info(`[all-mixer ml] vocal level ${rms(l).toFixed(4)} of input ${rmsIn.toFixed(4)}${Number.isFinite(rms(l)) ? '' : ' (NOT FINITE)'}`);
       d.copyWithin(2 * g.block, 0, 2 * g.block); // the vocal is both Vk and the A cappella
     },

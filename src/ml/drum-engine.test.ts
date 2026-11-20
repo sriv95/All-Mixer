@@ -72,6 +72,21 @@ describe('withDrums', () => {
     expect(runs).toBe(1); // 26 blocks = 133120 samples: the first chunk is complete, the second needs 108268 more
   });
 
+  it('a backing pair of the inner engine (planes 4, 5) moves after the stage planes, delayed like the vocal', async () => {
+    const inner = fakeInner();
+    const inner6: BlockEngine = { ...inner, planes: 6, process: async (d) => { await inner.process(d); d.copyWithin(4 * H, 2 * H, 4 * H); } };
+    const e = withDrums(inner6, (x) => x);
+    expect(e.planes).toBe(8);
+    const lag = SC_LAG;
+    const d = new Float32Array(8 * H);
+    for (let m = 0; m < 40; m++) {
+      for (let i = 0; i < H; i++) { d[i] = sig(0, m * H + i); d[H + i] = sig(1, m * H + i); }
+      await e.process(d);
+      if (m >= 30) for (let i = 0; i < H; i++) expect(d[6 * H + i]).toBe(d[2 * H + i]); // backing = vocal here, at the new offset
+    }
+    expect(lag).toBeGreaterThan(0);
+  });
+
   it('reset restarts the stream and the inner engine', async () => {
     const inner = fakeInner();
     const e = withDrums(inner, (x) => x);
