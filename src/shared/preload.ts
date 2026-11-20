@@ -1,4 +1,4 @@
-import { EXPORT_SAMPLE_RATE, stemsOf, type ExportProgress } from './export';
+import { EXPORT_SAMPLE_RATE, cacheStemsOf, type ExportProgress } from './export';
 import type { MixerSettings } from './settings';
 
 // Preload Audio: the whole video is separated up front and plays from memory (docs/preload-audio.md). Shared by the popup and the tab.
@@ -9,10 +9,10 @@ export const PRELOAD_MAX_BYTES = 900e6;
 type ModelAudio = Pick<MixerSettings, 'mlModel' | 'splitInstrumental' | 'splitGuitar'>;
 
 /** Memory of the cache: every stem is a stereo Float32 buffer of the video's length. */
-export const preloadBytes = (a: ModelAudio, durationS: number): number => stemsOf(a).length * Math.ceil(durationS * EXPORT_SAMPLE_RATE) * 2 * 4;
+export const preloadBytes = (a: ModelAudio, durationS: number): number => cacheStemsOf(a).length * Math.ceil(durationS * EXPORT_SAMPLE_RATE) * 2 * 4;
 
 /** What a cache was made with: a change of model or split switches means it holds other stems than the sliders control. */
-export const preloadSignature = (a: ModelAudio): string => `${a.mlModel}:${stemsOf(a).join(',')}`;
+export const preloadSignature = (a: ModelAudio): string => `${a.mlModel}:${cacheStemsOf(a).join(',')}`;
 
 export interface PreloadStatus {
   /** idle = no cache for this video; loading = being made (see `progress`); ready = in memory; error / cancelled = the last attempt. */

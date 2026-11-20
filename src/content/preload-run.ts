@@ -1,4 +1,4 @@
-import { defaultExportOptions, stemsOf, type ExportProgress } from '../shared/export';
+import { defaultExportOptions, cacheStemsOf, type ExportProgress } from '../shared/export';
 import { DEFAULT_LYRICS_PREFS } from '../shared/lyrics-prefs';
 import type { ExportAnswer } from '../shared/messages';
 import { createStemCache, stemKey, type StemCache as PersistentCache } from '../shared/stem-cache';
@@ -78,7 +78,7 @@ export class PreloadRunner {
     if (player && isAdShowing(player)) return refuse('An ad is playing. Preload when the video itself plays.');
     const bytes = preloadBytes(settings, video.duration);
     if (bytes > PRELOAD_MAX_BYTES) {
-      return refuse(`This video is too long to keep in memory with ${stemsOf(settings).length} stems (about ${Math.round(bytes / 1e6)} MB, the limit is ${Math.round(PRELOAD_MAX_BYTES / 1e6)} MB). Use Export, or Live mode.`, true);
+      return refuse(`This video is too long to keep in memory with ${cacheStemsOf(settings).length} stems (about ${Math.round(bytes / 1e6)} MB, the limit is ${Math.round(PRELOAD_MAX_BYTES / 1e6)} MB). Use Export, or Live mode.`, true);
     }
     const abort = (this.abort = new AbortController());
     const key = videoKey();
@@ -127,7 +127,7 @@ export class PreloadRunner {
       const player = site === 'generic' ? null : findPlayer(site);
       const tap = await pageTap(site);
       const options = { ...defaultExportOptions(settings, DEFAULT_LYRICS_PREFS), tracks: 'separate' as const }; // the model always runs
-      const cache = new StemCache(key, preloadSignature(settings), video.duration, stemsOf(settings));
+      const cache = new StemCache(key, preloadSignature(settings), video.duration, cacheStemsOf(settings));
       const stored = stemKey(key, video.duration, settings);
       const hit = await engine.runPreload(
         {

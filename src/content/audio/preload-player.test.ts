@@ -91,6 +91,8 @@ describe('stemLevels', () => {
   it('is the live formula: the vocal gain, and the instrumental gain on each other stem', () => {
     const s = { ...DEFAULT_SETTINGS, vocalPct: 40, instrumentalPct: 50, drumsPct: 20, othersPct: 80, splitInstrumental: true };
     expect(stemLevels(s, ['vocals', 'drums', 'others'])).toEqual({ vocals: 0.4, drums: 0.5 * 0.2, others: 0.5 * 0.8 });
+    // backing sits inside the vocals buffer: vg·v + (bg − vg)·k
+    expect(stemLevels({ ...DEFAULT_SETTINGS, vocalPct: 100, backingPct: 40 }, ['backing']).backing).toBeCloseTo(-0.6, 6);
     expect(stemLevels({ ...DEFAULT_SETTINGS, instrumentalPct: 30 }, ['instrumental'])).toEqual({ instrumental: 0.3 });
   });
 });

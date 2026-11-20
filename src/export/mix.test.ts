@@ -84,6 +84,12 @@ describe('mixSlice', () => {
 
 describe('stemsOfSlice', () => {
   const a = (over: Partial<ExportOptions['audio']> = {}) => ({ ...DEFAULT_SETTINGS, ...over });
+  it('keeps the backing stem (cache only) and the cached stems mix like the live formula', () => {
+    const s = stemsOfSlice(a({ mlModel: 'kara2' }), { ...slice(), backing: fill(0.05) });
+    expect(first(s.backing)).toBeCloseTo(0.05, 6);
+    const cached: StemSlice = { start: 0, length: 2, dry: fill(0.35), vk: fill(0), vocal: s.vocals!, backing: s.backing };
+    expect(first(mixSlice(opts({ instrumentalPct: 0, vocalPct: 100, backingPct: 0 }), cached).mix)).toBeCloseTo(0.1, 6);
+  });
   it('without parts: the vocal and the instrumental (dry − vk)', () => {
     const s = stemsOfSlice(a(), slice());
     expect(Object.keys(s)).toEqual(['vocals', 'instrumental']);

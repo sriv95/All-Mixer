@@ -10,7 +10,7 @@ import {
   needsSeparation,
   partsOf,
   safeFileName,
-  stemsOf,
+  cacheStemsOf,
   tracksOf,
   type ExportOptions,
   type ExportProgress,
@@ -141,7 +141,7 @@ function usable(set: StemSet | null | undefined, o: ExportOptions, plan: ChunkPl
     !!set &&
     set.sampleRate === EXPORT_SAMPLE_RATE &&
     Math.abs(set.length - plan.total) <= EXPORT_SAMPLE_RATE &&
-    stemsOf(o.audio).every((id) => set.stems[id]?.length === 2 && set.stems[id].every((c) => c.length >= set.length))
+    cacheStemsOf(o.audio).every((id) => set.stems[id]?.length === 2 && set.stems[id].every((c) => c.length >= set.length))
   );
 }
 
@@ -165,7 +165,7 @@ function* slicesOf(set: StemSet, o: ExportOptions, plan: ChunkPlan): Generator<S
       const x = (found[p] = pair(p));
       for (let c = 0; c < 2; c++) for (let i = 0; i < n; i++) dry[c]![i]! += x[c]![i]!;
     }
-    yield { start, length: n, dry, vk: [new Float32Array(n), new Float32Array(n)], vocal: pair('vocals'), parts: found };
+    yield { start, length: n, dry, vk: [new Float32Array(n), new Float32Array(n)], vocal: pair('vocals'), parts: found, ...(set.stems.backing ? { backing: pair('backing') } : {}) };
   }
 }
 

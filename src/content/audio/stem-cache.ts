@@ -54,7 +54,8 @@ export function stemLevels(settings: MixerSettings, stems: Iterable<Stem>): Part
   const g = separationFor({ ...settings, mode: 'separate', pitchSplit: false });
   const out: Partial<Record<Stem, number>> = {};
   for (const s of stems) {
-    out[s] = s === 'vocals' ? g.vocal : g.instrumental * (s === 'others' || s === 'instrumental' ? g.others : g[s]);
+    // backing is part of the vocals buffer: vg·v + (bg − vg)·k = vg·(v − k) + bg·k
+    out[s] = s === 'vocals' ? g.vocal : s === 'backing' ? g.backing - g.vocal : g.instrumental * (s === 'others' || s === 'instrumental' ? g.others : g[s]);
   }
   return out;
 }

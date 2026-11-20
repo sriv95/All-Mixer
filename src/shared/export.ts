@@ -1,4 +1,5 @@
 import { normalizeLyricsPrefs, type KaraokeStyle, type LyricsPrefs } from './lyrics-prefs';
+import { hasBackingSplit } from './model-store';
 import { DEFAULT_SETTINGS, normalizeSettings, separationFor, type MixerSettings } from './settings';
 
 // Options and progress of the Export section Shared by the popup, the content script and the export engine.
@@ -34,8 +35,9 @@ export interface ExportOptions {
 }
 
 export type Part = 'drums' | 'guitar' | 'bass' | 'piano';
-export type Stem = 'vocals' | 'instrumental' | Part | 'others';
-export type TrackId = 'mix' | Stem;
+/** `backing` is cache-only (a part of the vocal, see `cacheStemsOf`): never a track of an export. */
+export type Stem = 'vocals' | 'instrumental' | Part | 'others' | 'backing';
+export type TrackId = 'mix' | Exclude<Stem, 'backing'>;
 
 export const TRACK_LABEL: Record<TrackId, string> = {
   mix: 'Mix',
@@ -55,10 +57,13 @@ export function partsOf(a: Pick<MixerSettings, 'mlModel' | 'splitInstrumental' |
 }
 
 /** The stems of the Separate tracks mode: vocals, then each part, then the rest of the instrumental. */
-export function stemsOf(a: Pick<MixerSettings, 'mlModel' | 'splitInstrumental' | 'splitGuitar'>): Stem[] {
+export function stemsOf(a: Pick<MixerSettings, 'mlModel' | 'splitInstrumental' | 'splitGuitar'>): Exclude<Stem, 'backing'>[] {
   const parts = partsOf(a);
   return parts.length ? ['vocals', ...parts, 'others'] : ['vocals', 'instrumental'];
 }
+
+/** What the stem caches hold: the Separate tracks stems, plus the backing singers with a backing-split model (so the Backing vocal slider works from the cache). */
+export const cacheStemsOf = (a: Pick<MixerSettings, 'mlModel' | 'splitInstrumental' | 'splitGuitar'>): Stem[] => [...stemsOf(a), ...(hasBackingSplit(a.mlModel) ? (['backing'] as const) : [])];
 
 type AudioFacts = Pick<ExportOptions, 'tracks' | 'audio'> & Partial<Pick<ExportOptions, 'format' | 'withAudio'>>;
 

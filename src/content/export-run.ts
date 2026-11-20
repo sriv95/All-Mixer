@@ -2,7 +2,7 @@ import { createStemCache, stemKey, type StemCache as PersistentCache } from '../
 import { PRELOAD_MAX_BYTES, preloadBytes, preloadSignature } from '../shared/preload';
 import { StemCache, persistStems } from './audio/stem-cache';
 import { videoKey } from './preload-run';
-import { needsSeparation, normalizeExportOptions, stemsOf, type ExportOptions, type ExportProgress } from '../shared/export';
+import { needsSeparation, normalizeExportOptions, cacheStemsOf, type ExportOptions, type ExportProgress } from '../shared/export';
 import type { ExportAnswer } from '../shared/messages';
 import type { LyricLine } from '../lyrics/types';
 import { pageTap } from './page-tap';
@@ -89,7 +89,7 @@ export class ExportRunner {
         cache: { key: stored, store },
         // a miss: the separated stems pile up here and are saved once the export is done (a cancel or failure throws before that)
         onStems: keepable
-          ? (s) => (fresh ??= new StemCache(key, signature, video.duration, stemsOf(options.audio))).add(engine.stemsOfSlice(options.audio, s), s.start)
+          ? (s) => (fresh ??= new StemCache(key, signature, video.duration, cacheStemsOf(options.audio))).add(engine.stemsOfSlice(options.audio, s), s.start)
           : undefined,
         problem: () => (player && isAdShowing(player) ? 'An ad interrupted the recording. Try again when the video plays without ads.' : null),
       });

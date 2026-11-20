@@ -106,6 +106,7 @@ export function stemsOfSlice(audio: Pick<MixerSettings, 'mlModel' | 'splitInstru
     }
   }
   out.vocals = s.vocal;
+  if (s.backing) out.backing = s.backing;
   for (const p of parts) out[p] = s.parts![p]!;
   out[parts.length ? 'others' : 'instrumental'] = rest;
   return out;
