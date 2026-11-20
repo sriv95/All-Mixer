@@ -155,6 +155,26 @@ describe('RoformerStream, the all-stems model (hop 512, several stems)', () => {
     expect(() => new RoformerStream(swMeta, DEFAULT_ROF_GEOMETRY)).toThrow(/does not match/);
   });
 
+  it('a backing stem is the input times the vocals mask times the backing mask', async () => {
+    const g = SW_BASE_GEOMETRY;
+    const s = new RoformerStream({ ...swMeta, stems: ['vocals', 'backing'] }, g);
+    const model = (x: Float32Array): Float32Array => {
+      const fin = 4100, F = x.length / fin, m = new Float32Array(F * 2 * fin);
+      for (let t = 0; t < F; t++) for (let i = 0; i < fin; i += 2) { m[t * 2 * fin + i] = 0.8; m[(t * 2 + 1) * fin + i] = 0.5; }
+      return m;
+    };
+    const blk = (f: (n: number) => number, b: number) => Float32Array.from({ length: g.block }, (_, i) => f(b * g.block + i));
+    const outs = [0, 1].map(() => [new Float32Array(g.block), new Float32Array(g.block)] as const);
+    await s.processStems(blk(sineL, 0), blk(sineR, 0), model, outs);
+    await s.processStems(blk(sineL, 1), blk(sineR, 1), model, outs);
+    let worst = 0;
+    for (let i = 0; i < g.block; i++) {
+      const n = g.block - g.overlap + i;
+      worst = Math.max(worst, Math.abs(outs[0][0][i] - 0.8 * sineL(n)), Math.abs(outs[1][0][i] - 0.4 * sineL(n)), Math.abs(outs[1][1][i] - 0.4 * sineR(n)));
+    }
+    expect(worst).toBeLessThan(2e-4);
+  });
+
   it('every stem is the input times its mask, delayed by the overlap, from the second block on', async () => {
     const g = SW_BASE_GEOMETRY;
     const s = new RoformerStream(swMeta, g);

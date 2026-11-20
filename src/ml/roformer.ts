@@ -69,6 +69,9 @@ export class RoformerStream {
   /** Mask sums per (frame, bin·2 + channel). */
   private readonly accRe: Float32Array;
   private readonly accIm: Float32Array;
+  /** Averaged vocals mask, only for a 'backing' stem (its mask is over the vocals, not the mix). */
+  private readonly vocRe: Float32Array | null;
+  private readonly vocIm: Float32Array | null;
   /** iSTFT overlap-add, [L: padded][R: padded]. */
   private readonly ola: Float64Array;
   private readonly padded: number;
@@ -98,6 +101,9 @@ export class RoformerStream {
     this.specIm = new Float32Array(2 * F * BINS);
     this.accRe = new Float32Array(F * FS);
     this.accIm = new Float32Array(F * FS);
+    const chain = meta.stems?.[1] === 'backing';
+    this.vocRe = chain ? new Float32Array(F * FS) : null;
+    this.vocIm = chain ? new Float32Array(F * FS) : null;
     this.ramp = new Float32Array(g.overlap);
     this.tail = new Float32Array(2 * g.overlap * this.stems);
     this.sel = Int32Array.from(meta.sel);
@@ -169,6 +175,27 @@ export class RoformerStream {
       for (let j = 0; j < sel.length; j++) {
         accRe[base + sel[j]] += m[row + 2 * j];
         accIm[base + sel[j]] += m[row + 2 * j + 1];
+      }
+    }
+    if (stem === 1 && this.vocRe && this.vocIm) {
+      // backing = (X · vocals mask) · backing mask: fold the (per-bin averaged) vocals mask into the backing one, complex product per bin and channel
+      const { vocRe, vocIm } = this;
+      vocRe.fill(0);
+      vocIm.fill(0);
+      for (let t = 0; t < F; t++) {
+        const row = t * stems * fin, base = t * FS;
+        for (let j = 0; j < sel.length; j++) {
+          vocRe[base + sel[j]] += m[row + 2 * j];
+          vocIm[base + sel[j]] += m[row + 2 * j + 1];
+        }
+      }
+      for (let t = 0; t < F; t++) {
+        for (let a = t * FS; a < (t + 1) * FS; a++) {
+          const w = invBands[(a - t * FS) >> 1];
+          const br = accRe[a], bi = accIm[a];
+          accRe[a] = (vocRe[a] * br - vocIm[a] * bi) * w;
+          accIm[a] = (vocRe[a] * bi + vocIm[a] * br) * w;
+        }
       }
     }
     ola.fill(0);
