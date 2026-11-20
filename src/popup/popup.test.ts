@@ -729,9 +729,13 @@ describe('popup', () => {
     it('backing slider and Karaoke+Backing preset exist only for backing-split models', async () => {
       await load({ stored: { mode: 'separate', mlModel: 'mdx' } });
       expect(has('backing')).toBe(false);
+      expect([...document.querySelectorAll('.presets button')].map((b) => b.id)).toEqual(['preset-karaoke', 'preset-half-karaoke', 'preset-acappella', 'preset-reset']);
+      expect(el('preset-reset').parentElement?.classList.contains('col-span-2')).toBe(false);
       expect(has('preset-karaoke-backing')).toBe(false);
       await load({ stored: { mode: 'separate', mlModel: 'kara2', vocalPct: 70, backingPct: 70 } });
       expect(has('backing')).toBe(true);
+      expect([...document.querySelectorAll('.presets button')].map((b) => b.id)).toEqual(['preset-karaoke', 'preset-karaoke-backing', 'preset-half-karaoke', 'preset-acappella', 'preset-reset']);
+      expect(el('preset-reset').parentElement?.classList.contains('col-span-2')).toBe(true);
       el('preset-karaoke').click();
       await settle();
       expect(sent().at(-1).settings).toMatchObject({ vocalPct: 0, backingPct: 0 });

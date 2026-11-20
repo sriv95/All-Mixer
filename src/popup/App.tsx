@@ -427,10 +427,10 @@ const UNDO_MS = 5000;
 
 const PRESETS = [
   { id: 'preset-karaoke', label: 'Karaoke', tip: 'Vocal 0%, instrumental 100%', vocal: 0, backing: 0, instrumental: 100, icon: <MicOff size={15} aria-hidden /> },
+  { id: 'preset-karaoke-backing', label: 'Karaoke+Backing', tip: 'Lead vocal 0%, backing vocal and instrumental 100%', vocal: 0, backing: 100, instrumental: 100, only: true, icon: <Mic size={15} aria-hidden /> },
   { id: 'preset-half-karaoke', label: 'Half karaoke', tip: 'Vocal 50%, instrumental 100%', vocal: 50, backing: 50, instrumental: 100, icon: <AudioLines size={15} aria-hidden /> },
   { id: 'preset-acappella', label: 'A cappella', tip: 'Vocal 100%, instrumental 0%', vocal: 100, backing: 100, instrumental: 0, icon: <Mic size={15} aria-hidden /> },
   { id: 'preset-reset', label: 'Reset', tip: 'Vocal, instrumental and the split levels back to 100%', vocal: 100, backing: 100, instrumental: 100, icon: <RotateCcw size={15} aria-hidden /> },
-  { id: 'preset-karaoke-backing', label: 'Karaoke+Backing', tip: 'Lead vocal 0%, backing vocal and instrumental 100%', vocal: 0, backing: 100, instrumental: 100, only: true, icon: <Mic size={15} aria-hidden /> },
 ];
 
 function SeparateControls({ settings, update, ready, compact, advancedOpen, setAdvancedOpen, splitOpen, setSplitOpen, exportApi }: {
@@ -505,7 +505,7 @@ function SeparateControls({ settings, update, ready, compact, advancedOpen, setA
         {PRESETS.filter((p) => backing || !p.only).map((p, i) => {
           const pressed = p.vocal === settings.vocalPct && p.instrumental === settings.instrumentalPct && (!backing || p.backing === settings.backingPct);
           return (
-            <Tip key={p.id} text={p.tip} align={i % 2 === 0 ? 'start' : 'end'}>
+            <Tip key={p.id} text={p.tip} align={i % 2 === 0 ? 'start' : 'end'} className={backing && p.id === 'preset-reset' ? 'col-span-2' : undefined}>
             <Btn id={p.id} tone="preset" aria-pressed={pressed}
               onClick={() => {
                 setRipple((r) => ({ id: p.id, n: (r?.n ?? 0) + 1 }));
