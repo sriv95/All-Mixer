@@ -11,6 +11,8 @@ export interface MixerSettings {
   masterPct: number;
   /** Separate mode vocal volume, percent (0–100). Used once separation lands. */
   vocalPct: number;
+  /** Backing singers level, for models with a backing split (hasBackingSplit). */
+  backingPct: number;
   /** Separate mode instrumental volume, percent (0–100). Used once separation lands. */
   instrumentalPct: number;
   /** Separate mode ML model: 'mdx' (MDX-Net 9482 + Spleeter, the default) or a downloaded model: 'kara2' (High quality), 'deux' (Best Vocal) or 'sw' (Best Instrumental: six stems in one pass; the Drums, Guitar, Bass and Piano levels apply and the split switches are off). */
@@ -57,6 +59,7 @@ export const DEFAULT_SETTINGS: Readonly<MixerSettings> = Object.freeze({
   mode: 'default',
   masterPct: 100,
   vocalPct: 100,
+  backingPct: 100,
   instrumentalPct: 100,
   mlModel: 'mdx',
   splitInstrumental: false,
@@ -138,6 +141,7 @@ export function normalizeSettings(raw: unknown): MixerSettings {
     mode: r.mode === 'separate' ? 'separate' : 'default',
     masterPct: clampMasterPct(r.masterPct),
     vocalPct: clampPct(r.vocalPct, DEFAULT_SETTINGS.vocalPct),
+    backingPct: clampPct(r.backingPct, DEFAULT_SETTINGS.backingPct),
     instrumentalPct: clampPct(r.instrumentalPct, DEFAULT_SETTINGS.instrumentalPct),
     // 'roformer' was High quality before kara2 took the slot: a stored selection follows it.
     mlModel: ML_MODELS.includes(r.mlModel as MlModel) ? (r.mlModel as MlModel) : r.mlModel === 'roformer' || r.mlModel === 'kim2' ? 'kara2' : DEFAULT_SETTINGS.mlModel,

@@ -726,6 +726,26 @@ describe('popup', () => {
       expect(pressed()).toEqual([id]);
     });
 
+    it('backing slider and Karaoke+Backing preset exist only for backing-split models', async () => {
+      await load({ stored: { mode: 'separate', mlModel: 'mdx' } });
+      expect(has('backing')).toBe(false);
+      expect(has('preset-karaoke-backing')).toBe(false);
+      await load({ stored: { mode: 'separate', mlModel: 'kara2', vocalPct: 70, backingPct: 70 } });
+      expect(has('backing')).toBe(true);
+      el('preset-karaoke').click();
+      await settle();
+      expect(sent().at(-1).settings).toMatchObject({ vocalPct: 0, backingPct: 0 });
+      el('preset-karaoke-backing').click();
+      await settle();
+      expect(sent().at(-1).settings).toMatchObject({ vocalPct: 0, backingPct: 100, instrumentalPct: 100 });
+      expect(pressed()).toEqual(['preset-karaoke-backing']);
+      el('preset-half-karaoke').click();
+      await settle();
+      expect(sent().at(-1).settings).toMatchObject({ vocalPct: 50, backingPct: 50 });
+      await drag('backing', '30');
+      expect(sent().at(-1).settings.backingPct).toBe(30);
+    });
+
     it('the Reset preset also puts Drums and Others back to 100%', async () => {
       await load({ stored: { mode: 'separate', splitInstrumental: true, drumsPct: 40, othersPct: 30, masterPct: 300 } });
       el('preset-reset').click();

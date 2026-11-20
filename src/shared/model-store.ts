@@ -31,6 +31,9 @@ export const MODEL_IDS: readonly ModelId[] = ['kara2', 'deux', 'sw', 'drums', 'g
 export const VOCAL_MODEL_IDS: readonly ModelId[] = ['kara2', 'deux', 'sw'];
 /** Menu names. */
 export const MODEL_LABEL: Readonly<Record<ModelId, string>> = { kara2: 'High quality', deux: 'Best Vocal', sw: 'Best Instrumental', drums: 'Drum split', guitar: 'Guitar split', compat: 'Default (this GPU)' };
+/** Models whose output has a separate backing-vocal mask (lead = vocals - backing). */
+const BACKING_SPLIT_MODELS: ReadonlySet<string> = new Set<ModelId>(['kara2']);
+export const hasBackingSplit = (model: string): boolean => BACKING_SPLIT_MODELS.has(model);
 /** The files of a model: weights and, for the RoFormers, the STFT metadata. */
 export const modelFileNames = (id: ModelId): string[] =>
   id === 'drums' ? ['drums.onnx'] : id === 'compat' ? ['compat-mdx.onnx', 'compat-vocals.onnx'] : [`${id}.onnx`, `${id}-meta.json`];

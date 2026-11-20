@@ -25,6 +25,7 @@ describe('normalizeSettings', () => {
       mode: 'separate',
       masterPct: 600,
       vocalPct: 0,
+      backingPct: 100,
       instrumentalPct: 100,
       mlModel: 'mdx',
       splitInstrumental: false,
@@ -97,6 +98,10 @@ describe('normalizeSettings', () => {
     expect(normalizeSettings({}).splitInstrumental).toBe(false);
     expect(normalizeSettings({ splitInstrumental: true }).splitInstrumental).toBe(true);
     for (const v of ['true', 1, null]) expect(normalizeSettings({ splitInstrumental: v }).splitInstrumental).toBe(false);
+    expect(normalizeSettings({}).backingPct).toBe(100);
+    expect(normalizeSettings({ backingPct: 40 }).backingPct).toBe(40);
+    expect(normalizeSettings({ backingPct: 900 }).backingPct).toBe(100);
+    expect(normalizeSettings({ backingPct: 'x' }).backingPct).toBe(100);
     expect(normalizeSettings({ drumsPct: 0, othersPct: 900 })).toMatchObject({ drumsPct: 0, othersPct: 100 });
     expect(normalizeSettings({ drumsPct: 'x', othersPct: undefined })).toMatchObject({ drumsPct: 100, othersPct: 100 });
   });

@@ -1,9 +1,10 @@
 import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { AudioLines, AudioWaveform, Cpu, Drum, Guitar, HardDriveDownload, LoaderCircle, Maximize2, Mic, Minimize2, MicOff, Music, Piano, RefreshCw, RotateCcw, Settings2, Timer, TriangleAlert, Undo2, Volume2, Waves, Zap } from 'lucide-react';
+import { AudioLines, AudioWaveform, Cpu, Drum, Guitar, HardDriveDownload, LoaderCircle, Maximize2, Mic, MicVocal, Minimize2, MicOff, Music, Piano, RefreshCw, RotateCcw, Settings2, Timer, TriangleAlert, Undo2, Volume2, Waves, Zap } from 'lucide-react';
 import type { ContentStatus, ExportAnswer, ExportCancel, ExportStart, GetStatus, GetTabSettings, PreloadCancel, PreloadStart, SetTabSettings } from '../shared/messages';
 import type { ExportOptions } from '../shared/export';
 import { EQ_MAX_DB } from '../shared/effects';
 import { clampDelayS, clampEq, effectiveDelayS, clampOthersPct, clampPct, clampPitch, masterPctAt, masterPosOf, MASTER_POS_MAX, normalizeSettings, PITCH_MAX, type MixerSettings, type Mode } from '../shared/settings';
+import { hasBackingSplit } from '../shared/model-store';
 import { separationView, type SepView } from '../shared/separation-view';
 import { DELAY_RANGE } from '../ml/rof-plan';
 import type { MlModel } from '../worklet/protocol';
@@ -417,18 +418,19 @@ function Banner({ view, settings, update, retry, compact }: { compact: boolean; 
   );
 }
 
-type Levels = Pick<MixerSettings, 'vocalPct' | 'instrumentalPct' | 'drumsPct' | 'guitarPct' | 'bassPct' | 'pianoPct' | 'othersPct'>;
-const LEVEL_KEYS: readonly (keyof Levels)[] = ['vocalPct', 'instrumentalPct', 'drumsPct', 'guitarPct', 'bassPct', 'pianoPct', 'othersPct'];
+type Levels = Pick<MixerSettings, 'vocalPct' | 'backingPct' | 'instrumentalPct' | 'drumsPct' | 'guitarPct' | 'bassPct' | 'pianoPct' | 'othersPct'>;
+const LEVEL_KEYS: readonly (keyof Levels)[] = ['vocalPct', 'backingPct', 'instrumentalPct', 'drumsPct', 'guitarPct', 'bassPct', 'pianoPct', 'othersPct'];
 const levelsOf = (s: MixerSettings): Levels => Object.fromEntries(LEVEL_KEYS.map((k) => [k, s[k]])) as Levels;
 const sameLevels = (a: Levels, b: Levels) => LEVEL_KEYS.every((k) => a[k] === b[k]);
 /** How long "Undo" stays after a preset. */
 const UNDO_MS = 5000;
 
 const PRESETS = [
-  { id: 'preset-karaoke', label: 'Karaoke', tip: 'Vocal 0%, instrumental 100%', vocal: 0, instrumental: 100, icon: <MicOff size={15} aria-hidden /> },
-  { id: 'preset-half-karaoke', label: 'Half karaoke', tip: 'Vocal 50%, instrumental 100%', vocal: 50, instrumental: 100, icon: <AudioLines size={15} aria-hidden /> },
-  { id: 'preset-acappella', label: 'A cappella', tip: 'Vocal 100%, instrumental 0%', vocal: 100, instrumental: 0, icon: <Mic size={15} aria-hidden /> },
-  { id: 'preset-reset', label: 'Reset', tip: 'Vocal, instrumental and the split levels back to 100%', vocal: 100, instrumental: 100, icon: <RotateCcw size={15} aria-hidden /> },
+  { id: 'preset-karaoke', label: 'Karaoke', tip: 'Vocal 0%, instrumental 100%', vocal: 0, backing: 0, instrumental: 100, icon: <MicOff size={15} aria-hidden /> },
+  { id: 'preset-half-karaoke', label: 'Half karaoke', tip: 'Vocal 50%, instrumental 100%', vocal: 50, backing: 50, instrumental: 100, icon: <AudioLines size={15} aria-hidden /> },
+  { id: 'preset-acappella', label: 'A cappella', tip: 'Vocal 100%, instrumental 0%', vocal: 100, backing: 100, instrumental: 0, icon: <Mic size={15} aria-hidden /> },
+  { id: 'preset-reset', label: 'Reset', tip: 'Vocal, instrumental and the split levels back to 100%', vocal: 100, backing: 100, instrumental: 100, icon: <RotateCcw size={15} aria-hidden /> },
+  { id: 'preset-karaoke-backing', label: 'Karaoke+Backing', tip: 'Lead vocal 0%, backing vocal and instrumental 100%', vocal: 0, backing: 100, instrumental: 100, only: true, icon: <Mic size={15} aria-hidden /> },
 ];
 
 function SeparateControls({ settings, update, ready, compact, advancedOpen, setAdvancedOpen, splitOpen, setSplitOpen, exportApi }: {
@@ -444,6 +446,7 @@ function SeparateControls({ settings, update, ready, compact, advancedOpen, setA
 }) {
   // The all-stems model splits the drums, guitar, bass and piano itself: the split switches (and their models) are not available then.
   const all = settings.mlModel === 'sw';
+  const backing = hasBackingSplit(settings.mlModel);
   const [noF16, setNoF16] = useState(false);
   useEffect(() => { void hasShaderF16(settings.gpu).then((ok) => setNoF16(!ok)); }, [settings.gpu]);
   const models = useModels(settings.mlModel, { drums: settings.splitInstrumental && !all, guitar: settings.splitGuitar && !all }, ready, noF16);
@@ -471,6 +474,11 @@ function SeparateControls({ settings, update, ready, compact, advancedOpen, setA
       <Rise i={1}>
       <Card className="mx-rows">
         <SliderRow id="vocal" icon={<Mic size={15} />} label="Vocal" unit="%" pitch={stemPitch('vocal-pitch', 'Vocal pitch', settings.vocalPitch, (v) => update({ vocalPitch: clampPitch(v) }))} value={settings.vocalPct} min={0} max={100} step={5} onValue={(v) => update({ vocalPct: clampPct(v) })} />
+        <Collapse show={backing}>
+          <div className="pl-4">
+            <SliderRow id="backing" icon={<MicVocal size={15} />} label="Backing vocal" hint="backing singers" unit="%" value={settings.backingPct} min={0} max={100} step={5} onValue={(v) => update({ backingPct: clampPct(v) })} />
+          </div>
+        </Collapse>
         <SliderRow id="instrumental" icon={<Music size={15} />} label="Instrumental" unit="%" pitch={stemPitch('instrumental-pitch', 'Instrumental pitch', settings.instrPitch, (v) => update({ instrPitch: clampPitch(v) }))} value={settings.instrumentalPct} min={0} max={100} step={5} onValue={(v) => update({ instrumentalPct: clampPct(v) })} />
         <Collapse show={all || settings.splitInstrumental || settings.splitGuitar}>
           <div id="split-mix" className="flex flex-col gap-3.5 border-t border-well pt-3.5">
@@ -494,14 +502,14 @@ function SeparateControls({ settings, update, ready, compact, advancedOpen, setA
       <Collapse show={!compact}>
       <Rise i={2}>
       <div className="presets grid grid-cols-2 gap-2.5" role="group" aria-label="Presets">
-        {PRESETS.map((p, i) => {
-          const pressed = p.vocal === settings.vocalPct && p.instrumental === settings.instrumentalPct;
+        {PRESETS.filter((p) => backing || !p.only).map((p, i) => {
+          const pressed = p.vocal === settings.vocalPct && p.instrumental === settings.instrumentalPct && (!backing || p.backing === settings.backingPct);
           return (
             <Tip key={p.id} text={p.tip} align={i % 2 === 0 ? 'start' : 'end'}>
             <Btn id={p.id} tone="preset" aria-pressed={pressed}
               onClick={() => {
                 setRipple((r) => ({ id: p.id, n: (r?.n ?? 0) + 1 }));
-                const patch = { vocalPct: p.vocal, instrumentalPct: p.instrumental, ...(p.id === 'preset-reset' ? { drumsPct: 100, guitarPct: 100, bassPct: 100, pianoPct: 100, othersPct: 100 } : {}) };
+                const patch = { vocalPct: p.vocal, ...(backing ? { backingPct: p.backing } : {}), instrumentalPct: p.instrumental, ...(p.id === 'preset-reset' ? { drumsPct: 100, guitarPct: 100, bassPct: 100, pianoPct: 100, othersPct: 100 } : {}) };
                 const before = levelsOf(settings);
                 const after = levelsOf({ ...settings, ...patch });
                 if (!sameLevels(before, after)) setUndo({ before, after });

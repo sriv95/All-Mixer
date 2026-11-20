@@ -8,6 +8,10 @@ CI builds the extension, creates tag `vx.y.z` and a GitHub release with this sec
 
 ## [Unreleased]
 
+### Added
+
+- **Backing vocal slider and Karaoke+Backing preset (High quality model).** Turn the backing singers up or down on their own, or remove only the lead voice.
+
 ### Changed
 
 - **High quality now uses a new, cleaner vocal model.** If you already use High quality, you are moved to it automatically and it downloads once.
