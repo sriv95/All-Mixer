@@ -8,6 +8,10 @@ CI builds the extension, creates tag `vx.y.z` and a GitHub release with this sec
 
 ## [Unreleased]
 
+### Changed
+
+- **High quality now uses a new, cleaner vocal model.** If you already use High quality, you are moved to it automatically and it downloads once.
+
 ## [1.2.0] - 2026-11-18
 
 ### Changed

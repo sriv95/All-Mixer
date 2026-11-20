@@ -50,7 +50,7 @@ describe('planMdx', () => {
 describe('planMdx for Kim Vocal 2', () => {
   const plan = (sec: number, baseMs = 100) => planMdx(s(sec), baseMs, MDX_KIM2);
   it('the delay range is 3 to 8 s and the first limit gives a valid segment (32-frame steps, whole quanta, no Karaoke tail)', () => {
-    expect(DELAY_RANGE.kim2).toEqual({ min: 3, max: 8 });
+    expect(DELAY_RANGE.kara2).toEqual({ min: 3, max: 8 });
     const p = plan(3)!;
     expect(p.frames % MDX_T_STEP).toBe(0);
     expect(p.frames).toBeGreaterThanOrEqual(MDX_T_MIN);

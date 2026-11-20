@@ -26,32 +26,42 @@ describe('migrateModels', () => {
     const d: Record<string, unknown> = { 'modelRemote.roformer': {}, mlSpeeds: { 'roformer|1|0.3|gpu': { baseMs: 1, at: 1 }, 'deux|1|0.3|gpu': { baseMs: 1, at: 1 } } };
     const s = setup(chunks, d);
     await migrateModels(s.area, s.files, s.install);
-    expect([...s.m].sort()).toEqual(['stray.txt', 'v1-deux.onnx.0000', 'v1-drums.onnx.0000', 'v1-kim2-meta.json.0000', 'v1-kim2.onnx.0000', 'v2-sw.onnx.0001']);
+    expect([...s.m].sort()).toEqual(['stray.txt', 'v1-deux.onnx.0000', 'v1-drums.onnx.0000', 'v2-sw.onnx.0001']);
     expect(Object.keys(d.mlSpeeds as object)).toEqual(['deux|1|0.3|gpu']);
     expect(d['modelRemote.roformer']).toBeUndefined();
     expect(s.installs).toEqual([]);
   });
-  it('installs kim2 when the old model was installed, then forgets it', async () => {
+  it('installs kara2 when the old model was installed, then forgets it', async () => {
     const d: Record<string, unknown> = { [OLD]: { version: 1, files: {} } };
     const s = setup(chunks, d);
     await migrateModels(s.area, s.files, s.install);
-    expect(s.installs).toEqual(['kim2']);
+    expect(s.installs).toEqual(['kara2']);
     expect(d[OLD]).toBeUndefined();
-    expect(keyInstalled('kim2') in d).toBe(true);
+    expect(keyInstalled('kara2') in d).toBe(true);
   });
-  it('keeps the old record when the kim2 download failed, so the next start retries', async () => {
+  it('moves a Kim Vocal 2 install to kara2 and drops its records and chunks', async () => {
+    const d: Record<string, unknown> = { 'modelInstalled.kim2': { version: 1, files: {} }, 'modelRemote.kim2': { version: 1 }, mlSpeeds: { 'kim2|1|0.3|gpu': { baseMs: 1, at: 1 } } };
+    const s = setup(chunks, d);
+    await migrateModels(s.area, s.files, s.install);
+    expect(s.installs).toEqual(['kara2']);
+    expect('modelInstalled.kim2' in d).toBe(false);
+    expect('modelRemote.kim2' in d).toBe(false);
+    expect(Object.keys(d.mlSpeeds as object)).toEqual([]);
+    expect([...s.m].some((n) => n.includes('kim2'))).toBe(false);
+  });
+  it('keeps the old record when the kara2 download failed, so the next start retries', async () => {
     const d: Record<string, unknown> = { [OLD]: { version: 1, files: {} } };
     const s = setup([], d);
     await migrateModels(s.area, s.files, async () => {});
     expect(d[OLD]).toBeDefined();
   });
   it('does nothing the second time', async () => {
-    const d: Record<string, unknown> = { [OLD]: { version: 1, files: {} }, [keyRemote('kim2')]: { version: 1 } };
+    const d: Record<string, unknown> = { [OLD]: { version: 1, files: {} }, [keyRemote('kim2' as ModelId)]: { version: 1 } };
     const s = setup(chunks, d);
     await migrateModels(s.area, s.files, s.install);
     const after = JSON.stringify([d, [...s.m]]);
     await migrateModels(s.area, s.files, s.install);
     expect(JSON.stringify([d, [...s.m]])).toBe(after);
-    expect(s.installs).toEqual(['kim2']);
+    expect(s.installs).toEqual(['kara2']);
   });
 });

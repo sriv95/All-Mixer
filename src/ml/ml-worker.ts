@@ -16,8 +16,8 @@ import {
   type MlWorkerInit,
 } from '../worklet/protocol';
 import { CTX, BINS } from './stream';
-import { MDX_BINS, MdxStream } from './mdx';
-import { MDX_KIM2, MDX_T_MIN, mdxGeometry, planMdx } from './mdx-plan';
+import { MDX_BINS } from './mdx';
+import { MDX_T_MIN, planMdx } from './mdx-plan';
 import { MlPipeline, type Models } from './pipeline';
 import { warmUp, warmUpGated, type WarmUpResult } from './warmup';
 import { makeStall, type StallOpts } from './stall';
@@ -69,7 +69,6 @@ async function start(init: MlWorkerInit): Promise<void> {
   if (!f16 && init.guitar) return unavailable(`${MODEL_LABEL.guitar} is not supported on this GPU (no fp16)`);
   const info = adapter.info ?? {};
   const adapterName = nameOfAdapter(info);
-  if (init.model === 'kim2') return startKim2(init, adapterName);
   if (init.model !== 'mdx') return startRoformer(init, adapterName);
 
   // 2. ORT + models.
@@ -195,131 +194,6 @@ async function start(init: MlWorkerInit): Promise<void> {
     misses: () => pipeline.splMisses,
   };
   const engine = stages.length ? withStages(mdxEngine, stages) : mdxEngine;
-  serve(init.port, engine, { stallMs: init.stallMs ?? 0, stallAfterMs: init.stallAfterMs ?? 5000 }, init.timing ? new MlTiming() : null);
-}
-
-/**
- * Kim Vocal 2 (UVR MDX-Net fp16): the streaming MDX core (src/ml/mdx.ts, MDX_KIM2) around one fp32-I/O graph on WebGPU, vocal only. The
- * vocal block is both Vk and the A cappella; the worklet makes the instrumental as mix − vocal (src/worklet/core.ts). No Spleeter, no
- * Karaoke combine. The segment is planned from the speed measured at 64 frames (mdx-plan.ts planMdx; remembered per GPU like the RoFormers'),
- * one session per segment length (the `frames` axis is fixed per session). With the Split stages the segment stays at 64 frames (planMdxDrums).
- */
-async function startKim2(init: MlWorkerInit, adapterName: string): Promise<void> {
-  let ort: Ort, buf: ArrayBuffer;
-  const t0 = performance.now();
-  try {
-    ort = await import('onnxruntime-web/webgpu');
-    ort.env.wasm.wasmPaths = init.wasmBase;
-    ort.env.wasm.numThreads = 1;
-    ort.env.wasm.proxy = false;
-    if (init.gpu && init.gpu !== 'auto') ort.env.webgpu.powerPreference = init.gpu;
-    ort.env.logLevel = 'error';
-    const inst = init.installed;
-    if (!inst) return unavailable(`the ${MODEL_LABEL.kim2} model is not downloaded`);
-    if (inst.format !== MODEL_FORMAT) return unavailable(`the ${MODEL_LABEL.kim2} model is out of date: download it again`);
-    const [onnx] = modelFileNames('kim2');
-    buf = await readModelFile(opfsFiles(), inst.version, onnx, inst.files[onnx]).then((x) => x.arrayBuffer());
-  } catch (e) {
-    return unavailable(`model: ${String(e)}`);
-  }
-  interface Run { frames: number; session: Session; stream: MdxStream; run: () => Promise<Float32Array>; wu: WarmUpResult }
-  const measure = async (frames: number, w: { skip: number; n: number }): Promise<Run> => {
-    const session = await ort.InferenceSession.create(buf, { executionProviders: ['webgpu'], graphOptimizationLevel: 'all', logSeverityLevel: 3, freeDimensionOverrides: { frames } });
-    try {
-      const stream = new MdxStream(frames, MDX_KIM2);
-      const input = new ort.Tensor('float32', stream.x, [1, 4, MDX_KIM2.bins, frames]);
-      const run = async (): Promise<Float32Array> => {
-        const out = await session.run({ [session.inputNames[0]]: input });
-        const t = out[session.outputNames[0]];
-        const data = (await t.getData()) as Float32Array;
-        t.dispose();
-        return data;
-      };
-      const nl = Float32Array.from({ length: stream.block }, () => (Math.random() * 2 - 1) * 0.3), nr = nl.slice();
-      const ol = new Float32Array(stream.block), or = new Float32Array(stream.block);
-      const wu = await warmUp(() => stream.process(nl, nr, run, ol, or), w);
-      stream.reset();
-      return { frames, session, stream, run, wu };
-    } catch (e) {
-      void session.release();
-      throw e;
-    }
-  };
-  let chosen = null as Run | null; // set in `search`
-  let plan = null as { frames: number; geometry: MlGeometry } | null;
-  let note = '';
-  let stages: Split[] = [];
-  let planBaseMs = 0;
-  const speedKeyOf = speedKey({ model: 'kim2', modelVersion: init.installed?.version ?? 0, appVersion: init.appVersion ?? '', adapter: adapterName });
-  const delay = ((init.delayMs ?? DELAY_RANGE.kim2.min * 1000) / 1000) * ML_SAMPLE_RATE;
-  const base = mdxGeometry(MDX_T_MIN, 0, MDX_KIM2); // the stage plan keeps this block
-  const search = async (start: number, w: { skip: number; n: number }): Promise<void> => {
-    let baseMs = start;
-    for (let attempt = 0; attempt < 3 && !chosen; attempt++) {
-      if (stages.length) {
-        // An export has no speed to keep up with: only the block shape matters, so the plan is made for a fast GPU.
-        const g = planMdxDrums(init.offline ? 1 : baseMs, stages.map((s) => (init.offline ? { ...costOf(s), ms: 1 } : costOf(s))), base);
-        plan = g && { frames: MDX_T_MIN, geometry: { ...g, drums: init.drums === true, guitar: init.guitar === true, pool: poolFor(runsMs(stages), (base.block / ML_SAMPLE_RATE) * 1000) } };
-        if (!plan) { note = `too slow for the split (the vocal model takes ${baseMs.toFixed(0)} ms per block, ${stages.map((s) => `the ${s.id} model ${s.ms.toFixed(0)} ms per run`).join(', ')})`; break; }
-      } else {
-        plan = planMdx(delay, baseMs, MDX_KIM2);
-        if (!plan) {
-          note = `too slow for a ${Math.round(delay / ML_SAMPLE_RATE)} s delay (a step takes ${baseMs.toFixed(0)} ms for ${MDX_T_MIN} frames)${delay < DELAY_RANGE.kim2.max * ML_SAMPLE_RATE ? ': try a longer delay limit' : ''}`;
-          break;
-        }
-      }
-      try {
-        const r = await measure(plan.frames, w);
-        if (init.offline || r.wu.p90 <= plan.geometry.warmupP90Ms) {
-          chosen = r;
-          planBaseMs = baseMs;
-        } else {
-          baseMs *= r.wu.p90 / (baseMs * (plan.frames / MDX_T_MIN)); // slower than predicted: correct the speed, plan again
-          void r.session.release();
-        }
-      } catch (e) {
-        baseMs *= 1.5; // most likely out of GPU memory at this segment length
-        note = `segment of ${plan.frames} frames failed: ${String(e)}`;
-      }
-    }
-  };
-  const remembered = lookupSpeed(init.speeds, speedKeyOf);
-  try {
-    if (init.drums || init.guitar) {
-      const d = await loadStages(ort, init);
-      if (typeof d === 'string') return unavailable(d);
-      stages = d;
-    }
-    // An export is not bound to real time: plan for a fast GPU (the longest segment the delay limit allows), time one run.
-    if (init.offline) await search(1, { skip: 0, n: 1 });
-    else if (remembered !== null) await search(remembered, { skip: 1, n: 3 });
-    // Nothing remembered, or it no longer holds (another load on the GPU): measure now.
-    if (!chosen) {
-      note = '';
-      const r = await measure(MDX_T_MIN, { skip: 2, n: 6 });
-      void r.session.release();
-      await search(r.wu.p90, { skip: 1, n: 4 });
-    }
-  } catch (e) {
-    return unavailable(`warm-up: ${String(e)}`);
-  }
-  if (!chosen || !plan) return unavailable(note || 'too slow on this device');
-  const { stream, run, wu } = chosen;
-  const { geometry } = plan;
-  const createMs = performance.now() - t0;
-  if (init.timing) console.info(`[all-mixer ml] kim2 segment ${chosen.frames} frames (${(stream.segment / ML_SAMPLE_RATE).toFixed(2)} s), block ${(stream.block / ML_SAMPLE_RATE).toFixed(2)} s, delay ${(geometry.latency / ML_SAMPLE_RATE).toFixed(2)} s; warm-up p50 ${wu.p50.toFixed(1)} p90 ${wu.p90.toFixed(1)} (gate ${geometry.warmupP90Ms.toFixed(1)}), ready after ${createMs.toFixed(0)} ms, ${adapterName}`);
-  ctx.postMessage({ type: 'ready', p50: wu.p50, p90: wu.p90, p95: wu.p95, createMs, adapter: adapterName, geometry, ...(init.offline ? {} : { speed: { key: speedKeyOf, baseMs: planBaseMs } }) });
-  const B = stream.block;
-  const vocalEngine: BlockEngine = {
-    block: B,
-    resultOffset: stages.length ? base.resultOffset : geometry.resultOffset, // withStages adds the stage wait itself
-    reset: () => stream.reset(),
-    process: async (d) => {
-      await stream.process(d.subarray(0, B), d.subarray(B, 2 * B), run, d.subarray(0, B), d.subarray(B, 2 * B)); // the input is read whole before the vocal is written over it
-      d.copyWithin(2 * B, 0, 2 * B); // the vocal is both Vk and the A cappella
-    },
-  };
-  const engine = stages.length ? withStages(vocalEngine, stages) : vocalEngine;
   serve(init.port, engine, { stallMs: init.stallMs ?? 0, stallAfterMs: init.stallAfterMs ?? 5000 }, init.timing ? new MlTiming() : null);
 }
 

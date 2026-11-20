@@ -1,12 +1,12 @@
-// The RoFormer models ("High quality" = Kim fine-tune, "Best Vocal" = Deux, "Best Instrumental" = BS-RoFormer SW, six
+// The RoFormer models ("High quality" = fine-tuned kara2, "Best Vocal" = Deux, "Best Instrumental" = BS-RoFormer SW, six
 // stems in one pass), the drum split model (SCNet Tran Small) and the guitar model are not packed into the extension: the user downloads each from a public Hugging Face repo into the extension's own storage (OPFS). Pure
 // logic shared by the background worker (download), the popup (state text) and the ML page (which model files to
 // load). No chrome.* or DOM here.
 //
 // Repo layout (scripts/model-manifest.mjs writes it); every model has its own version:
-//   manifest.json   {"format":2,"models":{"kim2":{"version":1,"files":{"kim2.onnx":33399716,"kim2-meta.json":179}},"deux":{...},"drums":{"version":1,"files":{"drums.onnx":43105845}}}}
-//   v1/kim2.onnx, v1/kim2-meta.json, v1/deux.onnx, v1/deux-meta.json, v1/drums.onnx
-// A download is split into CHUNK-sized pieces, one OPFS file each (`v1-kim2.onnx.0007`): an interrupted download
+//   manifest.json   {"format":2,"models":{"kara2":{"version":1,"files":{"kara2.onnx":33399716,"kara2-meta.json":179}},"deux":{...},"drums":{"version":1,"files":{"drums.onnx":43105845}}}}
+//   v1/kara2.onnx, v1/kara2-meta.json, v1/deux.onnx, v1/deux-meta.json, v1/drums.onnx
+// A download is split into CHUNK-sized pieces, one OPFS file each (`v1-kara2.onnx.0007`): an interrupted download
 // (the service worker can be stopped at any time) resumes at the first missing piece, and the reader concatenates
 // the pieces as a Blob without copying.
 
@@ -19,18 +19,18 @@ export const MODEL_FORMAT = 2;
 export const CHUNK = 8 * 2 ** 20;
 
 /**
- * The downloadable models. 'kim2', 'deux' and 'sw' are the Model menu entries (src/worklet/protocol.ts MlModel);
+ * The downloadable models. 'kara2', 'deux' and 'sw' are the Model menu entries (src/worklet/protocol.ts MlModel);
  * 'drums' is SCNet Tran Small, the model of Split instrumental (src/ml/scnet.ts). 'guitar' is becruily's Mel-Band
  * RoFormer guitar stem model, a second stem of Split instrumental next to the drums (src/ml/guitar-stage.ts).
  * 'compat' is the Default model (MDX-Net + Spleeter) in fp32, for GPUs without WebGPU shader-f16 (e.g. AMD Polaris):
  * the packed Default models are fp16 and cannot run there. It is not a menu entry; the popup offers it when the GPU needs it.
  */
-export type ModelId = 'kim2' | 'deux' | 'sw' | 'drums' | 'guitar' | 'compat';
-export const MODEL_IDS: readonly ModelId[] = ['kim2', 'deux', 'sw', 'drums', 'guitar', 'compat'];
+export type ModelId = 'kara2' | 'deux' | 'sw' | 'drums' | 'guitar' | 'compat';
+export const MODEL_IDS: readonly ModelId[] = ['kara2', 'deux', 'sw', 'drums', 'guitar', 'compat'];
 /** The downloadable Model menu entries. */
-export const VOCAL_MODEL_IDS: readonly ModelId[] = ['kim2', 'deux', 'sw'];
+export const VOCAL_MODEL_IDS: readonly ModelId[] = ['kara2', 'deux', 'sw'];
 /** Menu names. */
-export const MODEL_LABEL: Readonly<Record<ModelId, string>> = { kim2: 'High quality', deux: 'Best Vocal', sw: 'Best Instrumental', drums: 'Drum split', guitar: 'Guitar split', compat: 'Default (this GPU)' };
+export const MODEL_LABEL: Readonly<Record<ModelId, string>> = { kara2: 'High quality', deux: 'Best Vocal', sw: 'Best Instrumental', drums: 'Drum split', guitar: 'Guitar split', compat: 'Default (this GPU)' };
 /** The files of a model: weights and, for the RoFormers, the STFT metadata. */
 export const modelFileNames = (id: ModelId): string[] =>
   id === 'drums' ? ['drums.onnx'] : id === 'compat' ? ['compat-mdx.onnx', 'compat-vocals.onnx'] : [`${id}.onnx`, `${id}-meta.json`];
