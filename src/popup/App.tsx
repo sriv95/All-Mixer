@@ -476,7 +476,7 @@ function SeparateControls({ settings, update, ready, compact, advancedOpen, setA
         <SliderRow id="vocal" icon={<Mic size={15} />} label="Vocal" unit="%" pitch={stemPitch('vocal-pitch', 'Vocal pitch', settings.vocalPitch, (v) => update({ vocalPitch: clampPitch(v) }))} value={settings.vocalPct} min={0} max={100} step={5} onValue={(v) => update({ vocalPct: clampPct(v) })} />
         <Collapse show={backing}>
           <div className="pl-4">
-            <SliderRow id="backing" icon={<MicVocal size={15} />} label="Backing vocal" hint="backing singers" unit="%" value={settings.backingPct} min={0} max={100} step={5} onValue={(v) => update({ backingPct: clampPct(v) })} />
+            <SliderRow id="backing" icon={<MicVocal size={15} />} label="Backing vocal" unit="%" value={settings.backingPct} min={0} max={100} step={5} onValue={(v) => update({ backingPct: clampPct(v) })} />
           </div>
         </Collapse>
         <SliderRow id="instrumental" icon={<Music size={15} />} label="Instrumental" unit="%" pitch={stemPitch('instrumental-pitch', 'Instrumental pitch', settings.instrPitch, (v) => update({ instrPitch: clampPitch(v) }))} value={settings.instrumentalPct} min={0} max={100} step={5} onValue={(v) => update({ instrumentalPct: clampPct(v) })} />
