@@ -18,6 +18,8 @@ export interface StemSlice {
   vk?: Pair;
   /** The vocal (A cappella). */
   vocal?: Pair;
+  /** The backing singers (a part of the vocal; the lead is vocal − backing), with a backing-split model. */
+  backing?: Pair;
   /** Parts of the instrumental the model took out. */
   parts?: Partial<Record<Part, Pair>>;
 }
@@ -56,6 +58,8 @@ export function mixSlice(options: Pick<ExportOptions, 'tracks' | 'audio'>, s: St
     for (let i = 0; i < n; i++) {
       const instr = s.dry[c][i] - s.vk[c][i];
       const v = s.vocal[c][i];
+      const k = s.backing?.[c][i];
+      const voice = k === undefined ? g.vocal * v : g.vocal * (v - k) + g.backing * k;
       let rest = instr;
       let partsSum = 0;
       for (const p of parts) {
@@ -66,9 +70,9 @@ export function mixSlice(options: Pick<ExportOptions, 'tracks' | 'audio'>, s: St
       const instrumental = g.instrumental * (partsSum + g.others * rest);
       const mix = out.mix;
       if (terms) {
-        terms.vocal[c][i] = g.vocal * v;
+        terms.vocal[c][i] = voice;
         terms.instr[c][i] = instrumental;
-      } else if (mix) mix[c][i] = limit(master * (g.vocal * v + instrumental));
+      } else if (mix) mix[c][i] = limit(master * (voice + instrumental));
       const set = (id: TrackId, x: number) => {
         const t = out[id];
         if (t) t[c][i] = limit(master * x);

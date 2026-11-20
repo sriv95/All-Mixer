@@ -10,6 +10,7 @@ const MAX_EXTRA_PAD_BLOCKS = 8;
 interface Reply {
   vk: Pair;
   vocal: Pair;
+  backing?: Pair;
   parts: Partial<Record<Part, Pair>>;
 }
 
@@ -144,7 +145,8 @@ export class OfflineSeparator {
       const parts: Partial<Record<Part, Pair>> = {};
       this.parts.forEach((p, i) => (parts[p] = [plane(4 + 2 * i), plane(5 + 2 * i)]));
       this.phase ??= ((start % B) + B) % B;
-      this.replies.set(start, { vk: [plane(0), plane(1)], vocal: [plane(2), plane(3)], parts });
+      const k = 4 + 2 * this.parts.length; // the backing pair comes after all the part pairs
+      this.replies.set(start, { vk: [plane(0), plane(1)], vocal: [plane(2), plane(3)], parts, ...(this.geometry.backing ? { backing: [plane(k), plane(k + 1)] as Pair } : {}) });
     }
     this.pool.push(buf);
     this.wake?.();
@@ -199,6 +201,7 @@ export class OfflineSeparator {
     const pair = (): Pair => [new Float32Array(n), new Float32Array(n)];
     const slice: StemSlice = { start: this.emitted, length: n, dry: pair(), vk: pair(), vocal: pair(), parts: {} };
     for (const p of this.parts) slice.parts![p] = pair();
+    if (this.geometry.backing) slice.backing = pair();
     for (let pos = this.emitted; pos < end; ) {
       const rs = this.regionStart(pos);
       const take = Math.min(end, rs + B) - pos;
@@ -207,6 +210,7 @@ export class OfflineSeparator {
       for (let c = 0; c < 2; c++) {
         slice.vk![c].set(rep.vk[c].subarray(from, from + take), to);
         slice.vocal![c].set(rep.vocal[c].subarray(from, from + take), to);
+        if (slice.backing) slice.backing[c].set(rep.backing![c].subarray(from, from + take), to);
         for (const p of this.parts) slice.parts![p]![c].set(rep.parts[p]![c].subarray(from, from + take), to);
       }
       pos += take;

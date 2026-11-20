@@ -95,6 +95,10 @@ class FakePort {
           data[(plane + 1) * block + i] = share * data[block + i];
           plane += 2;
         }
+        if (this.g.backing) {
+          data[plane * block + i] = 0.3 * data[i];
+          data[(plane + 1) * block + i] = 0.3 * data[block + i];
+        }
       }
       head[1] = start;
     }
@@ -140,6 +144,9 @@ interface Rig {
   aR: number[];
   pL: number[];
   pR: number[];
+  /** Backing singers output. */
+  kL: number[];
+  kR: number[];
   /** Bypass weight per output sample. */
   b: number[];
   q: number;
@@ -169,6 +176,8 @@ function rig(seconds: number, signal: (n: number, seed: number) => Float32Array 
   const ar = new Float32Array(QUANTUM);
   const pl = new Float32Array(QUANTUM);
   const pr = new Float32Array(QUANTUM);
+  const kl = new Float32Array(QUANTUM);
+  const kr = new Float32Array(QUANTUM);
   const r: Rig = {
     core,
     port,
@@ -187,12 +196,14 @@ function rig(seconds: number, signal: (n: number, seed: number) => Float32Array 
     aR: [],
     pL: [],
     pR: [],
+    kL: [],
+    kR: [],
     b: [],
     q: 0,
     run(nq) {
       for (let k = 0; k < nq; k++) {
         const p = r.q * QUANTUM;
-        core.process(sigL.subarray(p, p + QUANTUM), sigR.subarray(p, p + QUANTUM), vl, vr, il, ir, bw, p / SR, [dl, dr, gl, gr, al, ar, pl, pr]);
+        core.process(sigL.subarray(p, p + QUANTUM), sigR.subarray(p, p + QUANTUM), vl, vr, il, ir, bw, p / SR, [dl, dr, gl, gr, al, ar, pl, pr, kl, kr]);
         for (let i = 0; i < QUANTUM; i++) {
           r.vL.push(vl[i]);
           r.vR.push(vr[i]);
@@ -206,6 +217,8 @@ function rig(seconds: number, signal: (n: number, seed: number) => Float32Array 
           r.aR.push(ar[i]);
           r.pL.push(pl[i]);
           r.pR.push(pr[i]);
+          r.kL.push(kl[i]);
+          r.kR.push(kr[i]);
           r.b.push(bw[i]);
         }
         r.q++;
@@ -846,5 +859,25 @@ describe('SeparatorCore, all-stems model (drums, guitar, bass and piano planes)'
     for (let n = D + 2 * allG.block; n < r.aL.length; n++) err = Math.max(err, Math.abs(r.aL[n] - 0.05 * r.sigL[n - D]));
     expect(err).toBeLessThan(1e-6);
     expect([r.dL, r.gL, r.pL].every((a) => a.every((v) => v === 0))).toBe(true);
+  });
+});
+
+describe('SeparatorCore, backing split', () => {
+  const g: MlGeometry = { block: 40 * QUANTUM, resultOffset: 10 * QUANTUM, latency: 81 * QUANTUM, warmupP90Ms: 1, drums: true, backing: true };
+
+  it('the backing pair comes out after the part pairs, delayed like the vocal; without backing it is silent', () => {
+    const r = rig(3, noise, g);
+    expect(r.core.hasBacking).toBe(true);
+    r.core.setActive(true, 'ml');
+    r.run(Math.ceil((3 * SR) / QUANTUM) - 2);
+    const D = g.latency;
+    let err = 0;
+    for (let n = D + 2 * g.block; n < r.kL.length; n++) err = Math.max(err, Math.abs(r.kL[n] - 0.3 * r.sigL[n - D]), Math.abs(r.kR[n] - 0.3 * r.sigR[n - D]));
+    expect(err).toBeLessThan(1e-6);
+    const m = rig(1, noise, 'mdx');
+    m.core.setActive(true, 'ml');
+    m.run(300);
+    expect(m.core.hasBacking).toBe(false);
+    expect(m.kL.every((v) => v === 0)).toBe(true);
   });
 });

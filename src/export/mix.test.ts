@@ -18,6 +18,23 @@ const fill = (v: number): Pair => [Float32Array.of(v, v), Float32Array.of(v, v)]
 const slice = (): StemSlice => ({ start: 0, length: 2, dry: fill(0.5), vk: fill(0.15), vocal: fill(0.15), parts: { drums: fill(0.1) } });
 const first = (p: Pair | undefined) => p![0][0];
 
+describe('mixSlice, backing singers', () => {
+  // vocal 0.15 = lead 0.1 + backing 0.05; instrumental 0.35
+  const withBacking = (): StemSlice => ({ ...slice(), backing: fill(0.05) });
+  const mix = (a: Partial<ExportOptions['audio']>, s: StemSlice) => first(mixSlice(opts({ instrumentalPct: 0, ...a }), s).mix);
+  it('lead and backing have their own levels', () => {
+    expect(mix({ vocalPct: 0, backingPct: 100 }, withBacking())).toBeCloseTo(0.05, 6);
+    expect(mix({ vocalPct: 100, backingPct: 0 }, withBacking())).toBeCloseTo(0.1, 6);
+    expect(mix({ vocalPct: 0, backingPct: 0 }, withBacking())).toBeCloseTo(0, 6);
+    expect(mix({ vocalPct: 100, backingPct: 100 }, withBacking())).toBeCloseTo(0.15, 6);
+    expect(mix({ vocalPct: 50, backingPct: 50 }, withBacking())).toBeCloseTo(0.075, 6);
+  });
+  it('without a backing stem the backing level does nothing', () => {
+    expect(mix({ vocalPct: 100, backingPct: 0 }, slice())).toBeCloseTo(0.15, 6);
+    expect(mix({ vocalPct: 50, backingPct: 0 }, slice())).toBeCloseTo(0.075, 6);
+  });
+});
+
 describe('mixSlice', () => {
   it('100 % everywhere is the recording back (vocal + instrumental = dry)', () => {
     const t = mixSlice(opts({}), slice());

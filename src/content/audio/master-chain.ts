@@ -9,6 +9,7 @@ import {
   PARAM_INSTRUMENTAL,
   PARAM_INSTRUMENTAL_PITCH,
   PARAM_OTHERS,
+  PARAM_BACKING,
   PARAM_VOCAL,
   PARAM_VOCAL_PITCH,
   PITCH_LATENCY_SAMPLES,
@@ -50,6 +51,8 @@ export interface SeparationRequest {
   on: boolean;
   /** Linear gains, 0–6. */
   vocal: number;
+  /** Backing singers' gain (backing-split models only; default 1). */
+  backing?: number;
   instrumental: number;
   /** Split instrumental: gains of the drums, the guitar, the bass and the piano (the last two only with the all-stems model) and of the rest of the instrumental, on top of `instrumental` (default 1). */
   drums?: number;
@@ -373,6 +376,7 @@ export class MasterChain {
       // Only pitching (Default mode): the stem gains of the last Separate session do not apply.
       const gain = (v: number | undefined) => (on ? v ?? 1 : 1);
       sep.parameters.get(PARAM_VOCAL)?.setTargetAtTime(gain(this.separation.vocal), now, GAIN_TAU);
+      sep.parameters.get(PARAM_BACKING)?.setTargetAtTime(gain(this.separation.backing), now, GAIN_TAU);
       sep.parameters.get(PARAM_INSTRUMENTAL)?.setTargetAtTime(gain(this.separation.instrumental), now, GAIN_TAU);
       sep.parameters.get(PARAM_DRUMS)?.setTargetAtTime(gain(this.separation.drums), now, GAIN_TAU);
       sep.parameters.get(PARAM_GUITAR)?.setTargetAtTime(gain(this.separation.guitar), now, GAIN_TAU);

@@ -97,7 +97,7 @@ export class SeparatorCore {
   /** MDX vocal (A cappella); the instrumental uses mlL/mlR (Vk = x − Karaoke instrumental). */
   private mlSL = new Float32Array(RING);
   private mlSR = new Float32Array(RING);
-  /** The parts of the instrumental the geometry has (PARTS order: drums, guitar, bass, piano; only the ones that are on): L, R ring each. */
+  /** The parts of the instrumental the geometry has, then the backing singers if it has them (PARTS order: drums, guitar, bass, piano; only the ones that are on): L, R ring each. */
   private mlP: Float32Array[] = [];
   /** Absolute start of the ML block held in each slot (NaN = empty). */
   private slotStart = new Float64Array(SLOTS).fill(NaN);
@@ -186,10 +186,15 @@ export class SeparatorCore {
     this.mlR = new Float32Array(ring);
     this.mlSL = new Float32Array(ring);
     this.mlSR = new Float32Array(ring);
-    this.mlP = PARTS.filter((p) => g[p]).flatMap(() => [new Float32Array(ring), new Float32Array(ring)]);
+    this.mlP = [...PARTS.filter((p) => g[p]), ...(g.backing ? ['backing'] : [])].flatMap(() => [new Float32Array(ring), new Float32Array(ring)]);
     this.slotStart = new Float64Array(this.slots).fill(NaN);
     this.pool = [];
     for (let i = 0; i < (g.pool ?? POOL); i++) this.pool.push(entry(new ArrayBuffer(bufferBytes(g)), g.block, planesFor(g)));
+  }
+
+  /** Whether the geometry has the backing singers' stem. */
+  get hasBacking(): boolean {
+    return this.g.backing === true;
   }
 
   setPort(port: MessagePort): void {
@@ -361,6 +366,17 @@ export class SeparatorCore {
         const ew = (env0 + dE * (i + 1)) * (w0 + dW * (i + 1));
         oL[i] = ew * rL[j];
         oR[i] = ew * rR[j];
+      }
+    }
+    // The backing singers (a part of the vocal) are the 9th and 10th entries of `parts`, after the PARTS pairs.
+    const bL = parts?.[2 * PARTS.length], bR = parts?.[2 * PARTS.length + 1];
+    if (bL && bR) {
+      const k = mlP.length - 2;
+      for (let i = 0; i < QUANTUM; i++) {
+        const j = (r0 + i) & mask;
+        const ew = (env0 + dE * (i + 1)) * (w0 + dW * (i + 1));
+        bL[i] = this.g.backing ? ew * mlP[k][j] : 0;
+        bR[i] = this.g.backing ? ew * mlP[k + 1][j] : 0;
       }
     }
     this.env = target;

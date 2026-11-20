@@ -34,6 +34,7 @@ export const ML_LATENCY_SAMPLES = ML_ALGO_SAMPLES + ML_SLACK_SAMPLES + ML_QUANTU
 
 /** Gain AudioParams (linear, 0–6 = 0–600 %). */
 export const PARAM_VOCAL = 'vocalGain';
+export const PARAM_BACKING = 'backingGain';
 export const PARAM_INSTRUMENTAL = 'instrumentalGain';
 /** Split instrumental: the drums and the rest of the instrumental, each a gain on top of the instrumental one. */
 export const PARAM_DRUMS = 'drumsGain';

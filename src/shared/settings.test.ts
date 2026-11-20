@@ -138,6 +138,7 @@ describe('separationFor', () => {
     expect(separationFor({ ...DEFAULT_SETTINGS, mode: 'separate', vocalPct: 0, instrumentalPct: 80 })).toEqual({
       on: true,
       vocal: 0,
+      backing: 1,
       instrumental: 0.8,
       drums: 1,
       guitar: 1,

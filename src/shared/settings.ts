@@ -197,6 +197,7 @@ export const effectsFor = (settings: MixerSettings): EffectsParams => ({
 export function separationFor(settings: MixerSettings): {
   on: boolean;
   vocal: number;
+  backing: number;
   instrumental: number;
   drums: number;
   guitar: number;
@@ -216,6 +217,7 @@ export function separationFor(settings: MixerSettings): {
     pitchInstrumental: own ? settings.instrPitch : settings.pitch,
     on: settings.mode === 'separate',
     vocal: settings.vocalPct / 100,
+    backing: settings.backingPct / 100,
     instrumental: settings.instrumentalPct / 100,
     drums: drums ? settings.drumsPct / 100 : 1,
     guitar: guitar ? settings.guitarPct / 100 : 1,

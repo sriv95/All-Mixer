@@ -8,7 +8,7 @@
 // process() allocates nothing; every buffer is created in the constructor.
 import { QUANTUM, SeparatorCore } from './core';
 import { PitchShifter } from './pitch-shifter';
-import { PARAM_BASS, PARAM_DRUMS, PARAM_GUITAR, PARAM_INSTRUMENTAL, PARAM_PIANO, PARAM_INSTRUMENTAL_PITCH, PARAM_OTHERS, PARAM_VOCAL, PARAM_VOCAL_PITCH, SEPARATOR_PROCESSOR, type FromWorklet, type ToWorklet } from './protocol';
+import { PARAM_BACKING, PARAM_BASS, PARAM_DRUMS, PARAM_GUITAR, PARAM_INSTRUMENTAL, PARAM_PIANO, PARAM_INSTRUMENTAL_PITCH, PARAM_OTHERS, PARAM_VOCAL, PARAM_VOCAL_PITCH, SEPARATOR_PROCESSOR, type FromWorklet, type ToWorklet } from './protocol';
 
 // AudioWorkletGlobalScope is not in TypeScript's DOM lib.
 declare const sampleRate: number;
@@ -22,6 +22,7 @@ class SeparatorProcessor extends AudioWorkletProcessor {
   static get parameterDescriptors() {
     return [
       { name: PARAM_VOCAL, defaultValue: 1, minValue: 0, maxValue: 6, automationRate: 'k-rate' },
+      { name: PARAM_BACKING, defaultValue: 1, minValue: 0, maxValue: 6, automationRate: 'k-rate' },
       { name: PARAM_INSTRUMENTAL, defaultValue: 1, minValue: 0, maxValue: 6, automationRate: 'k-rate' },
       { name: PARAM_DRUMS, defaultValue: 1, minValue: 0, maxValue: 6, automationRate: 'k-rate' },
       { name: PARAM_OTHERS, defaultValue: 1, minValue: 0, maxValue: 6, automationRate: 'k-rate' },
@@ -40,7 +41,7 @@ class SeparatorProcessor extends AudioWorkletProcessor {
   private readonly iL = new Float32Array(QUANTUM);
   private readonly iR = new Float32Array(QUANTUM);
   /** L, R of each part of the instrumental, in PARTS order (drums, guitar, bass, piano). */
-  private readonly parts = Array.from({ length: 8 }, () => new Float32Array(QUANTUM));
+  private readonly parts = Array.from({ length: 10 }, () => new Float32Array(QUANTUM));
   private readonly bw = new Float32Array(QUANTUM);
   // The vocal term and the instrumental term, before the pitch shifters.
   private readonly tvL = new Float32Array(QUANTUM);
@@ -52,6 +53,7 @@ class SeparatorProcessor extends AudioWorkletProcessor {
   private active = false;
   // Gains applied at the end of the previous quantum; each quantum ramps linearly from these.
   private vg = 1;
+  private kg = 1;
   private ig = 1;
   private dg = 1;
   private og = 1;
@@ -110,22 +112,25 @@ class SeparatorProcessor extends AudioWorkletProcessor {
       return true;
     }
     const { vL, vR, iL, iR, parts, bw, tvL, tvR, tiL, tiR } = this;
-    const [dL, dR, gL, gR, aL, aR, pL, pR] = parts;
+    const [dL, dR, gL, gR, aL, aR, pL, pR, kL, kR] = parts;
+    const backing = this.core.hasBacking;
     this.core.process(inL, inR, vL, vR, iL, iR, bw, currentTime, parts);
 
     // Per-sample ramp from last quantum's gains so k-rate steps do not zipper. The drums are a part of the
     // instrumental: the instrumental gain scales all, the drums / guitar / others gains split it.
     const vg1 = parameters[PARAM_VOCAL][0];
+    const kg1 = parameters[PARAM_BACKING][0];
     const ig1 = parameters[PARAM_INSTRUMENTAL][0];
     const dg1 = parameters[PARAM_DRUMS][0];
     const og1 = parameters[PARAM_OTHERS][0];
     const gg1 = parameters[PARAM_GUITAR][0];
     const ag1 = parameters[PARAM_BASS][0];
     const pg1 = parameters[PARAM_PIANO][0];
-    const { vg: vg0, ig: ig0, dg: dg0, og: og0, gg: gg0, ag: ag0, pg: pg0 } = this;
+    const { vg: vg0, kg: kg0, ig: ig0, dg: dg0, og: og0, gg: gg0, ag: ag0, pg: pg0 } = this;
     for (let i = 0; i < len; i++) {
       const k = (i + 1) / len;
       const v = vg0 + (vg1 - vg0) * k;
+      const kk = kg0 + (kg1 - kg0) * k;
       const g = ig0 + (ig1 - ig0) * k;
       const d = dg0 + (dg1 - dg0) * k;
       const o = og0 + (og1 - og0) * k;
@@ -133,8 +138,14 @@ class SeparatorProcessor extends AudioWorkletProcessor {
       const a = ag0 + (ag1 - ag0) * k;
       const n = pg0 + (pg1 - pg0) * k;
       const b = bw[i];
-      tvL[i] = ((1 - b) * v + b) * vL[i];
-      tvR[i] = ((1 - b) * v + b) * vR[i];
+      if (backing) {
+        // lead = vocals - backing; the backing singers have their own gain.
+        tvL[i] = (1 - b) * (v * (vL[i] - kL[i]) + kk * kL[i]) + b * vL[i];
+        tvR[i] = (1 - b) * (v * (vR[i] - kR[i]) + kk * kR[i]) + b * vR[i];
+      } else {
+        tvL[i] = ((1 - b) * v + b) * vL[i];
+        tvR[i] = ((1 - b) * v + b) * vR[i];
+      }
       tiL[i] = (1 - b) * g * (d * dL[i] + u * gL[i] + a * aL[i] + n * pL[i] + o * (iL[i] - dL[i] - gL[i] - aL[i] - pL[i])) + b * iL[i];
       tiR[i] = (1 - b) * g * (d * dR[i] + u * gR[i] + a * aR[i] + n * pR[i] + o * (iR[i] - dR[i] - gR[i] - aR[i] - pR[i])) + b * iR[i];
     }
@@ -145,6 +156,7 @@ class SeparatorProcessor extends AudioWorkletProcessor {
       oR[i] += tiR[i];
     }
     this.vg = vg1;
+    this.kg = kg1;
     this.ig = ig1;
     this.dg = dg1;
     this.og = og1;
