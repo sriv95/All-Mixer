@@ -51,25 +51,31 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument('--ckpt'); ap.add_argument('--frames', default='228,718'); ap.add_argument('--limit', type=int)
     ap.add_argument('--device', default='cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu')
-    ap.add_argument('--out'); ap.add_argument('--root'); ap.add_argument('--set', default=str(HERE / 'eval_set.json'))
+    ap.add_argument('--out'); ap.add_argument('--ref', help='--out JSON of a reference ckpt run (same device): reuse its untuned SDRs, report ckpt-vs-ref paired diff + CI'); ap.add_argument('--root'); ap.add_argument('--set', default=str(HERE / 'eval_set.json'))
     a = ap.parse_args(); frames = [int(x) for x in a.frames.split(',')]; dev = a.device
     base = kt.load(dev).eval(); cand = base
     if a.ckpt:
         ck = torch.load(a.ckpt, map_location='cpu', weights_only=False); cand = kt.load(dev); cand.load_state_dict(ck.get('model', ck) if isinstance(ck, dict) else ck, strict=True); cand.eval()
     items = json.load(open(a.set)); per = {f: {} for f in frames}; sec = {f: [] for f in frames}; same = cand is base
+    ref = json.load(open(a.ref))['per_song'] if a.ref else {}
     for i, (name, mix, voc) in enumerate(clips(items, a.root)):
         if a.limit and i >= a.limit: break
         if (voc ** 2).sum() < 1e-6: print('skip silent', name); continue
         for f in frames:
-            t0 = time.time(); sb = float(sdr(voc, stream(base, mix, f, dev))); t1 = time.time()
+            t0 = time.time(); r0 = ref.get(str(f), {}).get(name); sb = r0['untuned'] if r0 else float(sdr(voc, stream(base, mix, f, dev))); t1 = time.time()
             sc = sb if same else float(sdr(voc, stream(cand, mix, f, dev))); t2 = time.time()
-            per[f][name] = dict(untuned=sb, ckpt=sc); sec[f].append((t2 - t0) / (1 if same else 2))
+            per[f][name] = dict(untuned=sb, ckpt=sc)
+            if r0: per[f][name]['vs_ref'] = sc - r0['ckpt']
+            sec[f].append((t2 - t0) / (1 if same or r0 else 2))
             print(f'{name:44s} {f:4d}fr untuned {sb:8.4f} ckpt {sc:8.4f} diff {sc - sb:+.4f} ({sec[f][-1]:.1f}s/model)', flush=True)
     summ = {}
     for f in frames:
         r = per[f]; b = np.array([x['untuned'] for x in r.values()]); c = np.array([x['ckpt'] for x in r.values()]); d = c - b
         lo, hi = ci(d) if len(d) else (0, 0)
         summ[f] = dict(n=len(d), untuned_mean=float(b.mean()), ckpt_mean=float(c.mean()), diff=float(d.mean()), ci_lo=lo, ci_hi=hi, s_per_song_model=float(np.mean(sec[f])))
+        if ref and all('vs_ref' in x for x in r.values()):
+            dr = np.array([x['vs_ref'] for x in r.values()]); rl, rh = ci(dr); summ[f].update(vs_ref=float(dr.mean()), vs_ref_lo=rl, vs_ref_hi=rh)
+            print(f'{f} frames vs ref ckpt diff {dr.mean():+.4f} 95%CI [{rl:+.4f}, {rh:+.4f}]')
         print(f'{f} frames n={len(d)} untuned {b.mean():.4f} ckpt {c.mean():.4f} diff {d.mean():+.4f} 95%CI [{lo:+.4f}, {hi:+.4f}]')
     ok3 = 228 in summ and summ[228]['ci_lo'] > 0; ok10 = 718 in summ and summ[718]['ci_hi'] >= 0 and summ[718]['diff'] >= -0.05
     if 228 in summ: print(f'PASS 3 s (CI lo > 0): {ok3}')
