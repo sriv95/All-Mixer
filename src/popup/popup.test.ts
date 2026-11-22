@@ -240,13 +240,13 @@ describe('popup', () => {
 
     it('shows the stored model and sends a change', async () => {
       await load({ stored: { mode: 'separate', mlModel: 'kara2' } });
-      expect(trigger().textContent).toMatch(/High quality/);
-      expect(values()).toEqual(['mdx', 'kara2', 'deux', 'sw']);
+      expect(trigger().textContent).toMatch(/Best Karaoke/);
+      expect(values()).toEqual(['mdx', 'kara2', 'duality', 'deux', 'sw']);
       expect(el('ml-model-option-kara2').getAttribute('aria-selected')).toBe('true');
       choose('ml-model', 'mdx');
       await settle();
       expect(sent().at(-1).settings.mlModel).toBe('mdx');
-      expect(trigger().textContent).toMatch(/Default/);
+      expect(trigger().textContent).toMatch(/Fast \(Default\)/);
       expect(trigger().getAttribute('aria-expanded')).toBe('false');
     });
 
@@ -356,7 +356,7 @@ describe('popup', () => {
 
     it('offers a download when the model is missing and asks the background to install that model', async () => {
       await load({ stored: { mode: 'separate', mlModel: 'kara2' }, local: { 'modelRemote.kara2': remote(1) } });
-      expect(el('model-text').textContent).toMatch(/High quality is a one-time download \(100 MB\)/);
+      expect(el('model-text').textContent).toMatch(/Best Karaoke is a one-time download \(100 MB\)/);
       el<HTMLButtonElement>('model-btn').click();
       expect(sendMessage).toHaveBeenCalledWith({ type: 'model-install', id: 'kara2' });
     });
@@ -392,13 +392,13 @@ describe('popup', () => {
     it('shows an update button even when the default model is selected', async () => {
       await load({ stored: { mode: 'separate', mlModel: 'mdx' }, local: { 'modelInstalled.kara2': installedV1, 'modelRemote.kara2': remote(2) } });
       expect(has('model-row')).toBe(true);
-      expect(el('model-text').textContent).toMatch(/Update available: High quality model v2/);
+      expect(el('model-text').textContent).toMatch(/Update available: Best Karaoke model v2/);
       expect(el('model-btn').textContent).toBe('Update');
     });
 
     it('says installed when up to date', async () => {
       await load({ stored: { mode: 'separate', mlModel: 'kara2' }, local: { 'modelInstalled.kara2': installedV1, 'modelRemote.kara2': remote(1) } });
-      expect(el('model-text').textContent).toBe('High quality model v1 installed.');
+      expect(el('model-text').textContent).toBe('Best Karaoke model v1 installed.');
       expect(has('model-btn')).toBe(false);
       expect(el('model-uninstall').textContent).toBe('Uninstall model');
     });
@@ -469,7 +469,7 @@ describe('popup', () => {
       expect(el('drums-btn').textContent).toBe('Update');
     });
 
-    it('a GPU without shader-f16 offers the fp32 Default download, and says the other models are not supported', async () => {
+    it('a GPU without shader-f16 offers the fp32 Fast (Default) download, and says the other models are not supported', async () => {
       vi.stubGlobal('navigator', Object.assign(Object.create(navigator), { gpu: { requestAdapter: async () => ({ features: new Set() }) } }));
       const cremote = { format: MODEL_FORMAT, version: 1, files: { 'compat-mdx.onnx': 30 * 2 ** 20, 'compat-vocals.onnx': 39 * 2 ** 20 }, checkedAt: 0 };
       await load({ stored: { mode: 'separate' }, local: { 'modelRemote.compat': cremote } });
@@ -885,7 +885,7 @@ describe('popup', () => {
         expect(sent().at(-1).settings.mlDelayS).toBe(4);
       });
 
-      it('on another model offers to switch to the Default model', async () => {
+      it('on another model offers to switch to the Fast (Default) model', async () => {
         await load({ stored: { mode: 'separate', mlModel: 'deux', mlDelayS: 15 }, status: stopped });
         expect(has('act-raise-delay')).toBe(false); // already at the longest limit
         el('act-default-model').click();

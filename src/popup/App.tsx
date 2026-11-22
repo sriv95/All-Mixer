@@ -408,7 +408,7 @@ function Banner({ view, settings, update, retry, compact }: { compact: boolean; 
       <Collapse show={tooSlow}>
         <div className="flex flex-col gap-2.5 pt-0.5">
           <Btn tone="primary" id="act-preload" onClick={() => update({ preload: true })}><HardDriveDownload size={16} aria-hidden />Switch to Preload Audio</Btn>
-          {settings.mlModel !== 'mdx' && <Btn tone="primary" id="act-default-model" onClick={() => update({ mlModel: 'mdx' as MlModel })}><Cpu size={16} aria-hidden />Switch to Default model</Btn>}
+          {settings.mlModel !== 'mdx' && <Btn tone="primary" id="act-default-model" onClick={() => update({ mlModel: 'mdx' as MlModel })}><Cpu size={16} aria-hidden />Switch to Fast (Default) model</Btn>}
           {effectiveDelayS(settings) < maxDelay && <Btn id="act-raise-delay" onClick={() => update({ mlDelayS: nextDelay })}><Timer size={16} aria-hidden />Raise delay limit to {nextDelay} s</Btn>}
           {gpuSelected(gpuNames, settings.gpu) !== 'high-performance' && <Btn id="act-fast-gpu" onClick={() => update({ gpu: 'high-performance' })}><Zap size={16} aria-hidden />Try the high performance GPU</Btn>}
           <Btn id="act-retry" onClick={() => void retry()}><RefreshCw size={16} aria-hidden />Try again</Btn>

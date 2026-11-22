@@ -306,8 +306,8 @@ SOFTWARE.
 ================================================================
 3. Mel-Band RoFormer vocal model (optional, experimental; downloaded on request, NOT shipped in the extension or the repository)
    Weights (one Model menu entry each):
-     roformer (High quality)  Unwa, "mel_band_roformer_kim_ft_unwa" (a fine-tune of Kimberley Jensen's Mel-Band RoFormer).
-     deux (Best quality)      becruily, "mel-band-roformer-deux" (huggingface.co/becruily/mel-band-roformer-deux),
+     roformer (legacy, not in the Model menu)  Unwa, "mel_band_roformer_kim_ft_unwa" (a fine-tune of Kimberley Jensen's Mel-Band RoFormer).
+     deux (Best Vocal)        becruily, "mel-band-roformer-deux" (huggingface.co/becruily/mel-band-roformer-deux),
                               CC BY-NC 4.0: non-commercial use only, with attribution. Only its vocal stem is used.
    Code: Mel-Band RoFormer architecture (Lucidrains, ZFTurbo / audio-separator implementations).
    The ONNX file (fp16, STFT removed, RMSNorm rewritten for fp16) is built by scripts/export-roformer.py and
@@ -316,6 +316,19 @@ SOFTWARE.
 ================================================================
 
 ================================================================
+8. Mel-Band RoFormer Duality (High quality model, the vocal teacher; ONNX conversions built by us)
+   Aname-Tommy, "Mel-Band-Roformer_Duality" (duality_v1.ckpt), huggingface.co/Aname-Tommy/Mel-Band-Roformer_Duality.
+   Licence: Apache License 2.0, as stated on the model card (checked 2026-11-22). The card names no copyright holder.
+   The full Apache 2.0 text is in section 2 above.
+   Changes: exported to ONNX (spike/duality/export_teacher.py) and converted to fp16; the original checkpoint is not redistributed.
+================================================================
+9. kara2 (Best Karaoke model; student distilled from Duality, published by musetric)
+   musetric, "mel-band-roformer-duality-kara2-student", huggingface.co/musetric/mel-band-roformer-duality-kara2-student.
+   Licence: Apache License 2.0, as stated on the model card (checked 2026-11-22). The full Apache 2.0 text is in section 2 above.
+   Its vocals are distilled from Duality (section 8); its backing split is distilled from UVR MDX-Net KARA 2 (licence of KARA 2 not checked here).
+   Changes: fine-tuned and converted to fp16 for the app.
+================================================================
+
 Export section (MP3 / MP4 export, loaded from export/engine.js only when an export starts)
 ================================================================
 

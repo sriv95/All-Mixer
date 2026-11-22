@@ -5,8 +5,9 @@ import { installModel, uninstallModel, type ModelLine } from './models';
 import { Btn, type Choice } from './ui';
 
 export const MODEL_CHOICES: readonly Choice<MlModel>[] = [
-  { value: 'mdx', label: 'Default' },
-  { value: 'kara2', label: 'High quality', hint: 'Optional download' },
+  { value: 'mdx', label: 'Fast (Default)' },
+  { value: 'kara2', label: 'Best Karaoke', hint: 'Optional download' },
+  { value: 'duality', label: 'High quality', hint: 'Optional download' },
   { value: 'deux', label: 'Best Vocal', hint: 'Needs a good GPU, optional download' },
   { value: 'sw', label: 'Best Instrumental', hint: 'Needs a good GPU, optional download' },
 ];

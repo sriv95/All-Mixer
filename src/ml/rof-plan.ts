@@ -21,6 +21,7 @@ export const MAX_FRAMES = 900;
 export const DELAY_RANGE: Readonly<Record<MlModel, { min: number; max: number }>> = {
   mdx: { min: 2, max: 4 },
   kara2: { min: 3, max: 8 },
+  duality: { min: 3, max: 10 }, // M1 WebGPU: 702 ms at 112 frames, plans live at 3 s
   deux: { min: 3, max: 10 },
   sw: { min: 3, max: 10 },
 };

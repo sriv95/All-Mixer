@@ -1,4 +1,4 @@
-// The RoFormer models ("High quality" = fine-tuned kara2, "Best Vocal" = Deux, "Best Instrumental" = BS-RoFormer SW, six
+// The RoFormer models ("Best Karaoke" = fine-tuned kara2, "High quality" = Duality, "Best Vocal" = Deux, "Best Instrumental" = BS-RoFormer SW, six
 // stems in one pass), the drum split model (SCNet Tran Small) and the guitar model are not packed into the extension: the user downloads each from a public Hugging Face repo into the extension's own storage (OPFS). Pure
 // logic shared by the background worker (download), the popup (state text) and the ML page (which model files to
 // load). No chrome.* or DOM here.
@@ -19,18 +19,18 @@ export const MODEL_FORMAT = 2;
 export const CHUNK = 8 * 2 ** 20;
 
 /**
- * The downloadable models. 'kara2', 'deux' and 'sw' are the Model menu entries (src/worklet/protocol.ts MlModel);
+ * The downloadable models. 'kara2', 'duality', 'deux' and 'sw' are the Model menu entries (src/worklet/protocol.ts MlModel);
  * 'drums' is SCNet Tran Small, the model of Split instrumental (src/ml/scnet.ts). 'guitar' is becruily's Mel-Band
  * RoFormer guitar stem model, a second stem of Split instrumental next to the drums (src/ml/guitar-stage.ts).
  * 'compat' is the Default model (MDX-Net + Spleeter) in fp32, for GPUs without WebGPU shader-f16 (e.g. AMD Polaris):
  * the packed Default models are fp16 and cannot run there. It is not a menu entry; the popup offers it when the GPU needs it.
  */
-export type ModelId = 'kara2' | 'deux' | 'sw' | 'drums' | 'guitar' | 'compat';
-export const MODEL_IDS: readonly ModelId[] = ['kara2', 'deux', 'sw', 'drums', 'guitar', 'compat'];
+export type ModelId = 'kara2' | 'duality' | 'deux' | 'sw' | 'drums' | 'guitar' | 'compat';
+export const MODEL_IDS: readonly ModelId[] = ['kara2', 'duality', 'deux', 'sw', 'drums', 'guitar', 'compat'];
 /** The downloadable Model menu entries. */
-export const VOCAL_MODEL_IDS: readonly ModelId[] = ['kara2', 'deux', 'sw'];
+export const VOCAL_MODEL_IDS: readonly ModelId[] = ['kara2', 'duality', 'deux', 'sw'];
 /** Menu names. */
-export const MODEL_LABEL: Readonly<Record<ModelId, string>> = { kara2: 'High quality', deux: 'Best Vocal', sw: 'Best Instrumental', drums: 'Drum split', guitar: 'Guitar split', compat: 'Default (this GPU)' };
+export const MODEL_LABEL: Readonly<Record<ModelId, string>> = { kara2: 'Best Karaoke', duality: 'High quality', deux: 'Best Vocal', sw: 'Best Instrumental', drums: 'Drum split', guitar: 'Guitar split', compat: 'Fast (Default, this GPU)' };
 /** Models whose output has a separate backing-vocal mask (lead = vocals - backing). */
 const BACKING_SPLIT_MODELS: ReadonlySet<string> = new Set<ModelId>(['kara2']);
 export const hasBackingSplit = (model: string): boolean => BACKING_SPLIT_MODELS.has(model);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MODEL_FORMAT, MODEL_LABEL, VOCAL_MODEL_IDS, modelFileNames, modelState, parseManifest, STALL_MS, type InstalledModel, type Progress, type RemoteRecord } from './model-store';
+import { MODEL_FORMAT, MODEL_LABEL, VOCAL_MODEL_IDS, hasBackingSplit, modelFileNames, modelState, parseManifest, STALL_MS, type InstalledModel, type Progress, type RemoteRecord } from './model-store';
 
 const files = { 'kara2.onnx': 100, 'kara2-meta.json': 10 };
 const inst = (version: number, format = MODEL_FORMAT): InstalledModel => ({ format, version, files });
@@ -30,8 +30,11 @@ describe('parseManifest', () => {
   });
   it('the all-stems model is a Model menu entry with the RoFormer files, and the menu names are Best Vocal and Best Instrumental', () => {
     expect(modelFileNames('sw')).toEqual(['sw.onnx', 'sw-meta.json']);
-    expect(VOCAL_MODEL_IDS).toEqual(['kara2', 'deux', 'sw']);
-    expect(MODEL_LABEL).toMatchObject({ kara2: 'High quality', deux: 'Best Vocal', sw: 'Best Instrumental' });
+    expect(VOCAL_MODEL_IDS).toEqual(['kara2', 'duality', 'deux', 'sw']);
+    expect(modelFileNames('duality')).toEqual(['duality.onnx', 'duality-meta.json']);
+    expect(hasBackingSplit('kara2')).toBe(true);
+    expect(hasBackingSplit('duality')).toBe(false);
+    expect(MODEL_LABEL).toMatchObject({ kara2: 'Best Karaoke', duality: 'High quality', deux: 'Best Vocal', sw: 'Best Instrumental' });
     const sw = { 'sw.onnx': 359, 'sw-meta.json': 13 };
     expect(parseManifest({ format: 2, models: { sw: { version: 1, files: sw } } })).toEqual({ sw: { format: 2, version: 1, files: sw } });
   });

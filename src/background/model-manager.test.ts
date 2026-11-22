@@ -42,6 +42,7 @@ function server(version: number, over: { format?: number; noDeux?: boolean; fail
     if (url.endsWith('/manifest.json')) {
       const models = {
         kara2: { version, files: { 'kara2.onnx': ONNX, 'kara2-meta.json': META } },
+        duality: { version: 1, files: { 'duality.onnx': ONNX, 'duality-meta.json': META } },
         ...(over.noDeux ? {} : { deux: { version: 1, files: { 'deux.onnx': ONNX, 'deux-meta.json': META } } }),
       };
       return new Response(JSON.stringify({ format: over.format ?? MODEL_FORMAT, models }));
@@ -143,6 +144,13 @@ describe('ModelManager', () => {
     expect(s.reqs.filter((r) => r.endsWith('manifest.json '))).toHaveLength(1);
   });
 
+  it('installs duality like the other RoFormers', async () => {
+    const area = memArea();
+    const { m, files } = memFiles();
+    await new ModelManager(area as never, files, server(1).fetchFn).install('duality');
+    expect(area.d[keyInstalled('duality')]).toMatchObject({ version: 1, files: { 'duality.onnx': ONNX, 'duality-meta.json': META } });
+    expect(m.has(chunkName(1, 'duality.onnx', 0))).toBe(true);
+  });
   it('installs each model on its own and a new kara2 version keeps the deux chunks', async () => {
     const area = memArea();
     const { m, files } = memFiles();

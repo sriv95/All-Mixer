@@ -16,7 +16,7 @@ import { copyFileSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const FORMAT = 2; // MODEL_FORMAT in src/shared/model-store.ts
-const IDS = ['kara2', 'deux', 'sw', 'drums', 'guitar', 'compat']; // MODEL_IDS in src/shared/model-store.ts
+const IDS = ['kara2', 'duality', 'deux', 'sw', 'drums', 'guitar', 'compat']; // MODEL_IDS in src/shared/model-store.ts
 const filesOf = (id) => (id === 'drums' ? ['drums.onnx'] : id === 'compat' ? ['compat-mdx.onnx', 'compat-vocals.onnx'] : [`${id}.onnx`, `${id}-meta.json`]); // modelFileNames there
 // shortcut: remove once old extension versions are gone. Extensions before kim2 download High quality as `roformer`, those before kara2 as `kim2`; they skip ids they do not know, so listing them keeps them working and new ones ignore them. Their files stay hosted at their old version (not copied here).
 export const LEGACY = {

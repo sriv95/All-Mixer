@@ -86,12 +86,12 @@ describe('Export section', () => {
     expect(el('export-vocal-value').textContent).toBe('30%');
     expect(el('export-instrumental-value').textContent).toBe('80%');
     expect(el('export-master-value').textContent).toBe('200%');
-    expect(el('export-model').textContent).toContain('High quality');
+    expect(el('export-model').textContent).toContain('Best Karaoke');
     slide('export-vocal', 0);
     choose('export-model', 'mdx');
     await settle();
     expect(el('export-vocal-value').textContent).toBe('0%');
-    expect(el('export-model').textContent).toContain('Default');
+    expect(el('export-model').textContent).toContain('Fast (Default)');
     expect(el('vocal-value').textContent).toBe('30%'); // the live slider
     expect(runtimeMessage.mock.calls.some((c) => c[0].type === 'set-tab-settings')).toBe(false);
   });
@@ -219,7 +219,7 @@ describe('Export section', () => {
     expect(el('export-error').textContent).toContain('An ad is playing');
   });
 
-  it('on a GPU without shader-f16 the model row offers the fp32 Default download', async () => {
+  it('on a GPU without shader-f16 the model row offers the fp32 Fast (Default) download', async () => {
     vi.stubGlobal('navigator', Object.assign(Object.create(navigator), { gpu: { requestAdapter: async () => ({ features: new Set() }) } }));
     const compat = { format: 2, version: 1, files: { 'compat-mdx.onnx': 30 * 2 ** 20, 'compat-vocals.onnx': 39 * 2 ** 20 }, checkedAt: 0 };
     await load({ local: { 'modelRemote.compat': compat } });
