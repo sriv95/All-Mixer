@@ -17,6 +17,7 @@ from teacher_data import TeacherCrops
 from train_kara2_r2 import per_sample_loss, distill_loss
 
 SR, EXTRA = 44100, mt.NFFT // mt.HOP  # a crop of T+EXTRA hop-frames holds exactly the (T-1)*HOP+NFFT samples of T STFT frames
+EDGE = 1024  # forward() divides by the squared-Hann envelope, which is ~0 at crop edges, so edges blow up: keep them out of the loss
 FRAMES = [64, 96, 128, 160, 192, 224, 256]
 MUSDB_REPO = pathlib.Path('/Users/sriv/Space/Repos/All-Mixer/.cache/musdb18hq')
 
@@ -37,7 +38,7 @@ def forward(model, mix, T):  # mix [B,2,N] -> est [B,2,N] differentiable, same m
 def train_step(model, batch, dev, opt=None):
     mix, tea, real, tm, rm, Tc = batch; T = Tc - EXTRA
     est = forward(model, mix.to(dev), T)
-    loss = distill_loss(est, tea.to(dev), real.to(dev), tm.to(dev), rm.to(dev))
+    loss = distill_loss(est[..., EDGE:-EDGE], tea.to(dev)[..., EDGE:-EDGE], real.to(dev)[..., EDGE:-EDGE], tm.to(dev), rm.to(dev))
     if opt: opt.zero_grad(set_to_none=True); loss.backward(); opt.step()
     return loss
 
@@ -115,6 +116,9 @@ def selftest():  # CPU only
                 '--save-every', '3', '--eval-every', '5', '--eval-clips', '1', '--eval-frames', '64']
         m = mt.load(); x = torch.randn(1, 2, (64 - 1) * mt.HOP + mt.NFFT) * 0.1  # differentiable forward == separate-style path
         assert torch.isfinite(forward(m, x, 64)).all()
+        mx, vc = load_eval(MUSDB_REPO / 'test', 1)[0]; n = x.shape[-1]  # base model must separate vocals on the interior (edge bug gave -54 dB)
+        with torch.no_grad(): e = forward(m.eval(), torch.from_numpy(mx[None, :, :n]), 64)[0].numpy()
+        b = float(sdr(vc[:, :n][:, EDGE:-EDGE], e[:, EDGE:-EDGE])); print(f'base forward interior SDR {b:.2f} dB'); assert b > 8, b; m.train()
         assert train(parser().parse_args(base + ['--steps', '3'])) == 3
         assert train(parser().parse_args(base + ['--steps', '5', '--resume'])) == 5
         assert (d / 'out/best_sdr.pt').exists() and torch.load(d / 'out/last.pt', weights_only=False)['step'] == 5
