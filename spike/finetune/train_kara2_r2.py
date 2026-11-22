@@ -35,7 +35,7 @@ def distill_loss(est, teacher, real, tm, rm, w_real=0.25):
 
 def train_step(model, batch, dev, opt=None):
     mix, tea, real, tm, rm, T = batch
-    est = kt.vocals(model, mix.to(dev)).float()
+    est = (model.separate(mix.to(dev), masks_dtype=torch.bfloat16)['vocals'] if dev.type == 'cuda' and torch.cuda.is_bf16_supported() else kt.vocals(model, mix.to(dev))).float()  # same as train_kara2.step_loss
     loss = distill_loss(est, tea.to(dev), real.to(dev), tm.to(dev), rm.to(dev))
     if opt: opt.zero_grad(set_to_none=True); loss.backward(); opt.step()
     return loss
@@ -90,7 +90,7 @@ def selftest(device='cpu'):  # CPU only by default: the 116M model OOMs on the 8
     print('selftest ok')
 
 
-ROOT_MUSDB = next(p for p in (kt.ROOT / '.cache/musdb18hq', kt.ROOT.parents[2] / 'Repos/All-Mixer/.cache/musdb18hq') if p.exists())  # worktree has no .cache
+ROOT_MUSDB = next((p for p in (kt.ROOT / '.cache/musdb18hq', *([kt.ROOT.parents[2] / 'Repos/All-Mixer/.cache/musdb18hq'] if len(kt.ROOT.parents) > 2 else [])) if p.exists()), None)  # worktree has no .cache
 
 
 def main():
@@ -130,6 +130,7 @@ def main():
             torch.save(dict(model=model.state_dict(), opt=opt.state_dict(), step=step, best_sdr=best), out / 'last.pt.tmp'); (out / 'last.pt.tmp').replace(out / 'last.pt')
         if step % a.snap_every == 0: torch.save(model.state_dict(), out / f'snap_{step}.pt')
         if stop: print('max-hours reached'); break
+    if dev.type == 'cuda': print(f'peak_alloc_GiB {torch.cuda.max_memory_allocated() / 2**30:.3f}', flush=True)
 
 
 if __name__ == '__main__':
