@@ -80,4 +80,4 @@ if __name__ == '__main__':
     ok3 = 228 in summ and summ[228]['ci_lo'] > 0; ok10 = 718 in summ and summ[718]['ci_hi'] >= 0 and summ[718]['diff'] >= -0.05
     if 228 in summ: print(f'PASS 3 s (CI lo > 0): {ok3}')
     if 718 in summ: print(f'PASS 10 s (no loss: CI hi >= 0 and mean diff >= -0.05): {ok10}')
-    if a.out: json.dump(dict(ckpt=a.ckpt, summary=summ, per_song=per), open(a.out, 'w'), indent=1)
+    if a.out: json.dump(dict(device=str(dev), argv=sys.argv, ckpt=a.ckpt, summary=summ, per_song=per), open(a.out, 'w'), indent=1)
