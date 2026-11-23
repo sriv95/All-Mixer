@@ -56,8 +56,15 @@ def load_eval(root, n):  # 10 s clips from MUSDB test, 30 s in
 
 def eval_sdr(model, clips, frames, dev):
     model.eval(); f = lambda x: model(x.to(dev)).cpu()
-    s = [float(sdr(v, mt.separate(f, m, T))) for m, v in clips for T in frames]
-    model.train(); return float(np.mean(s))
+    s = [float(sdr(v, mt.separate(f, m, T))) for m, v in clips for T in frames if (v ** 2).sum() >= 1e-6]  # skip silent vocals (as eval_mdx_ckpt)
+    model.train(); return finite_mean(s)
+
+
+def finite_mean(s):  # -inf/NaN clips must not poison the mean; no finite clip -> -inf
+    s = [x for x in s if np.isfinite(x)]; return float(np.mean(s)) if s else float('-inf')
+
+
+assert finite_mean([1., float('-inf'), float('nan'), 3.]) == 2. and finite_mean([float('nan')]) == float('-inf')
 
 
 def train(a):
