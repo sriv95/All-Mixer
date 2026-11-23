@@ -73,7 +73,7 @@ def core_features(core, raw):
 def apply_masks(core, st, masks):
     """masks [B,T,Fin] from Core -> vocals waveform [B,2,n]; same maths as MelBandRoformer.forward (num_stems 1), complex mask multiply + istft."""
     m = core.m; b, _, t, _ = st.shape; idx = core.m.freq_indices.to(st.device)
-    mk = rearrange(masks, 'b t (f c) -> b f t c', c=2)
+    mk = rearrange(masks.to(st.dtype), 'b t (f c) -> b f t c', c=2)  # masks are bf16 under autocast; scatter in fp32
     full = torch.zeros_like(st).index_add_(1, idx, mk)  # sum over overlapping bands, as scatter_add in forward
     den = torch.zeros(st.shape[1], device=st.device).index_add_(0, idx, torch.ones(len(idx), device=st.device)).clamp_min(1e-8)
     full = full / den[None, :, None, None]

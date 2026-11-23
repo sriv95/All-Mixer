@@ -8,7 +8,7 @@ With --steps N, --max-hours stops early. Resume keeps the elapsed time (last.pt 
 Snapshots every --snap-min minutes of wall time (and every --snap-every steps if > 0): snap_<step>.pt (Core state_dict), last.pt (model+opt+step+best), then in-training streaming SDR
 (eval_duality.stream, 3 s plan) on --eval-clips eval_set clips cut to --eval-sec s; best_sdr.pt = best by SDR, not loss. Eval clips need the MUSDB test dir (eval_set.json paths or --eval-root).
 Peak CUDA memory is printed at every snapshot and at the end."""
-import argparse, functools, json, math, pathlib, sys, tempfile, time
+import argparse, os, functools, json, math, pathlib, sys, tempfile, time
 import numpy as np, soundfile as sf, torch
 from torch.utils.checkpoint import checkpoint
 
@@ -44,7 +44,7 @@ def eval_sdr(core, items, dev, amp):
 
 
 def run(a):
-    dev = torch.device(('cuda' if torch.cuda.is_available() else 'cpu') if a.device == 'auto' else a.device); amp = dev.type == 'cuda'
+    dev = torch.device(('cuda' if torch.cuda.is_available() else 'cpu') if a.device == 'auto' else a.device); amp = dev.type == 'cuda' or os.environ.get('DUALITY_AMP') == '1'  # env: force bf16 autocast on CPU for selftests
     torch.manual_seed(a.seed)
     core = dt.load(dev)
     if a.init: ed.load_ckpt(core, a.init)
