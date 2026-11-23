@@ -1,4 +1,4 @@
-// Build-time fetch of the UVR MDX-Net 9482 vocal model (SRI-117): download, verify SHA-256, convert to fp16
+// Build-time fetch of the Default vocal model (UVR MDX-Net 9482 retrained, hosted fp32 'compat' v2) (SRI-117): download, verify SHA-256, convert to fp16
 // weights (fp32 input/output, dynamic time axis, scripts/mdx-to-fp16.py) and write public/ml/mdx.onnx.
 // Needs python with onnx + onnxconverter-common: PY=/path/to/python node scripts/fetch-mdx-model.mjs [--from <onnx>]
 import { createHash } from 'node:crypto';
@@ -7,12 +7,12 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const URL_ = 'https://github.com/TRvlvr/model_repo/releases/download/all_public_uvr_models/UVR_MDXNET_9482.onnx';
-const SOURCE_SHA256 = 'f4f365207c56deb115bceedff3ad8fe98a751c745f9e370cecec6226b8b47184';
+const URL_ = 'https://huggingface.co/sriv95/all-mixer-models/resolve/main/v2/compat-mdx.onnx'; // same repo as MODEL_BASE_URL (src/shared/model-store.ts)
+const SOURCE_SHA256 = '396cf20f6299a02c76992020dc4156b70bb715605e3be47dd808cac147a48dbf';
 const OUTPUT_BYTES = 14872262; // fp16 file with onnx 1.23 / onnxconverter-common 1.16; other versions may differ by a few bytes
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const cacheFile = join(root, '.cache/models/UVR_MDXNET_9482.onnx');
+const cacheFile = join(root, '.cache/models/compat-mdx-v2.onnx');
 const outFile = join(root, 'public/ml/mdx.onnx');
 // PY wins; else the uv venv (POSIX bin/ or Windows Scripts/), else whatever python is on PATH.
 const venvPy = ['.venv/bin/python', '.venv/Scripts/python.exe'].map((p) => join(root, p)).find(existsSync);

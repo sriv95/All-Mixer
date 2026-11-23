@@ -1,5 +1,5 @@
 """Parity of the torch port (mdx_torch.py) vs compat-mdx.onnx (ORT CPU) on 3 musdb18hq test clips of ~10 s.
-  .venv/bin/python spike/finetune/parity_mdx.py [--T 64] [--secs 10]    SDR torch vs ONNX (target > 40 dB), both vs vocals.wav
+  .venv/bin/python spike/finetune/parity_mdx.py [--T 64] [--secs 10] [--onnx f.onnx --pt trained.pt]    SDR torch vs ONNX (target > 40 dB), both vs vocals.wav
   .venv/bin/python spike/finetune/parity_mdx.py --selftest              fwd+bwd on MPS, random [1,4,2048,128] (batch 4 thrashes on an 8 GB Mac), finite grads, s/step"""
 import argparse, pathlib, sys, time
 import numpy as np, onnxruntime as ort, soundfile as sf, torch
@@ -28,11 +28,11 @@ def selftest():
 
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument('--selftest', action='store_true')
-    ap.add_argument('--mps', action='store_true'); ap.add_argument('--T', type=int, default=64); ap.add_argument('--secs', type=float, default=10); a = ap.parse_args()
+    ap.add_argument('--mps', action='store_true'); ap.add_argument('--onnx', default=str(mt.SRC)); ap.add_argument('--pt'); ap.add_argument('--T', type=int, default=64); ap.add_argument('--secs', type=float, default=10); a = ap.parse_args()
     if a.selftest: return selftest()
-    s = ort.InferenceSession(str(mt.SRC), providers=['CPUExecutionProvider'])
+    s = ort.InferenceSession(a.onnx, providers=['CPUExecutionProvider'])
     f_ort = lambda inp: torch.from_numpy(s.run(None, {'input': inp.numpy()})[0])
-    cpu = mt.load().eval(); mps = mt.load().eval().to('mps') if a.mps else None
+    cpu = (mt.load_trained(a.pt) if a.pt else mt.load()).eval(); mps = mt.load().eval().to('mps') if a.mps else None
     f_cpu = lambda inp: cpu(inp); f_mps = lambda inp: mps(inp.to('mps')).cpu() if mps is not None else None
     clips = sorted(MUSDB.iterdir())[:3]
     for d in clips:
