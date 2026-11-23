@@ -16,6 +16,7 @@ CI builds the extension, creates tag `vx.y.z` and a GitHub release with this sec
 
 - **The Default model is now called Fast (Default).** Nothing else changes: it is still built in and still the one selected at first.
 - **New High quality model (Duality) for clearer vocal removal.** It downloads once when you pick it.
+- **Fast (Default) was retrained on Deux teacher targets** (+3.2 dB SDR at the 3 s gate vs the original), and **High quality (Duality) was fine-tuned on Deux teacher targets.** Both separate vocals more cleanly.
 - **The previous High quality model is now called Best Karaoke** and keeps the backing vocal slider. If you had it selected, it stays selected.
 
 ## [1.2.0] - 2026-11-18

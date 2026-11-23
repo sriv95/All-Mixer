@@ -77,7 +77,7 @@ Build, architecture, model publishing and debug notes are in [src/README.md](src
 - [Spleeter](https://github.com/deezer/spleeter) (Deezer)
 - Default Model: [MDX-Net](https://github.com/Anjok07/ultimatevocalremovergui) 
 - Best Karaoke Model: [kara2](https://huggingface.co/musetric/mel-band-roformer-duality-kara2-student) by musetric (Apache-2.0), distilled from Duality; its backing split is distilled from [UVR MDX-Net KARA 2](https://github.com/TRvlvr/model_repo/releases/tag/all_public_uvr_models)
-- High-Quality Model: [Mel-Band RoFormer Duality](https://huggingface.co/Aname-Tommy/Mel-Band-Roformer_Duality) by Aname-Tommy (Apache-2.0)
+- High-Quality Model: [Mel-Band RoFormer Duality](https://huggingface.co/Aname-Tommy/Mel-Band-Roformer_Duality) by Aname-Tommy (Apache-2.0), fine-tuned on Deux teacher targets
 - Best-Vocal Model: [mel-band-roformer-deux](https://huggingface.co/becruily/mel-band-roformer-deux)
 - Drum Splitting Model: [SCNet](https://github.com/starrytong/SCNet) , ( Tran Small checkpoint from [ZFTurbo](https://github.com/ZFTurbo/Music-Source-Separation-Training) )
 - Best Instrumental Model: [BS-RoFormer-SW-6stem](https://huggingface.co/FractalSurfer/BS-RoFormer-SW-6stem)
