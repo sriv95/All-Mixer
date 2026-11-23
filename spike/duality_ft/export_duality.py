@@ -32,8 +32,7 @@ if __name__ == '__main__':
     fin = 2 * len(core.m.freq_indices)
     f32, f16 = out / 'duality_fp32.onnx', out / 'duality_fp16.onnx'
     with torch.no_grad():
-        core(torch.randn(1, ed.FR, fin) * 0.5)  # warm-up: rotary_embedding_torch caches its freqs at the first forward (175 frames); parity.py --export and the shipped graph have them baked in (no Range/Einsum). Without it the graph differs.
-        torch.onnx.export(core, (torch.randn(1, 113, fin) * 0.5,), str(f32), input_names=['x'], output_names=['masks'], opset_version=18, dynamo=True,
+        torch.onnx.export(dt.warm_rotary(core, fin), (torch.randn(1, 113, fin) * 0.5,), str(f32), input_names=['x'], output_names=['masks'], opset_version=18, dynamo=True,
                           dynamic_shapes={'x': {1: Dim('frames', min=16, max=MAX_FRAMES)}}, external_data=False)
     subprocess.run([sys.executable, '-I', str(HERE / 'to_fp16.py'), str(f32), str(f16)], check=True)
     ref = dt.ROOT / 'models-out/duality.onnx'; (c1, i1, o1), (c0, i0, o0) = info(f16), info(ref)

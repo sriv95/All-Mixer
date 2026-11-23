@@ -34,6 +34,7 @@ if '--export' in sys.argv:
     from torch.export import Dim
     out = pathlib.Path(tempfile.mkdtemp()) / 'duality_reexport.onnx'
     fin = xr.shape[-1]
+    core = dt.warm_rotary(core, fin)  # core already ran at 175 frames above
     with torch.no_grad():
         torch.onnx.export(core, (torch.randn(1, 113, fin) * 0.5,), str(out), input_names=['x'], output_names=['masks'], opset_version=18, dynamo=True,
                           dynamic_shapes={'x': {1: Dim('frames', min=16, max=1700)}}, external_data=False)

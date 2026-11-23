@@ -50,6 +50,20 @@ class Core(torch.nn.Module):  # same as export_teacher.py Core
         return hcat([mlp(x[..., i, :]) for i, mlp in enumerate(s.m.mask_estimators[0].to_freqs)], -1)
 
 
+WARM_FRAMES = 1101  # >= MAX_FRAMES in src/ml/rof-plan.ts (900); the shipped base graph's cached_freqs is 1101x64
+assert WARM_FRAMES >= 900
+
+
+def warm_rotary(model, fin):
+    # rotary_embedding_torch bakes its freqs at the first forward's length into an export; return a copy re-warmed at WARM_FRAMES so every frame count <= MAX_FRAMES works.
+    import copy
+    m = copy.deepcopy(model)
+    for r in m.modules():
+        if hasattr(r, 'cache_if_possible'): r.tmp_store('cached_freqs', None); r.tmp_store('cached_scales', None)
+    with torch.no_grad(): m(torch.randn(1, WARM_FRAMES, fin) * 0.5)
+    return m
+
+
 def load(device='cpu', ckpt=D / 'duality_v1.ckpt'):
     cfg = yaml.unsafe_load(open(D / 'config_v1.yaml'))
     cfg['model']['flash_attn'] = False
