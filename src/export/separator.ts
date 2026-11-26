@@ -60,7 +60,15 @@ export class OfflineSeparator {
     this.pool = Array.from({ length: Math.max(2, geometry.pool ?? 4) }, () => new ArrayBuffer(this.bytes));
     this.pendL = new Float32Array(this.block);
     this.pendR = new Float32Array(this.block);
-    port.onmessage = (e: MessageEvent) => this.onReply(e.data);
+    port.onmessage = (e: MessageEvent) => {
+      try {
+        this.onReply(e.data);
+      } catch (err) {
+        // A throw here used to leave the export waiting for the reply timeout with only an unnamed console line.
+        console.warn('[all-mixer] separator reply failed:', err);
+        this.fail(err instanceof Error ? err : new Error(String(err)));
+      }
+    };
     port.start();
   }
 
@@ -141,14 +149,21 @@ export class OfflineSeparator {
       this.fail(new Error('the model failed on a block'));
     } else {
       const B = this.block;
-      const plane = (k: number): Float32Array => new Float32Array(buf, ML_HEADER_BYTES + k * B * 4, B).slice();
+      // Copy with set(), not slice(): in Firefox a view over this port's buffer is an Xray wrapper, and slice() reads its `constructor` (denied).
+      const plane = (k: number): Float32Array => {
+        const out = new Float32Array(B);
+        out.set(new Float32Array(buf, ML_HEADER_BYTES + k * B * 4, B));
+        return out;
+      };
       const parts: Partial<Record<Part, Pair>> = {};
       this.parts.forEach((p, i) => (parts[p] = [plane(4 + 2 * i), plane(5 + 2 * i)]));
       this.phase ??= ((start % B) + B) % B;
       const k = 4 + 2 * this.parts.length; // the backing pair comes after all the part pairs
       this.replies.set(start, { vk: [plane(0), plane(1)], vocal: [plane(2), plane(3)], parts, ...(this.geometry.backing ? { backing: [plane(k), plane(k + 1)] as Pair } : {}) });
     }
-    this.pool.push(buf);
+    // Firefox: `buf` is the page's object seen through an Xray wrapper (a MessagePort made in a content script delivers into the page realm),
+    // and transferring it back throws "Permission denied to access object". Recycle a buffer of our own realm instead.
+    this.pool.push(__FIREFOX__ ? new ArrayBuffer(this.bytes) : buf);
     this.wake?.();
   }
 
