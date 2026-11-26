@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
 import { ML_HEADER_BYTES, bufferBytes, type MlGeometry } from '../worklet/protocol';
 import { EXPORT_SAMPLE_RATE, MAX_CHUNK_S } from '../shared/export';
@@ -107,5 +108,30 @@ describe('OfflineSeparator', () => {
 
   it('uses a buffer size the worker accepts', () => {
     expect(bufferBytes(geometry())).toBe(ML_HEADER_BYTES + 4 * 1000 * 4);
+  });
+
+  it('accepts a reply whose ArrayBuffer comes from another realm (Firefox content script), not a silent 120 s timeout', async () => {
+    const g = geometry();
+    const { port1, port2 } = new MessageChannel();
+    fakeWorker(port2, g);
+    // Re-wrap each reply in a buffer made by another JS realm: `instanceof ArrayBuffer` is false for it.
+    const foreign = (b: ArrayBuffer): ArrayBuffer => {
+      const f = runInNewContext('new ArrayBuffer(n)', { n: b.byteLength }) as ArrayBuffer;
+      new Uint8Array(f).set(new Uint8Array(b));
+      return f;
+    };
+    const proxy = {
+      postMessage: (b: ArrayBuffer, t: Transferable[]) => port1.postMessage(b, t),
+      set onmessage(fn: ((e: MessageEvent) => void) | null) {
+        port1.onmessage = fn && ((e) => fn({ data: foreign(e.data as ArrayBuffer) } as MessageEvent));
+      },
+      start: () => port1.start(),
+      close: () => port1.close(),
+    } as unknown as MessagePort;
+    const sep = new OfflineSeparator(proxy, g);
+    const [l, r] = signal(g.block * 3);
+    const out = await Promise.race([sep.push(l, r), new Promise<'timeout'>((res) => setTimeout(() => res('timeout'), 1500))]);
+    sep.dispose();
+    expect(out).not.toBe('timeout');
   });
 });

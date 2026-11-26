@@ -3,6 +3,24 @@ import type { SpeedCache } from '../ml/plan-cache';
 // Contract between the content-script audio engine and the separator AudioWorklet.
 // Imported by both sides, so it must not touch DOM or worklet globals.
 
+/**
+ * Realm-safe ArrayBuffer check for data that came through postMessage. `x instanceof ArrayBuffer` is false in Firefox when the
+ * buffer was made by another realm (content script vs page), so every reply was dropped; the tag and byteLength do not depend on it.
+ */
+export function isArrayBuffer(x: unknown): x is ArrayBuffer {
+  return Object.prototype.toString.call(x) === '[object ArrayBuffer]';
+}
+
+/** Messages dropped by a type or size guard, per site. A silent drop looks like a hung model, so the first few are logged. */
+export const droppedMessages: Record<string, number> = {};
+export function noteDrop(site: string, data: unknown, want?: number): void {
+  const n = (droppedMessages[site] = (droppedMessages[site] ?? 0) + 1);
+  if (n <= 3) {
+    const got = isArrayBuffer(data) ? `ArrayBuffer(${data.byteLength})` : Object.prototype.toString.call(data);
+    console.debug(`[all-mixer] dropped message at ${site}: got ${got}${want === undefined ? '' : `, want ${want} bytes`} (#${n})`);
+  }
+}
+
 export const SEPARATOR_PROCESSOR = 'all-mixer-separator';
 /** Path of the bundled worklet module inside the extension (web-accessible). */
 export const SEPARATOR_MODULE_PATH = 'worklet/separator-worklet.js';

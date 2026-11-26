@@ -44,6 +44,8 @@ import {
   type MlGeometry,
   type MlModel,
   type MlReason,
+  isArrayBuffer,
+  noteDrop,
 } from './protocol';
 
 export const QUANTUM = 128;
@@ -201,7 +203,8 @@ export class SeparatorCore {
     this.port?.close();
     this.port = port;
     port.onmessage = (e: MessageEvent) => {
-      if (e.data instanceof ArrayBuffer) this.onBlock(e.data);
+      if (isArrayBuffer(e.data)) this.onBlock(e.data);
+      else noteDrop('worklet.onmessage', e.data);
     };
   }
 

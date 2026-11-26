@@ -14,6 +14,8 @@ import {
   type FromMlWorker,
   type MlGeometry,
   type MlWorkerInit,
+  isArrayBuffer,
+  noteDrop,
 } from '../worklet/protocol';
 import { CTX, BINS } from './stream';
 import { MDX_BINS } from './mdx';
@@ -515,7 +517,7 @@ function serve(port: MessagePort, engine: BlockEngine, dbg: StallOpts, timing: M
 
   port.onmessage = (ev: MessageEvent<ArrayBuffer>) => {
     const buf = ev.data;
-    if (!(buf instanceof ArrayBuffer) || buf.byteLength !== bytes) return;
+    if (!isArrayBuffer(buf) || buf.byteLength !== bytes) return noteDrop('ml-worker.onmessage', buf, bytes);
     latestEpoch = Math.max(latestEpoch, new Float64Array(buf, 0, 1)[0]);
     queue.push(buf);
     void pump();

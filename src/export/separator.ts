@@ -1,4 +1,4 @@
-import { ML_HEADER_BYTES, PARTS, bufferBytes, planesFor, type MlGeometry } from '../worklet/protocol';
+import { ML_HEADER_BYTES, isArrayBuffer, noteDrop, PARTS, bufferBytes, planesFor, type MlGeometry } from '../worklet/protocol';
 import { EXPORT_SAMPLE_RATE, MAX_CHUNK_S, type Part } from '../shared/export';
 import type { Pair, StemSlice } from './mix';
 
@@ -134,7 +134,7 @@ export class OfflineSeparator {
   }
 
   private onReply(buf: unknown): void {
-    if (!(buf instanceof ArrayBuffer) || buf.byteLength !== this.bytes) return;
+    if (!isArrayBuffer(buf) || buf.byteLength !== this.bytes) return noteDrop('separator.onReply', buf, this.bytes);
     this.inflight--;
     const start = new Float64Array(buf, 0, 2)[1];
     if (start === -1) {
