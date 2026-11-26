@@ -1,7 +1,7 @@
 # CI (SRI-73, SRI-194): lint, typecheck and unit tests only when a PR is merged to main.
 # Also runs on a push to main that changes package.json (new version).
 # Not run on PR pushes, branch pushes or other pushes to main.
-# The full build needs the ML model and runs in release.yml.
+# The full build needs the ML model and runs in release.yml; the Firefox check builds with empty stand-in model files.
 name: CI
 
 on:
@@ -27,3 +27,9 @@ jobs:
       - run: bun run lint
       - run: bun run typecheck
       - run: bun run test
+      # The build only checks that the model files exist, so empty stand-ins are enough to build and lint the add-on.
+      - name: Build and lint Firefox add-on
+        run: |
+          touch public/ml/vocals.onnx public/ml/mdx.onnx
+          bun run build:firefox
+          npx --yes web-ext@10 lint --source-dir dist-firefox

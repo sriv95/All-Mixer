@@ -61,6 +61,8 @@ jobs:
           bun run typecheck
           bun run test
           bun run build
+          bun run build:firefox
+          npx --yes web-ext@10 lint --source-dir dist-firefox
 
       - name: Package
         if: steps.version.outputs.exists == 'false'
@@ -74,13 +76,21 @@ jobs:
           zip_name="all-mixer-${{ steps.version.outputs.tag }}.zip"
           (cd dist && zip -qr "../$zip_name" .)
           echo "zip=$zip_name" >> "$GITHUB_OUTPUT"
+          got_ff=$(node -p "require('./dist-firefox/manifest.json').version")
+          if [ "$got_ff" != "${{ steps.version.outputs.version }}" ]; then
+            echo "dist-firefox/manifest.json version $got_ff != package.json ${{ steps.version.outputs.version }}"
+            exit 1
+          fi
+          zip_ff="all-mixer-firefox-${{ steps.version.outputs.tag }}.zip"
+          (cd dist-firefox && zip -qr "../$zip_ff" .)
+          echo "zip_firefox=$zip_ff" >> "$GITHUB_OUTPUT"
 
       - name: Create tag and release
         if: steps.version.outputs.exists == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ steps.version.outputs.tag }}" "${{ steps.package.outputs.zip }}" \
+          gh release create "${{ steps.version.outputs.tag }}" "${{ steps.package.outputs.zip }}" "${{ steps.package.outputs.zip_firefox }}" \
             --target "$GITHUB_SHA" \
             --title "All Mixer! ${{ steps.version.outputs.tag }}" \
             --notes-file "$RUNNER_TEMP/notes.md"

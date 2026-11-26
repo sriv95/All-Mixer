@@ -33,6 +33,17 @@ Click **Add to Chrome**, then reload any open YouTube tabs and click the toolbar
 3. Click **Load unpacked** and pick the unzipped folder.
 4. Reload any open YouTube tabs, then click the toolbar icon.
 
+### Firefox
+
+AMO (the Firefox add-on store) does not list All Mixer! yet, so install it from a release as a temporary add-on.
+
+1. Download `all-mixer-firefox-vX.Y.Z.zip` from the [latest release](../../releases/latest). Do not unzip it.
+2. Open `about:debugging#/runtime/this-firefox` and click **Load Temporary Add-on...**.
+3. Pick the zip file (or `manifest.json` from the unzipped folder).
+4. Reload any open YouTube tabs, then click the toolbar icon.
+
+Firefox removes a temporary add-on when it closes, so repeat these steps after a restart. Needs Firefox 140 or newer on desktop, or 142 or newer on Android.
+
 ## Use
 
 1. Open a video on youtube.com or music.youtube.com and click the All Mixer! icon.
@@ -48,6 +59,8 @@ Separate mode delays the sound by about 2 seconds (3 seconds with High quality, 
 - **Default model:** any such GPU. If it has no fp16 support, the popup offers a one-time **Download supported models**.
 - **Other models and Split Instrumental:** the GPU must support **fp16**.
     - Listed as supported (fp16): Apple Silicon, NVIDIA RTX series, AMD Vega and AMD RX 5000 series or newer
+
+On Firefox, mixing live during playback is rejected when its WebGPU is too slow. On an M1, Firefox took about 300 ms per step and Chrome about 106 ms. Use **Preload** to mix on Firefox. Headless Firefox has no WebGPU adapter, so Separate mode cannot run there.
 
 To check your GPU, open [webgpureport.org](https://webgpureport.org) and look for `shader-f16` under features.
 
@@ -67,6 +80,8 @@ Search [existing issues](https://github.com/sriv95/All-Mixer/issues) first; add 
 ## For developers
 
 Build, architecture, model publishing and debug notes are in [src/README.md](src/README.md).
+
+Firefox build: `npm run build:firefox` writes `dist-firefox/`. `npm run pack:firefox` builds it and zips it into `web-ext-artifacts/`. `skills/verify-firefox` drives a real Firefox for checks.
 
 ## License
 
