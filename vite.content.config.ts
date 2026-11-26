@@ -1,5 +1,6 @@
 import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
+import { buildTarget, define, outDir } from './vite.target';
 
 // Content scripts: self-contained IIFEs, appended to dist/ after the main build.
 // ENTRY=page builds the main-world bridge (src/page/bridge.ts) instead, ENTRY=media the main-world media hook.
@@ -10,10 +11,11 @@ const entry = {
 
 export default defineConfig({
   publicDir: false,
+  define,
   build: {
-    outDir: resolve(import.meta.dirname, 'dist'),
+    outDir,
     emptyOutDir: false,
-    target: 'chrome120',
+    target: buildTarget,
     lib: {
       entry: resolve(import.meta.dirname, entry.src),
       formats: ['iife'],

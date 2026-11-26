@@ -20,6 +20,15 @@ bun run lint
 
 Use `bun run test`, not `bun test`. `bun test` starts Bun's own test runner; this repo uses vitest.
 
+## Firefox add-on
+
+```sh
+bun run build:firefox   # typecheck + vite build with FIREFOX=1 → dist-firefox/
+bun run pack:firefox    # build:firefox + web-ext build → web-ext-artifacts/*.zip (manifest.json at the zip root)
+```
+
+The Firefox manifest is `public/manifest.json` plus the overlay in `manifest.firefox.json` (shallow merge, `null` removes a key): another name, an event-page `background.scripts`, and `browser_specific_settings.gecko` (id, `strict_min_version` 128, no data collection). The build targets `firefox128`, and `__FIREFOX__` is true only in this build. Check the result with `npx web-ext lint --source-dir dist-firefox`.
+
 ## Load in Chrome
 
 1. Open `chrome://extensions`, turn on **Developer mode**.
